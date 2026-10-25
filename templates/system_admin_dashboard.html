@@ -105,8 +105,8 @@
                             <td><span class="badge bg-success-subtle text-success">Active</span></td>
                             <td>
                                 <small class="text-muted">
-                                    {% if admin.last_login %}
-                                    {{ admin.last_login|fmt_timestamp }}
+                                    {% if admin.last_login_display %}
+                                    {{ admin.last_login_display }}
                                     {% else %}
                                     Never
                                     {% endif %}

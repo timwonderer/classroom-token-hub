@@ -49,7 +49,7 @@ from app.services.classroom_setup import (
     create_student_user_for_seat,
     create_teacher,
 )
-from app.utils.canonical_temporal_resolver import utc_now
+from tests.helpers import temporal
 from app.utils.join_code import generate_join_code
 from app.utils.username_generation import build_username
 from tests.helpers.canonical_identities import CLASSROOMS, TEACHERS
@@ -211,7 +211,7 @@ def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = Tru
         # (``with_payroll_settings=False``) or uses
         # ``class_domain.put_payroll_setting_in_force``.
         if with_payroll_settings:
-            settings_recorded_at = utc_now()
+            settings_recorded_at = temporal.now()
             class_tz = pytz.timezone(economy.class_timezone)
             first_payday = class_tz.localize(datetime.combine(
                 (settings_recorded_at.astimezone(class_tz) + timedelta(days=365)).date(), time.min,

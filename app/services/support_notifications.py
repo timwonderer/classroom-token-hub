@@ -10,7 +10,7 @@ from flask import current_app
 from sqlalchemy import event
 
 from app.extensions import db
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.opaque_refs import make_opaque_ref
 
 
@@ -36,7 +36,7 @@ def schedule_support_notification(issue_id, *, event_type):
     payload = {
         "value1": _LABELS[event_type],
         "value2": make_opaque_ref("issue", issue_id),
-        "value3": utc_now().isoformat(),
+        "value3": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc.isoformat(),
     }
     session.info.setdefault(_PENDING, []).append((transaction, payload))
 

@@ -12,7 +12,9 @@ from app.services.attendance_service import (
     is_done_for_day,
     lock_attendance_seat,
 )
-from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver,
+)
 
 @dataclass(frozen=True)
 class AttendanceSessionResult:
@@ -149,11 +151,12 @@ def record_attendance_session_command(
                 primitive="evaluation_day_boundaries",
                 reference_time_utc=existing_active.timestamp,
             )
-            same_day_hanging_pass = (
-                hall_pass_day_bounds.boundary_start_utc
-                <= event_time
-                < hall_pass_day_bounds.boundary_end_utc
-            )
+            same_day_hanging_pass = canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="between_boundaries",
+                candidate=event_time,
+                start_boundary=hall_pass_day_bounds.boundary_start_utc,
+                end_boundary=hall_pass_day_bounds.boundary_end_utc,
+            ).is_between
             returning_from_this_pass = (
                 hall_pass_id is not None
                 and hall_pass_id == existing_active.hall_pass_id

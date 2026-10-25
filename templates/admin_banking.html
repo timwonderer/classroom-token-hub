@@ -140,7 +140,7 @@
               {% for tx in transactions[:10] %}
               <tr>
                 <td>
-                  {% if tx.timestamp %}{{ tx.timestamp|fmt_timestamp }}{% else %}N/A{% endif %}
+                  {% if tx.timestamp %}{{ transaction_time_displays[tx.id] }}{% else %}N/A{% endif %}
                 </td>
                 <td>
                   <a href="{{ student_detail_url(tx.actor_public_id) }}">{{ tx.student_name }}</a>
@@ -255,7 +255,7 @@
               {% for tx in transactions %}
               <tr>
                 <td>
-                  {% if tx.timestamp %}{{ tx.timestamp|fmt_timestamp }}{% else %}N/A{% endif %}
+                  {% if tx.timestamp %}{{ transaction_time_displays[tx.id] }}{% else %}N/A{% endif %}
                 </td>
                 <td>
                   <a href="{{ student_detail_url(tx.actor_public_id) }}">{{ tx.student_name }}</a>

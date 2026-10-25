@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from app import db
 from app.feats.base import FEATContext
 from app.models import Transaction, TransactionStatus, LedgerBalanceSnapshot, AccountType, ClassEconomy, Seat
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.seat_scope import transaction_scope_filter
 
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ def settle_balances(seat_id: int, class_id: str) -> None:
             db.session.flush()
         snapshots[account_type] = snapshot
 
-    now = utc_now()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     for tx in pending:
         account_type = _normalize_account_type(tx.account_type, tx.id)
         tx.posted_at = tx.posted_at or now

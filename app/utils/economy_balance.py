@@ -325,11 +325,17 @@ class EconomyBalanceChecker:
         from app.utils.canonical_temporal_resolver import (
             CLASS_LEVEL_EVALUATION,
             canonical_temporal_resolver,
-            utc_now,
         )
         pay_period_days = None
         class_id = getattr(payroll_settings, 'class_id', None)
-        period = pay_period_containing(class_id, utc_now()) if class_id else None
+        period = pay_period_containing(
+            class_id,
+            canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="current_time",
+            ).canonical_now_utc,
+        ) if class_id else None
         if period is not None:
             start, end = period
             local = canonical_temporal_resolver(

@@ -21,7 +21,7 @@ updates. `execute_transition_economic_policy` retained as backward-compat wrappe
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime as dt, timezone as tz
+from datetime import datetime as dt
 from typing import Optional
 import uuid
 
@@ -122,13 +122,17 @@ _CARRY_FORWARD_FIELDS = (
 
 
 def _parse_effective_at_timestamp(effective_at: str):
-    """Parse ISO 8601 effective_at into a timezone-aware datetime."""
+    """Parse ISO 8601 effective_at into a timezone-aware datetime.
+
+    The string must carry its UTC offset; a naive timestamp names no instant
+    and is refused rather than guessed at (SPEC-TIME-001 §VI).
+    """
     try:
         effective_at_ts = dt.fromisoformat(effective_at)
     except ValueError:
         return None
     if effective_at_ts.tzinfo is None:
-        effective_at_ts = effective_at_ts.replace(tzinfo=tz.utc)
+        return None
     return effective_at_ts
 
 

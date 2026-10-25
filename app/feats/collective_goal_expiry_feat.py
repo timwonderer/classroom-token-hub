@@ -38,7 +38,7 @@ from app.feats.base import requires_feat_context
 from app.models import EntitlementEvent, StoreProduct, Transaction
 from app.services import entitlement_service
 from app.services.ledger_correction_service import reverse_transaction
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +218,8 @@ def expire_lapsed_collective_goal(
     # re-enumerated and re-evaluated on every hourly run, forever.
     if not result.unresolved_correlations:
         product.availability_state = "RETIRED"
-        product.retired_at = utc_now()
+        product.retired_at = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc
 
     return result

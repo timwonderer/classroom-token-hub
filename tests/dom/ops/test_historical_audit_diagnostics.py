@@ -181,8 +181,10 @@ def test_historical_payload_serialization_is_exact_without_verifier_field_substi
     from datetime import datetime
     import hashlib
     import json
-    from app.utils.canonical_temporal_resolver import ensure_utc
-    namespace = dict(Any=object, datetime=datetime, ensure_utc=ensure_utc, hashlib=hashlib, json=json)
+    from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
+    namespace = dict(Any=object, datetime=datetime, hashlib=hashlib, json=json,
+                     SYSTEM_LEVEL_EVALUATION=SYSTEM_LEVEL_EVALUATION,
+                     canonical_temporal_resolver=canonical_temporal_resolver)
     exec(compile(ast.Module(body=functions, type_ignores=[]), "deployed-audit-source", "exec"), namespace)
     fields = {name: None for name in verifier.HISTORICAL_LEDGER_V1_CANDIDATE_FIELDS}
     fields.update(amount=Decimal("1.00"), status="PENDING")

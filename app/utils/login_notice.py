@@ -18,9 +18,14 @@ never break sign-in.
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import current_app
+
+from app.utils.canonical_temporal_resolver import (
+    SYSTEM_LEVEL_EVALUATION,
+    canonical_temporal_resolver,
+)
 
 LOGIN_NOTICE_FILENAME = "login_notice.json"
 MAX_MESSAGE_LENGTH = 1000
@@ -60,8 +65,14 @@ def parse_login_notice(raw, now=None):
     if expires_at.tzinfo is None:
         return None
 
-    now = now or datetime.now(timezone.utc)
-    if now >= expires_at:
+    # The notice's expiry is platform time, not any class's calendar: SLE.
+    now = now or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc
+    still_open = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=expires_at, reference=now,
+    ).is_later
+    if not still_open:
         return None
     message = message.strip()[:MAX_MESSAGE_LENGTH]
     try:

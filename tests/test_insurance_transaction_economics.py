@@ -37,7 +37,6 @@ from app.utils import canonical_temporal_resolver as canonical_temporal_resolver
 from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
     CLASS_LEVEL_EVALUATION,
-    ensure_utc,
 )
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.classroom_initializer import initialize
@@ -186,7 +185,7 @@ def _now_utc(classroom, student):
         canonical_execution_context=_student_ctx(classroom, student),
         primitive="current_time",
     )
-    return ensure_utc(temporal.canonical_now_utc)
+    return temporal.canonical_now_utc
 
 
 class TestPeriodPayoutCeiling:

@@ -180,15 +180,6 @@ def should_redirect_public_docs(doc_path=None):
     return bool(get_external_docs_base_url())
 
 
-def format_utc_iso(dt):
-    """Return a UTC ISO-8601 string (with trailing Z) for a datetime or None."""
-    if not dt:
-        return None
-    from app.utils.canonical_temporal_resolver import ensure_utc
-    dt = ensure_utc(dt)
-    return dt.isoformat().replace("+00:00", "Z")
-
-
 def is_safe_url(target, host_url=None):
     """
     Ensure a redirect URL is safe by checking if it's on the same domain.

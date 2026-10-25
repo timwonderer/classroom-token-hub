@@ -23,7 +23,7 @@ from decimal import Decimal
 
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
 from app.models import BillCycle
-from app.routes.admin import _resolve_rent_policy_deferral
+from app.services.obligation_view_model import resolve_rent_policy_deferral
 from app.services.class_configuration_query_service import get_rent_settings
 from tests.helpers.class_domain import customize_rent_settings, enable_class_feature
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
@@ -34,7 +34,7 @@ _FIRST_DUE = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
 _T_INITIAL = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
 _T_AFTER_BOUNDARY = datetime(2026, 2, 1, 12, 0, tzinfo=timezone.utc)
 
-# _resolve_rent_policy_deferral reads the real wall clock (utc_now()), not an
+# resolve_rent_policy_deferral reads the real wall clock (utc_now()), not an
 # injected reference time -- it is resolved fresh on every page render, not
 # tied to a request (see its docstring). A "cycle established but not yet
 # started" test therefore needs a boundary that stays in the future relative
@@ -63,7 +63,7 @@ def test_no_deferral_before_any_cycle_exists(app):
         settings = _setup_rent_class(classroom.class_id)
 
         assert BillCycle.query.filter_by(class_id=classroom.class_id).count() == 0
-        assert _resolve_rent_policy_deferral(classroom.class_id, settings) is None
+        assert resolve_rent_policy_deferral(classroom.class_id, settings) is None
 
 
 def test_a_billed_period_that_has_not_started_still_defers_a_new_policy(app):
@@ -84,7 +84,7 @@ def test_a_billed_period_that_has_not_started_still_defers_a_new_policy(app):
     for a class whose first rent cycle would not start for another month --
     directly contradicting the page's own "Not active yet" / "Not scheduled
     yet" summary a few lines below, which correctly recognized nothing had
-    started. ``_resolve_rent_policy_deferral`` treated ANY existing
+    started. ``resolve_rent_policy_deferral`` treated ANY existing
     ``BillCycle`` row as proof a cycle was underway, without checking
     whether its ``cycle_boundary_at`` had actually arrived.
     """
@@ -117,7 +117,7 @@ def test_a_billed_period_that_has_not_started_still_defers_a_new_policy(app):
         )
         assert pending.policy_uuid != cycle.policy_uuid  # a real divergence exists
 
-        deferral = _resolve_rent_policy_deferral(classroom.class_id, pending)
+        deferral = resolve_rent_policy_deferral(classroom.class_id, pending)
         assert deferral is not None
         assert deferral["billed_period_started"] is False
 
@@ -130,7 +130,7 @@ def test_no_deferral_when_the_open_cycle_already_carries_the_newest_policy(app):
         execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
 
         current = get_rent_settings(classroom.class_id)
-        assert _resolve_rent_policy_deferral(classroom.class_id, current) is None
+        assert resolve_rent_policy_deferral(classroom.class_id, current) is None
 
 
 def test_policy_saved_midcycle_is_reported_as_pending(app):
@@ -146,7 +146,7 @@ def test_policy_saved_midcycle_is_reported_as_pending(app):
         )
         assert pending.policy_uuid != enforced.policy_uuid
 
-        deferral = _resolve_rent_policy_deferral(classroom.class_id, pending)
+        deferral = resolve_rent_policy_deferral(classroom.class_id, pending)
 
         assert deferral is not None
         assert deferral["cycle_number"] == 1
@@ -173,7 +173,7 @@ def test_deferral_clears_once_the_cycle_advances(app):
         pending = customize_rent_settings(
             classroom.class_id, rent_amount=Decimal("75.00")
         )
-        assert _resolve_rent_policy_deferral(classroom.class_id, pending) is not None
+        assert resolve_rent_policy_deferral(classroom.class_id, pending) is not None
 
         execute_reconcile_rent(
             classroom.class_id, reference_time_utc=_T_AFTER_BOUNDARY
@@ -181,7 +181,7 @@ def test_deferral_clears_once_the_cycle_advances(app):
 
         current = get_rent_settings(classroom.class_id)
         assert current.policy_uuid == pending.policy_uuid
-        assert _resolve_rent_policy_deferral(classroom.class_id, current) is None
+        assert resolve_rent_policy_deferral(classroom.class_id, current) is None
 
 
 def test_terminal_cycle_reports_that_the_saved_policy_never_binds(app):
@@ -206,7 +206,7 @@ def test_terminal_cycle_reports_that_the_saved_policy_never_binds(app):
         pending = customize_rent_settings(
             classroom.class_id, rent_amount=Decimal("75.00")
         )
-        deferral = _resolve_rent_policy_deferral(classroom.class_id, pending)
+        deferral = resolve_rent_policy_deferral(classroom.class_id, pending)
 
         assert deferral is not None
         assert deferral["is_terminal"] is True

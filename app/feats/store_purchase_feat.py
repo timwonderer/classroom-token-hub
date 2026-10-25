@@ -44,7 +44,6 @@ from app.services.store_policy_resolver import StorePolicyResolver, PolicyNotFou
 from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
     CLASS_LEVEL_EVALUATION,
-    ensure_utc,
 )
 
 
@@ -353,7 +352,13 @@ def _execute_store_purchase_impl(
             canonical_execution_context=canonical_context,
             primitive="current_time",
         ).canonical_now_utc
-        if ensure_utc(policy_config.collective_goal_expires_at) <= ensure_utc(temporal_now):
+        if not canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=canonical_context,
+            primitive="later_than",
+            candidate=policy_config.collective_goal_expires_at,
+            reference=temporal_now,
+        ).is_later:
             return StorePurchaseResult(
                 success=False,
                 correlation_id="",

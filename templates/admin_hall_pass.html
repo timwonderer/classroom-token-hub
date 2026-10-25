@@ -144,7 +144,7 @@
                                 <div class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ req.student_name }}</strong> - {{ req.reason }}
-                                        <small class="d-block text-muted">Requested: {{ req.request_time | fmt_timestamp }} | Period: {{ req.period }}</small>
+                                        <small class="d-block text-muted">Requested: {{ req.request_time_display }} | Period: {{ req.period }}</small>
                                     </div>
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Hall pass request actions">
                                     <button type="button" class="btn btn-success" onclick="handlePendingPassAction('{{ req.id }}', 'approve')">
@@ -173,7 +173,7 @@
                                 <div class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ req.student_name }}</strong> - {{ req.reason }}
-                                        <small class="d-block text-muted">Issued: {{ req.decision_time | fmt_timestamp }} | Period: {{ req.period }}</small>
+                                        <small class="d-block text-muted">Issued: {{ req.decision_time_display }} | Period: {{ req.period }}</small>
                                     </div>
                             <button type="button" class="btn btn-sm btn-primary" onclick="handlePassAction({{ req.id }}, 'leave')" {% if out_of_class|length >= out_limit %}disabled{% endif %}>
                                         <span class="material-symbols-outlined icon-xs" aria-hidden="true">logout</span> Left Class
@@ -197,7 +197,7 @@
                                 <div class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ req.student_name }}</strong> - {{ req.reason }}
-                                        <small class="d-block text-muted">Left: {{ req.left_time | fmt_timestamp }} | Period: {{ req.period }}</small>
+                                        <small class="d-block text-muted">Left: {{ req.left_time_display }} | Period: {{ req.period }}</small>
                                     </div>
                             <button type="button" class="btn btn-sm btn-secondary" onclick="handlePassAction({{ req.id }}, 'return')">
                                         <span class="material-symbols-outlined icon-xs" aria-hidden="true">login</span> Returned

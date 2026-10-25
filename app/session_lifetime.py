@@ -35,11 +35,12 @@ owned by FEAT-IDEN-002 (SPEC-IDEN-001); cookie lifetime is not that store's TTL.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from flask.sessions import SecureCookieSessionInterface
 
 from app.auth import SESSION_TIMEOUT_MINUTES, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Absolute expiry stamped into the session by a login flow that already owns an
 # authoritative expiry instant. Students have one (`User.current_session_expires_at`);
@@ -59,6 +60,9 @@ _ROLE_LIFETIME_MINUTES = {
 def _stamped_expiry(session) -> datetime | None:
     """Return the session's absolute expiry, or None if absent/unusable.
 
+    The only writer (student login) stores an aware UTC ``isoformat()``, so a
+    stamp without an offset was not written by it and counts as unusable.
+
     A malformed stamp is treated as absent rather than fatal: the session cookie
     is an external boundary that outlives deploys, and refusing to serve a
     response because an old cookie carries an unparseable timestamp would turn a
@@ -73,7 +77,7 @@ def _stamped_expiry(session) -> datetime | None:
         parsed = datetime.fromisoformat(raw)
     except (TypeError, ValueError):
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else None
 
 
 class RoleScopedSessionInterface(SecureCookieSessionInterface):
@@ -97,4 +101,10 @@ class RoleScopedSessionInterface(SecureCookieSessionInterface):
 
         # Idle-based roles slide forward on each request, which is what
         # SESSION_REFRESH_EACH_REQUEST already does for the server-side check.
-        return datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+        return canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION,
+            primitive="shift_timestamp",
+            timestamp=now,
+            elapsed_seconds=minutes * 60,
+        ).shifted_timestamp_utc

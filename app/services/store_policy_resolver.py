@@ -22,7 +22,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from app.extensions import db
-from app.models import StoreProduct, ClassEconomy, utc_now
+from app.models import StoreProduct, ClassEconomy
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 class StorePolicyError(Exception):
@@ -144,11 +145,21 @@ class StorePolicyResolver:
                 f"Item type {product.item_type!r} has no entitlement type mapping"
             )
 
+        now_utc = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc
         return StorePolicyConfig(
             product_id=product.product_lineage_uuid,
             is_purchasable=(
                 product.availability_state == 'IN_USE'
-                and (product.activation_at is None or product.activation_at <= utc_now())
+                and (
+                    product.activation_at is None
+                    or not canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                        candidate=product.activation_at,
+                        reference=now_utc,
+                    ).is_later
+                )
             ),
             # HALL_PASS is the only catalog type a teacher may grant directly.
             supports_direct_grants=(entitlement_type == 'HALL_PASS'),

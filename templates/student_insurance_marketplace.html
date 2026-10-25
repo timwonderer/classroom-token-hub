@@ -181,7 +181,7 @@
               <h2 class="h5 mb-0">{{ cov.title }}</h2>
               {{ badge_pill(cov) }}
               {% if cov.starts_on %}
-              <span class="badge bg-info text-dark">Starts {{ cov.starts_on.strftime('%b %d') }}</span>
+              <span class="badge bg-info text-dark">Starts {{ cov.starts_on_display }}</span>
               {% elif not cov.premiums_current %}
               <span class="badge bg-danger">Premium overdue</span>
               {% elif cov.change and cov.change.kind in ('moving', 'continued') %}
@@ -196,7 +196,7 @@
               <span class="badge bg-success">Active</span>
               {% endif %}
             </div>
-            <div class="text-muted small mb-3">{{ cov.insurance_type|capitalize }} insurance{% if cov.purchased_at %} · bought {{ cov.purchased_at | fmt_date }}{% endif %}</div>
+            <div class="text-muted small mb-3">{{ cov.insurance_type|capitalize }} insurance{% if cov.purchased_at_display %} · bought {{ cov.purchased_at_display }}{% endif %}</div>
             {% if cov.description and cov.description != cov.title %}<p class="mb-3">{{ cov.description }}</p>{% endif %}
 
             <dl class="insurance-facts mb-3">
@@ -210,18 +210,18 @@
               </div>
               <div class="insurance-fact">
                 <dt>Claims</dt>
-                <dd>{% if cov.starts_on %}From {{ cov.starts_on.strftime('%b %d') }}{% elif cov.claims_open_on %}Open {{ cov.claims_open_on.strftime('%b %d') }}{% elif not cov.premiums_current %}Paused{% else %}Open now{% endif %}</dd>
+                <dd>{% if cov.starts_on %}From {{ cov.starts_on_display }}{% elif cov.claims_open_on %}Open {{ cov.claims_open_on_display }}{% elif not cov.premiums_current %}Paused{% else %}Open now{% endif %}</dd>
               </div>
               <div class="insurance-fact">
                 {% if cov.starts_on %}
                 <dt>Coverage starts</dt>
-                <dd>{{ cov.starts_on.strftime('%b %d, %Y') }}</dd>
+                <dd>{{ cov.starts_on_date_display }}</dd>
                 {% elif cov.last_covered_day %}
                 <dt>Covered through</dt>
-                <dd>{{ cov.last_covered_day.strftime('%b %d, %Y') }}</dd>
+                <dd>{{ cov.last_covered_day_display }}</dd>
                 {% else %}
                 <dt>Next premium</dt>
-                <dd>{{ cov.renews_on.strftime('%b %d, %Y') if cov.renews_on else '—' }}</dd>
+                <dd>{{ cov.renews_on_display }}</dd>
                 {% endif %}
               </div>
             </dl>
@@ -230,27 +230,27 @@
 
             {% if cov.change and cov.change.kind == 'moving' %}
             {% call cards.alert_card('info', 'Your teacher changed this plan', icon='update', body_class='mt-3') %}
-            <p class="mb-2">{% if cov.change.on %}From <strong>{{ cov.change.on.strftime('%B %-d, %Y') }}</strong>{% else %}At your next renewal{% endif %}, your coverage moves to <strong>{{ cov.change.successor.title or 'the updated plan' }}</strong>: ${{ "%.2f"|format(cov.change.successor.premium) }} / {{ cov.change.successor.charge_frequency|lower }}.</p>
+            <p class="mb-2">{% if cov.change.on %}From <strong>{{ cov.change_on_display }}</strong>{% else %}At your next renewal{% endif %}, your coverage moves to <strong>{{ cov.change.successor.title or 'the updated plan' }}</strong>: ${{ "%.2f"|format(cov.change.successor.premium) }} / {{ cov.change.successor.charge_frequency|lower }}.</p>
             {% set new_terms = policy_terms(cov.change.successor) %}
             {% if new_terms %}<p class="small mb-2">{{ new_terms }}</p>{% endif %}
             {% if cov.change.successor.description and cov.change.successor.description != cov.change.successor.title %}<p class="small mb-2">{{ cov.change.successor.description }}</p>{% endif %}
-            <p class="mb-0">{% if cov.change.bill_on %}Its first premium is charged on <strong>{{ cov.change.bill_on.strftime('%B %-d') }}</strong>. {% endif %}If you don't want the new plan, cancel this coverage before then. You stay covered under your current terms until it changes.</p>
+            <p class="mb-0">{% if cov.change.bill_on %}Its first premium is charged on <strong>{{ cov.change_bill_on_display }}</strong>. {% endif %}If you don't want the new plan, cancel this coverage before then. You stay covered under your current terms until it changes.</p>
             {% endcall %}
             {% elif cov.change and cov.change.kind == 'ending' %}
             {% call cards.alert_card('warning', 'This plan is ending', icon='event_busy', body_class='mt-3') %}
-            <p class="mb-0">Your teacher stopped offering this plan, so it won't renew and you won't be charged again. {% if cov.change.on %}Your coverage ends on <strong>{{ cov.change.on.strftime('%B %-d, %Y') }}</strong>.{% endif %}</p>
+            <p class="mb-0">Your teacher stopped offering this plan, so it won't renew and you won't be charged again. {% if cov.change.on %}Your coverage ends on <strong>{{ cov.change_on_display }}</strong>.{% endif %}</p>
             {% endcall %}
             {% elif cov.change and cov.change.kind == 'continued' %}
             {% call cards.alert_card('info', 'Moving to ' ~ (cov.change.successor.title if cov.change.successor else 'the updated plan'), icon='update', body_class='mt-3') %}
-            <p class="mb-0">Your teacher changed this plan. These terms cover you through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') if cov.last_covered_day else 'the end of this period' }}</strong>, and the new plan starts on <strong>{{ cov.change.on.strftime('%B %-d, %Y') }}</strong>.</p>
+            <p class="mb-0">Your teacher changed this plan. These terms cover you through <strong>{{ cov.last_covered_day_long_display or 'the end of this period' }}</strong>, and the new plan starts on <strong>{{ cov.change_on_display }}</strong>.</p>
             {% endcall %}
             {% elif cov.change and cov.change.kind == 'withdrawn' %}
             {% call cards.alert_card('warning', 'This plan is ending', icon='event_busy', body_class='mt-3') %}
-            <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') }}</strong>.</p>
+            <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day_long_display }}</strong>.</p>
             {% endcall %}
             {% elif cov.last_covered_day %}
             {% call cards.alert_card('warning', 'You cancelled this coverage', icon='event_busy', body_class='mt-3') %}
-            <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') }}</strong>. After that it ends.</p>
+            <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day_long_display }}</strong>. After that it ends.</p>
             {% endcall %}
             {% endif %}
 
@@ -259,7 +259,7 @@
             <p class="mb-0">A premium is unpaid, so claims are refused until you pay it. Losses while coverage is paused stay uncovered after you pay.</p>
             {% endcall %}
             {% elif cov.claims_open_on %}
-            <p class="small mb-0 mt-2">Events that happened before {{ cov.claims_open_on.strftime('%b %d') }} are not covered.</p>
+            <p class="small mb-0 mt-2">Events that happened before {{ cov.claims_open_on_display }} are not covered.</p>
             {% endif %}
           </div>
 
@@ -268,7 +268,7 @@
               {% if not cov.premiums_current %}
               <a href="{{ url_for('student.view_policy', policy_uuid=cov.policy_uuid) }}" class="btn btn-danger">Pay overdue premium</a>
               {% elif cov.claims_open_on %}
-              <button type="button" class="btn btn-outline-secondary" disabled>Claims open {{ cov.claims_open_on.strftime('%b %d') }}</button>
+              <button type="button" class="btn btn-outline-secondary" disabled>Claims open {{ cov.claims_open_on_display }}</button>
               {% else %}
               <a href="{{ url_for('student.file_claim', policy_uuid=cov.policy_uuid) }}" class="btn btn-primary">File a claim</a>
               {% endif %}
@@ -414,8 +414,8 @@
             {% set st = claim.status|lower %}
             <tr>
               <td>{{ claim.policy.title }}</td>
-              <td>{{ claim.incident_date | fmt_date }}</td>
-              <td>{{ claim.filed_date | fmt_date }}</td>
+              <td>{{ claim.incident_date_display }}</td>
+              <td>{{ claim.filed_date_display }}</td>
               <td>
                 {% set label = {'pending': ('Waiting for review', 'bg-warning text-dark'), 'approved': ('Approved', 'bg-success'), 'rejected': ('Rejected', 'bg-danger')}.get(st, (claim.status|capitalize, 'bg-secondary')) %}
                 <span class="badge {{ label[1] }}">{{ label[0] }}</span>
@@ -445,7 +445,7 @@
 <p>Cancelling stops this policy from renewing. Here's what that means for you:</p>
 <ul class="mb-0">
   {% if cov.cancel_covers_through %}
-  <li class="mb-2">You're <strong>still covered through {{ cov.cancel_covers_through.strftime('%B %-d, %Y') }}</strong>, and you can file claims for losses until then.</li>
+  <li class="mb-2">You're <strong>still covered through {{ cov.cancel_covers_through_display }}</strong>, and you can file claims for losses until then.</li>
   {% else %}
   <li class="mb-2">You stay covered until the end of the period you've paid for, and can file claims until then.</li>
   {% endif %}

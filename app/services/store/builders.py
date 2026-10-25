@@ -14,10 +14,12 @@ from collections.abc import Collection
 from dataclasses import dataclass, field
 from decimal import Decimal
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
-
 from app.extensions import db
 from app.models import StoreProduct, EntitlementEvent, RentSettings, ClassEconomy
+from app.utils.temporal_display import format_date, format_local_date, format_timestamp
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 @dataclass(frozen=True)
@@ -110,11 +112,11 @@ class EntitlementCardView:
     item_description: str | None  # Flattened from ORM
     status: str  # 'purchased', 'pending', 'processing', etc.
     display_status: str  # Display label: "Ready to Use", "Pending Approval", etc.
-    # Timestamps stay as datetimes. Rendering them is the temporal resolver's
-    # job (fmt_timestamp / fmt_date), which localizes to the class timezone;
-    # pre-formatting here would hard-code UTC.
     purchased_at: datetime | None
     expires_at: datetime | None
+    # Class-time display text, localized through the temporal resolver.
+    purchased_at_display: str
+    expires_at_display: str
     has_expiry_date: bool
     redemption_prompt: str | None
 
@@ -358,6 +360,8 @@ def build_entitlement_card_view(
         display_status=display_status,
         purchased_at=purchase_date,
         expires_at=expires_at,
+        purchased_at_display=format_timestamp(SimpleNamespace(class_id=class_id), purchase_date),
+        expires_at_display=format_date(SimpleNamespace(class_id=class_id), expires_at),
         has_expiry_date=has_expiry_date,
         redemption_prompt=redemption_prompt,
         can_redeem_immediately=can_redeem_immediately,
@@ -414,3 +418,178 @@ def build_collective_progress_view(
         goal_type=item.collective_goal_type or "fixed",
         display_expires_at=display_expires_at,
     )
+
+
+def build_redemption_time_displays(ctx, requests) -> dict[str, str]:
+    """Redemption request id -> its submission time."""
+    return {req.request_id: format_timestamp(ctx, req.submitted_at) for req in requests}
+
+
+def build_entitlement_time_displays(ctx, entitlements) -> dict:
+    """Entitlement id -> its purchase time."""
+    return {ent.id: format_timestamp(ctx, ent.purchase_date) for ent in entitlements}
+
+
+def build_insurance_claim_time_displays(ctx, claims) -> dict:
+    """Insurance claim id -> its filing time."""
+    return {claim.claim_id: format_timestamp(ctx, claim.filed_date) for claim in claims}
+
+
+def build_filed_claim_rows(ctx, claims) -> list[SimpleNamespace]:
+    """Insurance claims for the teacher's claim list, times as presentation text."""
+    return [
+        SimpleNamespace(
+            claim_id=claim.claim_id,
+            status=claim.status,
+            submitted_at_display=(
+                format_timestamp(ctx, claim.submitted_at) if claim.submitted_at else "N/A"
+            ),
+        )
+        for claim in claims
+    ]
+
+
+def build_claim_review_dates(
+    ctx,
+    *,
+    claim,
+    contract,
+    source_transaction,
+    productivity,
+    period_first_day,
+    period_last_day,
+    period_resets_on,
+) -> SimpleNamespace:
+    """Presentation text for every date and time on the claim review page.
+
+    Instants (filed, decided, purchase, coverage bought) localize through the
+    resolver under ``ctx``; the coverage and period dates and each claimed day
+    are already class-local calendar dates and are only formatted. ``days``
+    pairs each productivity row with its form key (ISO date) and labels.
+    """
+    def _short(day):
+        return day.strftime("%b %d") if day else None
+
+    return SimpleNamespace(
+        filed=format_timestamp(ctx, claim.submitted_at),
+        decided=format_timestamp(ctx, claim.decided_at) if claim.decided_at else None,
+        purchase=(
+            format_timestamp(ctx, source_transaction.timestamp) if source_transaction else None
+        ),
+        coverage_effective=contract.coverage_effective_date.strftime("%b %d, %Y"),
+        coverage_bought=format_date(ctx, contract.coverage_start_utc),
+        period_first_day=_short(period_first_day),
+        period_last_day=_short(period_last_day),
+        period_resets_on=period_resets_on.strftime("%b %d, %Y") if period_resets_on else None,
+        days=[
+            SimpleNamespace(
+                row=row,
+                key=row.claim_date.isoformat(),
+                label=row.claim_date.strftime("%a, %b %d, %Y"),
+                short_label=row.claim_date.strftime("%b %d"),
+            )
+            for row in (productivity.dates if productivity else [])
+        ],
+    )
+
+
+def _short_day(day) -> str | None:
+    """'Jan 05' for a class-local date."""
+    return day.strftime("%b %d") if day else None
+
+
+def _medium_day(day) -> str | None:
+    """'Jan 05, 2030' for a class-local date."""
+    return day.strftime("%b %d, %Y") if day else None
+
+
+def _long_day(day) -> str | None:
+    """'January 5, 2030' for a class-local date (no platform-specific %-d)."""
+    return f"{day:%B} {day.day}, {day.year}" if day else None
+
+
+def build_insurance_claim_rows(ctx, claims) -> list[SimpleNamespace]:
+    """Insurance claims as display rows, dates as class-time text."""
+    rows = []
+    for claim in claims:
+        incident_dt = claim.incident_at or claim.submitted_at
+        rows.append(SimpleNamespace(
+            id=claim.id,
+            claim_id=claim.claim_id,
+            policy=getattr(claim, "policy", SimpleNamespace(title="Insurance")),
+            status=getattr(claim.status, "value", claim.status),
+            approved_amount=getattr(claim, "approved_amount", None),
+            claim_amount=getattr(claim, "claim_amount", None),
+            rejection_reason=getattr(claim, "rejection_reason", None),
+            description=getattr(claim, "description", ""),
+            teacher_notes=getattr(claim, "teacher_notes", None),
+            incident_date=incident_dt,
+            filed_date=claim.submitted_at,
+            incident_date_display=format_date(ctx, incident_dt),
+            filed_date_display=format_date(ctx, claim.submitted_at),
+        ))
+    return rows
+
+
+def build_claim_date_max(ctx) -> str:
+    """The class's today as an ISO date: the latest day a claim may name.
+
+    The UTC date is yesterday there all morning in any class east of Greenwich.
+    """
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="current_evaluation_day",
+    ).evaluation_date.isoformat()
+
+
+def build_policy_enrollment_dates_display(ctx, *, purchase_date, coverage_start_date, covered_through) -> dict:
+    """Display text for the dates on the student's policy page, and whether coverage has yet to start."""
+    coverage_not_started = bool(coverage_start_date) and canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+        candidate=coverage_start_date,
+        reference=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+    ).is_later
+    return {
+        "coverage_not_started": coverage_not_started,
+        # No start date yet also means no claims can be filed.
+        "in_waiting_period": not coverage_start_date or coverage_not_started,
+        "purchase_date_display": format_date(ctx, purchase_date),
+        "coverage_start_date_display": format_date(ctx, coverage_start_date),
+        "covered_through_display": _medium_day(covered_through),
+    }
+
+
+def build_coverage_card_dates_display(
+    ctx, *, purchased_at, starts_on, claims_open_on, renews_on, last_covered_day, change, cancel_covers_through,
+) -> dict:
+    """Display text for the dates on an owned-coverage card (class-local dates)."""
+    return {
+        "purchased_at_display": format_date(ctx, purchased_at) if purchased_at else None,
+        "starts_on_display": _short_day(starts_on),
+        "starts_on_date_display": _medium_day(starts_on),
+        "claims_open_on_display": _short_day(claims_open_on),
+        "renews_on_display": _medium_day(renews_on) or "—",
+        "last_covered_day_display": _medium_day(last_covered_day),
+        "last_covered_day_long_display": _long_day(last_covered_day),
+        "cancel_covers_through_display": _long_day(cancel_covers_through),
+        "change_on_display": _long_day(getattr(change, "on", None)),
+        "change_bill_on_display": (
+            f"{change.bill_on:%B} {change.bill_on.day}" if getattr(change, "bill_on", None) else None
+        ),
+    }
+
+
+def claim_day_label(day) -> str:
+    """'Jan 05' for a claimed class-local date, in decision messages."""
+    return format_local_date(day, "short")
+
+
+def build_claim_transaction_choices(ctx, transactions) -> list[tuple[str, str]]:
+    """Transaction dropdown choices for a claim, dated in class time (not UTC)."""
+    choices = []
+    for txn in transactions:
+        day = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+            primitive="localize_timestamp", timestamp=txn.timestamp,
+        ).evaluation_date
+        choices.append((str(txn.id), f"{format_local_date(day, 'short')} · ${abs(txn.amount):.2f} · {txn.description or txn.type}"))
+    return choices

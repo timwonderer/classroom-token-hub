@@ -42,7 +42,7 @@ key) and a run that finds nothing due writes nothing.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -75,20 +75,12 @@ from app.services.policy_reference_service import (
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 
 NONPAYMENT_CAUSE = "NONPAYMENT"
-
-# Evaluating a withdrawal "as of" the termination instant would treat a period
-# that begins exactly at the instant as already begun (half-open periods), yet
-# DOM-OBL-001 §V.7 withdraws every untouched advance premium for a period
-# beginning AT OR AFTER the instant. Evaluating one microsecond (the storage
-# resolution) before the instant makes "not yet begun" coincide exactly with
-# "begins at or after the instant".
-_INSTANT_RESOLUTION = timedelta(microseconds=1)
 
 
 @dataclass
@@ -130,65 +122,6 @@ def _ctx(class_id: str) -> SimpleNamespace:
     return SimpleNamespace(class_id=class_id)
 
 
-def _reference_now(class_id: str, reference_time_utc: datetime | None) -> datetime:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_ctx(class_id),
-        primitive="current_time",
-        reference_time_utc=reference_time_utc,
-    ).canonical_now_utc
-
-
-def _reached(class_id: str, instant: datetime, reference: datetime) -> bool:
-    """Whether ``instant`` is at or before ``reference`` (canonical evaluation)."""
-    return not canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_ctx(class_id),
-        primitive="later_than",
-        reference_time_utc=reference,
-        candidate=instant,
-        reference=reference,
-    ).is_later
-
-
-def _add_class_local_days(class_id: str, instant: datetime, days: int) -> datetime:
-    """``instant`` moved ``days`` class-local calendar days, keeping its local time.
-
-    Coverage boundaries are class-local midnight, so for them this is the start
-    of the class-local day ``days`` after the boundary's date.
-    """
-    ctx = _ctx(class_id)
-    local_day = class_local_date(class_id, instant)
-    day_start = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="evaluation_day_boundaries",
-        evaluation_date=local_day,
-    ).boundary_start_utc
-    offset = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="time_since",
-        reference_time_utc=ensure_utc(instant),
-        start=day_start,
-    ).elapsed_seconds
-    target_start = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="evaluation_day_boundaries",
-        evaluation_date=local_day + timedelta(days=days),
-    ).boundary_start_utc
-    if not offset:
-        return target_start
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="shift_timestamp",
-        timestamp=target_start,
-        elapsed_seconds=offset,
-    ).shifted_timestamp_utc
-
-
 def _lineage_premiums(class_id: str, internal_ref: str) -> list[ObligationAssessment]:
     """The lineage's premium assessments (one per period), oldest period first."""
     return (
@@ -225,16 +158,29 @@ def find_nonpayment_deadline(
     internal_ref = premium_lineage_ref(entitlement_id)
     for assessment in _lineage_premiums(class_id, internal_ref):
         due_at = obligations_service.resolve_assessment_due_at(assessment)
-        if due_at is None or not _reached(class_id, due_at, reference_time_utc):
+        if due_at is None or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+            candidate=due_at, reference=reference_time_utc,
+        ).is_later:
             # Not yet due; later periods are later still.
             return None
-        deadline = _add_class_local_days(class_id, ensure_utc(due_at), cancel_after_days)
+        # The due instant moved cancel_after_days class-local calendar days, keeping its local time.
+        deadline = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_ctx(class_id),
+            primitive="shift_calendar_days",
+            timestamp=due_at,
+            days=cancel_after_days,
+        ).shifted_timestamp_utc
         state_at_deadline = obligations_service.get_obligation_state(
             assessment.correlation_id, as_of=deadline
         )
         if state_at_deadline is None or not state_at_deadline.is_outstanding:
             continue  # satisfied (or withdrawn) before its deadline
-        if _reached(class_id, deadline, reference_time_utc):
+        if not canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+            candidate=deadline, reference=reference_time_utc,
+        ).is_later:
             return deadline
         return None  # the earliest outstanding premium's deadline is still ahead
     return None
@@ -262,20 +208,21 @@ def _terminate_for_nonpayment(
             "source": "FEAT-STOR-007",
             "cause": NONPAYMENT_CAUSE,
             "policy_uuid": policy_uuid,
-            "deadline": ensure_utc(deadline).isoformat(),
+            "deadline": deadline.isoformat(),
         },
         effective_at=deadline,
     )
     # Terminated with the deadline as its instant. Withdrawal is evaluated as of
     # the deadline — not as of the (possibly late) run — so a period that began
-    # after the deadline only because the job ran late is still withdrawn; see
-    # _INSTANT_RESOLUTION for the one-microsecond evaluation point.
+    # after the deadline only because the job ran late is still withdrawn, and a
+    # period beginning exactly at the deadline is prevented, not begun
+    # (withdraw_assessment, DOM-OBL-001 §IX.15).
     terminate_bill_cycle(
         TerminateBillCycleRequest(
             class_id=class_id,
             internal_ref=premium_lineage_ref(entitlement_id),
             termination_at=deadline,
-            reference_time_utc=deadline - _INSTANT_RESOLUTION,
+            reference_time_utc=deadline,
         ),
         context=None,
     )
@@ -338,7 +285,7 @@ def _stop_renewal(class_id: str, entitlement_id: str, reference: datetime) -> da
         ),
         context=None,
     )
-    return ensure_utc(terminal.cycle_boundary_at)
+    return terminal.cycle_boundary_at
 
 
 def _continue_under_successor(
@@ -416,7 +363,12 @@ def renew_insurance_coverage(
     Domain orchestration composed inside the caller's FEAT-STOR-007 context.
     """
     result = InsuranceRenewalResult(entitlement_id=entitlement_id)
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
 
     grant = get_insurance_grant(class_id, entitlement_id)
     if grant is None:

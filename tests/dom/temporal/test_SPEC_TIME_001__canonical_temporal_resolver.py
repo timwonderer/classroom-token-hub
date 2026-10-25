@@ -4,7 +4,7 @@ Tests for SPEC-TIME-001: Canonical Temporal Resolver.
 Covers the required assertions from §XIV of the spec.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as wall_time, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -624,3 +624,99 @@ def test_minimum_period_duration_is_the_true_monthly_minimum():
         for n in range(12)
     )
     assert shortest == 28
+
+
+# ---------------------------------------------------------------------------
+# §XIV-25..29: shift_calendar_days / localize_timestamp (SPEC-TIME-001 1.3)
+# ---------------------------------------------------------------------------
+
+def _shift(**inputs):
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=FakeContext("cls-1"),
+        primitive="shift_calendar_days", reference_time_utc=REF, **inputs,
+    )
+
+
+def test_shift_calendar_days_moves_a_date_by_calendar_days_to_local_midnight():
+    """US DST ends 2026-11-01: Oct 31 + 2 days is Nov 2 at 00:00 EST, 49 hours later."""
+    start = _shift(date=date(2026, 10, 31), days=0)
+    later = _shift(date=date(2026, 10, 31), days=2)
+    assert later.shifted_date == date(2026, 11, 2)
+    assert later.boundary_start.hour == 0
+    assert later.boundary_start_utc == _utc(2026, 11, 2, 5)
+    assert later.boundary_start_utc - start.boundary_start_utc == timedelta(hours=49)
+    assert _shift(date=date(2026, 3, 1), days=-1).shifted_date == date(2026, 2, 28)
+
+
+def test_shift_calendar_days_keeps_a_timestamps_local_wall_clock_across_dst():
+    before = _utc(2026, 10, 30, 11)  # 07:00 EDT
+    after = _shift(timestamp=before, days=7)
+    assert after.shifted_date == date(2026, 11, 6)
+    assert (after.shifted_timestamp.hour, after.shifted_timestamp_utc) == (7, _utc(2026, 11, 6, 12))
+
+
+def test_shift_calendar_days_takes_the_earlier_instant_in_a_fold_and_skips_a_gap_forward():
+    fold = _shift(timestamp=_utc(2026, 10, 31, 5, 30), days=1)  # 01:30 EDT → 01:30 on Nov 1, twice
+    assert fold.shifted_timestamp_utc == _utc(2026, 11, 1, 5, 30)
+    gap = _shift(timestamp=_utc(2026, 3, 7, 7, 30), days=1)  # 02:30 EST → 02:30 never happens on Mar 8
+    assert (gap.shifted_timestamp.hour, gap.shifted_timestamp.minute) == (3, 30)
+
+
+def test_shift_calendar_days_places_a_local_wall_time_on_the_shifted_date():
+    nine = _shift(date=date(2026, 10, 31), days=1, time=wall_time(9, 0))
+    assert (nine.shifted_timestamp.hour, nine.shifted_timestamp_utc) == (9, _utc(2026, 11, 1, 14))
+    fold = _shift(date=date(2026, 11, 1), days=0, time=wall_time(1, 30))
+    assert fold.shifted_timestamp_utc == _utc(2026, 11, 1, 5, 30)  # the first 01:30, EDT
+    gap = _shift(date=date(2026, 3, 8), days=0, time=wall_time(2, 30))
+    assert (gap.shifted_timestamp.hour, gap.shifted_timestamp.minute) == (3, 30)
+
+
+@pytest.mark.parametrize("inputs", [
+    dict(date=date(2026, 1, 1), days=0, time=datetime(2026, 1, 1, 9)),
+    dict(timestamp=REF, days=0, time=wall_time(9)),
+    dict(date=date(2026, 1, 1), days=1.0),
+    dict(date=date(2026, 1, 1), days=True),
+    dict(days=1),
+    dict(date=date(2026, 1, 1), timestamp=REF, days=1),
+    dict(date=datetime(2026, 1, 1, tzinfo=timezone.utc), days=1),
+    dict(timestamp=datetime(2026, 1, 1), days=1),
+])
+def test_shift_calendar_days_fails_closed_on_bad_input(inputs):
+    with pytest.raises(TemporalResolutionError):
+        _shift(**inputs)
+
+
+def test_localize_timestamp_expresses_an_instant_in_the_class_timezone():
+    ev = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=FakeContext("cls-1"),
+        primitive="localize_timestamp", reference_time_utc=REF, timestamp=_utc(2026, 7, 21, 2, 15),
+    )
+    assert ev.local_timestamp == pytz.timezone(EASTERN).localize(datetime(2026, 7, 20, 22, 15))
+    assert ev.evaluation_date == date(2026, 7, 20)
+    with pytest.raises(TemporalResolutionError):
+        canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp",
+                                    timestamp=datetime(2026, 7, 21))
+
+
+# ---------------------------------------------------------------------------
+# §XIV-30..31: same_instant; elapsed_duration truncates once (SPEC-TIME-001 1.3)
+# ---------------------------------------------------------------------------
+
+def test_same_instant_compares_instants_not_offsets():
+    eastern = pytz.timezone(EASTERN).localize(datetime(2026, 7, 20, 14, 30))
+    ev = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+                                     candidate=eastern, reference=REF)
+    assert ev.is_same is True
+    assert canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+                                       candidate=REF, reference=REF + timedelta(microseconds=1)).is_same is False
+    with pytest.raises(TemporalResolutionError):
+        canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+                                    candidate=datetime(2026, 7, 20, 18, 30), reference=REF)
+
+
+def test_elapsed_duration_sums_exactly_and_truncates_once():
+    """Three 0.6 s intervals are 1.8 s: 1 whole second, not 0 from truncating each."""
+    half = timedelta(milliseconds=600)
+    intervals = [(REF + i * timedelta(seconds=10), REF + i * timedelta(seconds=10) + half) for i in range(3)]
+    ev = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=intervals)
+    assert ev.elapsed_seconds == 1

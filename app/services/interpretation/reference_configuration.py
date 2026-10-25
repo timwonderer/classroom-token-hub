@@ -26,7 +26,7 @@ from typing import Any
 
 from app.services.class_configuration_query_service import resolve_expected_weekly_hours
 from app.services.payroll.settings import payroll_setting_in_force_before
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Version of the reference_configuration projection shape (independent of the
 # observations_json schema_version and of SPEC-ITR-001's version).
@@ -59,7 +59,12 @@ def capture_reference_configuration(class_id: str, *, cycle_completed_at=None) -
     of a materialization safe. All numeric values are canonical decimal **strings**
     (or ``None`` when the input is unconfigured — an honest absence, not zero).
     """
-    payroll = payroll_setting_in_force_before(class_id, cycle_completed_at or utc_now())
+    payroll = payroll_setting_in_force_before(
+        class_id,
+        cycle_completed_at or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+        ).canonical_now_utc,
+    )
     hourly_pay_rate = None
     if payroll is not None and payroll.pay_rate is not None:
         # pay_rate is stored as $/minute; the CWI reference uses $/hour.

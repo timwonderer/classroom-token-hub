@@ -39,7 +39,7 @@ import uuid
 
 from app.extensions import db
 from app.models import InsurancePolicy
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 # Canonical availability projection states (DOM-POL-001 §IX).
@@ -125,7 +125,9 @@ def create_insurance_definition(
         policy_uuid=str(uuid.uuid4()),
         class_id=class_id,
         availability_state=availability_state,
-        created_at=created_at or utc_now(),
+        created_at=created_at or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+        ).canonical_now_utc,
         created_by_seat_id=actor_seat_id,
         **definition,
     )
@@ -234,7 +236,9 @@ def set_availability(
 
     row.availability_state = availability_state
     if availability_state == RETIRED:
-        row.retired_at = retired_at or utc_now()
+        row.retired_at = retired_at or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+        ).canonical_now_utc
 
     db.session.add(row)
     db.session.flush()

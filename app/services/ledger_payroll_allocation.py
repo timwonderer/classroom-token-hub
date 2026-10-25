@@ -6,7 +6,6 @@ from datetime import datetime
 
 from app.extensions import db
 from app.models import Transaction, TransactionStatus
-from app.utils.canonical_temporal_resolver import ensure_utc
 
 
 class AllocationIntegrityError(ValueError):
@@ -45,7 +44,7 @@ def allocate_payroll_cents(pricing, *, original_credit, allocation_version):
             closed_at = datetime.fromisoformat(source["closing_timestamp"])
             if closed_at.tzinfo is None:
                 raise AllocationIntegrityError("Closing timestamp must carry UTC offset.")
-            ranked.append((-(quotient-floor), ensure_utc(closed_at), key[0], key[1], key))
+            ranked.append((-(quotient-floor), closed_at, key[0], key[1], key))
         for *_, key in sorted(ranked)[:cents-allocated]:
             allocations[key] += 1
         expected += cents

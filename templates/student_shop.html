@@ -202,12 +202,12 @@
 
                         <p class="text-muted small mb-2">
                             <strong>Purchased:</strong>
-                            {{ entitlement.purchased_at|fmt_timestamp }}
+                            {{ entitlement.purchased_at_display }}
                         </p>
 
                         {% if entitlement.has_expiry_date %}
                         <p class="text-muted small mb-2">
-                            <strong>Expires:</strong> {{ entitlement.expires_at|fmt_date }}
+                            <strong>Expires:</strong> {{ entitlement.expires_at_display }}
                         </p>
                         {% endif %}
 

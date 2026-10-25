@@ -16,8 +16,8 @@ from app.models import (
 from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 
@@ -141,8 +141,8 @@ def get_attendance_session_counts_by_seat(
         )
         .filter(
             AttendanceSession.class_id == class_id,
-            AttendanceSession.timestamp >= ensure_utc(window_start),
-            AttendanceSession.timestamp < ensure_utc(window_end),
+            AttendanceSession.timestamp >= window_start,
+            AttendanceSession.timestamp < window_end,
         )
         .group_by(AttendanceSession.target_seat_id)
         .all()
@@ -176,38 +176,6 @@ def class_has_claimed_student_work(class_id: str) -> bool:
     ).scalar()
 
 
-def _current_evaluation_day_bounds(ctx, *, reference_time_utc=None):
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="evaluation_day_boundaries",
-        reference_time_utc=reference_time_utc,
-    )
-    return evaluation.boundary_start_utc, evaluation.boundary_end_utc
-
-
-def _current_evaluation_day_bounds_for_date(ctx, evaluation_date):
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="evaluation_day_boundaries",
-        evaluation_date=evaluation_date,
-    )
-    return evaluation.boundary_start_utc, evaluation.boundary_end_utc
-
-
-def _elapsed_seconds(ctx, intervals):
-    if not intervals:
-        return 0
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="elapsed_duration",
-        intervals=intervals,
-    )
-    return evaluation.elapsed_seconds
-
-
 def _pair_active_intervals(rows, *, end_boundary, start_boundary=None):
     intervals = []
     active_start = None
@@ -219,22 +187,22 @@ def _pair_active_intervals(rows, *, end_boundary, start_boundary=None):
         if row.status == "inactive" and active_start is not None:
             interval_start = active_start
             interval_end = timestamp
-            if start_boundary and interval_end <= start_boundary:
+            if start_boundary and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=interval_end, reference=start_boundary).is_later:
                 active_start = None
                 continue
-            if start_boundary and interval_start < start_boundary:
+            if start_boundary and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_start, reference=start_boundary).is_earlier:
                 interval_start = start_boundary
-            if interval_end > end_boundary:
+            if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=interval_end, reference=end_boundary).is_later:
                 interval_end = end_boundary
-            if interval_end >= interval_start:
+            if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_end, reference=interval_start).is_earlier:
                 intervals.append((interval_start, interval_end))
             active_start = None
     if active_start is not None:
         interval_start = active_start
         interval_end = end_boundary
-        if start_boundary and interval_start < start_boundary:
+        if start_boundary and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_start, reference=start_boundary).is_earlier:
             interval_start = start_boundary
-        if interval_end >= interval_start:
+        if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_end, reference=interval_start).is_earlier:
             intervals.append((interval_start, interval_end))
     return intervals
 
@@ -278,7 +246,7 @@ def _derive_hall_pass_state(seat_id: int, class_id: str):
             row for row in rows
             if left_row is not None
             and row.status == "active"
-            and row.timestamp >= left_row.timestamp
+            and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=row.timestamp, reference=left_row.timestamp).is_earlier
         ),
         None,
     )
@@ -316,15 +284,6 @@ class SeatPayrollAttendance:
         return self.payable_seconds + self.in_progress_seconds
 
 
-def _day_end_utc(ctx, timestamp):
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="evaluation_day_boundaries",
-        reference_time_utc=timestamp,
-    ).boundary_end_utc
-
-
 @dataclass(frozen=True)
 class AttendanceInterval:
     opening_event_id: int
@@ -344,8 +303,11 @@ class AttendanceInterval:
             raise ValueError("Settlement requires a persisted closing event.")
         return {"opening_event_id": self.opening_event_id,
                 "closing_event_id": self.closing_event_id,
-                "opening_timestamp": ensure_utc(self.opened_at).isoformat(),
-                "closing_timestamp": ensure_utc(self.closed_at).isoformat(),
+                # Frozen into payroll evidence and compared as text: always UTC.
+                "opening_timestamp": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+                    primitive="localize_timestamp", timestamp=self.opened_at).local_timestamp.isoformat(),
+                "closing_timestamp": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+                    primitive="localize_timestamp", timestamp=self.closed_at).local_timestamp.isoformat(),
                 "credited_seconds": self.credited_seconds}
 
 
@@ -356,7 +318,9 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
     if as_of_utc is None:
         as_of_utc = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
             canonical_execution_context=ctx, primitive="current_time").canonical_now_utc
-    as_of_utc = ensure_utc(as_of_utc)
+    # Interval endpoints are carried in UTC whatever offset the driver returns.
+    as_of_utc = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+        primitive="localize_timestamp", timestamp=as_of_utc).local_timestamp
     if source_limit is None:
         # The unbounded case is the one every other reader in this module also
         # runs; share the memoized fetch (audit O4) instead of a fresh query.
@@ -373,50 +337,55 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
             rows = query.all()
         if len(rows) > source_limit:
             raise ValueError("EVIDENCE_LIMIT_EXCEEDED")
-    intervals, opening = [], None
+    intervals, opening, opening_at, opening_day_end = [], None, None, None
     consumed_closings = set()
     for row in rows:
         if row.id in consumed_closings:
             continue
-        timestamp = ensure_utc(row.timestamp)
-        if timestamp > as_of_utc:
+        timestamp = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+            primitive="localize_timestamp", timestamp=row.timestamp).local_timestamp
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=timestamp, reference=as_of_utc).is_later:
             break
         if row.status == "active":
             if opening is None:
-                opening = row
-            elif timestamp >= _day_end_utc(ctx, opening.timestamp):
+                opening, opening_at = row, timestamp
+                opening_day_end = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+                    primitive="evaluation_day_boundaries", reference_time_utc=timestamp).boundary_end_utc
+            elif not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=timestamp, reference=opening_day_end).is_earlier:
                 # An unrecorded day-end remains unproven; do not invent an ID.
-                end = _day_end_utc(ctx, opening.timestamp)
+                end = opening_day_end
                 boundary_close = next((candidate for candidate in rows
                     if candidate.id not in consumed_closings and candidate.status == "inactive"
-                    and ensure_utc(candidate.timestamp) == end
+                    and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=candidate.timestamp, reference=end).is_same
                     and candidate.mechanism == "system"
                     and candidate.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value), None)
                 intervals.append(AttendanceInterval(opening.id, boundary_close.id if boundary_close else None,
-                    ensure_utc(opening.timestamp), end,
-                    _elapsed_seconds(ctx, [(ensure_utc(opening.timestamp), end)]), opening.mechanism,
+                    opening_at, end,
+                    elapsed_attendance_seconds(ctx, [(opening_at, end)]), opening.mechanism,
                     boundary_close.mechanism if boundary_close else None, bounded_at_day_end=True))
                 if boundary_close is not None:
                     consumed_closings.add(boundary_close.id)
-                opening = row
+                opening, opening_at = row, timestamp
+                opening_day_end = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+                    primitive="evaluation_day_boundaries", reference_time_utc=timestamp).boundary_end_utc
         elif row.status == "inactive" and opening is not None:
-            start = ensure_utc(opening.timestamp)
-            if timestamp < start or timestamp > _day_end_utc(ctx, start):
-                end = _day_end_utc(ctx, start)
+            start = opening_at
+            if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=timestamp, reference=start).is_earlier or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=timestamp, reference=opening_day_end).is_later:
+                end = opening_day_end
                 intervals.append(AttendanceInterval(opening.id, None, start, end,
-                    _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None,
-                    bounded_at_day_end=(end == _day_end_utc(ctx, start))))
+                    elapsed_attendance_seconds(ctx, [(start, end)]), opening.mechanism, None,
+                    bounded_at_day_end=True))
                 opening = None
                 continue
             intervals.append(AttendanceInterval(opening.id, row.id, start, timestamp,
-                _elapsed_seconds(ctx, [(start, timestamp)]), opening.mechanism, row.mechanism))
+                elapsed_attendance_seconds(ctx, [(start, timestamp)]), opening.mechanism, row.mechanism))
             opening = None
     if opening is not None:
-        start = ensure_utc(opening.timestamp)
-        end = min(as_of_utc, _day_end_utc(ctx, start))
+        start = opening_at
+        end = min(as_of_utc, opening_day_end)
         intervals.append(AttendanceInterval(opening.id, None, start, end,
-            _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None,
-            bounded_at_day_end=(end == _day_end_utc(ctx, start))))
+            elapsed_attendance_seconds(ctx, [(start, end)]), opening.mechanism, None,
+            bounded_at_day_end=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=end, reference=opening_day_end).is_same))
     return tuple(rows), tuple(intervals)
 
 
@@ -438,28 +407,31 @@ def close_due_attendance_intervals(*, ctx, seat_id, as_of_utc):
     from app.services.attendance_writer_service import record_attendance_session_command
     from app.services.payroll.settings import current_daily_limit_seconds
     lock_attendance_seat(seat_id, ctx.class_id)
-    now = ensure_utc(as_of_utc)
+    now = as_of_utc
     intervals = list_attendance_intervals(seat_id, ctx.class_id, ctx=ctx, as_of_utc=now)
     created = []
     for interval in intervals:
         if interval.closing_event_id is not None:
             continue
         limit = current_daily_limit_seconds(ctx.class_id, as_of=interval.opened_at)
-        day_end = _day_end_utc(ctx, interval.opened_at)
-        due = day_end
+        bounds = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=ctx, primitive="evaluation_day_boundaries",
+            reference_time_utc=interval.opened_at)
+        due = bounds.boundary_end_utc
         if limit:
-            bounds = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
-                canonical_execution_context=ctx, primitive="evaluation_day_boundaries",
-                reference_time_utc=interval.opened_at)
+            # A session opened at the day's first instant has no earlier same-day window.
+            window_open = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=interval.opened_at, reference=bounds.boundary_start_utc).is_later
             previous = sum(i.credited_seconds for i in intervals
-                if i.closing_event_id is not None and bounds.boundary_start_utc <= i.opened_at < interval.opened_at)
+                if i.closing_event_id is not None and window_open and canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="between_boundaries", candidate=i.opened_at,
+                    start_boundary=bounds.boundary_start_utc, end_boundary=interval.opened_at).is_between)
             remaining = max(0, int(limit) - previous)
             capped = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
                 canonical_execution_context=ctx, primitive="shift_timestamp",
                 timestamp=interval.opened_at, elapsed_seconds=remaining,
                 reference_time_utc=now).shifted_timestamp_utc
             due = min(due, capped)
-        if due <= now:
+        if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=due, reference=now).is_later:
             result = record_attendance_session_command(ctx=ctx, status="inactive", target_seat_id=seat_id,
                 mechanism="system", reason_code=AttendanceReasonCode.DONE_FOR_DAY,
                 reference_time_utc=due,
@@ -504,7 +476,6 @@ def calculate_seat_payroll_intervals(
             canonical_execution_context=ctx,
             primitive="current_time",
         ).canonical_now_utc
-    as_of_utc = ensure_utc(as_of_utc)
 
     identified = list_attendance_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
     closed = [i for i in identified if i.closing_event_id is not None]
@@ -532,7 +503,7 @@ def calculate_seat_payroll_intervals(
         if type(summary.get("allocation_version")) is not int or summary.get("allocation_version") != 1:
             historical.append(event)
             if summary.get("settlement_rule") != CLOSED_SESSION_SETTLEMENT_RULE:
-                legacy_times.append(ensure_utc(event.recorded_at))
+                legacy_times.append(event.recorded_at)
             continue
         try:
             shares = summary["pricing"]
@@ -549,7 +520,7 @@ def calculate_seat_payroll_intervals(
                     settled_pairs.add(key)
         except (KeyError, TypeError, ValueError, AttributeError):
             invalid_evidence = True
-    paid_through = max((ensure_utc(e.recorded_at) for e in historical), default=None)
+    paid_through = max((e.recorded_at for e in historical), default=None)
     if invalid_evidence:
         return SeatPayrollIntervals(payable=(), in_progress=(), unprovable=tuple(identified))
 
@@ -559,29 +530,40 @@ def calculate_seat_payroll_intervals(
         start, end = interval
         if (interval.opening_event_id, interval.closing_event_id) in settled_pairs or (interval.opening_event_id, interval.closing_event_id) in invalidated_pairs:
             continue
-        if paid_through is not None and end <= paid_through:
+        if paid_through is not None and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=paid_through).is_later:
             continue
-        if any(start < instant < end for instant in legacy_times):
+        if any(canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=instant, reference=start).is_later and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=instant, reference=end).is_earlier for instant in legacy_times):
             unprovable.append(interval)
             continue
-        if end > start:
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=start).is_later:
             payable.append(interval)
 
     open_intervals = []
     if in_progress is not None:
         start, end = in_progress
-        if any(start < instant < end for instant in legacy_times):
+        if any(canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=instant, reference=start).is_later and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=instant, reference=end).is_earlier for instant in legacy_times):
             unprovable.append(in_progress)
             start = end
-        if end > start:
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=start).is_later:
             open_intervals.append((start, end))
 
     return SeatPayrollIntervals(payable=tuple(payable), in_progress=tuple(open_intervals), unprovable=tuple(unprovable))
 
 
 def elapsed_attendance_seconds(ctx, intervals) -> int:
-    """Elapsed seconds across ``intervals`` under the canonical temporal resolver."""
-    return _elapsed_seconds(ctx, list(intervals))
+    """Elapsed seconds across ``intervals`` under the canonical temporal resolver.
+
+    No intervals is zero seconds; the resolver refuses an empty list.
+    """
+    intervals = list(intervals)
+    if not intervals:
+        return 0
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="elapsed_duration",
+        intervals=intervals,
+    ).elapsed_seconds
 
 
 def calculate_seat_payroll_attendance(
@@ -590,8 +572,8 @@ def calculate_seat_payroll_attendance(
     """Seconds of :func:`calculate_seat_payroll_intervals`: payable and in progress."""
     intervals = calculate_seat_payroll_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
     return SeatPayrollAttendance(
-        payable_seconds=_elapsed_seconds(ctx, list(intervals.payable)),
-        in_progress_seconds=_elapsed_seconds(ctx, list(intervals.in_progress)),
+        payable_seconds=elapsed_attendance_seconds(ctx, intervals.payable),
+        in_progress_seconds=elapsed_attendance_seconds(ctx, intervals.in_progress),
     )
 
 
@@ -614,14 +596,20 @@ def calculate_worked_attendance_seconds_for_date(seat_id: int, class_id: str, ev
     AttendanceSession rows or reason codes. Still-active sessions are clipped
     at the canonical now so a claim cannot count time that has not elapsed.
     """
-    day_start_utc, day_end_utc = _current_evaluation_day_bounds_for_date(ctx, evaluation_date)
+    day_bounds = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="evaluation_day_boundaries",
+        evaluation_date=evaluation_date,
+    )
+    day_start_utc, day_end_utc = day_bounds.boundary_start_utc, day_bounds.boundary_end_utc
     now_evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="current_time",
     )
     end_boundary = min(day_end_utc, now_evaluation.canonical_now_utc)
-    if end_boundary <= day_start_utc:
+    if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end_boundary, reference=day_start_utc).is_later:
         return 0
     canonical_rows = _canonical_seat_rows(seat_id, class_id)
     intervals = _pair_active_intervals(
@@ -629,7 +617,7 @@ def calculate_worked_attendance_seconds_for_date(seat_id: int, class_id: str, ev
         start_boundary=day_start_utc,
         end_boundary=end_boundary,
     )
-    return _elapsed_seconds(ctx, intervals)
+    return elapsed_attendance_seconds(ctx, intervals)
 
 
 def calculate_worked_attendance_seconds_today(seat_id: int, class_id: str, *, ctx):
@@ -641,14 +629,19 @@ def calculate_worked_attendance_seconds_today(seat_id: int, class_id: str, *, ct
     it must never be the unbounded unpaid-since-payroll figure, which can span
     many days when payroll has not run.
     """
-    day_start_utc, day_end_utc = _current_evaluation_day_bounds(ctx)
+    day_bounds = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="evaluation_day_boundaries",
+    )
+    day_start_utc, day_end_utc = day_bounds.boundary_start_utc, day_bounds.boundary_end_utc
     now_evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="current_time",
     )
     end_boundary = min(day_end_utc, now_evaluation.canonical_now_utc)
-    if end_boundary <= day_start_utc:
+    if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end_boundary, reference=day_start_utc).is_later:
         return 0
     canonical_rows = _canonical_seat_rows(seat_id, class_id)
     intervals = _pair_active_intervals(
@@ -656,7 +649,7 @@ def calculate_worked_attendance_seconds_today(seat_id: int, class_id: str, *, ct
         start_boundary=day_start_utc,
         end_boundary=end_boundary,
     )
-    return _elapsed_seconds(ctx, intervals)
+    return elapsed_attendance_seconds(ctx, intervals)
 
 
 def is_done_for_day(seat_id: int, class_id: str, *, ctx, reference_time_utc=None) -> bool:
@@ -671,9 +664,13 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx, reference_time_utc=None
     which previously computed attendance facts independently and never
     surfaced this one at all.
     """
-    day_start_utc, day_end_utc = _current_evaluation_day_bounds(
-        ctx, reference_time_utc=reference_time_utc
+    day_bounds = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="evaluation_day_boundaries",
+        reference_time_utc=reference_time_utc,
     )
+    day_start_utc, day_end_utc = day_bounds.boundary_start_utc, day_bounds.boundary_end_utc
     rows = AttendanceSession.query.filter(
         AttendanceSession.target_seat_id == seat_id,
         AttendanceSession.class_id == class_id,
@@ -684,7 +681,7 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx, reference_time_utc=None
     ).all()
     if not rows:
         return False
-    if any(ensure_utc(row.timestamp) != day_start_utc for row in rows):
+    if any(not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=row.timestamp, reference=day_start_utc).is_same for row in rows):
         return True
     # The prior day's exact end is today's start. Its persisted closing event
     # belongs to the originating pair, not today's terminal state (§XV.7).
@@ -694,7 +691,7 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx, reference_time_utc=None
         for interval in list_attendance_intervals(
             seat_id, class_id, ctx=ctx, as_of_utc=day_start_utc
         )
-        if interval.opened_at < day_start_utc
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval.opened_at, reference=day_start_utc).is_earlier
     }
     return any(row.id not in prior_day_closings for row in rows)
 

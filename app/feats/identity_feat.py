@@ -30,7 +30,7 @@ from app.services.class_configuration_query_service import get_class_economy
 from app.services.classroom_setup import create_student_seat_with_profile, delete_seat_with_profile
 from app.services.context_resolver import CanonicalContext
 from app.feats.base import requires_feat_context
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -256,12 +256,15 @@ def _recovery_nonce_hash(nonce: str) -> str:
 
 
 def recovery_setup_is_valid(user: Optional[User], authorization: Optional[str]) -> bool:
-    from app.utils.canonical_temporal_resolver import ensure_utc
-
     if (not user or user.user_role != "student"
             or not isinstance(authorization, str) or len(authorization) != 43
             or not user.recovery_setup_nonce_hash or not user.recovery_setup_expires_at
-            or ensure_utc(user.recovery_setup_expires_at) <= utc_now()):
+            or not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                candidate=user.recovery_setup_expires_at,
+                reference=canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+            ).is_later):
         return False
     return hmac.compare_digest(user.recovery_setup_nonce_hash, _recovery_nonce_hash(authorization))
 
@@ -491,13 +494,16 @@ def validate_recovery_code(
     idempotency_key: str,
 ) -> RecoveryLookupResult:
     """Consume the code once and bind reset authority to the accepting session."""
-    from app.utils.canonical_temporal_resolver import ensure_utc
-
     matches = (User.query.filter_by(reset_code=reset_code, user_role="student")
                .populate_existing().limit(2).with_for_update().all())
     user = matches[0] if len(matches) == 1 else None
     if (not reset_code or not user or not user.reset_code_expires_at
-            or ensure_utc(user.reset_code_expires_at) <= utc_now()):
+            or not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                candidate=user.reset_code_expires_at,
+                reference=canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+            ).is_later):
         return RecoveryLookupResult(
             success=False, error_code="INVALID_OR_EXPIRED",
             error_message="Invalid or expired recovery code.",
@@ -622,7 +628,9 @@ def bind_authenticated_student_to_class(
 
     # Step 6: Bind seat to authenticated user
     matched_seat.user_id = user_id
-    matched_seat.claimed_at = utc_now()
+    matched_seat.claimed_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc
     matched_seat.claim_first_name_hash = None
     matched_seat.claim_last_name_hash = None
     matched_seat.roster_fingerprint = None

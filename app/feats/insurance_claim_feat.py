@@ -30,7 +30,7 @@ import math
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import uuid
 
 from app.extensions import db
@@ -101,7 +101,6 @@ def _resolve_claim_policy(entitlement_id, *, class_id, seat_id):
 from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
     CLASS_LEVEL_EVALUATION,
-    ensure_utc,
 )
 from app.models import _quantize_currency
 from app.services.economic_engine import require_ready_base, EconomicEngineNotReady
@@ -140,7 +139,7 @@ class _CoverageTerms:
 def _coverage_period_at(class_id: str, entitlement_id: str, filed_at: datetime):
     """The coverage period containing a filing time, or ``None``."""
     return insurance_coverage.get_coverage_period(
-        class_id, entitlement_id, reference_time_utc=ensure_utc(filed_at)
+        class_id, entitlement_id, reference_time_utc=filed_at
     )
 
 
@@ -160,17 +159,6 @@ def _period_for_claim(claim) -> "insurance_coverage.CoveragePeriod":
     return period
 
 
-def _class_local_date(canonical_context: CanonicalContext, ts_utc: datetime) -> date:
-    """Class-local (CLE) calendar date of a UTC instant."""
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=canonical_context,
-        primitive="current_evaluation_day",
-        reference_time_utc=ensure_utc(ts_utc),
-    )
-    return evaluation.evaluation_date
-
-
 def _filing_deadline_end_utc(
     canonical_context: CanonicalContext,
     transaction_ts_utc: datetime,
@@ -183,8 +171,19 @@ def _filing_deadline_end_utc(
     NOT 7×24h). The returned instant is the exclusive upper bound: a submission is
     timely iff ``submitted_at < deadline_end_utc``.
     """
-    txn_date = _class_local_date(canonical_context, transaction_ts_utc)
-    deadline_date = txn_date + timedelta(days=int(claim_window_days))
+    txn_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=transaction_ts_utc,
+    ).evaluation_date
+    deadline_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="shift_calendar_days",
+        date=txn_date,
+        days=int(claim_window_days),
+    ).shifted_date
     boundaries = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=canonical_context,
@@ -211,8 +210,18 @@ def _coverage_week_equivalent(
     """
     freq = (policy_terms.charge_frequency or "WEEKLY").strip().upper()
     if freq == "MONTHLY":
-        start_date = _class_local_date(canonical_context, period.start_utc)
-        end_date = _class_local_date(canonical_context, period.end_utc)
+        start_date = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=canonical_context,
+            primitive="current_evaluation_day",
+            reference_time_utc=period.start_utc,
+        ).evaluation_date
+        end_date = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=canonical_context,
+            primitive="current_evaluation_day",
+            reference_time_utc=period.end_utc,
+        ).evaluation_date
         covered_days = (end_date - start_date).days
         return Decimal(covered_days) / Decimal("7")
     # Weekly coverage (and any fail-safe) is exactly one week-equivalent.
@@ -295,7 +304,7 @@ def covered_from_utc(canonical_context: CanonicalContext, policy_terms, granted_
     A loss that happens during the waiting period is not covered, whenever the
     claim is filed (operator ruling 2026-09-26). With no wait this is the grant.
     """
-    granted = ensure_utc(granted_event.timestamp)
+    granted = granted_event.timestamp
     _, effective_start = coverage_effective_start_utc(
         canonical_context, granted, waiting_period_days(policy_terms, granted_event)
     )
@@ -316,15 +325,20 @@ def coverage_effective_start_utc(
     day after purchase, not at 3pm on that day. ``N = 0`` returns the start of the
     purchase date, which is at or before the grant, so coverage is immediate.
     """
-    start_date = _class_local_date(canonical_context, coverage_start_utc)
-    effective_date = start_date + timedelta(days=int(waiting_period_days))
-    boundaries = canonical_temporal_resolver(
+    start_date = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=canonical_context,
-        primitive="evaluation_day_boundaries",
-        evaluation_date=effective_date,
+        primitive="current_evaluation_day",
+        reference_time_utc=coverage_start_utc,
+    ).evaluation_date
+    effective = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="shift_calendar_days",
+        date=start_date,
+        days=int(waiting_period_days),
     )
-    return effective_date, boundaries.boundary_start_utc
+    return effective.shifted_date, effective.boundary_start_utc
 
 
 @dataclass(frozen=True)
@@ -374,7 +388,7 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
     grant = _resolve_claim_grant(claim.entitlement_id, class_id=class_id, seat_id=seat_id)
     policy = _resolve_claim_policy(claim.entitlement_id, class_id=class_id, seat_id=seat_id)
 
-    coverage_start_utc = ensure_utc(grant.timestamp)
+    coverage_start_utc = grant.timestamp
     effective_date, _ = coverage_effective_start_utc(
         canonical_context, coverage_start_utc, waiting_period_days(policy, grant)
     )
@@ -411,9 +425,15 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
         )
         if source_transaction is not None and claim_window_days is not None:
             deadline_end_utc = _filing_deadline_end_utc(
-                canonical_context, ensure_utc(source_transaction.timestamp), claim_window_days
+                canonical_context, source_transaction.timestamp, claim_window_days
             )
-            filed_within_window = ensure_utc(claim.submitted_at) < deadline_end_utc
+            filed_within_window = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=canonical_context,
+                primitive="earlier_than",
+                candidate=claim.submitted_at,
+                reference=deadline_end_utc,
+            ).is_earlier
     elif policy.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
         allowance_unit = "date"
         per_week = policy.claimable_dates_per_week_equivalent or Decimal("0")
@@ -491,10 +511,16 @@ def _enforce_waiting_period(
 
     effective_date, effective_start = coverage_effective_start_utc(
         canonical_context,
-        ensure_utc(granted_event.timestamp),
+        granted_event.timestamp,
         wait_days,
     )
-    if submitted_at >= effective_start:
+    if not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="earlier_than",
+        candidate=submitted_at,
+        reference=effective_start,
+    ).is_earlier:
         return None
 
     return InsuranceClaimSubmissionResult(
@@ -561,8 +587,13 @@ def _enforce_transaction_submission(
 
     # (b) Coverage interval. The filing window is NOT gated here — see the
     # docstring above; it is surfaced and enforced at approval instead.
-    source_ts_utc = ensure_utc(source_transaction.timestamp)
-    if source_ts_utc < covered_from_utc(canonical_context, policy_terms, granted_event):
+    if canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="earlier_than",
+        candidate=source_transaction.timestamp,
+        reference=covered_from_utc(canonical_context, policy_terms, granted_event),
+    ).is_earlier:
         return InsuranceClaimSubmissionResult(
             success=False,
             error_code="TRANSACTION_OUTSIDE_COVERAGE",
@@ -666,8 +697,18 @@ def _parse_productivity_dates(
             error_message="additional_information must be a string when provided",
         )
 
-    coverage_start_date = _class_local_date(canonical_context, coverage_start_utc)
-    today_local = _class_local_date(canonical_context, ensure_utc(submitted_at))
+    coverage_start_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=coverage_start_utc,
+    ).evaluation_date
+    today_local = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=submitted_at,
+    ).evaluation_date
 
     parsed: list[_ProductivityClaimedDate] = []
     seen: set[date] = set()
@@ -882,9 +923,15 @@ def _enforce_productivity_submission(
     return None, advisory_flags
 
 
-def _week_start(day: date) -> date:
+def _week_start(canonical_context: CanonicalContext, day: date) -> date:
     """Monday-anchored week bucket, matching the canonical period resolver."""
-    return day - timedelta(days=day.weekday())
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="shift_calendar_days",
+        date=day,
+        days=-day.weekday(),
+    ).shifted_date
 
 
 def _projected_weekly_hours_for_status(row) -> Decimal:
@@ -989,7 +1036,7 @@ def _compute_productivity_weekly_advisory(
 
     claimed_by_week: dict[date, Decimal] = {}
     for row in existing:
-        wk = _week_start(row.claim_date)
+        wk = _week_start(canonical_context, row.claim_date)
         claimed_by_week[wk] = (
             claimed_by_week.get(wk, Decimal("0"))
             + _projected_weekly_hours_for_status(row)
@@ -997,19 +1044,25 @@ def _compute_productivity_weekly_advisory(
     for claimed in parsed_dates:
         if claimed.claim_date in existing_dates:
             continue  # replay of an already-persisted date; already counted above
-        wk = _week_start(claimed.claim_date)
+        wk = _week_start(canonical_context, claimed.claim_date)
         claimed_by_week[wk] = (
             claimed_by_week.get(wk, Decimal("0")) + claimed.student_claimed_hours
         )
 
     # Restrict advisory to weeks this submission actually touches.
-    touched_weeks = {_week_start(d.claim_date) for d in parsed_dates}
+    touched_weeks = {_week_start(canonical_context, d.claim_date) for d in parsed_dates}
 
     warnings: list[dict] = []
     for wk in sorted(touched_weeks):
         worked_seconds = 0
         for offset in range(7):
-            day = wk + timedelta(days=offset)
+            day = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=canonical_context,
+                primitive="shift_calendar_days",
+                date=wk,
+                days=offset,
+            ).shifted_date
             worked_seconds += calculate_worked_attendance_seconds_for_date(
                 seat_id, class_id, day, ctx=canonical_context
             )
@@ -1468,8 +1521,15 @@ def build_productivity_review_context(
         if wk not in worked_week_cache:
             total = 0
             for offset in range(7):
+                day = canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION,
+                    canonical_execution_context=canonical_context,
+                    primitive="shift_calendar_days",
+                    date=wk,
+                    days=offset,
+                ).shifted_date
                 total += calculate_worked_attendance_seconds_for_date(
-                    seat_id, class_id, wk + timedelta(days=offset), ctx=canonical_context
+                    seat_id, class_id, day, ctx=canonical_context
                 )
             worked_week_cache[wk] = total
         return worked_week_cache[wk]
@@ -1477,7 +1537,7 @@ def build_productivity_review_context(
     # Claimed hours per week within THIS claim (student-claimed).
     claimed_week: dict[date, Decimal] = {}
     for row in rows:
-        wk = _week_start(row.claim_date)
+        wk = _week_start(canonical_context, row.claim_date)
         claimed_week[wk] = claimed_week.get(wk, Decimal("0")) + (
             row.student_claimed_hours or Decimal("0")
         )
@@ -1485,7 +1545,7 @@ def build_productivity_review_context(
     review: list[ProductivityDateReview] = []
     any_exceeded = False
     for row in rows:
-        wk = _week_start(row.claim_date)
+        wk = _week_start(canonical_context, row.claim_date)
         worked_seconds = calculate_worked_attendance_seconds_for_date(
             seat_id, class_id, row.claim_date, ctx=canonical_context
         )
@@ -1937,10 +1997,16 @@ def _resolve_insurance_claim_impl(
             if policy_terms.claim_window_days is not None:
                 deadline_end_utc = _filing_deadline_end_utc(
                     canonical_context,
-                    ensure_utc(source_transaction.timestamp),
+                    source_transaction.timestamp,
                     policy_terms.claim_window_days,
                 )
-                filed_late = ensure_utc(claim.submitted_at) >= deadline_end_utc
+                filed_late = not canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION,
+                    canonical_execution_context=canonical_context,
+                    primitive="earlier_than",
+                    candidate=claim.submitted_at,
+                    reference=deadline_end_utc,
+                ).is_earlier
                 if filed_late and not (filing_window_override_reason or "").strip():
                     return InsuranceClaimResolutionResult(
                         success=False,

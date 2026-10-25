@@ -8,10 +8,8 @@ and other interactive features. Most routes require authentication.
 import re
 import secrets
 import uuid
-import pytz
-from datetime import datetime, timedelta, timezone
+from datetime import date
 from decimal import Decimal
-from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app, g
 from sqlalchemy import func, or_
@@ -83,9 +81,8 @@ from app.services.hall_pass_request_queue import HallPassRequestNotFound
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class, resolve_feature_class_for_class
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
-    utc_now,
 )
 from app.utils.join_code import get_display_join_code
 from app.utils.transaction_idempotency import (
@@ -93,7 +90,6 @@ from app.utils.transaction_idempotency import (
     get_idempotent_transaction,
     purchase_transaction_key,
 )
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 
 # Import external modules
 from app.services.attendance_service import (
@@ -134,63 +130,6 @@ def handle_api_context_resolution_error(e):
     if isinstance(e, (ContextForbidden, ContextMismatch)):
         return jsonify({"status": "error", "message": "Not Found", "error": "Not Found"}), 404
     return jsonify({"status": "error", "message": "Class context required", "error": "Class context required"}), 401
-
-
-
-# -------------------- Rent Helpers --------------------
-
-
-
-
-def _get_period_delta(rent_setting):
-    """Return the timedelta/relativedelta for a rent setting."""
-    if rent_setting.frequency_type == 'daily':
-        return timedelta(days=1)
-    if rent_setting.frequency_type == 'weekly':
-        return timedelta(weeks=1)
-    if rent_setting.frequency_type == 'monthly':
-        return relativedelta(months=1)
-    if rent_setting.frequency_type == 'custom':
-        unit = rent_setting.custom_frequency_unit or 'days'
-        value = rent_setting.custom_frequency_value or 1
-        if unit == 'days':
-            return timedelta(days=value)
-        if unit == 'weeks':
-            return timedelta(weeks=value)
-        if unit == 'months':
-            return relativedelta(months=value)
-    return timedelta(days=30)
-
-
-def _add_period(dt, delta):
-    """Add a timedelta or relativedelta to dt."""
-    return dt + delta
-
-
-def _calculate_due_dates(rent_setting, now):
-    """
-    Calculate the current and next due dates for a rent setting based on the provided time.
-    Returns (current_due, next_due). If first due date is not set, returns (None, None).
-    """
-    first_due = ensure_utc(rent_setting.first_rent_due_date)
-    if not first_due:
-        return (None, None)
-
-    delta = _get_period_delta(rent_setting)
-
-    # If before the first due date, the first due date is both current and next marker
-    if now < first_due:
-        return (first_due, _add_period(first_due, delta))
-
-    current_due = first_due
-    next_due = _add_period(first_due, delta)
-
-    # Advance until next_due is after now
-    while next_due and next_due <= now:
-        current_due = next_due
-        next_due = _add_period(next_due, delta)
-
-    return (current_due, next_due)
 
 
 def _resolve_class_display_label(class_id, fallback_block=None):
@@ -1184,7 +1123,7 @@ def update_hall_pass_settings():
             user_id=context.user_id if context else None,
             class_id=class_id,
             max_queue_limit=data["max_queue_limit"],
-            updated_at=utc_now(),
+            updated_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",
         )
@@ -1237,7 +1176,7 @@ def hall_pass_history():
 
         if start_date:
             try:
-                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_day = date.fromisoformat(start_date)
                 start_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1250,7 +1189,7 @@ def hall_pass_history():
 
         if end_date:
             try:
-                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                end_day = date.fromisoformat(end_date)
                 end_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1271,13 +1210,7 @@ def hall_pass_history():
         offset = (page - 1) * page_size
         records = query.offset(offset).limit(page_size).all()
 
-        from app.utils.temporal_display import format_timestamp as _fmt_display, resolve_display_timezone as _resolve_tz
-        _display_tz = _resolve_tz(context)
-
-        def format_timestamp(dt):
-            if not dt:
-                return None
-            return _fmt_display(dt, _display_tz)
+        from app.services.payroll.builders import build_hall_pass_history_times
 
         # Format records for response
         records_data = []
@@ -1311,10 +1244,12 @@ def hall_pass_history():
                 "period": class_row.section if class_row else "",
                 "reason": record.destination,
                 "status": status,
-                "request_time": format_timestamp(record.timestamp),
+                **build_hall_pass_history_times(
+                    context, requested_at=record.timestamp,
+                    left_at=left_row.timestamp if left_row else None,
+                    returned_at=return_row.timestamp if return_row else None,
+                ),
                 "decision_time": None,
-                "left_time": format_timestamp(left_row.timestamp if left_row else None),
-                "return_time": format_timestamp(return_row.timestamp if return_row else None),
             })
 
         return jsonify({
@@ -1420,7 +1355,7 @@ def save_hall_pass_setup():
             hall_pass_enabled=hall_pass_enabled,
             pass_type_payload=pass_types,
             max_queue_limit=int(data.get('max_queue_limit', 10)),
-            updated_at=utc_now(),
+            updated_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
             correlation_id=f"corr_settings_setup_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-setup:{user_id}:{scope['class_id']}:{uuid.uuid4().hex}",
         )
@@ -1571,7 +1506,7 @@ def attendance_history():
 
         if start_date:
             try:
-                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_day = date.fromisoformat(start_date)
                 start_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1584,7 +1519,7 @@ def attendance_history():
 
         if end_date:
             try:
-                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                end_day = date.fromisoformat(end_date)
                 end_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1645,12 +1580,8 @@ def attendance_history():
             student_class_id = seat_info['class_id']
             student_class_label = seat_info['class_label'] or student_class_id or 'Unknown'
 
-            timestamp_str = None
-            formatted_ts = None
-            if record.timestamp:
-                timestamp_str = ensure_utc(record.timestamp).isoformat().replace('+00:00', 'Z')
-                from app.utils.temporal_display import format_timestamp as _format_ts, resolve_display_timezone as _resolve_tz
-                formatted_ts = _format_ts(record.timestamp, _resolve_tz(context))
+            from app.services.payroll.builders import build_attendance_record_times
+            record_times = build_attendance_record_times(context, record.timestamp)
 
             records_data.append({
                 "id": record.id,
@@ -1661,8 +1592,7 @@ def attendance_history():
                 "period": seat_info['period'],
                 "status": record.status,
                 "reason": record.reason_code,
-                "timestamp": timestamp_str,
-                "formatted_timestamp": formatted_ts,
+                **record_times,
             })
 
         return jsonify({

@@ -1,5 +1,4 @@
 """Encrypted initial signup staging under INV-ARC-018 and FEAT-IDEN-101."""
-from datetime import timedelta
 from hashlib import sha256
 import json
 import secrets
@@ -10,7 +9,7 @@ from app.feats.base import requires_feat_context
 from app.models import TeacherSignupAttempt
 from app.services.classroom_setup import create_teacher, create_class
 from app.utils.auth_username import normalize_auth_username
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.encryption import encrypt_totp, decrypt_totp
 from app.utils.join_code import generate_join_code
 
@@ -27,7 +26,10 @@ def _load(nonce, *, lock=False):
         return None
     query = TeacherSignupAttempt.query.filter_by(nonce_hash=digest).populate_existing()
     row = (query.with_for_update() if lock else query).first()
-    if row is None or ensure_utc(row.expires_at) <= utc_now():
+    if row is None or not canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+            candidate=row.expires_at, reference=canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc).is_later:
         return None
     return row
 
@@ -47,7 +49,11 @@ def stage_signup(*, previous_nonce, metadata, correlation_id, idempotency_key):
         db.session.delete(old)
     nonce = secrets.token_urlsafe(32)
     db.session.add(TeacherSignupAttempt(nonce_hash=_digest(nonce),
-        payload_encrypted=encrypt_totp(json.dumps(payload)), expires_at=utc_now()+timedelta(minutes=30)))
+        payload_encrypted=encrypt_totp(json.dumps(payload)), expires_at=canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+            timestamp=canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+            elapsed_seconds=30 * 60).shifted_timestamp_utc))
     return nonce
 
 
@@ -85,4 +91,5 @@ def complete_signup(*, nonce, username, totp_code, correlation_id, idempotency_k
 
 @requires_feat_context('FEAT-IDEN-101')
 def purge_expired_signups(*, correlation_id, idempotency_key):
-    return TeacherSignupAttempt.query.filter(TeacherSignupAttempt.expires_at <= utc_now()).delete(synchronize_session=False)
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    return TeacherSignupAttempt.query.filter(TeacherSignupAttempt.expires_at <= now).delete(synchronize_session=False)

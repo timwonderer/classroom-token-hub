@@ -114,7 +114,7 @@ def test_stale_account_destruction_reuses_all_class_teardown(client, app, monkey
     now = utc_now()
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='stale:setup'):
         classroom.teacher_user.last_signed_in_at = now-timedelta(days=180)
-    monkeypatch.setattr(teacher_lifecycle, 'utc_now', lambda: now)
+    monkeypatch.setattr('app.utils.canonical_temporal_resolver.utc_now', lambda: now)
     assert destroy_stale_teacher(user_id=user_id, correlation_id=generate_correlation_id(), idempotency_key='stale:destroy')
     db.session.expire_all()
     assert db.session.get(User, user_id) is None
@@ -165,7 +165,7 @@ def test_scheduled_sweep_deletes_never_signed_in_after_30_days(client, app, monk
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='never:setup'):
         classroom.teacher_user.created_at = now-timedelta(days=30)
         classroom.teacher_user.last_signed_in_at = None
-    monkeypatch.setattr(teacher_lifecycle, 'utc_now', lambda: now)
+    monkeypatch.setattr('app.utils.canonical_temporal_resolver.utc_now', lambda: now)
     job = next(job for job in SCHEDULED_JOB_SPECS if job.id == 'stale_teacher_accounts')
     # Cron on a fixed minute, not `interval, hours=1` (audit O3): an interval
     # trigger anchors to process-start time, so all nine hourly jobs became due

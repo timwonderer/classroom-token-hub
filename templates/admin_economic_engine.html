@@ -90,8 +90,8 @@
             <span class="badge bg-danger">Pricing Significantly Off</span>
             {% endif %}
           </h5>
-          {% if policy_summary.updated_at %}
-          <div class="small text-muted mb-1">Last updated: {{ policy_summary.updated_at | fmt_date }}</div>
+          {% if policy_dates.policy_updated_on %}
+          <div class="small text-muted mb-1">Last updated: {{ policy_dates.policy_updated_on }}</div>
           {% endif %}
           <p class="text-muted mb-0">Configure the Economic Policy to change the earned income to expense ratio within the classroom economy. This affects the pricing recommendation calculations and alert thresholds.</p>
         </div>
@@ -118,9 +118,9 @@
           {% endif %}
           {% if policy_summary.has_pending_economy_change %}
           <span class="badge bg-info text-dark">Economy Update Scheduled</span>
-          {% if pending_rebalance_effective_at %}
+          {% if policy_dates.pending_rebalance_effective_on %}
           <div class="small text-muted mt-1">
-            Scheduled effective date: {{ pending_rebalance_effective_at | fmt_date }}
+            Scheduled effective date: {{ policy_dates.pending_rebalance_effective_on }}
           </div>
           {% endif %}
           {% endif %}

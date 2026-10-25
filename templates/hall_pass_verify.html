@@ -59,9 +59,9 @@
                     <dt class="col-5 text-muted small">Destination</dt>
                     <dd class="col-7">{{ result.destination }}</dd>
 
-                    {% if result.time_out %}
+                    {% if result.time_out_display %}
                     <dt class="col-5 text-muted small">Time Out</dt>
-                    <dd class="col-7">{{ result.time_out|fmt_timestamp }}</dd>
+                    <dd class="col-7">{{ result.time_out_display }}</dd>
                     {% endif %}
 
                     <dt class="col-5 text-muted small">Status</dt>
@@ -73,7 +73,7 @@
                         </span>
                         {% elif result.status == 'returned' %}
                         <span class="badge bg-success">
-                            Returned{% if result.return_time %} at {{ result.return_time|fmt_timestamp }}{% endif %}
+                            Returned{% if result.return_time_display %} at {{ result.return_time_display }}{% endif %}
                         </span>
                         {% elif result.status == 'approved' %}
                         <span class="badge bg-info text-dark">Approved (not yet out)</span>
