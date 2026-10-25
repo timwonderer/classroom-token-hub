@@ -1,0 +1,18 @@
+<div class="hx:mx-auto hx:flex hextra-max-page-width">
+  {{ partial "sidebar.html" (dict "context" .) }}
+  {{ partial "toc.html" . }}
+  <article class="hx:w-full hx:min-w-0 hx:pb-8">
+    <main id="content" class="hx:w-full hx:min-w-0 hextra-max-content-width hx:px-6 hx:pt-4 hx:md:px-12">
+      {{ partial "breadcrumb.html" (dict "page" . "enable" true) }}
+      <div class="content">
+        {{ if not .Params.source_h1 }}<h1>{{ .Title }}</h1>{{ end }}
+        {{ .Content }}
+      </div>
+      <div class="cth-source">
+        {{ with .Params.sourceEditURL }}<a href="{{ . }}">Edit canonical source on GitHub</a>{{ end }}
+        {{ with .Params.last_updated }}<p>Last updated: {{ . }}</p>{{ end }}
+      </div>
+      {{ partial "components/pager.html" . }}
+    </main>
+  </article>
+</div>

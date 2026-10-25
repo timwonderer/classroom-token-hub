@@ -1,0 +1,15 @@
+{{- $url := urls.Parse .Destination -}}
+{{- $dest := .Destination -}}
+{{- if and (not $url.IsAbs) $url.Path -}}
+  {{- $path := $url.Path -}}
+  {{- if not (hasPrefix $path "/") -}}{{- $path = path.Join (path.Dir (.PageInner.Params.canonicalSource | default .PageInner.File.Path)) $path -}}{{- end -}}
+  {{- if strings.HasSuffix $path "README.md" -}}{{- $path = path.Dir $path -}}{{- end -}}
+  {{- with site.GetPage $path -}}
+    {{- $dest = .RelPermalink -}}
+    {{- with $url.RawQuery -}}{{- $dest = printf "%s?%s" $dest . -}}{{- end -}}
+    {{- with $url.Fragment -}}{{- $dest = printf "%s#%s" $dest . -}}{{- end -}}
+  {{- else -}}
+    {{- if hasPrefix $path "assets/" -}}{{- $dest = relURL $path -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+<a href="{{ $dest | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}>{{ .Text | safeHTML }}</a>
