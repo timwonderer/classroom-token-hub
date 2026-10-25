@@ -8,7 +8,7 @@ presentation-ready text, localized through the canonical temporal resolver
 
 from __future__ import annotations
 
-from app.utils.temporal_display import format_timestamp
+from app.utils.temporal_display import format_date, format_timestamp
 from app.services import obligations_service
 from types import SimpleNamespace
 
@@ -46,6 +46,11 @@ def build_teacher_issue_view(ctx, issue, student_display_name, class_label):
         'closed_at_display': format_timestamp(ctx, issue.closed_at),
         'closed_by_type': issue.closed_by_type,
         'context_snapshot': issue.context_snapshot,
+        # The snapshot's frozen ISO timestamps, shown as class-local dates.
+        'recent_transactions': [
+            {**txn, 'date_display': format_date(ctx, txn.get('timestamp')) if txn.get('timestamp') else 'N/A'}
+            for txn in ((issue.context_snapshot or {}).get('recent_transactions') or [])[:5]
+        ],
         'page_url': issue.page_url,
         'system_metadata': issue.system_metadata,
         'eligible_for_reward': issue.eligible_for_reward,

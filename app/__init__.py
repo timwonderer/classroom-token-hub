@@ -62,7 +62,7 @@ if missing_vars:
 
 # -------------------- UTILITIES --------------------
 from app.utils.encryption import PIIEncryptedType
-from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown, docs_url_for, sanitize_for_log
+from app.utils.helpers import is_safe_url, render_markdown, docs_url_for, sanitize_for_log
 from app.utils.constants import THEME_PROMPTS
 
 
@@ -559,10 +559,7 @@ def create_app():
     # Add built-in functions to Jinja2 globals
     app.jinja_env.globals['min'] = min
     app.jinja_env.globals['max'] = max
-    app.jinja_env.globals['format_utc_iso'] = format_utc_iso
 
-    from app.utils.temporal_display import register_temporal_filters
-    register_temporal_filters(app)
     
     from app.utils.join_code import get_display_join_code
     app.jinja_env.globals['get_display_join_code'] = get_display_join_code

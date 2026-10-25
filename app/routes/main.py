@@ -347,7 +347,7 @@ def verify_hall_pass(teacher_public_token):
         }
         # The filter this replaces localized under the request's canonical context
         # (SLE for an anonymous kiosk visitor); reproduced exactly.
-        result = build_hall_pass_verification_result(result, getattr(g, "canonical_context", None))
+        result = build_hall_pass_verification_result(result, public_temporal_context)
 
     return render_template(
         'hall_pass_verify.html',

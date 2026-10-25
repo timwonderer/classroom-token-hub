@@ -77,9 +77,19 @@ from app.forms import (
     ManualPaymentForm
 )
 # Import utility functions
-from app.utils.helpers import safe_redirect_target, format_utc_iso, generate_anonymous_code, render_template_with_fallback as render_template
+from app.utils.helpers import safe_redirect_target, generate_anonymous_code, render_template_with_fallback as render_template
 from app.utils.join_code import generate_join_code, get_display_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
+from app.services.payroll.builders import (
+    build_correction_paid_label,
+    build_payroll_effective_date_text,
+)
+from app.services.store.builders import claim_day_label
+from app.services.obligation_view_model import (
+    build_rent_first_due_display,
+    build_rent_period_dates_display,
+    resolve_rent_policy_deferral,
+)
 from app.utils.economy_policy import (
     POLICY_MODES,
     frequency_label,
@@ -2922,7 +2932,8 @@ def recovery_status():
         return redirect(url_for('admin.recover'))
     return render_template(
         'admin_recovery_status.html',
-        status=build_recovery_status_view(getattr(g, 'canonical_context', None), status),
+        # Recovery deadlines are system time (SPEC-TIME-001 §IV, §X): shown in UTC.
+        status=build_recovery_status_view(None, status),
     )
 
 
@@ -3011,8 +3022,8 @@ def save_recovery_progress():
         flash('Recovery progress could not be saved.', 'error')
         return redirect(url_for('admin.recover'))
     return render_template('admin_recovery_saved.html', resume_pin=pin, codes_saved=0,
-        recovery=build_recovery_saved_view(
-            getattr(g, 'canonical_context', None), get_recovery_request_by_id(request_id)))
+        # Recovery deadlines are system time (SPEC-TIME-001 §IV, §X): shown in UTC.
+        recovery=build_recovery_saved_view(None, get_recovery_request_by_id(request_id)))
 
 
 @admin_bp.route('/resume-credentials', methods=['GET', 'POST'])
@@ -5111,93 +5122,6 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
     return base_amount
 
 
-def _resolve_rent_policy_deferral(class_id, pending_settings):
-    """Describe a saved rent policy that is not yet the one students are billed under.
-
-    ``rent_settings`` is append-only (DOM-POL-001 SS VI.1): a save inserts a new
-    immutable row and retires its predecessor. It does not reach into the open
-    rent cycle, which froze a ``policy_uuid`` when it was created and keeps
-    resolving that row (DOM-POL-001 SS VII). The terms a class is actually billed
-    under therefore do not move until ``reconcile_rent`` advances the cycle at
-    ``next_assessment_at`` and binds whatever policy is in force by then.
-
-    That deferral is the intended protection: a teacher cannot raise rent on a
-    period students are already living through. The page said nothing about it.
-    Both the "Current Rent Configuration" card and the settings form render the
-    newest ``IN_USE`` row, which after a mid-cycle save is the *pending* policy,
-    under a heading calling it current -- so a teacher who raised rent saw the
-    new figure echoed back with no indication that no student would be charged
-    it this cycle.
-
-    A period is bound to its policy when it is assessed, not when it begins
-    (DOM-OBL-001 §V.7 advance assessment), so a billed period that has not begun
-    is deferred past too; ``billed_period_started`` tells the page which wording
-    applies.
-
-    Returns ``None`` when nothing is deferred: no cycle has been established yet
-    (the first save is in force immediately) or the latest billed cycle already
-    carries the newest policy.
-    """
-    if not class_id or pending_settings is None:
-        return None
-
-    # The latest cycle is the latest period whose bills are ISSUED: a policy
-    # binds when a period is assessed (DOM-OBL-001 §V.7 advance assessment), so
-    # a save cannot reach a period that is already billed, even one that has not
-    # begun. The pending policy first binds to the period after it.
-    cycle = obligations_service.get_latest_bill_cycle(f"rent:{class_id}")
-    if cycle is None or not cycle.policy_uuid:
-        return None
-    if cycle.policy_uuid == pending_settings.policy_uuid:
-        return None
-    current = obligations_service.get_current_bill_cycle(class_id, f"rent:{class_id}")
-    period_started = current is not None and current.id == cycle.id
-    enforced = RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid).first()
-    if enforced is None:
-        return None
-
-    # The instant the successor cycle is minted is the instant the pending policy
-    # binds, so it -- not ``cycle_boundary_at`` -- is the effective date to show.
-    # A terminal cycle (``next_assessment_at IS NULL``) mints no successor, so
-    # there is no boundary at which the pending policy could take effect at all.
-    takes_effect_on = None
-    if cycle.next_assessment_at is not None:
-        # Class timezone, not UTC: this is a class-scoped deadline the teacher
-        # reasons about locally, and SPEC-TIME-001 SS CLE is the only authority
-        # that knows ``ClassEconomy.class_timezone``.
-        takes_effect_on = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=_cle_context(class_id),
-            primitive="localize_timestamp",
-            timestamp=cycle.next_assessment_at,
-        ).evaluation_date
-
-    def _terms(policy):
-        return {
-            'amount': f"${policy.rent_amount:.2f}",
-            'cadence': frequency_label(
-                policy.frequency_type,
-                custom_frequency_value=policy.custom_frequency_value,
-                custom_frequency_unit=getattr(policy, 'custom_frequency_unit', None),
-            ),
-            'grace_period_days': policy.grace_period_days,
-            'late_penalty': f"${policy.late_penalty_amount:.2f}",
-        }
-
-    return {
-        'cycle_number': cycle.cycle_number,
-        'is_terminal': cycle.next_assessment_at is None,
-        'billed_period_started': period_started,
-        'takes_effect_on': takes_effect_on,
-        'display_takes_effect_on': (
-            takes_effect_on.strftime("%B %d, %Y") if takes_effect_on else ""
-        ),
-        'enforced': _terms(enforced),
-        'pending': _terms(pending_settings),
-        'amount_changed': enforced.rent_amount != pending_settings.rent_amount,
-    }
-
-
 @admin_bp.route('/rent-settings', methods=['GET', 'POST'])
 @admin_required
 def rent_settings():
@@ -5319,7 +5243,7 @@ def rent_settings():
         # mid-cycle save takes effect only when the cycle advances. Saying
         # "updated successfully" and nothing else let a teacher believe a raise
         # or a longer preview window was live when it was not.
-        deferral = _resolve_rent_policy_deferral(class_id, block_settings)
+        deferral = resolve_rent_policy_deferral(class_id, block_settings)
         if deferral is None:
             flash("Rent settings updated successfully!", "success")
         elif deferral['is_terminal']:
@@ -5367,28 +5291,8 @@ def rent_settings():
     waiver_history_raw = obligations_service.get_rent_waiver_history_for_class(
         class_id, limit=100,
     )
-    # Enrich with student_name for template rendering. Waiver-event
-    # amount is not persisted (DOM-OBL-001 §VII.1); resolve from the
-    # linked ASSESSMENT's frozen RentSettings via view model helpers if
-    # display is desired — for now the audit log shows seat + waived_at
-    # + due_at only, matching the domain's guarantees.
-    waiver_history = []
-    for row in waiver_history_raw:
-        profile = (
-            IdentityProfile.query.filter_by(seat_id=row['seat_id']).first()
-            if row['seat_id'] else None
-        )
-        student_name = (
-            f"{profile.first_name} {profile.last_name}".strip()
-            if profile else f"Seat {row['seat_id']}"
-        )
-        waiver_history.append({
-            'correlation_id': row['correlation_id'],
-            'student_name': student_name,
-            'due_at': row['due_at'],
-            'waived_at': row['waived_at'],
-            'notes': row['notes'],
-        })
+    from app.services.obligation_view_model import build_rent_waiver_history_rows
+    waiver_history = build_rent_waiver_history_rows(class_id, waiver_history_raw)
 
     # Calculate payroll warning
     payroll_warning = None
@@ -5509,15 +5413,15 @@ def rent_settings():
             # moment a non-US class used the app. The ISO form feeds the date input
             # the teacher re-saves from, so a UTC reading there would walk the date
             # backwards one day per edit.
-            _first_due_local = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=settings.first_rent_due_date).evaluation_date
-            display_first_rent_due_date = _first_due_local.strftime("%B %d, %Y")
-            display_first_rent_due_date_iso = _first_due_local.strftime("%Y-%m-%d")
+            first_due = build_rent_first_due_display(g.canonical_context, settings.first_rent_due_date)
+            display_first_rent_due_date = first_due["display"]
+            display_first_rent_due_date_iso = first_due["iso"]
 
     # The banner that tells the teacher which policy the class is actually on.
     # Resolved on every render, not only after a save, because the divergence
     # persists for the whole remaining cycle and is not tied to the request
     # that created it.
-    rent_policy_deferral = _resolve_rent_policy_deferral(class_id, settings)
+    rent_policy_deferral = resolve_rent_policy_deferral(class_id, settings)
 
     canonical_rent_band = None
     # Gated on payroll only. This previously required `settings` as well — an
@@ -5564,12 +5468,10 @@ def rent_settings():
         except (TypeError, ValueError, AttributeError):
             canonical_rent_band = None
 
-    if current_period_start and current_period_end:
-        display_current_period_start = current_period_start.strftime("%b %d, %Y")
-        display_current_period_end = current_period_end.strftime("%b %d, %Y")
-
-    if next_due_date:
-        display_next_due_date = next_due_date.strftime("%B %d, %Y")
+    period_dates = build_rent_period_dates_display(current_period_start, current_period_end, next_due_date)
+    display_current_period_start = period_dates["start"]
+    display_current_period_end = period_dates["end"]
+    display_next_due_date = period_dates["next_due"]
 
     return render_template('admin_rent_settings.html',
                           settings=settings,
@@ -6228,7 +6130,7 @@ def process_claim(claim_id):
                 try:
                     hours = Decimal(raw_hours)
                 except (ArithmeticError, InvalidOperation):
-                    flash(f"Enter the hours to approve for {row.claim_date.strftime('%b %d')}.", "danger")
+                    flash(f"Enter the hours to approve for {claim_day_label(row.claim_date)}.", "danger")
                     return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
                 date_adjustments[key] = {
                     "hours": hours,
@@ -6241,7 +6143,7 @@ def process_claim(claim_id):
                     return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
                 decision = "rejected"
                 form.rejection_reason.data = "\n".join(
-                    f"- {datetime.fromisoformat(k).strftime('%b %d')}: {adj['note']}"
+                    f"- {claim_day_label(date.fromisoformat(k))}: {adj['note']}"
                     for k, adj in sorted(date_adjustments.items())
                 )
         if decision == "approved":
@@ -7335,8 +7237,7 @@ def _build_payroll_correction_view(proposal, class_label: str) -> dict:
     rows = []
     for row in proposal.rows:
         if row.status == CORRECTED:
-            local_date = None if row.corrected_at is None else canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=row.corrected_at).evaluation_date
-            status = f"Paid {local_date.strftime('%b %d')}" if local_date else "Paid"
+            status = build_correction_paid_label(g.canonical_context, row.corrected_at)
         elif row.status == NEEDS_REVIEW:
             status = "Needs review: records do not match what was paid; use Manual Payment if pay is owed"
         else:
@@ -7705,26 +7606,6 @@ def payroll():
         payroll_events=payroll_history_events,
         class_label=class_label,
     )
-    # Pre-format display values (Phase 1 Jinja2 remediation - no formatting in templates)
-    display_payroll_updated_at = ""
-    if payroll_updated_at:
-        display_payroll_updated_at = payroll_updated_at.strftime("%H:%M")
-
-    # Format first_pay_date for both display and input.
-    #
-    # Read back in the class's timezone, because that is what it was written in.
-    # Formatting the stored instant directly reports whatever day it falls on in
-    # UTC: for a class east of Greenwich, local midnight on the 2nd is still the
-    # 1st in UTC, so the teacher was shown the previous day — and since this also
-    # fills the date input, re-saving the form persisted that earlier day. That
-    # is the same one-day walk `_local_date_of_end_of_day` documents for delist
-    # dates, in the opposite direction.
-    display_first_pay_date = ""
-    if current_setting and current_setting.first_pay_date:
-        display_first_pay_date = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=current_setting.first_pay_date).evaluation_date.strftime("%m/%d/%Y")
-    display_first_pay_date_iso = ""
-    if form_setting and form_setting.first_pay_date:
-        display_first_pay_date_iso = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=form_setting.first_pay_date).evaluation_date.strftime("%Y-%m-%d")
 
     # INV-ARC-022 §V.8: every time reaches the template as text.
     from app.services.payroll.builders import add_payroll_event_time_displays, build_payroll_schedule_time_displays
@@ -7733,6 +7614,8 @@ def payroll():
     payroll_time_displays = build_payroll_schedule_time_displays(
         ctx, next_payroll_date=next_payroll_date, payroll_updated_at=payroll_updated_at,
         next_change_effective=next_change_effective_utc, pending_settings=pending_setting_views,
+        first_pay_date=current_setting.first_pay_date if current_setting else None,
+        form_first_pay_date=form_setting.first_pay_date if form_setting else None,
     )
 
     return render_template(
@@ -7746,7 +7629,6 @@ def payroll():
         display_next_payroll_estimate=display_next_payroll_estimate,
         display_total_payroll_estimate=display_total_payroll_estimate,
         payroll_updated_at=payroll_updated_at,
-        display_payroll_updated_at=display_payroll_updated_at,
         total_students=len(students),
         avg_payout=avg_payout,
         display_avg_payout=display_avg_payout,
@@ -7757,8 +7639,6 @@ def payroll():
         pending_settings=pending_setting_views,
         next_change_effective=next_change_effective_utc,  # Pass UTC timestamp
         payroll_form=payroll_form,
-        display_first_pay_date=display_first_pay_date,
-        display_first_pay_date_iso=display_first_pay_date_iso,
         show_setup_banner=show_setup_banner,
         can_run_payroll=can_run_payroll,
         # DOM-PROD-001 §XV.6: composed by the view model from the owning domains.
@@ -7774,7 +7654,6 @@ def payroll():
         payroll_history=payroll_history,
         payroll_correction_pending=class_has_pending_correction(selected_class_id),
         current_page="payroll",
-        format_utc_iso=format_utc_iso,
         feature_options=feature_options,
         selected_feature_scope=selected_scope,
     )
@@ -7928,13 +7807,9 @@ def payroll_settings():
         if immediate:
             flash('Payroll settings saved. They are in effect now.', 'success')
         else:
-            effective_local_date = canonical_temporal_resolver(
-                CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
-                primitive="localize_timestamp", timestamp=effective_date,
-            ).evaluation_date
             flash(
                 'Payroll settings saved. They take effect on the next payroll date, '
-                f'{effective_local_date.strftime("%B %d, %Y")}. '
+                f'{build_payroll_effective_date_text(g.canonical_context, effective_date)}. '
                 'Work before then is paid at the current settings.',
                 'success',
             )
@@ -8395,7 +8270,8 @@ def export_students():
     exported_at = canonical_temporal_resolver(
         SYSTEM_LEVEL_EVALUATION, primitive="current_time",
     ).canonical_now_utc
-    filename = f"students_export_{exported_at.strftime('%Y%m%d_%H%M%S')}.csv"
+    from app.utils.temporal_display import format_file_stamp
+    filename = f"students_export_{format_file_stamp(exported_at)}.csv"
 
     return Response(
         output.getvalue(),
@@ -8935,7 +8811,6 @@ def banking():
         overdraft_reco=overdraft_reco,
         overdraft_fee_warnings=overdraft_fee_warnings,
         current_page="banking",
-        format_utc_iso=format_utc_iso,
         selected_feature_scope=selected_scope,
     )
 
@@ -9258,7 +9133,6 @@ def help_support():
                 actor_public_id=actor_public_id,
                 my_reports=my_reports,
                 help_content=HELP_ARTICLES['teacher'],
-                format_utc_iso=format_utc_iso,
                 form_issue_category=issue_category,
                 form_title=title,
                 form_description=description,
@@ -9285,7 +9159,6 @@ def help_support():
                 actor_public_id=actor_public_id,
                 my_reports=my_reports,
                 help_content=HELP_ARTICLES['teacher'],
-                format_utc_iso=format_utc_iso,
                 form_issue_category=issue_category,
                 form_title=title,
                 form_description=description,
@@ -9346,7 +9219,6 @@ def help_support():
                 actor_public_id=actor_public_id,
                 my_reports=my_reports,
                 help_content=HELP_ARTICLES['teacher'],
-                format_utc_iso=format_utc_iso,
                 form_issue_category=issue_category,
                 form_title=title,
                 form_description=description,
@@ -9396,8 +9268,7 @@ def help_support():
                          class_scope_options=class_scope_options,
                          actor_public_id=actor_public_id,
                          my_reports=my_reports,
-                         help_content=HELP_ARTICLES['teacher'],
-                         format_utc_iso=format_utc_iso)
+                         help_content=HELP_ARTICLES['teacher'])
 
 
 # -------------------- FEATURE SETTINGS --------------------
@@ -10580,8 +10451,7 @@ def issues_queue():
                          pending_issues=pending_issues,
                          resolved_issues=resolved_issues,
                          escalated_issues=escalated_issues,
-                         issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
-                         format_utc_iso=format_utc_iso)
+                         issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id))
 
 
 @admin_bp.route('/issues/<issue_ref>')
@@ -10636,8 +10506,7 @@ def view_issue(issue_ref):
                          page_title=f'Issue #{issue.id}',
                          issue=issue_view,
                          purchase_resolution=purchase_resolution,
-                         issue_ref=make_opaque_ref('issue', issue.id),
-                         format_utc_iso=format_utc_iso)
+                         issue_ref=make_opaque_ref('issue', issue.id))
 
 
 @admin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])

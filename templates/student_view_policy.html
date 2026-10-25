@@ -57,7 +57,7 @@
                         <p><strong>Coverage Start:</strong>
                             {% if not enrollment.coverage_start_date %}
                             &mdash;
-                            {% elif enrollment.coverage_start_date > now %}
+                            {% elif enrollment.coverage_not_started %}
                             <span class="text-warning">{{ enrollment.coverage_start_date_display }} (after {{
                                 enrollment.policy.waiting_period_days }}-day waiting period)</span>
                             {% else %}
@@ -221,8 +221,7 @@
                 {% endif %}
 
                 <div class="mt-3">
-                    {% set in_waiting_period = not enrollment.coverage_start_date or enrollment.coverage_start_date >
-                    now %}
+                    {% set in_waiting_period = enrollment.in_waiting_period %}
                     {% if in_waiting_period %}
                     <button type="button" class="btn btn-primary" disabled
                         title="Coverage not active yet - still in waiting period">File New Claim (Waiting
@@ -244,8 +243,7 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    {% set in_waiting_period = not enrollment.coverage_start_date or enrollment.coverage_start_date >
-                    now %}
+                    {% set in_waiting_period = enrollment.in_waiting_period %}
                     {% if in_waiting_period %}
                     <button type="button" class="btn btn-primary" disabled title="Coverage not active yet - still in waiting period">
                         File a Claim (Waiting Period)

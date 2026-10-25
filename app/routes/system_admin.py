@@ -43,7 +43,7 @@ from app.auth import (
 from app.forms import SystemAdminLoginForm
 
 # Import utility functions
-from app.utils.helpers import is_safe_url, format_utc_iso
+from app.utils.helpers import is_safe_url
 from app.utils.encryption import decrypt_totp
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_posting_service import create_pending_transaction
@@ -777,7 +777,6 @@ def view_issue(issue_ref):
         tz_mode=tz_mode,
         class_timezone=class_timezone,
         display_timezone=display_timezone,
-        format_utc_iso=format_utc_iso,
     )
 
 

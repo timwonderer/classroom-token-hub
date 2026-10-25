@@ -51,7 +51,7 @@ from app.forms import (
 )
 
 # Import utility functions
-from app.utils.helpers import is_safe_url, format_utc_iso, render_template_with_fallback as render_template
+from app.utils.helpers import is_safe_url, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.ip_handler import get_real_ip
@@ -2301,10 +2301,10 @@ def file_claim(policy_uuid):
     form = InsuranceClaimForm()
     if is_transaction_type:
         eligible = _eligible_claim_transactions(seat_id, class_id)
-        form.transaction_id.choices = [("", "Select a transaction…")] + [
-            (str(t.id), f"{t.timestamp:%b %d} · ${abs(t.amount):.2f} · {t.description or t.type}")
-            for t in eligible
-        ]
+        from app.services.store.builders import build_claim_transaction_choices
+        form.transaction_id.choices = [("", "Select a transaction…")] + build_claim_transaction_choices(
+            g.canonical_context, eligible,
+        )
     else:
         form.transaction_id.choices = []  # SelectField requires choices even when unused
 
@@ -2487,9 +2487,6 @@ def view_policy(policy_uuid):
                 entitlement_id=getattr(entitlement, "entitlement_id", None),
             ),
         ),
-        now=canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION, canonical_execution_context=context, primitive="current_time",
-        ).canonical_now_utc,
     )
 
 
@@ -3312,8 +3309,7 @@ def help_support():
                          page_title='Help & Support',
                          my_issues=my_issues,
                          submitted_displays=build_issue_submitted_displays(class_context, my_issues),
-                         help_content=HELP_ARTICLES['student'],
-                         format_utc_iso=format_utc_iso)
+                         help_content=HELP_ARTICLES['student'])
 
 
 @student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])

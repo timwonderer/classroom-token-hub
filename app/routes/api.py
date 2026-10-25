@@ -1210,12 +1210,7 @@ def hall_pass_history():
         offset = (page - 1) * page_size
         records = query.offset(offset).limit(page_size).all()
 
-        from app.utils.temporal_display import format_timestamp as _fmt_display
-
-        def format_timestamp(dt):
-            if not dt:
-                return None
-            return _fmt_display(context, dt)
+        from app.services.payroll.builders import build_hall_pass_history_times
 
         # Format records for response
         records_data = []
@@ -1249,10 +1244,12 @@ def hall_pass_history():
                 "period": class_row.section if class_row else "",
                 "reason": record.destination,
                 "status": status,
-                "request_time": format_timestamp(record.timestamp),
+                **build_hall_pass_history_times(
+                    context, requested_at=record.timestamp,
+                    left_at=left_row.timestamp if left_row else None,
+                    returned_at=return_row.timestamp if return_row else None,
+                ),
                 "decision_time": None,
-                "left_time": format_timestamp(left_row.timestamp if left_row else None),
-                "return_time": format_timestamp(return_row.timestamp if return_row else None),
             })
 
         return jsonify({
@@ -1583,14 +1580,8 @@ def attendance_history():
             student_class_id = seat_info['class_id']
             student_class_label = seat_info['class_label'] or student_class_id or 'Unknown'
 
-            timestamp_str = None
-            formatted_ts = None
-            if record.timestamp:
-                timestamp_str = canonical_temporal_resolver(
-                    SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=record.timestamp,
-                ).local_timestamp.isoformat().replace('+00:00', 'Z')
-                from app.utils.temporal_display import format_timestamp as _format_ts
-                formatted_ts = _format_ts(context, record.timestamp)
+            from app.services.payroll.builders import build_attendance_record_times
+            record_times = build_attendance_record_times(context, record.timestamp)
 
             records_data.append({
                 "id": record.id,
@@ -1601,8 +1592,7 @@ def attendance_history():
                 "period": seat_info['period'],
                 "status": record.status,
                 "reason": record.reason_code,
-                "timestamp": timestamp_str,
-                "formatted_timestamp": formatted_ts,
+                **record_times,
             })
 
         return jsonify({

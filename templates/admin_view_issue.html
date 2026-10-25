@@ -212,14 +212,14 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for txn in issue.context_snapshot.recent_transactions[:5] %}
+                                {% for txn in issue.recent_transactions %}
                                 <tr {% if txn.id == issue.related_transaction_id %}class="table-warning"{% endif %}>
                                     <td>#{{ txn.id }}</td>
                                     <td class="{% if txn.amount > 0 %}text-success{% else %}text-danger{% endif %}">
                                         ${{ "%.2f"|format(txn.amount) }}
                                     </td>
                                     <td>{{ txn.description }}</td>
-                                    <td><small>{{ txn.timestamp[:10] if txn.timestamp else 'N/A' }}</small></td>
+                                    <td><small>{{ txn.date_display }}</small></td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

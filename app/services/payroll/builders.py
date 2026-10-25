@@ -16,7 +16,8 @@ from datetime import datetime
 from typing import Any
 from app.extensions import db
 from app.models import PayrollSettings, Transaction, Seat, IdentityProfile
-from app.utils.temporal_display import format_compact_date, format_date, format_time, format_timestamp
+from app.utils.temporal_display import format_compact_date, format_date, format_local_date, format_time, format_timestamp
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 @dataclass(frozen=True)
@@ -430,16 +431,29 @@ def add_payroll_event_time_displays(ctx, rows: list[dict]) -> list[dict]:
     return rows
 
 
+def _class_date_of(ctx, instant):
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+        primitive="localize_timestamp", timestamp=instant,
+    ).evaluation_date if instant else None
+
+
 def build_payroll_schedule_time_displays(
     ctx, *, next_payroll_date, payroll_updated_at, next_change_effective=None, pending_settings=(),
+    first_pay_date=None, form_first_pay_date=None,
 ) -> dict[str, str]:
     """Payroll schedule times for the payroll page and dashboard cards.
 
-    Adds ``effective_date_display`` to each pending-setting row.
+    Adds ``effective_date_display`` to each pending-setting row. The first pay
+    date is read back in the class calendar it was written in: formatting the
+    stored instant directly shows the previous day for a class east of Greenwich,
+    and since it also fills the date input, re-saving would persist that day.
     """
     for pending in pending_settings:
         pending["effective_date_display"] = format_timestamp(ctx, pending["effective_date"])
     return {
+        "display_first_pay_date": format_local_date(_class_date_of(ctx, first_pay_date), "numeric") or "",
+        "display_first_pay_date_iso": format_local_date(_class_date_of(ctx, form_first_pay_date), "input") or "",
         "next_payroll_date_display": format_timestamp(ctx, next_payroll_date),
         "next_payroll_compact_display": format_compact_date(ctx, next_payroll_date),
         "payroll_updated_at_display": format_timestamp(ctx, payroll_updated_at),
@@ -504,3 +518,31 @@ def build_hall_pass_verification_result(result: dict, temporal_context) -> dict:
             format_timestamp(temporal_context, result["return_time"]) if result.get("return_time") else None
         ),
     }
+
+
+def build_payroll_effective_date_text(ctx, effective_date) -> str:
+    """'January 05, 2030': when saved payroll settings take effect, in class time."""
+    return format_local_date(_class_date_of(ctx, effective_date), "full")
+
+
+def build_correction_paid_label(ctx, corrected_at) -> str:
+    """'Paid Jan 05' for a corrected payroll row, the date in class time."""
+    day = _class_date_of(ctx, corrected_at)
+    return f"Paid {format_local_date(day, 'short')}" if day else "Paid"
+
+
+def build_hall_pass_history_times(ctx, *, requested_at, left_at, returned_at) -> dict:
+    """Hall-pass history times for the JSON history feed (None when absent)."""
+    def text(instant):
+        return format_timestamp(ctx, instant) if instant else None
+    return {"request_time": text(requested_at), "left_time": text(left_at), "return_time": text(returned_at)}
+
+
+def build_attendance_record_times(ctx, timestamp) -> dict:
+    """An attendance record's instant as UTC ISO ('…Z') and as display text."""
+    if not timestamp:
+        return {"timestamp": None, "formatted_timestamp": None}
+    iso = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=timestamp,
+    ).local_timestamp.isoformat().replace("+00:00", "Z")
+    return {"timestamp": iso, "formatted_timestamp": format_timestamp(ctx, timestamp)}

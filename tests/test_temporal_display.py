@@ -4,10 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from jinja2 import Environment
-
 from app.utils.temporal_display import (
-    fmt_timestamp,
     format_compact_date,
     format_date,
     format_time,
@@ -45,17 +42,13 @@ def test_class_local_date_differs_from_utc_date(app):
     assert format_date(None, value) == "Jan 4, 2026"
 
 
-def test_template_timestamps_follow_class_context(app):
-    """The Jinja filter localizes under the template's class context rather than a fixed default."""
-    env = Environment(autoescape=True)
-    env.filters["fmt_timestamp"] = fmt_timestamp
-    template = env.from_string("{{ value | fmt_timestamp }}")
-    value = datetime(2026, 1, 3, 18, 5, tzinfo=timezone.utc)
-
-    with app.app_context():
-        class_id = provision_classroom("chemistry_p1").class_id
-        assert template.render(value=value, temporal_context=SimpleNamespace(class_id=class_id)) == "Jan 3, 2026, 10:05 AM PST"
-    assert template.render(value=value) == "Jan 3, 2026, 6:05 PM UTC"
+def test_INV_ARC_022__no_jinja_filter_formats_a_time(app):
+    """Templates print builder-formatted text (SPEC-UI-001 §X); the app registers no
+    time filter, because resolving a class timezone while rendering is a database
+    read (INV-ARC-022 §V.8)."""
+    time_filters = {name for name in app.jinja_env.filters if name.startswith("fmt_")}
+    assert not time_filters
+    assert "format_utc_iso" not in app.jinja_env.globals
 
 
 def test_hall_pass_times_arrive_formatted_in_class_time(app):

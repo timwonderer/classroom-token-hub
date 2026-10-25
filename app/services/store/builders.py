@@ -18,8 +18,8 @@ from types import SimpleNamespace
 from typing import Any
 from app.extensions import db
 from app.models import StoreProduct, EntitlementEvent, RentSettings, ClassEconomy
-from app.utils.temporal_display import format_date, format_timestamp
-from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.temporal_display import format_date, format_local_date, format_timestamp
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 @dataclass(frozen=True)
@@ -542,8 +542,16 @@ def build_claim_date_max(ctx) -> str:
 
 
 def build_policy_enrollment_dates_display(ctx, *, purchase_date, coverage_start_date, covered_through) -> dict:
-    """Display text for the dates on the student's policy page."""
+    """Display text for the dates on the student's policy page, and whether coverage has yet to start."""
+    coverage_not_started = bool(coverage_start_date) and canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+        candidate=coverage_start_date,
+        reference=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+    ).is_later
     return {
+        "coverage_not_started": coverage_not_started,
+        # No start date yet also means no claims can be filed.
+        "in_waiting_period": not coverage_start_date or coverage_not_started,
         "purchase_date_display": format_date(ctx, purchase_date),
         "coverage_start_date_display": format_date(ctx, coverage_start_date),
         "covered_through_display": _medium_day(covered_through),
@@ -568,3 +576,20 @@ def build_coverage_card_dates_display(
             f"{change.bill_on:%B} {change.bill_on.day}" if getattr(change, "bill_on", None) else None
         ),
     }
+
+
+def claim_day_label(day) -> str:
+    """'Jan 05' for a claimed class-local date, in decision messages."""
+    return format_local_date(day, "short")
+
+
+def build_claim_transaction_choices(ctx, transactions) -> list[tuple[str, str]]:
+    """Transaction dropdown choices for a claim, dated in class time (not UTC)."""
+    choices = []
+    for txn in transactions:
+        day = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+            primitive="localize_timestamp", timestamp=txn.timestamp,
+        ).evaluation_date
+        choices.append((str(txn.id), f"{format_local_date(day, 'short')} · ${abs(txn.amount):.2f} · {txn.description or txn.type}"))
+    return choices

@@ -235,6 +235,10 @@ def _issue(status: str, **overrides) -> dict:
                 {"id": 6, "amount": 10.0, "description": "Payroll", "timestamp": "2030-01-10T09:00:00Z"},
             ],
         },
+        "recent_transactions": [
+            {"id": 7, "amount": -4.5, "description": "Cafeteria lunch", "date_display": "Jan 12, 2030"},
+            {"id": 6, "amount": 10.0, "description": "Payroll", "date_display": "Jan 10, 2030"},
+        ],
         "page_url": "/student/shop", "system_metadata": None, "eligible_for_reward": False,
         "share_class_name_with_sysadmin": False, "resolution_actions": [], "status_history": [],
         "_resolution_actions_count": 0,
@@ -248,7 +252,6 @@ def _view_issue(issue: dict, purchase_resolution=None):
         return {
             **admin_layout(current_page="issues"), "page_title": f"Issue #{issue['id']}", "issue": issue,
             "purchase_resolution": purchase_resolution, "issue_ref": "issue-ref-a11y-42",
-            "format_utc_iso": lambda dt: dt.isoformat().replace("+00:00", "Z") if dt else None,
         }
     return build
 

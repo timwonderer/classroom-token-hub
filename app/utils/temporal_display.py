@@ -5,12 +5,11 @@ Every timestamp is localized through ``canonical_temporal_resolver``'s
 ``localize_timestamp`` primitive: CLE in the class timezone when a class
 context is at hand, SLE (UTC) when there is none.
 
-The ``ctx`` argument is either a context object carrying ``class_id``
-(``CanonicalContext``, ``SimpleNamespace(class_id=...)``), ``None`` (SLE), or the
-Jinja template context the filters receive. For a template context the class
-comes from an explicit ``temporal_context`` template variable (a display lens,
-e.g. the sysadmin ticket view's "class time" toggle), else from the request's
-``g.canonical_context``.
+The ``ctx`` argument is a context object carrying ``class_id``
+(``CanonicalContext``, ``SimpleNamespace(class_id=...)``) for class time, or
+``None`` for UTC. Builders call these (SPEC-UI-001 §VII); templates never format
+a time and nothing here is a Jinja filter (INV-ARC-022 §V.8: a template must not
+query the database, and resolving a class timezone is a database read).
 
 Core functions (plain Python, usable anywhere):
     format_timestamp  — "Dec 3, 2025, 2:30 PM PST"
@@ -18,18 +17,14 @@ Core functions (plain Python, usable anywhere):
     format_compact_date — "Dec 3"
     format_time       — "2:30 PM PST"
 
-Jinja filters (registered via register_temporal_filters):
-    fmt_timestamp, fmt_date, fmt_compact_date, fmt_time
+    format_local_date — text for a class-local ``date`` (no conversion)
+    format_file_stamp — "20261025_143000" (UTC) for export file names
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from flask import g, has_app_context
-from jinja2 import pass_context
-from jinja2.runtime import Context
-from markupsafe import Markup
 
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -44,10 +39,6 @@ from app.utils.canonical_temporal_resolver import (
 
 def _execution_context(ctx):
     """The class context to localize under, or None for SLE."""
-    if isinstance(ctx, Context):
-        ctx = ctx.get("temporal_context") or (
-            getattr(g, "canonical_context", None) if has_app_context() else None
-        )
     # BoundaryContext raises AttributeError on class_id; getattr's default covers it.
     return ctx if getattr(ctx, "class_id", None) else None
 
@@ -108,6 +99,29 @@ def format_compact_date(ctx, dt) -> str:
     return _format_month_day(local)
 
 
+def format_local_date(day, style: str = "medium") -> str | None:
+    """Text for a class-local calendar date the resolver already produced.
+
+    No conversion happens here: ``day`` is a ``date`` already in the class's
+    calendar. For builders only; templates print the result (SPEC-UI-001 §VII).
+    """
+    if not day:
+        return None
+    if style == "short":
+        return f"{day:%b %d}"
+    if style == "medium":
+        return f"{day:%b %d, %Y}"
+    if style == "full":
+        return f"{day:%B %d, %Y}"
+    if style == "long":
+        return f"{day:%B} {day.day}, {day.year}"
+    if style == "numeric":
+        return f"{day:%m/%d/%Y}"
+    if style == "input":
+        return day.isoformat()
+    raise ValueError(f"unknown date style: {style}")
+
+
 def format_time(ctx, dt) -> str:
     if not dt:
         return "—"
@@ -117,40 +131,9 @@ def format_time(ctx, dt) -> str:
     return f"{formatted} {abbrev}".strip()
 
 
-# ---------------------------------------------------------------------------
-# Jinja2 filters (delegate to core functions with the template context)
-# ---------------------------------------------------------------------------
-
-@pass_context
-def fmt_timestamp(ctx, dt):
-    if not dt:
-        return Markup("&mdash;")
-    return format_timestamp(ctx, dt)
-
-
-@pass_context
-def fmt_date(ctx, dt):
-    if not dt:
-        return Markup("&mdash;")
-    return format_date(ctx, dt)
-
-
-@pass_context
-def fmt_compact_date(ctx, dt):
-    if not dt:
-        return Markup("&mdash;")
-    return format_compact_date(ctx, dt)
-
-
-@pass_context
-def fmt_time(ctx, dt):
-    if not dt:
-        return Markup("&mdash;")
-    return format_time(ctx, dt)
-
-
-def register_temporal_filters(app):
-    app.jinja_env.filters["fmt_timestamp"] = fmt_timestamp
-    app.jinja_env.filters["fmt_date"] = fmt_date
-    app.jinja_env.filters["fmt_compact_date"] = fmt_compact_date
-    app.jinja_env.filters["fmt_time"] = fmt_time
+def format_file_stamp(instant) -> str:
+    """'20261025_143000': a UTC instant for an export file name."""
+    utc = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=instant,
+    ).local_timestamp
+    return f"{utc:%Y%m%d_%H%M%S}"
