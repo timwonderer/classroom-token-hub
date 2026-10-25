@@ -6,7 +6,14 @@ import pytest
 from check import check
 from build import CACHE, ROOT, catalog_label, published_documents
 
+# The built site is opt-in: the repository's full suite runs `pytest` on Ubuntu without
+# bootstrapping Hugo (macOS-only), so these skip there and run after build.py locally.
+requires_built_site = pytest.mark.skipif(
+    not (CACHE / 'hugo/public/index.html').is_file(),
+    reason='Hugo artifact not built; run docs-generator-proof/bootstrap.py and build.py first')
 
+
+@requires_built_site
 def test_shared_public_brand_sources_are_preserved():
     """Fail when the proof forks the shared CSS or drops public footer content."""
     import re
@@ -19,6 +26,7 @@ def test_shared_public_brand_sources_are_preserved():
 
 
 
+@requires_built_site
 def test_published_artifact_carries_no_theme_branding():
     """Hextra's favicons and manifest name another product; the CTH tab icon replaces them."""
     public = CACHE / 'hugo/public'
@@ -29,6 +37,7 @@ def test_published_artifact_carries_no_theme_branding():
     assert 'href="/docs/assets/images/icon-192.png"' in (public / 'index.html').read_text()
 
 
+@requires_built_site
 def test_engineering_notes_are_not_published():
     """Engineering notes (docs-site/blog) are not authorized; neither pages nor links may ship."""
     public = CACHE / 'hugo/public'
