@@ -1,11 +1,17 @@
 {
-  "hugo.pkg": {
+  "hugo-darwin.pkg": {
+    "platform": "darwin",
     "url": "https://github.com/gohugoio/hugo/releases/download/v0.168.0/hugo_extended_0.168.0_darwin-universal.pkg",
     "sha256": "6e8c6a1e6db996bb9e71c8728461f372c78f12eb18135b709837227debf84940"
   },
+  "hugo-linux.tar.gz": {
+    "platform": "linux",
+    "url": "https://github.com/gohugoio/hugo/releases/download/v0.168.0/hugo_extended_0.168.0_linux-amd64.tar.gz",
+    "sha256": "787f100057328824f38c6ad7c87ff10d6451ae0a7bc39cedaad0dd2bcde17e53"
+  },
   "hextra.tar.gz": {
-    "url": "https://api.github.com/repos/imfing/hextra/tarball/v0.13.0",
-    "sha256": "b1ea7893a46f70b922d5c6a5c4daf164d6d1a7d0be162ea8de7e3fc996d91446"
+    "url": "https://github.com/imfing/hextra/archive/refs/tags/v0.13.0.tar.gz",
+    "sha256": "603dc5576aa1af84531e303ff376b0bff2213ee0391727a514e0d3bdd26ad006"
   },
   "flexsearch.bundle.min.js": {
     "url": "https://cdn.jsdelivr.net/npm/flexsearch@0.8.143/dist/flexsearch.bundle.min.js",

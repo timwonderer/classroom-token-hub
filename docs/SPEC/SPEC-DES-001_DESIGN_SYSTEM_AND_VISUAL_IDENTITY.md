@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-DES-001 | 2.4 | 2026-10-20 | `FEAT-DES-001` v1.1 (archived) | Normative |
+| SPEC-DES-001 | 2.5 | 2026-10-24 | `FEAT-DES-001` v1.1 (archived) | Normative |
 
 > Supersedes `docs/archive/v1-docs/FEATURES/DESIGN/FEAT-DES-001_Design_System.md` (archived, non-normative). That document described the v1 token set and carries values that no longer match the implementation; it governs nothing and is retained as history only.
 
@@ -31,7 +31,7 @@ Does not govern:
 
 - page rendering structure, view models, or builder organization — governed by `SPEC-UI-001`
 - accessibility requirements — governed by `INV-ARC-020`, which this document is subordinate to and must not weaken
-- `github-pages/` and `docs-site/` — separately published artifacts. See §XIII.
+- `github-pages/`, `docs-generator-proof/` and `docs-site/` — separately published artifacts. See §XIII.
 - domain, mutation, or persistence authority
 
 ---
@@ -414,6 +414,8 @@ The token layer conforms when:
 
 `github-pages/` and `docs-site/` maintain their own stylesheets and are outside the runtime token layer. They are nonetheless **brand surfaces** and MUST NOT contradict §VI.4.
 
+The developer documentation site published at `/docs/` is built from `docs-generator-proof/` with Hugo + Hextra (it replaced the Docusaurus build in `docs-site/` on 2026-10-24). It loads `github-pages/style.css` byte-for-byte as its public stylesheet and `docs-site/src/css/tokens.css` as its token layer, and its own stylesheet, `docs-generator-proof/assets/css/custom.css`, is **subordinate to this specification** on the same terms as `status.css`: every design value in it MUST resolve through a token defined in those two layers, and it MUST NOT introduce a colour. Hextra's own custom properties (`--hx-*`, `--hextra-*`) are framework-owned and are mapped onto project tokens there, never the reverse. `docs-site/` remains a brand surface while it stays in the repository as the fallback build.
+
 `github-pages/style.css` carried `--secondary: #d3af37` and `--primary-color: #236960` through v2.1; both were reconciled on 2026-09-19. `status_service/` is served from the same stylesheet: `status_service/static/cth-public.css` is a byte-identical copy of `github-pages/style.css`, and a divergence between them is therefore a diff, not a silent fork. It held one for roughly a day — a copy frozen immediately before the 2026-09-19 fix, which left `.toc a:hover` accessible on one host and at 3.16:1 on the other — and that is the failure mode the byte-identity requirement exists to prevent.
 
 The status service also carries the runtime token layer: `status_service/static/tokens.css` is a byte-identical copy of `static/css/tokens.css`, loaded after `cth-public.css`, so the status pages and the operator console draw on the same spacing, type, radius, elevation and colour tokens as the application, and the operator console takes the sysadmin identity through `body.sysadmin-shell` (§V.2). Its own stylesheet, `status_service/static/status.css`, is **subordinate to this specification**: it may add state chrome the other stylesheets have no use for, but every design value in it MUST resolve through a token defined in those two token layers. It MUST NOT introduce a colour. Service states derive from the status colours in §VI and always carry a word as well as a colour, per §XI.2.
@@ -424,7 +426,7 @@ The status service also carries the runtime token layer: `status_service/static/
 
 Design-system conformance is mechanically checkable and SHOULD be gated rather than reviewed by eye. `scripts/lint_design_tokens.py` gates rules 1 and 5–10, and `tests/test_design_token_contract.py` runs it with one test per rule; run the script directly on the files being edited. The test also carries a mutation proof for every rule — a synthetic near-miss violation it asserts is reported — so the gate cannot go green because the scanner stopped seeing.
 
-Rules 1, 5, 6 and 7 scan `templates/`. Rules 8, 9 and 10 scan the token layer and stylesheets of **all four brand surfaces** named in §XIII, not the application alone. The application was the only gated surface through v2.1, and it was also the only one that had not drifted; that is not a coincidence, and it is why the scope is now the surface list rather than `templates/`. The checkable rules:
+Rules 1, 5, 6 and 7 scan `templates/`. Rules 8, 9 and 10 scan the token layer and stylesheets of **every brand surface** named in §XIII, not the application alone. The application was the only gated surface through v2.1, and it was also the only one that had not drifted; that is not a coincidence, and it is why the scope is now the surface list rather than `templates/`. The checkable rules:
 
 1. No hex/`rgb()`/`hsl()` literal under `templates/`.
 2. No raw color in `style.css` outside a token definition block.

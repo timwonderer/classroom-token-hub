@@ -1,15 +1,15 @@
-# Hugo + Hextra developer-doc site (local proof)
+# Hugo + Hextra developer-doc site
 
-Hugo + Hextra was selected on October 24, 2026, as the migration candidate for the
-Docusaurus developer site; it replaces Docusaurus only after the gates under "Before
-production" pass. This directory builds that site from `docs/` on its own. It does not
-switch the production build: it changes no application code, canonical document, user
-guide, Pages workflow or deployment configuration.
+This directory builds the developer documentation published at
+<https://classroomtokenhub.com/docs/> from `docs/`. `.github/workflows/github-pages.yml`
+runs `bootstrap.py`, `build.py` and `check.py` on every change and deploys the result;
+a failing check stops the deploy. It replaced the Docusaurus build in `docs-site/` on
+October 24, 2026; `docs-site/` stays in the repository as a fallback until the Hugo site
+has been confirmed live, and still supplies the brand fonts and token layer.
 
 [The comparison](COMPARISON.md) and [evidence/](evidence/) record why Hugo was chosen
 over the Zensical prototype. They are history: the Zensical harness that produced them
-has been removed, and the proof no longer depends on Zensical code or on the ab56
-worktree.
+has been removed.
 
 ## Authority and scope
 
@@ -18,9 +18,9 @@ worktree.
 - `SOP-DOC-000` §X: publication boundaries; §XI: link integrity.
 - No application domain mutation or FEAT contract changes are involved.
 
-## Reproduce on macOS
+## Build locally (macOS or Linux)
 
-From the repository root, with Python 3.10+ and these standalone proof dependencies
+From the repository root, with Python 3.10+ and these standalone dependencies
 (not the application's full `requirements.txt`):
 
 ```bash
@@ -36,20 +36,22 @@ python3 -m venv /tmp/cth-docs-proof-venv
 ```
 
 `check.py` exits nonzero while any rule fails; failures are never suppressed. A
-successful Hugo command alone is not a passing gate. Browser checks also fail on
-reported accessibility, overflow, interaction or JavaScript errors. On current `main`
-the check reports seven source-heading failures (multiple `h1`s or skipped levels) in
-canonical documents; they are source defects, not generator defects.
+successful Hugo command alone is not a passing gate. Heading-structure defects inside a
+canonical document (multiple `h1`s, skipped levels) are reported as warnings instead:
+the generator renders the source faithfully, and the fix belongs in the document. On
+generated pages they are failures. Browser checks also fail on reported accessibility,
+overflow, interaction or JavaScript errors.
 
 Preview: <http://127.0.0.1:8766/docs/> (loopback only; Ctrl-C stops it). This is not a
 deployment.
 
 ## What the build does
 
-`bootstrap.py` verifies the three hashes in `tools.lock.json`, extracts Hugo without
-installing a system package, and pins Hextra/FlexSearch. It is a macOS bootstrap, not
-a Linux GitHub Actions implementation. No Node build or theme CSS compilation is
-required; Hugo still ships browser JavaScript.
+`bootstrap.py` verifies the pinned downloads in `tools.lock.json` for the current
+platform (Hugo for macOS or Linux, Hextra and FlexSearch), installs Hugo to
+`.cache/tools/bin/hugo` without a system package, and refuses anything whose checksum
+does not match. No Node build or theme CSS compilation is required; Hugo still ships
+browser JavaScript.
 
 `build.py` owns the publication policy. Only the allowlisted roots in `GROUPS`, the two
 durable `TRACKING` files and the one listed illustration publish; `user-guides`,
@@ -83,10 +85,11 @@ never author or amend contracts there. Screenshots go to
 `output/playwright/docs-generator-proof/`. No current vulnerability audit or human
 assistive-technology review was performed.
 
-## Before production
+## Follow-ups
 
-Add the Linux/CI build path and a dependency-maintenance policy, remove the
-`noindex` robots tag in `layouts/_partials/custom/head-end.html`, add this site's
-stylesheet to the `scripts/lint_design_tokens.py` surfaces (SPEC-DES-001 §XIV) in place
-of Docusaurus, compare against a fresh Docusaurus artifact for URL compatibility, and
-complete broader rendered and assistive-technology review.
+- Fix the source heading defects `check.py` reports as warnings, in the documents
+  themselves.
+- Once the Hugo site is confirmed live, delete the Docusaurus build in `docs-site/`
+  (moving the fonts and token layer here first) and drop its `SPEC-DES-001` surface.
+- Complete a broader rendered and assistive-technology review; no human
+  assistive-technology review has been done.
