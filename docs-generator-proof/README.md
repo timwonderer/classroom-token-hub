@@ -1,6 +1,6 @@
 # Hugo + Hextra developer-doc site (local proof)
 
-Hugo + Hextra was selected on October 24, 2026 as the migration candidate for the
+Hugo + Hextra was selected on October 24, 2026, as the migration candidate for the
 Docusaurus developer site; it replaces Docusaurus only after the gates under "Before
 production" pass. This directory builds that site from `docs/` on its own. It does not
 switch the production build: it changes no application code, canonical document, user
