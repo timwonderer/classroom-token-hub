@@ -24,7 +24,7 @@ from app.hash_utils import hash_password, verify_password
 import pytz
 from dateutil.relativedelta import relativedelta
 
-from app.extensions import db, limiter
+from app.extensions import db, limiter, student_login_identity_limit_key
 from app.services import student_setup
 from app.models import (
     Transaction, AttendanceSession, StoreItemVisibility,
@@ -113,7 +113,11 @@ from app.feats.base import requires_feat_context, FEATContext
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
 from app.feats.transfer_feat import InsufficientFunds, execute_account_transfer
 from app.feats.store_purchase_feat import execute_store_purchase
-from app.feats.insurance_claim_feat import coverage_effective_start_utc, submit_insurance_claim
+from app.feats.insurance_claim_feat import (
+    coverage_effective_start_utc,
+    submit_insurance_claim,
+    waiting_period_days,
+)
 from app.services.payroll.settings import current_pay_rate_per_second
 from app.utils.join_code import get_display_join_code
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
@@ -718,6 +722,7 @@ def calculate_scoped_balances(seat_id: int | None, class_id: str | None) -> tupl
 # -------------------- STUDENT ONBOARDING --------------------
 
 @student_bp.route('/claim-account', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])
 def claim_account():
     """
     PAGE 1: Claim Account - Verify identity using join code to begin setup.
@@ -735,8 +740,12 @@ def claim_account():
     form = StudentClaimAccountForm()
 
     if form.validate_on_submit():
-        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated,
-        # and rate-limited by nothing else on this route.
+        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated.
+        # The route-level @limiter.limit above budgets attempts per IP (audit S6:
+        # FEAT-IDEN-001's distinguishing failure responses -- invalid credentials
+        # vs. already-claimed -- are intentional claim-flow UX, per operator
+        # ruling 2026-10-12, so the mitigation is rate limiting this endpoint
+        # rather than collapsing those responses).
         turnstile_token = request.form.get('cf-turnstile-response')
         if not verify_turnstile_token(turnstile_token, get_real_ip()):
             flash("Security verification failed. Please complete the check and try again.", "claim")
@@ -1580,6 +1589,19 @@ def transfer():
         from app.models import _quantize_currency
         amount = _quantize_currency(request.form.get('amount'))
 
+        # The dropdowns only offer 'checking'/'savings', but that is client-side
+        # only. A crafted POST with an unknown account name would otherwise reach
+        # get_available_balance(), which deliberately raises ValueError for any
+        # account_type outside that set (ledger_balance_query_service.py) rather
+        # than answering a different question. Reject it here as an ordinary
+        # invalid request instead of letting that raise become an HTTP 500.
+        if from_account not in ('checking', 'savings') or to_account not in ('checking', 'savings'):
+            message = "Invalid account selection."
+            if is_json:
+                return jsonify(status="error", message=message), 400
+            flash(message, "transfer_error")
+            return redirect(url_for("student.transfer"))
+
         # CRITICAL FIX: Calculate balances using canonical seat/class scoping
         checking_balance, savings_balance = calculate_scoped_balances(context.seat_id, context.class_id)
         economic_engine = get_current_economic_engine(context.class_id)
@@ -1622,7 +1644,7 @@ def transfer():
         else:
             try:
                 with FEATContext(
-                    "FEAT-LED-000",
+                    "FEAT-LED-005",
                     idempotency_key=f"feat:transfer:{class_id}:{seat_id}:{uuid.uuid4().hex}",
                 ):
                     execute_account_transfer(
@@ -1738,7 +1760,7 @@ def insurance_marketplace():
     insurance_for_sale = is_feature_enabled('insurance')
     if not insurance_for_sale and not _has_surviving_premium_state(resolve_canonical_context()):
         abort(404)
-    from app.services.insurance_policy_service import normalize_insurance_type
+    from app.services.insurance_policy_service import MARKETING_BADGES, normalize_insurance_type
     context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
@@ -1758,6 +1780,7 @@ def insurance_marketplace():
                 policy_uuid=d.policy_uuid,
                 title=d.title or "Insurance policy",
                 description=d.description or "",
+                marketing_badge=d.marketing_badge,
                 insurance_type=d.insurance_type,
                 premium=d.premium,
                 charge_frequency=d.charge_frequency,
@@ -1810,12 +1833,17 @@ def insurance_marketplace():
             continue
         claims_open_on, renews_on = _coverage_card_dates(context, grant, d)
         last_covered_day = _last_covered_day(class_id, grant.entitlement_id)
+        starts_on = (
+            insurance_coverage.class_local_date(class_id, grant.timestamp)
+            if ensure_utc(grant.timestamp) > utc_now() else None
+        )
         owned_coverage.append(
             SimpleNamespace(
                 entitlement_id=grant.entitlement_id,
                 policy_uuid=policy_uuid,
                 title=d.title or "Insurance policy",
                 description=d.description or "",
+                marketing_badge=d.marketing_badge,
                 insurance_type=d.insurance_type,
                 premium=d.premium,
                 charge_frequency=d.charge_frequency,
@@ -1834,6 +1862,10 @@ def insurance_marketplace():
                 ),
                 # Set once renewal is stopped: the last day the coverage runs.
                 last_covered_day=last_covered_day,
+                # A continuation granted ahead of its boundary: the day it begins.
+                starts_on=starts_on,
+                # What happens at the boundary (FEAT-STOR-007 §V.A), else None.
+                change=_coverage_change(class_id, grant, d, renews_on, last_covered_day),
                 # If cancelled now: the last day it would still cover. Same
                 # derivation the cancel command uses (DOM-OBL-001 §V.7).
                 cancel_covers_through=(
@@ -1868,6 +1900,7 @@ def insurance_marketplace():
         ungrouped_policies=ungrouped_policies,
         owned_coverage=owned_coverage,
         insurance_for_sale=insurance_for_sale,
+        marketing_badges=MARKETING_BADGES,
         my_claims=[_claim_display_row(claim) for claim in _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)],
         now=utc_now(),
     )
@@ -2022,7 +2055,7 @@ def _coverage_card_dates(context, grant, definition):
     )
 
     claims_open_on = None
-    wait = int(definition.waiting_period_days or 0)
+    wait = waiting_period_days(definition, grant)  # none for a continuation
     if wait > 0:
         open_date, open_utc = coverage_effective_start_utc(
             context, ensure_utc(grant.timestamp), wait
@@ -2045,6 +2078,58 @@ def _coverage_card_dates(context, grant, definition):
     if period is not None and period.end_utc is not None:
         renews_on = insurance_coverage.class_local_date(context.class_id, period.end_utc)
     return claims_open_on, renews_on
+
+
+def _coverage_change(class_id, grant, definition, renews_on, last_covered_day):
+    """What happens to this coverage at its boundary, for its card, or None.
+
+    FEAT-STOR-007 §V.A, so the student sees it before the next premium is billed
+    (SPEC-ECON-003 §4.4.2): ``moving`` (the teacher's edit takes over at the
+    boundary), ``ending`` (the plan was withdrawn and will not renew),
+    ``continued`` (already moved: a new entitlement starts at the boundary) or
+    ``withdrawn`` (renewal stopped while the plan is off sale).
+    """
+    from app.feats.insurance_coverage_renewal_feat import continuation_correlation_id
+    from app.models import EntitlementEvent
+
+    follow_on = EntitlementEvent.query.filter_by(
+        class_id=class_id,
+        target_seat_id=grant.target_seat_id,
+        entitlement_type="INSURANCE",
+        event_type="GRANTED",
+        correlation_id=continuation_correlation_id(grant.entitlement_id),
+    ).first()
+    if follow_on is not None:
+        return SimpleNamespace(
+            kind="continued",
+            successor=insurance_defs.get_insurance_definition(
+                (follow_on.payload or {}).get("policy_uuid"), class_id=class_id
+            ),
+            on=insurance_coverage.class_local_date(class_id, follow_on.timestamp),
+        )
+    successor = insurance_defs.get_latest_successor(definition.policy_uuid, class_id=class_id)
+    successor_on_sale = successor is not None and successor.availability_state == insurance_defs.IN_USE
+    withdrawn = definition.availability_state != insurance_defs.IN_USE and not successor_on_sale
+    if last_covered_day:
+        # Renewal stopped. The job stops it only for a withdrawn plan; with a
+        # version on sale to move to, the student cancelled (FEAT-OBL-005).
+        return SimpleNamespace(kind="withdrawn") if withdrawn else None
+    if successor_on_sale:
+        from app.services import obligations_service
+
+        cycle = obligations_service.get_latest_bill_cycle(
+            insurance_coverage.premium_lineage_ref(grant.entitlement_id)
+        )
+        bill_at = obligations_service.get_assessment_point(cycle) if cycle is not None else None
+        return SimpleNamespace(
+            kind="moving",
+            successor=successor,
+            on=renews_on,
+            bill_on=insurance_coverage.class_local_date(class_id, bill_at) if bill_at else None,
+        )
+    if withdrawn:
+        return SimpleNamespace(kind="ending", on=renews_on)
+    return None
 
 
 def _cancel_covers_through(class_id, entitlement_id):
@@ -2351,7 +2436,7 @@ def view_policy(policy_uuid):
         _, coverage_start_date = coverage_effective_start_utc(
             context,
             purchase_date,
-            placeholder_policy.waiting_period_days,
+            waiting_period_days(placeholder_policy, entitlement),
         )
     enrollment = SimpleNamespace(
         id=policy_uuid,
@@ -2915,161 +3000,177 @@ def rent_pay(period):
 # -------------------- AUTHENTICATION --------------------
 
 @student_bp.route('/login', methods=['GET', 'POST'])
-@limiter.limit("60 per minute")
-@requires_feat_context("FEAT-IDEN-001")
+# Audit O1: this address-keyed limit counted GET page loads together with
+# POST attempts, and a school NAT shares one address across every student
+# in the building, so 30 page loads plus 30 attempts exhausted the whole
+# school's budget at the 61st request. Scoping to POST frees it from GETs;
+# the per-identity limit below is what actually bounds repeated guessing
+# against ONE account, independent of how many classmates share the address.
+@limiter.limit("60 per minute", methods=["POST"])
+@limiter.limit("10 per minute", key_func=student_login_identity_limit_key, methods=["POST"])
 def login():
-    """Student login with username and passphrase."""
+    """Student login with username and passphrase.
+
+    Only a submission runs inside FEAT-IDEN-001; rendering the form must not
+    open a FEAT, which commits on exit (INV-ARC-007: GET must be pure).
+    """
     form = StudentLoginForm()
     if form.validate_on_submit():
-        is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-
-        # Verify Turnstile token
-        turnstile_token = request.form.get('cf-turnstile-response')
-        if not verify_turnstile_token(turnstile_token, get_real_ip()):
-            current_app.logger.warning(f"Turnstile verification failed for student login attempt")
-            if is_json:
-                return jsonify(status="error", message="CAPTCHA verification failed. Please try again."), 403
-            flash("CAPTCHA verification failed. Please try again.", "error")
-            return redirect(url_for('student.login', next=request.args.get('next')))
-
-        username = form.username.data.strip()
-        passphrase = form.passphrase.data.strip()
-
-        user = find_canonical_user_by_auth_username(username, expected_role="student")
-
-        try:
-            passphrase_valid = bool(user and verify_password(passphrase, user.passphrase_hash or ''))
-            has_claimed_seat = False
-            if passphrase_valid:
-                has_claimed_seat = Seat.query.filter(
-                    Seat.user_id == user.id,
-                    Seat.role == "student",
-                    Seat.claimed_at.isnot(None),
-                ).count() > 0
-
-            if not passphrase_valid or not has_claimed_seat:
-                if is_json:
-                    return jsonify(status="error", message="Invalid credentials"), 401
-                flash("Invalid credentials", "error")
-                return redirect(url_for('student.login', next=request.args.get('next')))
-
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error("Error during student login authentication")
-            if is_json:
-                return jsonify(status="error", message="An error occurred during login. Please try again."), 500
-            flash("An error occurred during login. Please try again.", "error")
-            return redirect(url_for('student.login'))
-
-        # --- Establish canonical session ---
-        # Clear old student-specific session keys without wiping the CSRF token.
-        _reset_student_login_session()
-        session.pop('onboarding_seat_ref', None)
-        session.pop('onboarding_claim_generation', None)
-        session.pop('onboarding_user_ref', None)
-        session.pop('recovery_setup_authorization', None)
-        session.pop('generated_username', None)
-        clear_teacher_display_name_cache()
-
-        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-        session['login_time'] = now.isoformat()
-        session['last_activity'] = session['login_time']
-
-        from app.auth import SESSION_TIMEOUT_MINUTES
-        user.current_session_started_at = now
-        user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
-
-        # Mirror the authoritative expiry onto the cookie so the browser evicts
-        # it at the same instant login_required stops honoring it. Without this
-        # the cookie outlives the session by Flask's 31-day default whenever the
-        # student closes the tab, since the server-side check only runs on a
-        # request. Set here rather than in either branch below: both the
-        # class-selection path and the direct-dashboard path pass through this
-        # line, and no session.clear() intervenes.
-        session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
-
-        linked_user = user
-
-        # Find all classes this user has claimed seats in.
-        seat_options = _get_identity_bound_seat_options(linked_user.id)
-        if not seat_options:
-            return _student_login_hard_fail(
-                student_id=linked_user.id,
-                reason=f"User {linked_user.id} login has no valid class seats.",
-                is_json=is_json,
-            )
-
-        # Restore the user's previously-selected class if still valid.
-        persisted_class_id = getattr(linked_user, "last_active_class_id", None)
-        valid_persisted_selection = None
-        if persisted_class_id:
-            valid_persisted_selection = next(
-                (item for item in seat_options if item["class_id"] == persisted_class_id),
-                None,
-            )
-            if valid_persisted_selection is None:
-                current_app.logger.error(
-                    "TLCP-INVARIANT-VIOLATION: User %s login has invalid persisted class %s.",
-                    linked_user.id,
-                    persisted_class_id,
-                    extra={
-                        "actor_type": "student",
-                        "actor_public_id": "-",
-                        "class_id": "-",
-                        "error_class": "InvariantViolation",
-                        "correlation_version": "v1",
-                    },
-                )
-                linked_user.last_active_class_id = None
-
-        if valid_persisted_selection is None:
-            # No valid class selection — establish minimal session and send to class selector.
-            session['user_id'] = linked_user.id
-            session['role'] = 'student'
-            session.permanent = True
-            nonce = secrets.token_urlsafe(32)
-            session['current_session_nonce'] = nonce
-            linked_user.current_session_nonce = nonce
-            # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
-            return redirect(url_for('student.select_class_context'))
-
-        # Resolve the canonical seat for the selected class.
-        target_seat = Seat.query.filter(
-            Seat.user_id == linked_user.id,
-            Seat.class_id == valid_persisted_selection["class_id"],
-            Seat.claimed_at.isnot(None),
-        ).first()
-        if target_seat is None:
-            return _student_login_hard_fail(
-                student_id=linked_user.id,
-                reason=f"User {linked_user.id} login failed to resolve seat for class {valid_persisted_selection['class_id']}.",
-                is_json=is_json,
-            )
-
-        # Update canonical DB pointers before establishing session.
-        linked_user.last_active_class_id = valid_persisted_selection["class_id"]
-        linked_user.last_active_seat_id = target_seat.id
-
-        # Establish canonical session (user_id + class_id + role + nonce).
-        # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
-        establish_student_session(linked_user, class_id=valid_persisted_selection["class_id"])
-        nonce = secrets.token_urlsafe(32)
-        session['current_session_nonce'] = nonce
-        linked_user.current_session_nonce = nonce
-
-        _prime_seat_teacher_display_name_cache(linked_user.id)
-
-        if is_json:
-            return jsonify(status="success", message="Login successful")
-
-        next_url = request.args.get('next')
-        if not is_safe_url(next_url):
-            return redirect(url_for('student.dashboard'))
-        return redirect(next_url or url_for('student.dashboard'))  # nosec # Safe: validated by is_safe_url()
+        return _complete_student_login(form)
 
     # Always display CTA to claim/create account for first-time users
     setup_cta = True
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
+
+
+@requires_feat_context("FEAT-IDEN-001")
+def _complete_student_login(form):
+    """The validated login submission: authenticate and establish the session."""
+    is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    # Verify Turnstile token
+    turnstile_token = request.form.get('cf-turnstile-response')
+    if not verify_turnstile_token(turnstile_token, get_real_ip()):
+        current_app.logger.warning(f"Turnstile verification failed for student login attempt")
+        if is_json:
+            return jsonify(status="error", message="CAPTCHA verification failed. Please try again."), 403
+        flash("CAPTCHA verification failed. Please try again.", "error")
+        return redirect(url_for('student.login', next=request.args.get('next')))
+
+    username = form.username.data.strip()
+    passphrase = form.passphrase.data.strip()
+
+    user = find_canonical_user_by_auth_username(username, expected_role="student")
+
+    try:
+        passphrase_valid = bool(user and verify_password(passphrase, user.passphrase_hash or ''))
+        has_claimed_seat = False
+        if passphrase_valid:
+            has_claimed_seat = Seat.query.filter(
+                Seat.user_id == user.id,
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
+            ).count() > 0
+
+        if not passphrase_valid or not has_claimed_seat:
+            if is_json:
+                return jsonify(status="error", message="Invalid credentials"), 401
+            flash("Invalid credentials", "error")
+            return redirect(url_for('student.login', next=request.args.get('next')))
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error("Error during student login authentication")
+        if is_json:
+            return jsonify(status="error", message="An error occurred during login. Please try again."), 500
+        flash("An error occurred during login. Please try again.", "error")
+        return redirect(url_for('student.login'))
+
+    # --- Establish canonical session ---
+    # Clear old student-specific session keys without wiping the CSRF token.
+    _reset_student_login_session()
+    session.pop('onboarding_seat_ref', None)
+    session.pop('onboarding_claim_generation', None)
+    session.pop('onboarding_user_ref', None)
+    session.pop('recovery_setup_authorization', None)
+    session.pop('generated_username', None)
+    clear_teacher_display_name_cache()
+
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    session['login_time'] = now.isoformat()
+    session['last_activity'] = session['login_time']
+
+    from app.auth import SESSION_TIMEOUT_MINUTES
+    user.current_session_started_at = now
+    user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+
+    # Mirror the authoritative expiry onto the cookie so the browser evicts
+    # it at the same instant login_required stops honoring it. Without this
+    # the cookie outlives the session by Flask's 31-day default whenever the
+    # student closes the tab, since the server-side check only runs on a
+    # request. Set here rather than in either branch below: both the
+    # class-selection path and the direct-dashboard path pass through this
+    # line, and no session.clear() intervenes.
+    session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
+
+    linked_user = user
+
+    # Find all classes this user has claimed seats in.
+    seat_options = _get_identity_bound_seat_options(linked_user.id)
+    if not seat_options:
+        return _student_login_hard_fail(
+            student_id=linked_user.id,
+            reason=f"User {linked_user.id} login has no valid class seats.",
+            is_json=is_json,
+        )
+
+    # Restore the user's previously-selected class if still valid.
+    persisted_class_id = getattr(linked_user, "last_active_class_id", None)
+    valid_persisted_selection = None
+    if persisted_class_id:
+        valid_persisted_selection = next(
+            (item for item in seat_options if item["class_id"] == persisted_class_id),
+            None,
+        )
+        if valid_persisted_selection is None:
+            current_app.logger.error(
+                "TLCP-INVARIANT-VIOLATION: User %s login has invalid persisted class %s.",
+                linked_user.id,
+                persisted_class_id,
+                extra={
+                    "actor_type": "student",
+                    "actor_public_id": "-",
+                    "class_id": "-",
+                    "error_class": "InvariantViolation",
+                    "correlation_version": "v1",
+                },
+            )
+            linked_user.last_active_class_id = None
+
+    if valid_persisted_selection is None:
+        # No valid class selection — establish minimal session and send to class selector.
+        session['user_id'] = linked_user.id
+        session['role'] = 'student'
+        session.permanent = True
+        nonce = secrets.token_urlsafe(32)
+        session['current_session_nonce'] = nonce
+        linked_user.current_session_nonce = nonce
+        # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
+        return redirect(url_for('student.select_class_context'))
+
+    # Resolve the canonical seat for the selected class.
+    target_seat = Seat.query.filter(
+        Seat.user_id == linked_user.id,
+        Seat.class_id == valid_persisted_selection["class_id"],
+        Seat.claimed_at.isnot(None),
+    ).first()
+    if target_seat is None:
+        return _student_login_hard_fail(
+            student_id=linked_user.id,
+            reason=f"User {linked_user.id} login failed to resolve seat for class {valid_persisted_selection['class_id']}.",
+            is_json=is_json,
+        )
+
+    # Update canonical DB pointers before establishing session.
+    linked_user.last_active_class_id = valid_persisted_selection["class_id"]
+    linked_user.last_active_seat_id = target_seat.id
+
+    # Establish canonical session (user_id + class_id + role + nonce).
+    # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
+    establish_student_session(linked_user, class_id=valid_persisted_selection["class_id"])
+    nonce = secrets.token_urlsafe(32)
+    session['current_session_nonce'] = nonce
+    linked_user.current_session_nonce = nonce
+
+    _prime_seat_teacher_display_name_cache(linked_user.id)
+
+    if is_json:
+        return jsonify(status="success", message="Login successful")
+
+    next_url = request.args.get('next')
+    if not is_safe_url(next_url):
+        return redirect(url_for('student.dashboard'))
+    return redirect(next_url or url_for('student.dashboard'))  # nosec # Safe: validated by is_safe_url()
 
 
 @student_bp.route('/select-class-context', methods=['GET', 'POST'])

@@ -44,18 +44,13 @@ def main() -> int:
     app = create_app()
     with app.app_context():
         cutoff = datetime.now(timezone.utc) - timedelta(days=args.lookback_days)
-        phase1_join_codes = ("ADVA1", "ADVA2", "ADVB1")
-        phase1_class_ids = [
-            row.class_id
-            for row in ClassEconomy.query.filter(ClassEconomy.join_code.in_(phase1_join_codes)).all()
-            if row.class_id
-        ]
-
-        query = Transaction.query.filter(Transaction.timestamp >= cutoff)
-        scoped_to_phase1 = bool(phase1_class_ids)
-        if scoped_to_phase1:
-            query = query.filter(Transaction.class_id.in_(phase1_class_ids))
-
+        topology = json.loads(artifact_path("topology.json").read_text(encoding="utf-8"))
+        phase1_class_ids = [topology[key] for key in ("ADVA1", "ADVA2", "ADVB1")]
+        if not all(ClassEconomy.query.filter_by(class_id=cid).first() for cid in phase1_class_ids):
+            raise SystemExit("Seeded classes are missing")
+        query = Transaction.query.filter(
+            Transaction.timestamp >= cutoff, Transaction.class_id.in_(phase1_class_ids)
+        )
         rows = query.with_entities(
             Transaction.id,
             Transaction.class_id,
@@ -77,16 +72,13 @@ def main() -> int:
                 )
 
         strict = bool(args.require_lineage)
-        status = "FAIL" if (strict and missing) else "PASS"
+        status = "FAIL" if (strict and missing) else "BLOCKED" if missing or not rows else "PASS"
         report = {
             "generated_at": now_iso(),
             "check": "lineage_lawfulness_skeleton",
-            "scope": (
-                f"phase1_classes_transactions_since_{cutoff.isoformat()}"
-                if scoped_to_phase1
-                else f"transactions_since_{cutoff.isoformat()}"
-            ),
+            "scope": f"phase1_classes_transactions_since_{cutoff.isoformat()}",
             "status": status,
+            "checked_count": len(rows),
             "violation_count": len(missing) if strict else 0,
             "violations": missing if strict else [],
             "unverified_count": len(missing),
@@ -98,7 +90,7 @@ def main() -> int:
         }
         artifact_path("lineage_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         print(json.dumps({"status": report["status"], "violation_count": report["violation_count"], "unverified_count": len(missing)}))
-        return 1 if strict and missing else 0
+        return 1 if strict and missing else 2 if missing or not rows else 0
 
 
 if __name__ == "__main__":

@@ -263,7 +263,8 @@
                    command. Idempotency is never derived by counting prior payments. #}
                 <input type="hidden" name="payment_nonce" value="{{ payment_nonce }}" />
                 <button type="submit" class="btn btn-primary w-100"
-                    onclick="return confirm('Pay this bill for Period {{ current_block|upper }}?');">
+                    data-confirm="Pay this bill for Period {{ current_block|upper }}?"
+                    data-confirm-title="Pay bill" data-confirm-label="Pay">
                     Pay Bill (${{ "%.2f"|format(group_due) }})
                 </button>
             </form>
@@ -297,7 +298,8 @@
                                value="{{ '%.2f'|format(part_max) }}" required>
                     </div>
                     <button type="submit" class="btn btn-outline-primary"
-                        onclick="return confirm('Pay $' + document.getElementById('rent-payment-amount').value + ' toward this bill?');">
+                        data-confirm="Pay ${value} toward this bill?" data-confirm-value-from="rent-payment-amount"
+                        data-confirm-title="Pay toward bill" data-confirm-label="Pay">
                         Pay this amount
                     </button>
                 </div>

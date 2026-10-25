@@ -25,6 +25,7 @@ The job now evaluates each open session inside the canonical day of its own
 from __future__ import annotations
 
 from datetime import timedelta, timezone
+from uuid import uuid4
 
 from app import db
 from app.feats.base import FEATContext
@@ -229,6 +230,68 @@ def test_DOM_PROD_001__stale_closure_does_not_block_working_today(client):
         reference_time_utc=now_utc,
     )
     db.session.commit()
+
+
+def _raw_attendance(classroom, seat, *, status, at):
+    """Append one raw timeline row at an exact timestamp, bypassing the FEAT writer.
+
+    Needed only to force two rows onto the identical ``timestamp`` so the test
+    below can pin the tie-break: ``record_attendance_session`` (used by
+    ``_tap_in``) always stamps ``now()``, which two calls never share.
+    """
+    with FEATContext(
+        "FEAT-PROD-001", correlation_id=f"raw-att:{uuid4()}", idempotency_key=f"raw-att:{uuid4()}"
+    ):
+        row = AttendanceSession(
+            target_seat_id=seat.id, class_id=classroom.class_id,
+            actor_seat_id=classroom.teacher_seat.id, status=status,
+            reason_code="start_work" if status == "active" else AttendanceReasonCode.DONE_FOR_DAY.value,
+            timestamp=at,
+        )
+        db.session.add(row)
+        db.session.flush()
+    db.session.commit()
+    return row
+
+
+def test_DOM_PROD_001__equal_timestamp_tie_breaks_on_the_higher_id(client):
+    """``latest_per_seat`` orders by ``(timestamp desc, id desc)`` (O2's window
+    function, app/scheduled_tasks.py). Two rows at the exact same instant are a
+    real possibility (e.g. a corrective write replayed at the original time),
+    and without the ``id`` tiebreak the window function's choice of "latest" row
+    is undefined on a timestamp tie. Insert ``inactive`` then ``active`` at one
+    shared instant — the higher id (the ``active`` row) must win, so the stale,
+    still-open session is swept per §312 exactly as if it were the sole row.
+    """
+    classroom = initialize("chemistry_p1", client.application)
+    seat = classroom.students[0].seat
+
+    tap_in_at = _stale_tap_in_at(classroom)
+    _raw_attendance(classroom, seat, status="inactive", at=tap_in_at)
+    active_row = _raw_attendance(classroom, seat, status="active", at=tap_in_at)
+    assert active_row.id > AttendanceSession.query.filter_by(
+        target_seat_id=seat.id, status="inactive",
+    ).one().id, "the active row must be the HIGHER id for this to test the tiebreak"
+
+    enforce_daily_limits_job()
+
+    # Filtered to mechanism="system" (the sweep's own signature) so the row we
+    # inserted ourselves above -- also status "inactive", same timestamp --
+    # can never be mistaken for the sweep's output.
+    close_row = (
+        AttendanceSession.query.filter_by(
+            target_seat_id=seat.id, class_id=classroom.class_id,
+            status="inactive", mechanism="system",
+        )
+        .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
+        .first()
+    )
+    assert close_row is not None, (
+        "the higher-id (active) row must win the timestamp tie, so the sweep "
+        "must treat this seat as open and still close it at day end"
+    )
+    assert close_row.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value
+    assert _aware(close_row.timestamp) == _day_bounds(classroom, tap_in_at).boundary_end_utc
 
 
 def test_DOM_PROD_001__session_opened_today_and_under_limit_is_left_open(client):

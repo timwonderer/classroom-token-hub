@@ -35,6 +35,7 @@ import collections
 from app import app
 from app.extensions import db, migrate, csrf, limiter
 from app.feats.base import FEATContext
+from app.utils.helpers import sanitize_for_log
 
 
 def get_validated_status_page_url():
@@ -176,7 +177,7 @@ def log_error_to_db(error_type=None, error_message=None, stack_trace=None, log_o
             app.logger.warning(
                 "Skipping DB error log outside FEAT context: %s %s",
                 error_type or "unknown",
-                request.path if in_request_context else "-",
+                sanitize_for_log(request.path) if in_request_context else "-",
             )
             return None
 
@@ -244,6 +245,29 @@ def internal_error(error):
     ), 500
 
 
+_404_CACHE_MAX_ENTRIES = 10_000
+_404_CACHE_PRUNE_INTERVAL_SECONDS = 60
+# Trimming to a target below the cap (not exactly the cap) avoids pruning
+# again on almost every following request while a sustained burst holds the
+# cache right at the boundary.
+_404_CACHE_TRIM_TARGET = int(_404_CACHE_MAX_ENTRIES * 0.9)
+
+
+def _prune_404_cache(cache, current_time):
+    """Drop entries older than an hour, then enforce the size cap by age.
+
+    Factored out so a test can drive it directly without a live request.
+    """
+    cache = {
+        k: v for k, v in cache.items()
+        if (current_time - v).total_seconds() < 3600
+    }
+    if len(cache) > _404_CACHE_MAX_ENTRIES:
+        oldest_first = sorted(cache.items(), key=lambda item: item[1])
+        cache = dict(oldest_first[-_404_CACHE_TRIM_TARGET:])
+    return cache
+
+
 @app.errorhandler(404)
 def not_found_error(error):
     """
@@ -251,17 +275,32 @@ def not_found_error(error):
     Displays a user-friendly page with navigation help.
     Rate-limited database logging to prevent spam from bots/typos.
     """
-    app.logger.warning(f"404 Not Found: {request.url}")
+    app.logger.warning("404 Not Found: %s", sanitize_for_log(request.url))
 
     # Rate-limited logging: only log unique 404s once per hour
     cache_key = f"404_{request.path}"
     if not hasattr(app, '_404_cache'):
         app._404_cache = {}
+    if not hasattr(app, '_404_cache_last_pruned_at'):
+        app._404_cache_last_pruned_at = None
 
-    # Clean old entries (older than 1 hour)
     current_time = datetime.now(timezone.utc)
-    app._404_cache = {k: v for k, v in app._404_cache.items()
-                      if (current_time - v).total_seconds() < 3600}
+
+    # Pruning used to rescan every entry on every single 404, which made a
+    # scanner trying many distinct unique paths within the hour cost O(n^2)
+    # overall, and the cache carried no size cap of its own (audit O8).
+    # Pruning now runs at most once per interval, or immediately once the
+    # cache has grown past its cap -- so a burst can grow the cache no larger
+    # than the cap before the next prune trims it back down.
+    last_pruned_at = app._404_cache_last_pruned_at
+    should_prune = (
+        last_pruned_at is None
+        or (current_time - last_pruned_at).total_seconds() >= _404_CACHE_PRUNE_INTERVAL_SECONDS
+        or len(app._404_cache) > _404_CACHE_MAX_ENTRIES
+    )
+    if should_prune:
+        app._404_cache = _prune_404_cache(app._404_cache, current_time)
+        app._404_cache_last_pruned_at = current_time
 
     # Log to database if not recently logged
     if cache_key not in app._404_cache:
@@ -271,6 +310,12 @@ def not_found_error(error):
             stack_trace=None
         )
         app._404_cache[cache_key] = current_time
+        # The cap above was checked before this insert; re-check once after
+        # it so a single request can never leave the cache larger than the
+        # cap, not even by the one entry just added.
+        if len(app._404_cache) > _404_CACHE_MAX_ENTRIES:
+            app._404_cache = _prune_404_cache(app._404_cache, current_time)
+            app._404_cache_last_pruned_at = current_time
 
     return render_template(
         'error_404.html',
@@ -285,7 +330,7 @@ def forbidden_error(error):
     Displays a user-friendly page with permission troubleshooting.
     Logs to database to track potential security issues.
     """
-    app.logger.warning(f"403 Forbidden: {request.url}")
+    app.logger.warning("403 Forbidden: %s", sanitize_for_log(request.url))
 
     # Log to database - permission errors could indicate security issues
     log_error_to_db(
@@ -304,7 +349,7 @@ def unauthorized_error(error):
     Displays a user-friendly page with login guidance.
     Logs to database to track authentication issues.
     """
-    app.logger.warning(f"401 Unauthorized: {request.url}")
+    app.logger.warning("401 Unauthorized: %s", sanitize_for_log(request.url))
 
     # Log to database - authentication errors help identify session/auth issues
     log_error_to_db(
@@ -324,7 +369,9 @@ def bad_request_error(error):
     Logs to database to identify UX/validation issues.
     """
     error_msg = str(error.description) if hasattr(error, 'description') else str(error)
-    app.logger.warning(f"400 Bad Request: {request.url} - {error_msg}")
+    app.logger.warning(
+        "400 Bad Request: %s - %s", sanitize_for_log(request.url), sanitize_for_log(error_msg)
+    )
 
     # Log to database - validation errors help identify UX issues
     log_error_to_db(
@@ -347,7 +394,11 @@ def too_many_requests_error(error):
     Logs to database to help spot limits that are too tight for real usage.
     """
     limit_description = str(error.description) if hasattr(error, 'description') else None
-    app.logger.warning(f"429 Too Many Requests: {request.url} - {limit_description}")
+    app.logger.warning(
+        "429 Too Many Requests: %s - %s",
+        sanitize_for_log(request.url),
+        sanitize_for_log(limit_description) if limit_description is not None else None,
+    )
 
     log_error_to_db(
         error_type='429 Too Many Requests',
@@ -384,7 +435,7 @@ def service_unavailable_error(error):
     Displays a user-friendly page for maintenance/downtime.
     Logs to database for service availability tracking.
     """
-    app.logger.error(f"503 Service Unavailable: {request.url}")
+    app.logger.error("503 Service Unavailable: %s", sanitize_for_log(request.url))
 
     # Log to database - service availability is critical to track
     log_error_to_db(

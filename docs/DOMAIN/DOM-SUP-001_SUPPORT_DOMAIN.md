@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.8 | 2026-10-04 | 1.7 | Normative |
+| DOM-SUP-001 | 1.9 | 2026-10-14 | 1.8 | Constitutional |
+
+> [!IMPORTANT]
+> **v1.9 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
 
 ## I. Purpose
 

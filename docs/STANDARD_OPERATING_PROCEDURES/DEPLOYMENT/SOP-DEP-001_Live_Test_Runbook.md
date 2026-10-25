@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.8     | 2026-10-06     | 2.7 | Normative |
+| SOP-DEP-001      | 2.11    | 2026-10-23     | 2.10 | Normative |
 
 ## I. Purpose
 
@@ -192,7 +192,8 @@ git status --porcelain  # must be empty
 Before a restricted work window, confirm an unauthenticated browser reaches Access,
 an unauthorized identity cannot enter, and an authorized operator can reach the
 normal application sign-in. Verify the origin cannot be reached around Cloudflare.
-Public health probes require authorized service-token headers; host-local probes
+Health endpoints are public and need no credential; while the gate is closed the status
+collector reads nothing from the application (SPEC-OPS-006 1.6). Host-local probes
 do not traverse Access. Never record tokens in logs or deployment evidence.
 
 At the end of the window, change the Access policy only when public access is
@@ -266,39 +267,35 @@ flask db current
 7. Point Nginx at the service only after local health passes, then confirm
    HTTPS certificate, host routing, and security headers.
 
-## XI. Full-App First Test
+## XI. Browser Validation
 
-Exercise these in a real browser while the Cloudflare Access gate remains restricted. Each
-line records owner, timestamp, pass/fail/blocked, and notes or defect link.
+Browser validation follows one of two templates:
 
-- `/admin/login` renders and submits.
-- `/student/login` renders and submits.
-- `/docs` renders.
-- Passwordless enrollment and authentication with deployment credentials.
-- Turnstile renders on every configured route and real verification succeeds.
-- Teacher creates or accesses a class boundary.
-- Student seat claim, then a student session.
-- Teacher current-class switching via `POST /admin/current-class`.
-- Student add-class via `/student/add-class`, and switch-class via
-  `POST /student/switch-class/<class_id>`. The route takes the canonical
-  `class_id`; a `join_code` in that position is the retired alias form.
-- Selected-class export via `/admin/export-students`. The export scopes to the
-  session's active class — a query parameter does not choose the class — and
-  lists claimed seats only.
-- Hall-pass verification via `/verify/hallpass/<teacher_public_token>`.
-- Class-scoped admin actions cannot cross the selected class boundary.
-- Attendance, productivity, payroll, obligations, ledger and store paths load
-  and execute through their canonical routes.
-- Audit/lineage records are produced for protected mutations.
-- Export and support/operations surfaces load without 500 responses.
-- No PII appears in URLs, logs, errors, or browser-visible diagnostics.
-- Accessibility smoke checks cover the public, login, teacher and student
-  surfaces reached in this test (INV-ARC-020).
+- **`SOP-DEP-001A`, Initial Deployment Browser Validation:** the first deployment of the v2 application onto a
+  host, a rehearsal host or fresh database, or a release the owner designates as full. Every item is checked and
+  evidenced before the gate opens.
+- **`SOP-DEP-001B`, Release Functional Browser Validation:** every other release. The scope comes from the release
+  diff: features the release changes directly, features connected to those changes, and features with a known
+  problem. A feature outside that scope needs no row.
+
+Both record results during or after the checks from contemporaneous evidence, and both use §XI.A below for items
+that assert something cannot happen.
 
 ### XI.A How to exercise the adversarial items
 
 Several §XI lines assert that something **cannot** happen — a query parameter
-cannot choose the class, an action cannot cross the class boundary. A negative
+cannot choose the class, an action cannot cross the class boundary.
+
+**On a host serving live classes, no deliberate cross-scope attempt is made.**
+A crafted request against another class, or a stale form submitted into a class
+other than the one it was rendered for, is a vulnerability test against real
+classrooms, and that is not the operator's role, even for classes the operator
+owns (owner ruling, 2026-10-16). There, such a line is split: its positive half
+is evidenced by normal use (every exercised action landed in its own class, as
+item 5 confirms at the data layer), and its negative half by the release suite's
+class-isolation tests, named in the record with their result on the suite run.
+Items 2 and 3 below apply as written only on a host holding no live classroom
+data, such as a rehearsal deployment. A negative
 result is weak evidence by default, because "the protection worked" and "the
 request never really arrived" look identical from the outside. The techniques
 below exist to tell those apart, and were derived from the 2026-09-20 session
@@ -394,9 +391,9 @@ Named roles for each rehearsal or smoke pass:
 
 Primary operator and escalation owner may be the same person. In a
 single-operator environment the operator MAY assume all three roles provided
-the test suite passes with no unexplained failures, every §XI line is executed
-and recorded, results are written into the record, and known risks or
-deviations are stated before the go/no-go decision.
+the test suite passes with no unexplained failures, the browser validation the
+deployment requires (`SOP-DEP-001A` or `SOP-DEP-001B`) is executed and recorded,
+and results and known risks are written into the record.
 
 AI assistance MAY be used to look for defects or invariant violations. Its
 output is advisory only and is **not** independent verification authority.
@@ -437,7 +434,7 @@ output is advisory only and is **not** independent verification authority.
 ## XV. Record Storage
 
 Capture: migration head before and after, the `pytest_result/` artifact
-reference, health output, §XI results, failures, and the go/no-go decision.
+reference, health output, browser validation results (`SOP-DEP-001A` or `SOP-DEP-001B`), failures, and the go/no-go decision.
 
 Store the finalized record as a repository artifact under `docs/ops/audits/`,
 or as a retained PR/ticket comment. **Do not create `docs/LOGS/`** — that root
@@ -471,7 +468,7 @@ immutable once finalized.
 ## XVI. Completion Condition
 
 The first test deployment is complete only when the exact SHA runs from a fresh
-database, the required integrations work, every §XI path has recorded evidence,
+database, the required integrations work, every `SOP-DEP-001A` item has recorded evidence,
 and the operator/verifier decision is stored.
 
 ## XVII. Amendment
@@ -485,6 +482,9 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.11 | 2026-10-23 | §VI Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23. |
+| 2.10 | 2026-10-22 | §XI's checklist is extracted into two templates with separate mechanisms: `SOP-DEP-001A` (initial deployment: every item evidenced before the gate opens) and `SOP-DEP-001B` (release: scope from the diff, covering directly changed, connected and known-problem features; out-of-scope features need no row). Both allow results recorded after the checks from contemporaneous evidence. §XI.A stays here. §XIII, §XV and §XVI cite the templates; §XIII drops the before-go/no-go ordering for known risks. Owner rulings, 2026-10-22 (v2.3.0). |
+| 2.9 | 2026-10-16 | §XI: one result set for every line (*evidenced*, *in part*, *failed*, *blocked*, *not exercised*), replacing pass/fail/blocked; a line is evidenced when the exercised features ran through it and behaved as asserted; a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |
 | 2.8 | 2026-10-06 | §XIV: the forward-only list is `migrations/forward_only_register.txt`, enforced against the chain by a test; the prose list was incomplete. Dependencies: `SOP-DB-009` (archived) replaced by `SOP-DB-004`. |
 | 2.7 | 2026-10-04 | §XIV: register the three attendance/payroll recovery revisions that reject all downgrades; preserve snapshot restore or reviewed fix-forward recovery. |
 | 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after pending hall-pass requests, now `pending_actions` rows, are deployed and verified. |

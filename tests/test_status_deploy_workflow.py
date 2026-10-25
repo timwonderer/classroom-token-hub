@@ -24,6 +24,7 @@ OPERATOR = "operator@example.com"
 ALLOWLIST_SECRET = {"secretKeyRef": {"name": "status-operator-allowlist", "key": "latest"}}
 IMAGE = f"us-west2-docker.pkg.dev/{PROJECT}/status/cth-status:1eeaaa8e346c74a6a64493fb81954c045db571ed"
 COLLECTOR_JOB = "cth-status-app-health-collector"
+COLLECTOR_SERVICE = "cth-status-collector"
 
 # Stands in for `gcloud secrets versions access`: serves the payloads it is
 # given, and refuses any other secret, project or command the way a missing
@@ -52,6 +53,7 @@ def test_focused_status_job_runs_collector_and_workflow_tests():
     steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["test"]["steps"]
     command = next(step["run"] for step in steps if step.get("name") == "Run focused status tests")
     assert "tests/test_status_collector.py" in command
+    assert "tests/test_status_collector_app.py" in command
     assert "tests/test_status_deploy_workflow.py" in command
     # The hall-pass component's tests read app/routes, so they run here too.
     assert "tests/test_status_hall_pass.py" in command
@@ -68,8 +70,8 @@ def test_collector_job_uses_shared_image_scoped_identity_and_secret_references()
     assert "--command python" in command
     assert "--args=-m,status_service.collector" in command
     assert "FIRESTORE_DATABASE=cth-status-prod" in command
-    assert "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest" in command
-    assert "CF_ACCESS_CLIENT_SECRET=cth-status-cf-access-client-secret:latest" in command
+    # The collector carries no Cloudflare Access credential (SPEC-OPS-006 1.6).
+    assert "CF_ACCESS" not in command
     assert not any(flag in command for flag in REPLACING_FLAGS)
 
 
@@ -88,6 +90,28 @@ def test_duplicate_collector_step_with_same_name_is_rejected(monkeypatch):
     monkeypatch.setattr(sys.modules[__name__], "_deploy_steps", lambda: [*steps, duplicate])
     with pytest.raises(AssertionError):
         test_collector_job_requires_explicit_opt_in()
+
+
+def test_collector_service_is_private_and_opt_in():
+    step = _step("Deploy private collector service")
+    command = step["run"]
+    assert step["if"] == "${{ vars.STATUS_COLLECTOR_SERVICE_ENABLED == 'true' }}"
+    assert f"gcloud run deploy {COLLECTOR_SERVICE}" in command
+    assert '--image "$IMAGE_URI"' in command
+    assert '--service-account "status-probe@cth-production-status.iam.gserviceaccount.com"' in command
+    assert "--args=--bind,0.0.0.0:8080,--workers,1,--timeout,110,status_service.collector_app:app" in command
+    for flag in ("--ingress internal", "--no-allow-unauthenticated", "--concurrency 1",
+                 "--cpu-throttling", "--max 1", "--max-instances 1", "--min 0", "--min-instances 0", "--timeout 120s"):
+        assert flag in command
+    assert "FIRESTORE_DATABASE=cth-status-prod" in command
+    # The collector carries no Cloudflare Access credential (SPEC-OPS-006 1.6).
+    assert "CF_ACCESS" not in command
+    assert not any(flag in command for flag in REPLACING_FLAGS)
+    assert _step("Verify private collector service")["if"] == step["if"]
+    assert sum(
+        other.get("run", "").count(f"gcloud run deploy {COLLECTOR_SERVICE}")
+        for other in _deploy_steps()
+    ) == 1
 
 
 def test_status_image_contains_shared_projection_package():
@@ -158,6 +182,36 @@ def _run_readiness_check(tmp_path, public, operator):
     )
 
 
+def _run_collector_verify(tmp_path, *, ingress="internal", members=(), cpu_throttling="true",
+                          service_max="1", revision_max="1", service_min="0", revision_min="0",
+                          ready="True", missing_ready=False, cpu="1000m"):
+    service = _described(COLLECTOR_SERVICE, ready=ready)
+    if missing_ready:
+        service["status"]["conditions"] = [condition for condition in service["status"]["conditions"]
+                                           if condition["type"] != "Ready"]
+    service["metadata"]["annotations"] = {"run.googleapis.com/ingress": ingress,
+                                            "run.googleapis.com/maxScale": service_max,
+                                            "run.googleapis.com/minScale": service_min}
+    template = service["spec"]["template"]["spec"]
+    service["spec"]["template"]["metadata"] = {"annotations": {
+        "run.googleapis.com/cpu-throttling": cpu_throttling,
+        "autoscaling.knative.dev/maxScale": revision_max,
+        "autoscaling.knative.dev/minScale": revision_min,
+    }}
+    template.update(serviceAccountName="status-probe@cth-production-status.iam.gserviceaccount.com",
+                    containerConcurrency=1)
+    template["containers"][0].update(command=["gunicorn"],
+                                      args=["--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "110", "status_service.collector_app:app"],
+                                      resources={"limits": {"cpu": cpu, "memory": "512Mi"}})
+    service_path = tmp_path / "collector.json"
+    policy_path = tmp_path / "policy.json"
+    service_path.write_text(json.dumps(service))
+    policy_path.write_text(json.dumps({"bindings": [{"role": "roles/run.invoker", "members": list(members)}]}))
+    return subprocess.run([sys.executable, "-", str(service_path), str(policy_path)],
+                          input=_step_script("Verify private collector service"), capture_output=True, text=True,
+                          env={**os.environ, "IMAGE_URI": IMAGE}, check=False)
+
+
 def _reported_missing(result):
     return set(re.findall(r"::error::cth-status-operator has no (\w+)", result.stdout))
 
@@ -171,7 +225,7 @@ def test_status_deploy_workflow_never_replaces_service_configuration(flag):
     deploys = _gcloud_deploys()
     # Without this, a renamed service or reshaped step would match no command
     # and the flag check below would pass having inspected nothing.
-    assert set(deploys) == SERVICES
+    assert set(deploys) == SERVICES | {COLLECTOR_SERVICE}
     for service, command in deploys.items():
         assert flag not in command, f"{service} deploy uses {flag}"
 
@@ -214,6 +268,47 @@ def test_status_deploy_workflow_readiness_passes_when_both_services_serve_this_c
     result = _run_readiness_check(tmp_path, _described("cth-status-public"), _described("cth-status-operator"))
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.count(" serving") == 2
+
+
+@pytest.mark.parametrize("cpu", ["1", "1000m"])
+def test_collector_verification_accepts_private_ready_service(tmp_path, cpu):
+    result = _run_collector_verify(tmp_path, members=["serviceAccount:status-scheduler@example.com"], cpu=cpu)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("ingress,members", [
+    ("all", []),
+    ("internal", ["allUsers"]),
+    ("internal", ["allAuthenticatedUsers"]),
+])
+def test_collector_verification_rejects_public_access(tmp_path, ingress, members):
+    result = _run_collector_verify(tmp_path, ingress=ingress, members=members)
+    assert result.returncode == 1
+
+
+def test_collector_verification_rejects_instance_based_billing(tmp_path):
+    result = _run_collector_verify(tmp_path, cpu_throttling="false")
+    assert result.returncode == 1
+    assert "collector request_billing: FAIL" in result.stdout
+
+
+@pytest.mark.parametrize("overrides,failed_check", [
+    ({"service_max": "2"}, "service_max_instances"),
+    ({"revision_max": "2"}, "revision_max_instances"),
+    ({"service_min": "1"}, "service_min_instances"),
+    ({"revision_min": "1"}, "revision_min_instances"),
+])
+def test_collector_verification_rejects_scaling_drift(tmp_path, overrides, failed_check):
+    result = _run_collector_verify(tmp_path, **overrides)
+    assert result.returncode == 1
+    assert f"collector {failed_check}: FAIL" in result.stdout
+
+
+@pytest.mark.parametrize("overrides", [{"ready": "False"}, {"ready": "Unknown"}, {"missing_ready": True}])
+def test_collector_verification_requires_ready_condition(tmp_path, overrides):
+    result = _run_collector_verify(tmp_path, **overrides)
+    assert result.returncode == 1
+    assert "collector readiness: FAIL" in result.stdout
 
 
 @pytest.mark.parametrize(

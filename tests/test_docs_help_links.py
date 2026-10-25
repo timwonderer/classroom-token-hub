@@ -65,6 +65,30 @@ def test_help_doc_map_targets_exist(layout):
     assert not missing, f"{layout} help_doc_map points at missing docs: {missing}"
 
 
+def _diagnostic_paths_in_layout(layout: str) -> list[str]:
+    """Every value declared in the layout's `help_diagnostic_map`.
+
+    `help_diagnostic_map` is the "Troubleshooting" counterpart to `help_doc_map`
+    (same dict-literal shape, picked out the same way), and nothing previously
+    checked that its targets exist on disk.
+    """
+    source = (REPO_ROOT / "templates" / layout).read_text(encoding="utf-8")
+    start = source.index("help_diagnostic_map = {")
+    end = source.index("}", start)
+    block = source[start:end]
+    return [
+        line.split(":", 1)[1].strip().strip(",").strip("'\"")
+        for line in block.splitlines()
+        if ":" in line and ("'" in line or '"' in line)
+    ]
+
+
+@pytest.mark.parametrize("layout", ["layout_admin.html", "layout_student.html"])
+def test_help_diagnostic_map_targets_exist(layout):
+    missing = [p for p in _diagnostic_paths_in_layout(layout) if not _doc_file_exists(p)]
+    assert not missing, f"{layout} help_diagnostic_map points at missing docs: {missing}"
+
+
 # `url_for('docs.view_doc', doc_path=...)` and the help macros both take a bare
 # doc path, so a typo renders a 404 that only shows up by clicking it.
 _DOC_REFERENCE = re.compile(

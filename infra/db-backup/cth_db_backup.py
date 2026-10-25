@@ -3,7 +3,7 @@
 
 PROPOSAL, NOT APPLIED. See ``infra/db-backup/README.md`` and
 ``docs/ops/DATABASE_BACKUP_PLAN.md``. The baseline model this implements is the
-owner's 2026-09-30 direction (POST_LAUNCH_TRACKER_2026.md §IV-B), which is still
+owner's 2026-09-30 direction (archived POST_LAUNCH_TRACKER_2026.md §IV-B; issue #1639), which is still
 under failure-mode review; nothing here is normative.
 
 Commands
@@ -51,6 +51,7 @@ import tempfile
 from pathlib import Path
 
 import psycopg2
+from psycopg2 import sql
 
 # Identity rows whose disappearance is a protected destruction (seat, class or
 # teacher-account deletion; user rows go with the last seat of a student and with
@@ -182,7 +183,7 @@ def table_counts(cur):
     tables = [r[0] for r in cur.fetchall()]
     counts = {}
     for t in tables:
-        cur.execute(f'SELECT count(*) FROM public."{t}"')
+        cur.execute(sql.SQL("SELECT count(*) FROM public.{}").format(sql.Identifier(t)))
         counts[t] = cur.fetchone()[0]
     return counts
 

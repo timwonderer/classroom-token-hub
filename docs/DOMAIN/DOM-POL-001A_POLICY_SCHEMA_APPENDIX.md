@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001A | 2.2 | 2026-09-30 | 2.1 | Constitutional Appendix |
+| DOM-POL-001A | 2.4 | 2026-10-14 | 2.3 | Constitutional Appendix |
 
 ## I. Purpose
 
@@ -135,6 +135,21 @@ IS NOT NULL` backstops the FEAT-CLASS-003 command guard. The group-level semanti
 (rank set, three-tier cap, one-active-coverage-per-group at purchase) are specified in
 FEAT-CLASS-003 §VIII.
 
+The rows also carry an optional `marketing_badge` (string key; NULL = none): marketplace
+flair a teacher may pin on an offering (owner approval 2026-10-14, ported from v1). It is
+presentation metadata only and never enters premium, coverage or claim evaluation.
+FEAT-CLASS-003 accepts only a key from the fixed catalog
+`app/services/insurance_policy_service.MARKETING_BADGES`. Like every other field it is
+frozen with the definition, so changing a badge mints a new `policy_uuid`.
+
+A row minted by an edit (or by putting a hidden offering back on sale) carries
+`supersedes_policy_uuid`: the `policy_uuid` of the version it replaces, in the same
+class (owner ruling 2026-10-14). It is set when the row is created and never changes;
+NULL means the row replaces nothing. Following these links from a version reaches the
+latest version that supersedes it. The link decides where an existing holder's
+coverage continues (`DOM-STORE-001` §VIII.E.1); it never changes the terms of an
+entitlement already granted.
+
 ### E. Recurring billing terms (rent and insurance)
 
 A recurring policy family carries the terms that schedule its obligations. Each is part of the immutable definition row; a downstream bill cycle resolves them from the exact `policy_uuid` it carries (`DOM-POL-001` §VII, frozen by reference), never from the family's current row.
@@ -151,7 +166,7 @@ A recurring policy family carries the terms that schedule its obligations. Each 
 - `nonpayment_mode` — `ACCUMULATE` or `CANCEL_AFTER_X_DAYS`;
 - `cancel_after_days` — required, and greater than zero, when the mode is `CANCEL_AFTER_X_DAYS`; absent otherwise. It may exceed one billing period.
 
-These terms are frozen with the purchased policy version: a later submission changes them only for entitlements purchased under the new `policy_uuid`.
+These terms are frozen with the purchased policy version: a later submission changes them only for entitlements purchased under the new `policy_uuid`. An existing holder reaches the new terms only through a new entitlement granted under the successor at a coverage boundary (`DOM-STORE-001` §VIII.E.1); the holder's existing entitlement and its cycles keep the version they carry.
 
 **Policies read.** Policies exposes one family-agnostic read, "the preview interval for `policy_uuid` X", used by Obligations to schedule succession. Obligations does not open `rent_settings` or `insurance_policies`, and does not branch on the family.
 

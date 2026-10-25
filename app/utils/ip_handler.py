@@ -152,6 +152,19 @@ def _trusted_proxy_networks():
     return networks
 
 
+def is_host_local_request():
+    """Whether this request came from the host itself rather than through nginx.
+
+    nginx proxies to gunicorn over loopback, so ``remote_addr`` is loopback for
+    every public request too. Only the proxy headers nginx always sets tell them
+    apart: a host-local caller (the Prometheus scrape, an operator's curl) has none.
+    """
+    return request.remote_addr in ('127.0.0.1', '::1') and not any(
+        request.headers.get(h)
+        for h in ('X-CF-Edge-IP', 'X-Real-IP', 'X-Forwarded-For', 'CF-Connecting-IP')
+    )
+
+
 def peer_is_trusted_proxy():
     """Whether the TCP peer of this request is a proxy we run.
 

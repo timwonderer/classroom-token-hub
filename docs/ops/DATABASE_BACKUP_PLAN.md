@@ -2,7 +2,7 @@
 
 **Status: proposal, not applied.** Nothing here has been installed on the production host. This is the
 implementation candidate for the "No database backup of any kind exists" item in
-[POST_LAUNCH_TRACKER_2026.md](../TRACKING/POST_LAUNCH_TRACKER_2026.md) §IV-B. That item says a failure-mode
+[POST_LAUNCH_TRACKER_2026.md](../archive/v2-tracking-2026/POST_LAUNCH_TRACKER_2026.md) §IV-B (archived 2026-10-22; now issue #1639). That item says a failure-mode
 review of the owner's backup model comes before any normative text or implementation. This document is input to
 that review (see §8): it is descriptive, not normative, and it settles nothing the review has not.
 

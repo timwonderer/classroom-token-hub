@@ -494,7 +494,10 @@
 <script>
   // Void Transaction
   async function voidTransaction(transactionId) {
-    if (!confirm('Reverse this transaction? A compensating entry will be added to its history.')) return;
+    const confirmed = await window.AppCore.confirm('Reverse this transaction? A compensating entry will be added to its history.', {
+      title: 'Reverse transaction', confirmLabel: 'Reverse', danger: true,
+    });
+    if (!confirmed) return;
 
     try {
       const resp = await window.AppCore.csrfFetch(`/admin/void-transaction/${transactionId}`, {

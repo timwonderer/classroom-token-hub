@@ -45,7 +45,7 @@ import pytz
 import bleach
 from werkzeug.exceptions import HTTPException, NotFound
 
-from app.extensions import db, limiter
+from app.extensions import db, limiter, login_account_limit_key, login_totp_replay_limit_key
 from app.feats.base import requires_feat_context, FEATContext, InvariantViolation, generate_correlation_id
 from app.access.scope import Scope
 from app.access import AccessScopeDenied, resolve_scope
@@ -108,6 +108,8 @@ from app.services.announcement_service import (
     update_class_announcement,
 )
 from app.services import insurance_definition_service as insurance_defs
+from app.services.insurance_policy_service import MARKETING_BADGES
+from app.services.insurance_premium_helper import build_insurance_premium_helper
 from app.feats.class_configuration import (
     configure_insurance_definition,
     set_insurance_definition_availability,
@@ -1211,6 +1213,20 @@ def _admin_owns_class(canonical_context, class_id):
     ).scalar()
 
 
+def _gate_seconds(value, cast):
+    """A gate timer value, or 0 (which fails the gate) when it is unusable.
+
+    `float("nan") < 10` is False, so a non-finite value would satisfy a
+    "too short" check; `int(float("inf"))` raises OverflowError, and so does
+    `math.isfinite` on an int beyond float range.
+    """
+    try:
+        seconds = cast(value)
+        return seconds if math.isfinite(seconds) else 0
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def _validate_destruction_gate(data, expected_phrase):
     """Require timed in-app gate proof for destructive operations."""
     phrase = str((data or {}).get("gate_phrase", "")).strip().upper()
@@ -1220,15 +1236,8 @@ def _validate_destruction_gate(data, expected_phrase):
             "message": "Confirmation failed: confirmation phrase did not match."
         }), 400
 
-    try:
-        countdown_seconds = int((data or {}).get("gate_countdown_seconds", 0))
-    except (TypeError, ValueError):
-        countdown_seconds = 0
-
-    try:
-        hold_seconds = float((data or {}).get("gate_hold_seconds", 0))
-    except (TypeError, ValueError):
-        hold_seconds = 0.0
+    countdown_seconds = _gate_seconds((data or {}).get("gate_countdown_seconds", 0), int)
+    hold_seconds = _gate_seconds((data or {}).get("gate_hold_seconds", 0), float)
 
     if countdown_seconds < 30:
         return jsonify({
@@ -2203,7 +2212,6 @@ def _get_validated_teacher_class_options(user_id: int) -> list[dict]:
 
 
 @admin_bp.route('/select-class-context', methods=['GET', 'POST'])
-@requires_feat_context("FEAT-IDEN-001")
 def select_class_context():
     """Explicit teacher class-selection gate before dashboard access."""
     ctx = getattr(g, "canonical_context", None)
@@ -2216,47 +2224,9 @@ def select_class_context():
         return redirect(url_for("admin.onboarding"))
 
     if request.method == "POST":
-        selected_class_id = (request.form.get("class_id") or "").strip()
-        selected = next((item for item in raw_options if item["class_id"] == selected_class_id), None)
-        if not selected:
-            flash("Invalid class selection.", "error")
-            from app.services.identity.builders import build_admin_class_selection_view
-            from app.utils.display_name_session import get_admin_display_name_cache
-            admin_name = get_admin_display_name_cache(user_id=ctx.user_id)
-            class_selection_view = build_admin_class_selection_view(admin_name, raw_options)
-            return render_template(
-                "admin_select_class_context.html",
-                class_selection_view=class_selection_view,
-            ), 400
-
-        session["last_activity"] = utc_now().isoformat()
-        user = db.session.get(User, ctx.user_id)
-        if user:
-            # Move BOTH canonical pointers together. Updating last_active_class_id
-            # alone leaves last_active_seat_id pointing at the previous class's
-            # teacher seat, which the context resolver rejects with ContextMismatch
-            # (seat.class_id != last_active_class_id) — the class switch then fails.
-            # `selected["seat_id"]` is the teacher seat for the newly chosen class,
-            # validated by _get_validated_teacher_class_options.
-            user.last_active_class_id = selected["class_id"]
-            user.last_active_seat_id = selected["seat_id"]
-            # A teacher has a distinct Seat + IdentityProfile per class, so
-            # switching classes switches identity. Invalidate the session
-            # identity caches carried over from the previous class, then
-            # re-establish the display name from the newly selected class's
-            # teacher profile so the layout renders the correct identity on the
-            # next request (the canonical context is already re-pointed above).
-            clear_admin_display_name_cache()
-            clear_teacher_display_name_cache()
-            new_profile = IdentityProfile.query.filter_by(
-                seat_id=selected["seat_id"]
-            ).first()
-            if new_profile:
-                set_admin_display_name_cache(
-                    user_id=user.id,
-                    display_name=new_profile.full_name,
-                )
-        return redirect(url_for("admin.dashboard"))
+        # Only the selection runs inside FEAT-IDEN-001; a FEAT commits on exit,
+        # and rendering the selector must not (INV-ARC-007: GET must be pure).
+        return _apply_teacher_class_selection(ctx, raw_options)
 
     from app.services.identity.builders import build_admin_class_selection_view
     from app.utils.display_name_session import get_admin_display_name_cache
@@ -2266,6 +2236,52 @@ def select_class_context():
         "admin_select_class_context.html",
         class_selection_view=class_selection_view,
     )
+
+
+@requires_feat_context("FEAT-IDEN-001")
+def _apply_teacher_class_selection(ctx, raw_options):
+    """The submitted class selection: move the teacher's canonical pointers."""
+    selected_class_id = (request.form.get("class_id") or "").strip()
+    selected = next((item for item in raw_options if item["class_id"] == selected_class_id), None)
+    if not selected:
+        flash("Invalid class selection.", "error")
+        from app.services.identity.builders import build_admin_class_selection_view
+        from app.utils.display_name_session import get_admin_display_name_cache
+        admin_name = get_admin_display_name_cache(user_id=ctx.user_id)
+        class_selection_view = build_admin_class_selection_view(admin_name, raw_options)
+        return render_template(
+            "admin_select_class_context.html",
+            class_selection_view=class_selection_view,
+        ), 400
+
+    session["last_activity"] = utc_now().isoformat()
+    user = db.session.get(User, ctx.user_id)
+    if user:
+        # Move BOTH canonical pointers together. Updating last_active_class_id
+        # alone leaves last_active_seat_id pointing at the previous class's
+        # teacher seat, which the context resolver rejects with ContextMismatch
+        # (seat.class_id != last_active_class_id) — the class switch then fails.
+        # `selected["seat_id"]` is the teacher seat for the newly chosen class,
+        # validated by _get_validated_teacher_class_options.
+        user.last_active_class_id = selected["class_id"]
+        user.last_active_seat_id = selected["seat_id"]
+        # A teacher has a distinct Seat + IdentityProfile per class, so
+        # switching classes switches identity. Invalidate the session
+        # identity caches carried over from the previous class, then
+        # re-establish the display name from the newly selected class's
+        # teacher profile so the layout renders the correct identity on the
+        # next request (the canonical context is already re-pointed above).
+        clear_admin_display_name_cache()
+        clear_teacher_display_name_cache()
+        new_profile = IdentityProfile.query.filter_by(
+            seat_id=selected["seat_id"]
+        ).first()
+        if new_profile:
+            set_admin_display_name_cache(
+                user_id=user.id,
+                display_name=new_profile.full_name,
+            )
+    return redirect(url_for("admin.dashboard"))
 
 @admin_bp.route('/')
 @admin_required
@@ -2578,6 +2594,16 @@ def login():
         if not verify_turnstile_token(turnstile_token, get_real_ip()):
             flash("Security verification failed. Please complete the check and try again.", "error")
             return render_template("admin_login.html", form=form)
+        # The per-account and replay budgets (audit S5) are charged only once
+        # Turnstile has passed: as route decorators they would run in
+        # Flask-Limiter's before_request hook, ahead of the Turnstile check
+        # above, letting an attacker spend a known account's whole budget
+        # with no token at all. limiter.limit() used as a context manager
+        # checks and increments on __enter__ (its __exit__ is a no-op), so
+        # this block need not wrap the rest of the function.
+        with limiter.limit("5 per 5 minutes", key_func=login_account_limit_key()), \
+                limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key()):
+            pass
         username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
         user = find_canonical_user_by_auth_username(username, expected_role="teacher")
@@ -4165,8 +4191,9 @@ def bulk_delete_students():
 # the join-code deletion route below.
 
 
+# One rule only: a second rule `/join-code` (DELETE) was registered first, so
+# url_for built it and the Delete Class page POSTed there and got 405.
 @admin_bp.route('/join-code/delete', methods=['POST'])
-@admin_bp.route('/join-code', methods=['DELETE'])
 @admin_required
 def delete_join_code():
     """Hard-delete the *active* class economy and every record scoped to it.
@@ -5245,7 +5272,8 @@ def rent_settings():
     Configuration authority, not Obligations mutation (MAP-UI-001).
 
     This route previously carried ``@requires_feat_context("FEAT-OBL-003")``
-    (Obligations / "Scheduled Insurance Cycle"), which made the POST open a
+    (Obligations / Satisfy Obligation, then mislabelled "Scheduled Insurance
+    Cycle" in the registry), which made the POST open a
     second, nested context and fail outright with ``FEATContextError``: a
     teacher could not change rent at all. The decorator could not simply be
     re-pointed at the right FEAT either, since ``requires_feat_context`` reads
@@ -5809,6 +5837,7 @@ def _insurance_definition_view(row):
         insurance_type=row.insurance_type,
         title=row.title or "(untitled policy)",
         description=row.description or "",
+        marketing_badge=row.marketing_badge,
         premium=row.premium,
         charge_frequency=row.charge_frequency,
         reimbursement_percentage=row.reimbursement_percentage,
@@ -5872,6 +5901,7 @@ def _insurance_submission_from_form(form):
         "tier_group": tier_group,
         "title": _v("title"),
         "description": _v("description"),
+        "marketing_badge": _v("marketing_badge"),
     }
 
 
@@ -5899,6 +5929,7 @@ def _insurance_submission_from_row(row):
         "tier_group": row.tier_group,
         "title": row.title,
         "description": row.description,
+        "marketing_badge": row.marketing_badge,
     }
 
 
@@ -6002,6 +6033,8 @@ def new_insurance_policy():
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
                 nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
+                premium_helper=build_insurance_premium_helper(class_id),
+                marketing_badges=MARKETING_BADGES,
             )
         flash(f"Insurance policy '{row.title or row.policy_uuid}' created.", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6016,6 +6049,8 @@ def new_insurance_policy():
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
         nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
+        premium_helper=build_insurance_premium_helper(class_id),
+        marketing_badges=MARKETING_BADGES,
     )
 
 
@@ -6059,6 +6094,8 @@ def edit_insurance_policy(policy_uuid):
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
                 nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
+                premium_helper=build_insurance_premium_helper(class_id),
+                marketing_badges=MARKETING_BADGES,
             )
         flash(f"Insurance policy '{new_row.title or new_row.policy_uuid}' updated (new version).", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6073,6 +6110,8 @@ def edit_insurance_policy(policy_uuid):
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
         nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
+        premium_helper=build_insurance_premium_helper(class_id),
+        marketing_badges=MARKETING_BADGES,
     )
 
 
@@ -6383,6 +6422,7 @@ def void_transaction(transaction_id):
             tx,
             correlation_id=f"{tx.correlation_id}:void:{transaction_id}",
             idempotency_key=f"feat:ledger:void:{ctx.class_id}:{transaction_id}",
+            actor_seat_id=ctx.seat_id,
         )
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as e:
@@ -7366,13 +7406,15 @@ def _post_payroll_corrections(ctx, seat_ids: set[int]) -> list[int]:
     only who is still owed. Returns the seats paid.
 
     Two approvals running at once plan the same students. The second one to post a
-    student hits the replay guard: that student is already corrected, so it is
-    skipped and the rest of this approval continues. Any other error propagates.
+    student finds that student already corrected: record_payroll_event replays the
+    existing event (its idempotency-key check), or, failing that, the database's
+    replay guard refuses the insert. Either way the student is skipped, not counted
+    as paid, and the rest of this approval continues. Any other error propagates.
     """
     paid = []
     for posting in plan_class_corrections(ctx=ctx, seat_ids=seat_ids):
         try:
-            record_payroll_event(
+            result = record_payroll_event(
                 ctx=ctx,
                 target_seat_id=posting.seat_id,
                 payroll_event_type="manual_credit",
@@ -7388,6 +7430,8 @@ def _post_payroll_corrections(ctx, seat_ids: set[int]) -> list[int]:
             if constraint != "uq_payroll_event_replay_guard":
                 raise
             db.session.rollback()
+            continue
+        if result.replayed:
             continue
         paid.append(posting.seat_id)
     return paid
@@ -9037,18 +9081,12 @@ def account_delete():
             flash('Account deletion blocked: confirmation phrase did not match.', 'error')
             return redirect(url_for('admin.account_delete'))
 
-        try:
-            gate_countdown_seconds = int(request.form.get('gate_countdown_seconds', 0))
-        except (TypeError, ValueError):
-            gate_countdown_seconds = 0
+        gate_countdown_seconds = _gate_seconds(request.form.get('gate_countdown_seconds', 0), int)
         if gate_countdown_seconds < 30:
             flash('Account deletion blocked: 30-second safety countdown is required.', 'error')
             return redirect(url_for('admin.account_delete'))
 
-        try:
-            gate_hold_seconds = float(request.form.get('gate_hold_seconds', 0))
-        except (TypeError, ValueError):
-            gate_hold_seconds = 0.0
+        gate_hold_seconds = _gate_seconds(request.form.get('gate_hold_seconds', 0), float)
         if gate_hold_seconds < 10:
             flash('Account deletion blocked: 10-second hold is required.', 'error')
             return redirect(url_for('admin.account_delete'))
@@ -10780,21 +10818,15 @@ def resolve_issue(issue_ref):
             )
 
             if action_type == 'reverse_transaction':
-                for event in item_events:
-                    db.session.add(EntitlementEvent(
-                        class_id=event.class_id,
-                        entitlement_id=event.entitlement_id,
-                        target_seat_id=event.target_seat_id,
-                        actor_seat_id=acting_seat.id if acting_seat else event.actor_seat_id,
-                        product_id=event.product_id,
-                        entitlement_type=event.entitlement_type,
-                        acquisition_type=event.acquisition_type,
-                        event_type='REVOKED',
-                        correlation_id=event.correlation_id,
-                        payload={'reason': 'issue_reversal', 'reversed_transaction_id': reversal_tx.id},
-                        timestamp=utc_now(),
-                    ))
-                db.session.flush()
+                # Same revocation and $0 item-removal row as the banking page's
+                # Reverse; a refund keeps the item (SPEC-OPS-001 §3.3).
+                from app.feats.transaction_void_feat import revoke_reversed_purchase
+                revoke_reversed_purchase(
+                    transaction,
+                    list(item_events),
+                    reason='issue_reversal',
+                    actor_seat_id=acting_seat.id,
+                )
 
             issue.teacher_resolution = (
                 'Transaction Reversed' if action_type == 'reverse_transaction'

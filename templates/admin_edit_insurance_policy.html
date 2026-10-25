@@ -1,5 +1,7 @@
 {% extends "layout_admin.html" %}
 {% import 'macros/cards.html' as cards %}
+{% from "macros/insurance_premium_helper.html" import premium_helper as premium_helper_box %}
+{% from "macros/insurance_marketing_badge.html" import marketing_badge_select %}
 {% set is_new = (mode == 'new') %}
 {% set page_title = "New Insurance Policy" if is_new else "Edit Insurance Policy" %}
 {% set current_page = "insurance" %}
@@ -23,7 +25,7 @@
 {% endcall %}
 
 {% call help.topic('pol-versions', 'edit_note', 'What editing does to current holders') %}
-<p class="mb-0"><strong>Editing publishes a new version; it does not rewrite history.</strong> Students already covered keep the terms they bought until their coverage ends. To move everyone, hide the old policy and sell the new one.</p>
+<p class="mb-0"><strong>Editing publishes a new version; it does not rewrite history.</strong> Students already covered finish their current period on the terms they bought, then move to the new version at their next renewal. They see the change before it's billed and can cancel first.</p>
 {% endcall %}
 {% endblock %}
 
@@ -67,7 +69,7 @@
         <div class="row g-3">
           <!-- Common: identity + type -->
           <div class="col-md-6">
-            <label class="form-label fw-bold" for="title">Policy Title</label>
+            <label class="form-label fw-bold" for="title">Policy Name</label>
             <input class="form-control" id="title" name="title" maxlength="120" value="{{ cur('title') }}">
           </div>
           <div class="col-md-6">
@@ -81,7 +83,12 @@
 
           <div class="col-12">
             <label class="form-label fw-bold" for="description">Description <span class="text-muted fw-normal">(optional)</span></label>
-            <textarea class="form-control" id="description" name="description" rows="3">{{ cur('description') }}</textarea>
+            <textarea class="form-control" id="description" name="description" rows="3" aria-describedby="description_help">{{ cur('description') }}</textarea>
+            <div class="form-text" id="description_help">Students see this before they buy, so put any conditions here.</div>
+          </div>
+
+          <div class="col-md-6">
+            {{ marketing_badge_select(marketing_badges, cur('marketing_badge')) }}
           </div>
 
           <!-- Common: premium + coverage period -->
@@ -90,45 +97,60 @@
             <input class="form-control" id="premium" name="premium" value="{{ cur('premium', '0.00') }}">
           </div>
           <div class="col-md-3">
-            <label class="form-label fw-bold" for="charge_frequency">Charge Frequency</label>
+            <label class="form-label fw-bold" for="charge_frequency">Insurance Bill Cycle</label>
             <select class="form-select" id="charge_frequency" name="charge_frequency">
               {% for value, label in charge_frequency_choices %}
               <option value="{{ value }}" {% if current_freq == value %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
+            <div class="form-text mb-2">
+              Students will be charged according to this interval.
+            </div>
           </div>
 
           <!-- TRANSACTION + PRODUCTIVITY: reimbursement + payout multiple -->
           <div class="col-md-3 type-field" data-types="TRANSACTION PRODUCTIVITY">
-            <label class="form-label fw-bold" for="reimbursement_percentage">Reimbursement %</label>
+            <label class="form-label fw-bold" for="reimbursement_percentage">Percent of loss covered</label>
             <input class="form-control type-input" data-types="TRANSACTION PRODUCTIVITY"
                    id="reimbursement_percentage" name="reimbursement_percentage" value="{{ cur('reimbursement_percentage') }}">
           </div>
           <div class="col-md-3 type-field" data-types="TRANSACTION PRODUCTIVITY">
-            <label class="form-label fw-bold" for="payout_multiple">Payout Multiple</label>
+            <label class="form-label fw-bold" for="payout_multiple">Maximum Payout (in multiple of premium amount)</label>
             <input class="form-control type-input" data-types="TRANSACTION PRODUCTIVITY"
                    id="payout_multiple" name="payout_multiple" value="{{ cur('payout_multiple') }}">
+            <div class="form-text mb-2">
+             If a student pays $10 per month for a policy, a maximum payout of 3 means they can claim up to $30 per month.
+            </div>
           </div>
 
           <!-- TRANSACTION + NON_MONETARY: claims per week-equivalent -->
           <div class="col-md-3 type-field" data-types="TRANSACTION NON_MONETARY">
-            <label class="form-label fw-bold" for="claims_per_week_equivalent">Claims / week-equiv.</label>
+            <label class="form-label fw-bold" for="claims_per_week_equivalent">Weekly Claimable Transactions Limit</label>
             <input class="form-control type-input" data-types="TRANSACTION NON_MONETARY"
                    id="claims_per_week_equivalent" name="claims_per_week_equivalent" value="{{ cur('claims_per_week_equivalent') }}">
+                   <div class="form-text mb-2">
+              Maximum number of claims a student may file per week
+            </div>
           </div>
 
           <!-- TRANSACTION only: claim window -->
           <div class="col-md-3 type-field" data-types="TRANSACTION">
-            <label class="form-label fw-bold" for="claim_window_days">Claim Window (days)</label>
+            <label class="form-label fw-bold" for="claim_window_days">Transaction claimable window (days)</label>
             <input class="form-control type-input" data-types="TRANSACTION"
                    id="claim_window_days" name="claim_window_days" type="number" min="0" value="{{ cur('claim_window_days') }}">
+                   <div class="form-text mb-2">
+              The amount of time a student has to file a claim after eligible spending happened.
+            </div>
           </div>
 
           <!-- PRODUCTIVITY only: claimable dates per week-equivalent -->
           <div class="col-md-3 type-field" data-types="PRODUCTIVITY">
-            <label class="form-label fw-bold" for="claimable_dates_per_week_equivalent">Claimable dates / week-equiv.</label>
+            <label class="form-label fw-bold" for="claimable_dates_per_week_equivalent">Weekly Claimable Dates Limit</label>
             <input class="form-control type-input" data-types="PRODUCTIVITY"
                    id="claimable_dates_per_week_equivalent" name="claimable_dates_per_week_equivalent" value="{{ cur('claimable_dates_per_week_equivalent') }}">
+            <div class="form-text mb-2">
+              Maximum number of dates a student may claim per week
+            </div>
           </div>
 
           <!-- Waiting period: settable for every insurance type, per operator
@@ -143,6 +165,11 @@
             <label class="form-label fw-bold" for="waiting_period_days">Waiting Period (days)</label>
             <input class="form-control type-input" data-types="TRANSACTION PRODUCTIVITY NON_MONETARY"
                    id="waiting_period_days" name="waiting_period_days" type="number" min="0" value="{{ cur('waiting_period_days') }}">
+            <div class="form-text mb-2">The number of days a student must wait before filing a claim.</div>
+          </div>
+
+          <div class="col-12">
+            {{ premium_helper_box(premium_helper) }}
           </div>
 
           <!-- Recurring billing (DOM-POL-001A §V.E) — every insurance type. -->
@@ -156,7 +183,7 @@
             </div>
           </div>
           <div class="col-md-3">
-            <label class="form-label fw-bold" for="bill_preview_days">Bill ahead (days)</label>
+            <label class="form-label fw-bold" for="bill_preview_days">Bill preview (days)</label>
             <input class="form-control" id="bill_preview_days" name="bill_preview_days" type="number"
                    min="1" max="27" required value="{{ cur('bill_preview_days', '3') }}">
             <div class="form-text">At least 1; under 7 for weekly, under 28 for monthly.</div>
@@ -221,7 +248,7 @@
         <script type="application/json" id="tier-taken-data">{{ tier_groups | tojson }}</script>
 
         <p class="text-muted small mt-3 mb-0">
-          Only the fields that apply to the selected insurance type are submitted. Values may fall outside the Economic Engine's recommended ranges, but hard limits (premium ≥ 0, reimbursement ≤ 100%, non-negative terms) are enforced.
+            Editing an existing policy creates a brand new policy version. Current policy holders keep the same terms until the next cycle. The old version stops accepting new enrollments, so new policy holders get the new terms.
         </p>
 
         <div class="d-flex gap-2 mt-4">

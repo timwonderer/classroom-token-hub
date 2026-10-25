@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-CORE-001     | 1.1     | 2026-04-13     | 1.0        | Foundational    |
+| INV-CORE-001     | 1.2     | 2026-10-13     | 1.1        | Foundational    |
 
 ## I. Purpose
 
@@ -99,6 +99,7 @@ Registered `INV-ARC` documents at this level are:
 - `INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md`
 - `INV-ARC-020_ACCESSIBILITY_REQUIREMENTS_AND_TEMPLATE_CONTRACT.md`
 - `INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md`
+- `INV-ARC-022_REQUEST_CONTEXT_AND_PAGE_RENDERING.md`
 
 ## VI. DOM Specifications
 

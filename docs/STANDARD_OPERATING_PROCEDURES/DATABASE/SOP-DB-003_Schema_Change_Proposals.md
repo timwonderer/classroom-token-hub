@@ -2,7 +2,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-003 | 1.2 | 2026-09-17 | 1.1 (issued as SOP-DB-015) | Normative |
+| SOP-DB-003 | 1.4 | 2026-10-14 | 1.3 | Normative |
+
+> [!IMPORTANT]
+> **v1.4 (2026-10-14), review correction.** v1.3's §VI pointer cited `SOP-DB-004` §VI.1 twice for two different things, ambiguously. Reworded to say plainly that §VI.1 both defines the `M2 DATA` class and states how this gate treats it.
+>
+> **v1.3 (2026-10-14), documentation modernization.** Added `SOP-DB-004` to Dependencies and a pointer in §VI: that document (§XII) states it classifies a data rewrite (`M2 DATA`) that this document's three-box classification doesn't cover, and this document gave no hint a reader needed to know that. No classification requirement changes.
 
 ## I. Purpose
 
@@ -20,6 +25,7 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `SOP-DB-001_Migration_Specifications.md`
+- `SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md` — classifies a data rewrite (`M2 DATA`), which has no box in §VI below; see that document's §XII
 
 ## V. When This Gate Applies
 
@@ -42,6 +48,8 @@ Every schema-affecting PR MUST declare **exactly one** classification at the top
 - [ ] **CONTRACT (DATABASE)** – Destructive migration only
 
 If no classification is selected, the PR is invalid.
+
+A pure data rewrite (no column/table/FK shape change) is not classified by the three boxes above — see `SOP-DB-004` §VI.1, which both defines the `M2 DATA` class and states how this gate treats it.
 
 ## VII. Mandatory Checklist (PR-Blocking)
 

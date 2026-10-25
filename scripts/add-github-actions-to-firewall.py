@@ -9,7 +9,9 @@ Usage:
     python3 scripts/add-github-actions-to-firewall.py <firewall-id>
 """
 
+import ipaddress
 import json
+import uuid
 import subprocess
 import sys
 import urllib.request
@@ -23,8 +25,24 @@ BLUE = '\033[0;34m'
 NC = '\033[0m'  # No Color
 
 def run_command(cmd):
-    """Run a shell command and return success status."""
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    """Run a command (argv list) and return success status.
+
+    CodeQL py/command-line-injection (alerts #281, #282): this used to be
+    ``subprocess.run(cmd, shell=True, ...)`` with ``cmd`` an f-string built
+    from ``firewall_id`` (an operator-supplied CLI arg) and, at the call
+    sites below, from each IP string in GitHub's own ``/meta`` API response.
+    Neither is attacker-controlled in the way a request handler's input
+    would be, but shell=True means any shell metacharacter in either value
+    -- a malformed API response, a copy-pasted firewall id -- runs as a
+    shell command rather than being rejected or passed through literally.
+    An argv list goes straight to execve with no shell in between, so this
+    has no shell-metacharacter interpretation left to exploit regardless of
+    what ends up in the strings.
+    """
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    except OSError as error:
+        return False, str(error)
     return result.returncode == 0, result.stderr
 
 def fetch_github_ips():
@@ -42,7 +60,7 @@ def fetch_github_ips():
             print(f"{YELLOW}Warning: No GitHub Actions IPs found, trying 'hooks' instead{NC}")
             actions_ips = data.get('hooks', [])
 
-        return actions_ips
+        return [str(ipaddress.ip_network(ip, strict=False)) for ip in actions_ips]
     except Exception as e:
         print(f"{RED}Error fetching GitHub IPs: {e}{NC}")
         return None
@@ -56,21 +74,25 @@ def main():
         print("  doctl compute firewall list")
         sys.exit(1)
 
-    firewall_id = sys.argv[1]
+    try:
+        firewall_id = str(uuid.UUID(sys.argv[1]))
+    except ValueError:
+        print(f"{RED}Error: Firewall ID must be a UUID{NC}")
+        sys.exit(1)
 
     # Verify doctl is installed
-    success, _ = run_command('doctl version > /dev/null 2>&1')
+    success, _ = run_command(['doctl', 'version'])
     if not success:
         print(f"{RED}Error: doctl is not installed{NC}")
         print("Install: https://docs.digitalocean.com/reference/doctl/how-to/install/")
         sys.exit(1)
 
     # Verify firewall exists
-    success, error = run_command(f'doctl compute firewall get {firewall_id} > /dev/null 2>&1')
+    success, error = run_command(['doctl', 'compute', 'firewall', 'get', firewall_id])
     if not success:
         print(f"{RED}Error: Firewall '{firewall_id}' not found{NC}")
         print("\nAvailable firewalls:")
-        subprocess.run('doctl compute firewall list', shell=True)
+        subprocess.run(['doctl', 'compute', 'firewall', 'list'])
         sys.exit(1)
 
     # Fetch GitHub IPs
@@ -90,7 +112,10 @@ def main():
         print(f"Adding {ip} ... ", end='', flush=True)
 
         # Add rule for SSH (22) - GitHub Actions needs SSH for deployment
-        cmd = f'doctl compute firewall add-rules {firewall_id} --inbound-rules "protocol:tcp,ports:22,address:{ip}"'
+        cmd = [
+            'doctl', 'compute', 'firewall', 'add-rules', firewall_id,
+            '--inbound-rules', f'protocol:tcp,ports:22,address:{ip}',
+        ]
         success, error = run_command(cmd)
 
         if success:
@@ -98,8 +123,11 @@ def main():
             added += 1
         else:
             # Check if it already exists
-            check_cmd = f'doctl compute firewall get {firewall_id} --format InboundRules --no-header'
-            result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
+            check_cmd = [
+                'doctl', 'compute', 'firewall', 'get', firewall_id,
+                '--format', 'InboundRules', '--no-header',
+            ]
+            result = subprocess.run(check_cmd, capture_output=True, text=True)
 
             # Remove /32 suffix for comparison if present
             ip_base = ip.replace('/32', '').replace('/128', '')

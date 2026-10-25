@@ -328,8 +328,13 @@ def grant_insurance_entitlement(
     actor_seat_id: int | None = None,
     correlation_id: str | None = None,
     granted_at=None,
+    continues_entitlement_id: str | None = None,
 ) -> str:
     """Grant one INSURANCE coverage entitlement (acquisition_type=PURCHASE).
+
+    ``continues_entitlement_id`` marks a continuation after a policy edit
+    (DOM-STORE-001 §VIII.E.1): coverage the student already held, carried onto
+    the successor version, so no waiting period applies to it.
 
     ``granted_at`` is the purchase instant the coordinating FEAT resolved
     canonically (the start of the first coverage period, DOM-STORE-001
@@ -380,6 +385,7 @@ def grant_insurance_entitlement(
         payload={
             "source": "grant_insurance_entitlement",
             "policy_uuid": policy_uuid,
+            **({"continues_entitlement_id": continues_entitlement_id} if continues_entitlement_id else {}),
         },
         timestamp=granted_at or _current_utc(),
     )
@@ -645,6 +651,36 @@ def revoke_entitlement(
     db.session.add(event)
     db.session.flush()
     return event
+
+
+def revoke_reversed_purchase_grants(
+    grants: list[EntitlementEvent],
+    *,
+    reversed_transaction_id: int,
+    reason: str,
+    actor_seat_id: int,
+) -> list[EntitlementEvent]:
+    """Revoke every grant a reversed purchase produced (SPEC-OPS-001 §3.3).
+
+    The caller has already passed the reversal eligibility gate (§3.4). The
+    payload names the reversed purchase, not the compensating row, so a reader
+    can tell a revocation the money compelled from one a teacher chose
+    (INV-OPS-002).
+    """
+    return [
+        revoke_entitlement(
+            entitlement_id=grant.entitlement_id,
+            class_id=grant.class_id,
+            target_seat_id=grant.target_seat_id,
+            actor_seat_id=actor_seat_id,
+            product_id=grant.product_id,
+            entitlement_type=grant.entitlement_type,
+            acquisition_type=grant.acquisition_type,
+            correlation_id=grant.correlation_id,
+            payload={"reason": reason, "reversed_transaction_id": reversed_transaction_id},
+        )
+        for grant in grants
+    ]
 
 
 def expire_rent_perks(

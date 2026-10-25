@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-DISPLAY-001 | 1.0 | 2026-07-21 | None | Normative |
+| SPEC-DISPLAY-001 | 1.1 | 2026-10-12 | SPEC-DISPLAY-001 v1.0 | Normative |
 
 ---
 
@@ -10,7 +10,7 @@
 
 This document is the normative build specification for the Display Metadata Resolver.
 
-The resolver creates a request/session-safe display object from canonical identity and class references so templates and route view builders can render names, class labels, join codes, teacher notes, class timezone, section labels, and other display-only artifacts without re-deriving them independently on every page.
+The resolver creates a per-request display object from canonical identity and class references so templates and route view builders can render names, class labels, join codes, teacher notes, class timezone, section labels, and other display-only artifacts without each page independently re-querying for them. Per section VII, the object is request-scoped only and must never be persisted to the session or any other cross-request store.
 
 This resolver does not establish authority. It does not answer whether an actor may do something. Authorization, scope, and actor identity remain the responsibility of Canonical Context resolution and capability evaluation.
 
@@ -63,7 +63,7 @@ For class-scoped display metadata, `CanonicalContext` must contain:
 |---|---|
 | `class_id` | Required |
 | `seat_id` | Required when actor-specific display metadata is needed |
-| `user_id` | Required for context cache identity |
+| `user_id` | Required for context identity (`context_key`) |
 | `actor_role` | Required for actor-role display selection |
 
 The resolver may return `None` when no class-scoped canonical context exists.
@@ -101,7 +101,7 @@ Minimum fields:
 
 | Field | Meaning |
 |---|---|
-| `context_key` | Cache identity derived from canonical context |
+| `context_key` | Stable identity string derived from canonical context (`user_id`/`seat_id`/`class_id`/`actor_role`); used for equality checks, not caching |
 | `user_id` | Display copy of canonical user id |
 | `seat_id` | Display copy of canonical seat id |
 | `class_id` | Display copy of canonical class id |
@@ -128,34 +128,28 @@ The return object must not expose `block`, `block_display`, `period`, or any blo
 
 ## VII. Cache Contract
 
-The resolver may cache `DisplayMetadata` in the Flask session under a dedicated display-metadata key.
+`DisplayMetadata` must not be cached in the Flask session, or in any other
+store that persists across requests on the client. It carries decrypted PII
+(`actor_first_name` and its siblings) by design (section VI); the Flask
+session is a signed but unencrypted cookie, so writing `DisplayMetadata`
+there puts that PII at rest in plaintext on the client, in conflict with
+`INV-CORE-000` section 2 and `INV-ARC-018` section VII.1.
 
-The cache is valid only when:
+v1.0 of this document allowed exactly that caching (audit finding S10).
+Operator ruling (Tim, 2026-10-12): resolving `DisplayMetadata` fresh from the
+database on every request is cheap, so there was no real tradeoff being made
+by caching it, and no reason to accept the PII-at-rest exposure for it. This
+revision removes the allowance rather than narrow it.
 
-```text
-cached.context_key == context_key(current CanonicalContext)
-```
+The resolver must therefore recompute `DisplayMetadata` on every call.
+Implementations may hold it only for the lifetime of the single request that
+resolved it (for example, an in-memory variable or a `flask.g` attribute
+scoped to that request) — never across requests, and never anywhere that is
+serialized back to the client.
 
-The context key must include, at minimum:
-
-- `user_id`
-- `seat_id`
-- `class_id`
-- `actor_role`
-
-If any of those values change, cached display metadata must be ignored and recomputed.
-
-The cache must be cleared when a flow intentionally changes canonical context or display identity.
-
-Examples:
-
-- context switching to another class/seat;
-- name change;
-- teacher note change;
-- account reset flow that changes display/session assumptions;
-- logout.
-
-The cache is not authoritative. A stale cache may cause a display bug, but must not grant or deny authority.
+Because there is no cross-request cache, there is nothing to invalidate on
+class/seat switch, name change, note change, or logout: every one of those
+requests already recomputes `DisplayMetadata` from current canonical context.
 
 ---
 
@@ -170,14 +164,13 @@ app/utils/display_metadata.py
 The public names exported by this module must include:
 
 ```python
-DISPLAY_METADATA_SESSION_KEY
 DisplayMetadata
 resolve_display_metadata
-get_cached_display_metadata
-set_cached_display_metadata
-clear_display_metadata_cache
 get_or_resolve_display_metadata
 ```
+
+Per section VII, `get_or_resolve_display_metadata` must not read or write any
+cross-request cache; it exists only because callers already use that name.
 
 Route handlers and context processors may call `get_or_resolve_display_metadata(ctx)` after canonical context has been resolved.
 
@@ -234,10 +227,9 @@ Targeted tests should prove:
 3. Resolver reads actor display names from `IdentityProfile`.
 4. Resolver reads teacher display names through teacher `Seat` plus `IdentityProfile`.
 5. Resolver does not use join code as class authority.
-6. Session cache is reused only when context key matches.
-7. Session cache is ignored when `user_id`, `seat_id`, `class_id`, or `actor_role` changes.
-8. Clearing the cache removes display metadata from session.
-9. Resolver output does not expose `block`, `block_display`, `period`, or block-shaped aliases.
+6. Resolver output does not expose `block`, `block_display`, `period`, or block-shaped aliases.
+7. `DisplayMetadata` is never written to the Flask session (audit S10 regression guard).
+8. Two calls to `resolve_display_metadata` with the same canonical context return independently-resolved, equal results — proving no cross-request cache is in play.
 
 Recommended test file:
 
@@ -255,8 +247,7 @@ tests/dom/identity/test_SPEC_DISPLAY_001__display_identity_metadata_resolver.py
 - class metadata resolves from `ClassEconomy`;
 - display names and notes resolve from `IdentityProfile`;
 - teacher display metadata resolves through canonical teacher seat/profile references;
-- session caching is keyed by canonical context;
-- cache invalidation occurs on context or display identity changes;
+- `DisplayMetadata` is recomputed on every request and never persisted to the session or any other cross-request store (section VII);
 - route/template display contracts use the resolver or page view models derived from it;
 - no FEAT, domain service, or authorization path uses display metadata as authority;
 - no display resolver path calls legacy join-code helpers or legacy identity identifiers.

@@ -52,20 +52,17 @@ def get_real_ip_for_limiter():
         return get_remote_address()
 
 
-def student_status_seat_limit_key():
-    """Key the student status poll by seat, not by network address.
+def _seat_or_ip_limit_key():
+    """Key on ``(class_id, seat_id)`` from ``g.canonical_context`` when present.
 
     Students in a school leave through a small pool of shared public
     addresses, so an address-keyed budget is spent by whoever else sits behind
-    the same address. The poll is authenticated, class-scoped activity: its
-    budget belongs to ``(class_id, seat_id)``.
-
-    Reads only the ``g.canonical_context`` that ``login_required`` validated
-    and attached; it never resolves context again (DOM-IDEN-006 §IX) and reads
-    neither the session nor the database. It is therefore only meaningful on a
-    limit decorator placed *below* ``@login_required``. Anything else falls
-    back to the address key, and the key is never empty: Flask-Limiter skips a
-    limit whose key is empty.
+    the same address. Reads only ``g.canonical_context`` -- never resolves
+    context itself (DOM-IDEN-006 §IX) and reads neither the session nor the
+    database -- so it is meaningful only where that context is already
+    attached and trustworthy by the time the limiter's key func runs. Falls
+    back to the address key otherwise, and the key is never empty:
+    Flask-Limiter skips a limit whose key is empty.
     """
     from flask import g
 
@@ -75,6 +72,128 @@ def student_status_seat_limit_key():
     if class_id and seat_id:
         return f"seat:{class_id}:{seat_id}"
     return f"ip:{get_real_ip_for_limiter() or 'unknown'}"
+
+
+def student_status_seat_limit_key():
+    """Key the student status poll by seat, not by network address.
+
+    The poll is authenticated, class-scoped activity: its budget belongs to
+    ``(class_id, seat_id)``. Meaningful only on a limit decorator placed
+    *below* ``@login_required``, which is what leaves a validated context on
+    ``g`` for :func:`_seat_or_ip_limit_key` to read.
+    """
+    return _seat_or_ip_limit_key()
+
+
+def attendance_tap_seat_limit_key():
+    """Key ``/api/tap`` by ``(class_id, seat_id)``, not by network address.
+
+    Audit O1: a shared school address pooled every student's tap budget
+    together, so one busy bell-time minute could exhaust the limit for every
+    classmate behind the same address. Unlike the student-status poll, this
+    route carries no ``@login_required``; the context it reads was still
+    resolved for every request by the app-wide ``before_request`` hook
+    (``capture_correlation_context`` in ``app/__init__.py``), which runs
+    before any route decorator, including this one. An unauthenticated or
+    malformed request -- no resolved context -- falls back to the address key,
+    which is exactly the traffic an address-keyed limit is still meant to
+    bound.
+    """
+    return _seat_or_ip_limit_key()
+
+
+def student_login_identity_limit_key():
+    """Key a student login attempt by the submitted username, not address.
+
+    Audit O1: student login's address-keyed limit counted GET page loads and
+    POST attempts together, and a school NAT shares one address across every
+    student in the building, so the whole school drew on one pool. The route
+    now scopes its address-keyed limit to POST only (the GETs that render the
+    form no longer spend it), and this second limit is what actually bounds
+    repeated guessing against ONE account, independent of how many other
+    students share the same address.
+
+    Reads the raw submitted username -- a bad or unknown username must still
+    count, so this never looks it up -- and hashes it the same way login
+    lookups are keyed (``hash_username_lookup``, PEPPER_KEY-derived) so no
+    plaintext username is ever written into the limiter's storage. Falls back
+    to the address key when no username was submitted (e.g. a GET), and the
+    key is never empty: Flask-Limiter skips a limit whose key is empty.
+    """
+    from flask import request
+    from app.hash_utils import hash_username_lookup
+
+    username = (request.form.get("username") or "").strip()
+    if username:
+        return f"login-identity:{hash_username_lookup(username)}"
+    return f"ip:{get_real_ip_for_limiter() or 'unknown'}"
+
+
+def login_account_limit_key(form_field: str = "username"):
+    """Build a per-account rate-limit key from a login POST's username field.
+
+    A limit keyed only by IP (the existing ``10 per minute`` on the teacher
+    and sysadmin login routes) does not budget a single account: many guesses
+    against one teacher's TOTP code can be spread across source addresses, or
+    simply outlast a shared-IP budget shared with other legitimate traffic
+    (audit S5). This key is independent of that IP limit, scoped to the
+    account rather than the caller, and intentionally coarser (SPEC-SEC-001's
+    unsalted lookup digest, not the salted credential hash) since it only
+    needs to recognize "the same account was just tried", not authenticate
+    anyone.
+
+    Returns a digest, never the raw username, since Flask-Limiter's storage
+    keys are visible to anything that can read the limiter's backing store.
+    The existing per-IP limit on these routes already covers a request that
+    posts no parseable username, so this key is left empty in that case
+    rather than guessing a fallback -- Flask-Limiter skips a limit whose key
+    is empty.
+    """
+    from flask import request
+
+    from app.hash_utils import hash_username_lookup
+    from app.utils.auth_username import normalize_auth_username
+
+    def _key() -> str:
+        normalized = normalize_auth_username(request.form.get(form_field, ""))
+        if not normalized:
+            return ""
+        return f"acct:{hash_username_lookup(normalized)}"
+
+    return _key
+
+
+def login_totp_replay_limit_key(username_field: str = "username", code_field: str = "totp_code"):
+    """Key that lets a given TOTP code be submitted only once per account.
+
+    ``valid_window=1`` on the teacher and sysadmin logins accepts a code for
+    up to three 30-second steps, so a captured code is otherwise usable
+    again for up to ~90 seconds after the legitimate login (audit S5). This
+    pairs a ``1 per 2 minutes`` limit (comfortably past that window) with a
+    key scoped to this exact (account, code) pair, so resubmitting the same
+    code -- whether a replay or a double-submitted form -- is refused, while
+    a different code (a genuine retry after a typo) gets its own budget.
+
+    Left empty (and so skipped by Flask-Limiter) when either field is
+    missing, rather than falling back to an IP-only key: a single IP can
+    legitimately post several different accounts' or codes' attempts within
+    the window, and the existing per-IP and per-account limits on these
+    routes already cover that traffic.
+    """
+    from flask import request
+
+    from app.hash_utils import hash_login_totp_replay_key
+    from app.utils.auth_username import normalize_auth_username
+
+    def _key() -> str:
+        normalized = normalize_auth_username(request.form.get(username_field, ""))
+        code = (request.form.get(code_field, "") or "").strip()
+        if not normalized or not code:
+            return ""
+        return f"totp-once:{hash_login_totp_replay_key(normalized, code)}"
+
+    return _key
+
 
 # Use memory storage in CI/testing environments, Redis in production
 # This prevents Redis connection errors in GitHub Actions

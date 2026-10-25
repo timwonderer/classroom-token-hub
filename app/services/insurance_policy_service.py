@@ -26,6 +26,28 @@ PRODUCTIVITY = "PRODUCTIVITY"
 NON_MONETARY = "NON_MONETARY"
 INSURANCE_TYPES = (TRANSACTION, PRODUCTIVITY, NON_MONETARY)
 
+# Optional marketplace flair a teacher may pin on a definition (ported from v1).
+# Presentation only — never read by claim, premium or coverage logic. Key → (label,
+# Bootstrap colour, Material Symbols icon). FEAT-CLASS-003 rejects any other key.
+MARKETING_BADGES: dict[str, tuple[str, str, str]] = {
+    "best_value": ("Best Value!", "warning", "grade"),
+    "most_popular": ("Most Popular", "primary", "trending_up"),
+    "recommended": ("Recommended", "success", "verified"),
+    "premium": ("Premium Coverage", "dark", "workspace_premium"),
+    "limited_time": ("Limited Time Offer", "danger", "schedule"),
+    "new": ("New!", "info", "new_releases"),
+    "fan_favorite": ("Fan Favorite", "primary", "favorite"),
+    "yolo": ("YOLO Protection", "danger", "casino"),
+    "trust_me": ("Trust Me Bro", "warning", "handshake"),
+    "definitely_not_scam": ("Definitely Not a Scam", "success", "verified_user"),
+    "parents_approved": ("Your Parents Would Approve", "info", "family_restroom"),
+    "as_seen_on_tv": ("As Seen on TV", "primary", "live_tv"),
+    "industry_leading": ("Industry Leading*", "dark", "emoji_events"),
+    "chaos_insurance": ("Chaos Insurance", "danger", "tornado"),
+    "responsible_choice": ("The Responsible Choice™", "success", "check_circle"),
+    "your_friend_has_it": ("The One Your Friend Has", "info", "groups"),
+}
+
 # Legacy claim_type taxonomy → canonical mapping. Single runtime source of truth
 # for coercing pre-cutover payloads on read and at definition write time.
 # Per SPEC-ECON-003 §4.5 and ARC-OPS-001:

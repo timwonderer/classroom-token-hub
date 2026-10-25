@@ -420,8 +420,17 @@ class TestClaimWindow:
             on_time_id = str(uuid4())
             late_id = str(uuid4())
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="econ-window-projection"):
+                # Both grants before either loss: each grant funds exactly its own
+                # premium, so a loss booked in between would leave the second
+                # premium unaffordable (F1-F4 refuses it rather than overdrawing).
                 _add_granted(
                     classroom, student, on_time_id,
+                    claim_window_days=7, claims_per_week_equivalent="5",
+                    premium="100.00", payout_multiple="1",
+                    granted_at=now_utc - timedelta(days=30),
+                )
+                _add_granted(
+                    classroom, student, late_id,
                     claim_window_days=7, claims_per_week_equivalent="5",
                     premium="100.00", payout_multiple="1",
                     granted_at=now_utc - timedelta(days=30),
@@ -430,12 +439,6 @@ class TestClaimWindow:
                     classroom, student, idem="win-proj-ontime", amount="-5.00",
                     at=now_utc - timedelta(days=1),
                 ).id
-                _add_granted(
-                    classroom, student, late_id,
-                    claim_window_days=7, claims_per_week_equivalent="5",
-                    premium="100.00", payout_multiple="1",
-                    granted_at=now_utc - timedelta(days=30),
-                )
                 late_loss = _seed_loss(
                     classroom, student, idem="win-proj-late", amount="-5.00",
                     at=now_utc - timedelta(days=8),

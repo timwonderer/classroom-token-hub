@@ -69,6 +69,8 @@ _DEFINITION_FIELDS = frozenset(
         "description",
         "tier_name",
         "tier_group",
+        "marketing_badge",
+        "supersedes_policy_uuid",
     }
 )
 
@@ -148,6 +150,34 @@ def get_insurance_definition(
         )
         .first()
     )
+
+
+def get_latest_successor(policy_uuid: str, *, class_id: str) -> Optional[InsurancePolicy]:
+    """The last version reached by following successor links from ``policy_uuid``.
+
+    ``None`` when nothing supersedes it. Class-scoped like every read here. A
+    version superseded more than once (edited again after it was retired)
+    follows its newest successor. The walk is bounded: it stops at a version it
+    has already visited rather than loop on corrupt links.
+    """
+    seen = {policy_uuid}
+    latest = None
+    current = policy_uuid
+    while True:
+        successor = (
+            db.session.query(InsurancePolicy)
+            .filter(
+                InsurancePolicy.class_id == class_id,
+                InsurancePolicy.supersedes_policy_uuid == current,
+            )
+            .order_by(InsurancePolicy.created_at.desc())
+            .first()
+        )
+        if successor is None or successor.policy_uuid in seen:
+            return latest
+        seen.add(successor.policy_uuid)
+        latest = successor
+        current = successor.policy_uuid
 
 
 def list_insurance_definitions(

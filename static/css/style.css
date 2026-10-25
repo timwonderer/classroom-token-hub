@@ -172,7 +172,12 @@ a:hover {
     border-color: var(--neutral-400) !important;
 }
 
-.btn-outline-secondary:hover {
+/* Keyboard focus and press too: Bootstrap fills those states grey (#6c757d),
+   under the forced --neutral-700 text that was 2.3:1. */
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus-visible,
+.btn-outline-secondary:active,
+.btn-outline-secondary.active {
     background-color: var(--neutral-200) !important;
     color: var(--neutral-900) !important;
 }
@@ -235,7 +240,10 @@ a:hover {
     color: var(--text-inverse) !important;
 }
 
-.btn-outline-info:hover {
+.btn-outline-info:hover,
+.btn-outline-info:focus-visible,
+.btn-outline-info:active,
+.btn-outline-info.active {
     background-color: var(--info) !important;
     color: var(--text-inverse) !important;
 }
@@ -430,7 +438,8 @@ a:hover {
     background: transparent;
 }
 
-.btn-outline-primary:hover {
+.btn-outline-primary:hover,
+.btn-outline-primary:focus-visible {
     background-color: var(--primary) !important;
     color: var(--text-inverse) !important;
 }
@@ -605,6 +614,14 @@ a:hover {
 .offcanvas .offcanvas-body {
     display: flex;
     flex-direction: column;
+}
+
+/* Bootstrap's default --bs-offcanvas-width (400px) overflows the viewport on
+   phones narrower than that, clipping the help drawer's right edge. */
+@media (max-width: 400px) {
+    .offcanvas {
+        width: 100vw;
+    }
 }
 
 .offcanvas .contextual-help-resources {

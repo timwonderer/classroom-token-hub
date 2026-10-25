@@ -35,6 +35,7 @@ from app.services.hall_pass_request_queue import (
     PendingHallPassRequest,
     clear_pending_hall_pass_requests_for_seat,
     enqueue_hall_pass_request,
+    get_pending_hall_pass_request,
     new_request_id,
     pop_pending_hall_pass_request,
 )
@@ -52,6 +53,25 @@ def submit_hall_pass_request(
     """Persist the student's request for teacher approval."""
     from app.feats.prod import require_hall_pass_settings
     from app.services.entitlement_service import get_available_hall_pass_grant
+
+    # F6: when the seat has no pending request yet, clear_pending_hall_pass_
+    # requests_for_seat() below has no row to lock, so two concurrent
+    # submissions for the same seat can both see "nothing pending", both find
+    # the same available grant, and both insert — two pending rows reserving
+    # the same pass, instead of the second genuinely replacing the first.
+    # Locking the seat row first (same idiom as transfer_feat.py and
+    # store_purchase_feat.py) serializes them: the second submission waits for
+    # the first's commit, then its own clear() finds and removes the first's
+    # freshly-committed row before inserting its own, as the "newest request
+    # replaces the seat's earlier one" rule above intends.
+    seat = (
+        db.session.query(Seat)
+        .filter(Seat.id == ctx.seat_id, Seat.class_id == ctx.class_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if seat is None:
+        raise ValueError("FATAL: Hall pass request seat is outside the transaction class scope.")
 
     # Approval (FEAT-PROD-002 §III) is refused without settings, so a request
     # made without them could never be granted.
@@ -87,11 +107,26 @@ def approve_hall_pass_request(
     """Resolve the request by issuing the pass, atomically with the row's deletion."""
     from app.feats.prod import _record_hall_pass_log_impl
 
+    # F6 review: submit_hall_pass_request locks the seat before touching its
+    # pending-request row; pop_pending_hall_pass_request below locks (and
+    # deletes) that pending-request row directly. Locking the seat first here
+    # too — before the pending-request row — keeps submission and approval
+    # taking these two locks in the same order, so a resubmission racing an
+    # approval of the same seat's request can no longer deadlock.
+    peek = get_pending_hall_pass_request(request_id, class_id=ctx.class_id)
+    if peek is None:
+        raise HallPassRequestNotFound(request_id)
+    seat = (
+        db.session.query(Seat)
+        .filter(Seat.id == peek.requested_by_seat_id, Seat.class_id == ctx.class_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if seat is None:
+        raise HallPassRequestNotFound(request_id)
+
     request = pop_pending_hall_pass_request(request_id, class_id=ctx.class_id)
     if request is None:
-        raise HallPassRequestNotFound(request_id)
-    seat = db.session.get(Seat, request.requested_by_seat_id)
-    if seat is None or seat.class_id != ctx.class_id:
         raise HallPassRequestNotFound(request_id)
     return _record_hall_pass_log_impl(
         ctx=ctx,

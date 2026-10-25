@@ -4,8 +4,11 @@ import ast
 import base64
 import json
 import logging
+import sys
 import time
+from importlib import import_module
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -159,6 +162,19 @@ def test_status_identity_expired_assertion_is_rejected(operator_env, iap_keys):
     _assert_rejected(_sign(_claims(iat=now - 1200, exp=now - 600)))
 
 
+def test_status_identity_assertion_issued_moments_ahead_of_this_clock_authenticates(operator_env, iap_keys):
+    # IAP stamps iat on its own clock just before forwarding, so a fresh
+    # assertion routinely reads as issued a moment in the future here. Google
+    # tells verifiers to allow 30 seconds; allowing none rejected every login.
+    now = int(time.time())
+    assert identity.authenticated_operator_email(_sign(_claims(iat=now + 5, exp=now + 605))) == OPERATOR
+
+
+def test_status_identity_assertion_issued_beyond_the_skew_allowance_is_rejected(operator_env, iap_keys):
+    now = int(time.time())
+    _assert_rejected(_sign(_claims(iat=now + 120, exp=now + 720)))
+
+
 @pytest.mark.parametrize(
     "assertion",
     ["not-a-jwt", "a.b.c", "a.b.c.d", f"{_b64([])}.{_b64({})}.c2ln"],
@@ -295,6 +311,38 @@ def test_status_identity_trusted_header_is_ignored_when_disabled(operator_env, m
     assert identity.authenticated_operator_email(None, f"accounts.google.com:{OPERATOR}") is None
 
 
+def test_status_identity_forged_email_header_with_forged_assertion_is_refused(operator_env, iap_keys, auth_log):
+    forged = _sign(_claims(), key=ec.generate_private_key(ec.SECP256R1()))
+    assert identity.authenticated_operator_email(forged, f"accounts.google.com:{OPERATOR}") is None
+    assert auth_log() == [("WARNING", "status operator refused assertion=invalid_token header=disabled")]
+
+
+@pytest.fixture
+def operator_client(monkeypatch, operator_env):
+    store = SimpleNamespace(list_active_notices=lambda: [], current_snapshot=lambda: None,
+                            list_notices=lambda: [], list_notice_events=lambda notice_id: [])
+    monkeypatch.setenv("STATUS_SERVICE_MODE", "operator")
+    monkeypatch.setenv("STATUS_SESSION_SECRET", "test-only")
+    # Import the module-level app without real credentials or a Firestore client.
+    monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+    monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+    module = import_module("status_service.app")
+    # Other status tests replace this name with a stub; this test needs the real check.
+    monkeypatch.setattr(module, "authenticated_operator_email", identity.authenticated_operator_email)
+    return module.create_app(store=store).test_client()
+
+
+@pytest.mark.parametrize("fallback, expected", [(None, 401), ("true", 200)], ids=["fallback-off", "fallback-on"])
+def test_status_identity_operator_route_refuses_a_forged_email_header(operator_client, monkeypatch, fallback, expected):
+    # fallback-on is the control: it proves the header reaches the check, so
+    # the 401 is the disabled fallback refusing it rather than a broken request.
+    if fallback is not None:
+        monkeypatch.setenv("IAP_TRUSTED_EMAIL_HEADER", fallback)
+    response = operator_client.get(
+        "/operator/notices", headers={"X-Goog-Authenticated-User-Email": f"accounts.google.com:{OPERATOR}"})
+    assert response.status_code == expected
+
+
 def test_status_identity_logs_authentication_by_signed_assertion(operator_env, iap_keys, auth_log):
     assert identity.authenticated_operator_email(_sign(_claims())) == OPERATOR
     assert auth_log() == [("INFO", "status operator authenticated via=iap_assertion")]
@@ -314,6 +362,11 @@ def _expired():
     return _sign(_claims(iat=now - 1200, exp=now - 600))
 
 
+def _issued_in_future(key=IAP_KEY):
+    now = int(time.time())
+    return _sign(_claims(iat=now + 120, exp=now + 720), key=key)
+
+
 def _audience_not_configured(monkeypatch):
     monkeypatch.delenv("IAP_AUDIENCE")
     return _sign(_claims())
@@ -331,7 +384,10 @@ REFUSALS = [
     ("wrong_issuer", lambda keys, env: _sign(_claims(iss="https://accounts.google.com"))),
     ("not_allowlisted", lambda keys, env: _sign(_claims(email="intruder@example.com"))),
     ("invalid_token", lambda keys, env: _sign(_claims(), key=ec.generate_private_key(ec.SECP256R1()))),
-    ("invalid_token", lambda keys, env: _expired()),
+    ("expired", lambda keys, env: _expired()),
+    ("issued_in_future", lambda keys, env: _issued_in_future()),
+    # The claims name a reason only once the signature verifies.
+    ("invalid_token", lambda keys, env: _issued_in_future(key=ec.generate_private_key(ec.SECP256R1()))),
     ("invalid_token", lambda keys, env: "a.b.c"),
     ("wrong_algorithm", lambda keys, env: _with_header(_sign(_claims()), {"alg": "RS256", "typ": "JWT", "kid": KEY_ID})),
     ("invalid_key_id", lambda keys, env: _with_header(_sign(_claims()), {"alg": "ES256", "typ": "JWT", "kid": [KEY_ID]})),
@@ -343,7 +399,7 @@ REFUSALS = [
     "reason, build",
     REFUSALS,
     ids=["absent", "audience-not-configured", "wrong-audience", "wrong-issuer", "not-allowlisted",
-         "forged", "expired", "malformed", "wrong-algorithm", "invalid-key-id", "key-fetch-failed"],
+         "forged", "expired", "issued-in-future", "forged-issued-in-future", "malformed", "wrong-algorithm", "invalid-key-id", "key-fetch-failed"],
 )
 def test_status_identity_logs_why_a_request_was_refused(operator_env, iap_keys, auth_log, monkeypatch, reason, build):
     assert identity.authenticated_operator_email(build(iap_keys, monkeypatch)) is None

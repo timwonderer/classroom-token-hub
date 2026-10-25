@@ -9,7 +9,9 @@ Usage:
     python3 scripts/create-github-actions-firewall.py <droplet-id>
 """
 
+import ipaddress
 import json
+import uuid
 import subprocess
 import sys
 import urllib.request
@@ -22,13 +24,26 @@ BLUE = '\033[0;34m'
 NC = '\033[0m'
 
 def run_command(cmd, capture=True):
-    """Run a shell command."""
-    if capture:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        return result.returncode == 0, result.stdout, result.stderr
-    else:
-        result = subprocess.run(cmd, shell=True)
-        return result.returncode == 0, "", ""
+    """Run a command (argv list).
+
+    CodeQL py/command-line-injection (alerts #284, #285): this used to run
+    ``cmd`` with ``shell=True``, where ``cmd`` was an f-string/multi-line
+    shell snippet built from ``droplet_id`` (an operator-supplied CLI arg)
+    and each IP string in GitHub's own ``/meta`` API response, one of them
+    relying on a single-quoted shell literal to protect embedded JSON. An
+    argv list needs no shell quoting at all -- every element reaches the
+    child process exactly as given, so there is nothing left for a shell to
+    reinterpret regardless of what either value contains.
+    """
+    try:
+        if capture:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            return result.returncode == 0, result.stdout, result.stderr
+        else:
+            result = subprocess.run(cmd)
+            return result.returncode == 0, "", ""
+    except OSError as error:
+        return False, "", str(error)
 
 def fetch_github_ips():
     """Fetch GitHub Actions IP ranges from GitHub API."""
@@ -42,7 +57,7 @@ def fetch_github_ips():
         if not actions_ips:
             actions_ips = data.get('hooks', [])
 
-        return actions_ips
+        return [str(ipaddress.ip_network(ip, strict=False)) for ip in actions_ips]
     except Exception as e:
         print(f"{RED}Error fetching GitHub IPs: {e}{NC}")
         return None
@@ -74,15 +89,22 @@ def create_firewall_with_rules(droplet_id, github_ips):
         })
 
     inbound_rules_json = json.dumps(inbound_rules)
+    outbound_rules_json = json.dumps([
+        {"protocol": "tcp", "ports": "all", "destinations": {"addresses": ["0.0.0.0/0", "::/0"]}},
+        {"protocol": "udp", "ports": "all", "destinations": {"addresses": ["0.0.0.0/0", "::/0"]}},
+        {"protocol": "icmp", "destinations": {"addresses": ["0.0.0.0/0", "::/0"]}},
+    ])
 
     # Create firewall with first batch of rules
-    create_cmd = f"""doctl compute firewall create \
-        --name "{firewall_name}" \
-        --inbound-rules '{inbound_rules_json}' \
-        --outbound-rules '[{{"protocol":"tcp","ports":"all","destinations":{{"addresses":["0.0.0.0/0","::/0"]}}}},{{"protocol":"udp","ports":"all","destinations":{{"addresses":["0.0.0.0/0","::/0"]}}}},{{"protocol":"icmp","destinations":{{"addresses":["0.0.0.0/0","::/0"]}}}}]' \
-        --droplet-ids {droplet_id} \
-        --format ID \
-        --no-header"""
+    create_cmd = [
+        'doctl', 'compute', 'firewall', 'create',
+        '--name', firewall_name,
+        '--inbound-rules', inbound_rules_json,
+        '--outbound-rules', outbound_rules_json,
+        '--droplet-ids', str(droplet_id),
+        '--format', 'ID',
+        '--no-header',
+    ]
 
     success, firewall_id, error = run_command(create_cmd)
 
@@ -91,7 +113,11 @@ def create_firewall_with_rules(droplet_id, github_ips):
         print(f"Error: {error}")
         return None
 
-    firewall_id = firewall_id.strip()
+    try:
+        firewall_id = str(uuid.UUID(firewall_id.strip()))
+    except ValueError:
+        print(f"{RED}Error: doctl returned an invalid firewall ID{NC}")
+        return None
     print(f"{GREEN}✓ Firewall created: {firewall_id}{NC}")
     print(f"  Added {len(first_batch)} rules in initial batch")
 
@@ -101,7 +127,10 @@ def create_firewall_with_rules(droplet_id, github_ips):
             print(f"\n{BLUE}Adding batch {i}/{len(batches)} ({len(batch)} IPs)...{NC}")
 
             for ip in batch:
-                cmd = f'doctl compute firewall add-rules {firewall_id} --inbound-rules "protocol:tcp,ports:22,address:{ip}" 2>&1'
+                cmd = [
+                    'doctl', 'compute', 'firewall', 'add-rules', firewall_id,
+                    '--inbound-rules', f'protocol:tcp,ports:22,address:{ip}',
+                ]
                 success, _, error = run_command(cmd)
 
                 if not success and "already exists" not in error.lower():
@@ -120,24 +149,31 @@ def main():
         print("  doctl compute droplet list")
         sys.exit(1)
 
-    droplet_id = sys.argv[1]
+    try:
+        droplet_number = int(sys.argv[1])
+        if droplet_number <= 0:
+            raise ValueError
+    except ValueError:
+        print(f"{RED}Error: Droplet ID must be a positive integer{NC}")
+        sys.exit(1)
+    droplet_id = str(droplet_number)
 
     # Verify doctl
-    success, _, _ = run_command('doctl version > /dev/null 2>&1')
+    success, _, _ = run_command(['doctl', 'version'])
     if not success:
         print(f"{RED}Error: doctl not installed{NC}")
         sys.exit(1)
 
     # Verify droplet exists
-    success, _, _ = run_command(f'doctl compute droplet get {droplet_id} > /dev/null 2>&1')
+    success, _, _ = run_command(['doctl', 'compute', 'droplet', 'get', droplet_id])
     if not success:
         print(f"{RED}Error: Droplet '{droplet_id}' not found{NC}")
         print("\nAvailable droplets:")
-        run_command('doctl compute droplet list', capture=False)
+        run_command(['doctl', 'compute', 'droplet', 'list'], capture=False)
         sys.exit(1)
 
     # Check if firewall already exists
-    success, output, _ = run_command('doctl compute firewall list --format ID,Name --no-header')
+    success, output, _ = run_command(['doctl', 'compute', 'firewall', 'list', '--format', 'ID,Name', '--no-header'])
     if success and 'github-actions-ssh' in output:
         print(f"{YELLOW}Warning: Firewall 'github-actions-ssh' already exists{NC}")
         print("Delete it first with:")

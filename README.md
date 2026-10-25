@@ -2,15 +2,15 @@
 
 # Classroom Token Hub (CTH)
 
-A classroom behavior management and reward platform with built-in simulated financial products and economic engines (and an absurd amount of documentation, pytests, and opinions.) 
+A classroom behavior management and reward platform with built-in simulated financial products and economic engines (and an absurd amount of documentation, pytests, and opinions.)
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**In production:** [v2.2.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.1) (`f98d8a206`), deployed 2026-10-10 ([release record](docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md)). 
+**In production:** [v2.3.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.3.0) (`339c775cd`, deployed 2026-10-22 UTC, [release record](docs/ops/audits/DEPLOY_2026-10-22_339c775cd.md)).
 
 **Latest tag:** ![Version](https://img.shields.io/github/v/release/timwonderer/classroom-token-hub)
 
-**Branch:** `main` 
+**Branch:** `main`
 
 **License:** [Polyform Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
@@ -182,7 +182,7 @@ Don't rotate `ENCRYPTION_KEY` or `PEPPER_KEY` casually. `ENCRYPTION_KEY` protect
 
 ### Running tests
 
-Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`; there's no SQLite path. `conftest.py` drops the schema and rebuilds it through the real migration chain, so triggers and constraints are live in every test.
+Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`; there's no SQLite path. `conftest.py` builds the schema through the real migration chain once per session and gives every test a fresh copy of it, so triggers and constraints are live in every test. The test database must be local and named as a test database, and the role needs `CREATEDB` for the fast path; see CONTRIBUTING.md.
 
 ```bash
 pytest tests/dom/obligations/ -v          # one domain
@@ -234,38 +234,11 @@ curl http://localhost:5000/health/status   # bounded status signals; no tenant d
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (released 2026-09-26) `v2.0.1` is `ad64a473f` (released 2026-09-28), `v2.1.0` is `5ac05ea6f` (released 2026-10-02), the merge commit of its release PR, `v2.1.1` is `2bdfac65e` (released 2026-10-04), the tip of `main` at release, `v2.2.0` is `5ebae62db` (released 2026-10-09), the tip of `main` at release, and `v2.2.1` is `f98d8a206` (released 2026-10-10), the tip of `main` at release. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/):
-
-- v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)
-- v2.0.1: [DEPLOY_2026-09-28_ad64a473f.md](docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md), which also covers the unrecorded `efdf09eda` release of 2026-09-27
-- v2.1.0: [DEPLOY_2026-10-02_5ac05ea6f.md](docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md)
-- v2.1.1: [DEPLOY_2026-10-04_2bdfac65e.md](docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md)
-- v2.2.0: [DEPLOY_2026-10-09_5ebae62db.md](docs/ops/audits/DEPLOY_2026-10-09_5ebae62db.md)
-- v2.2.1: [DEPLOY_2026-10-10_f98d8a206.md](docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md)
-
-Five untagged releases from `main` followed v2.0.1, each through the release workflow. On 2026-09-29: `bc5c07a2` (#1439, the payroll fix for the 2026-09-28 incident), `eaca2a7e` (#1440, a one-time payroll correction for teachers to review), `29b99b14` (#1442, the username retention check) and `00166e56` (#1443). None of these four has a release record in `docs/ops/audits/` yet. On 2026-09-30: `314158d53` (#1438, #1449, #1451).
-
-The `314158d53` release record is [DEPLOY_2026-09-30_314158d53.md](docs/ops/audits/DEPLOY_2026-09-30_314158d53.md). All five releases are part of v2.1.0 in [CHANGELOG.md](CHANGELOG.md).
-
-Two untagged releases followed v2.1.0: `ad9574334` on 2026-10-03 ([DEPLOY_2026-10-03_ad9574334.md](docs/ops/audits/DEPLOY_2026-10-03_ad9574334.md)), and `4c2fc4bc4` on 2026-10-04, a hotfix carrying #1476 off `main`, recorded in the v2.1.1 record. Both are part of v2.1.1 in the CHANGELOG.
-
-Three untagged releases followed v2.1.1: `381a12d49` on 2026-10-05 ([DEPLOY_2026-10-04_381a12d49.md](docs/ops/audits/DEPLOY_2026-10-04_381a12d49.md)), then `35bad089a` on 2026-10-05 and `1cdbf03da` on 2026-10-06, neither of which has a release record. All three are part of v2.2.0 in the CHANGELOG. Production currently runs v2.2.1 (`f98d8a206`), deployed 2026-10-10; its record is [DEPLOY_2026-10-10_f98d8a206.md](docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md).
+The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md). Each release has a dated record under [docs/ops/audits/](docs/ops/audits/), except six untagged releases from before the recording procedure was settled: `bc5c07a2`, `eaca2a7e`, `29b99b14` and `00166e56` (2026-09-29), and `35bad089a` and `1cdbf03da` (2026-10-05 and 2026-10-06). All six are covered by the CHANGELOG, and the later records note the gap. Each tagged release has [GitHub release notes](https://github.com/timwonderer/classroom-token-hub/releases) and a section in [CHANGELOG.md](CHANGELOG.md). The release in production is named at the top of this page.
 
 ### Known limits of the release evidence
 
-Evidence that was actually run isn't the same as coverage that was inferred (INV-ARC-017). As of v2.0.1, production has verified:
-
-- the migrations to `f4b8d2a6c1e9` (`users.id` as UUID) and the integrity of every reference to `users`
-- a single scheduler owner (the gunicorn process), with none started by migrations
-- teacher passkey registration and sign-in end to end, run by the operator after release
-
-These surfaces haven't been exercised yet:
-
-- **Other signed-in flows on the production host**: covered by the automated suite and by live test rounds on the same host before launch, but not repeated since the launch wipe. They'll first run in production when teachers start using it
-- **Public routes after v2.0.1**: not checked at release, because the Cloudflare Access maintenance window was still in place
-- **Daylight-saving and midnight transitions**: class-timezone handling is tested, but no live daylight-saving change has happened since launch
-- **Load**: concurrent settlement, payroll batch runs and scheduled jobs haven't been tested under load
-- **Browser accessibility**: axe covers every rendered template, but keyboard, focus and contrast behavior across the whole app still needs a person using a real browser. The signed-in insurance page's buy and cancel dialogs haven't had an axe audit yet
+Evidence that was run is not the same as coverage that was inferred (INV-ARC-017). This page does not keep a snapshot of what production has and hasn't exercised, because a snapshot goes stale with the next release. The **current release record** (linked at the top of this page) carries it: what that release verified, its browser validation under [SOP-DEP-001B](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md), and its known gaps and follow-ups.
 
 ---
 
@@ -310,10 +283,10 @@ The user guides in `docs/user-guides/` are served inside the app at `/docs`. The
 
 | Line | Status | Where it lives |
 | --- | --- | --- |
-| **v2** | Current. v2.0.0 released 2026-09-26; v2.0.1 (security) released 2026-09-28; untagged releases from `main` on 2026-09-29 and 2026-09-30; v2.1.0 released 2026-10-02; untagged releases on 2026-10-03 and 2026-10-04; v2.1.1 released 2026-10-04; untagged releases on 2026-10-05 and 2026-10-06; v2.2.0 released 2026-10-09; v2.2.1 released 2026-10-10 | `main` |
+| **v2** | Current. v2.0.0 released 2026-09-26; later releases are on the [releases page](https://github.com/timwonderer/classroom-token-hub/releases) and in [docs/ops/audits/](docs/ops/audits/) | `main` |
 | **v1** | Retired. v1.10.0 (2026-06-14) was the final v1 release | Branch `main_legacy_v1.10.0` and the `v1.*` tags |
 
-v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1), [v2.1.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.0), [v2.1.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.1), [v2.2.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.0) and [v2.2.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.1) release notes. Upgrading every 2.0.0 deployment to 2.0.1 is recommended: it ties each passkey to the account it was registered to.
+v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. Upgrading every 2.0.0 deployment to 2.0.1 or later is recommended: 2.0.1 ties each passkey to the account it was registered to.
 
 ---
 

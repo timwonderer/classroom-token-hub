@@ -18,13 +18,13 @@
 <p>The three availability states are not the same thing:</p>
 <ul class="ps-3 mb-0">
     <li class="mb-2"><strong>For sale</strong> — students can buy it now.</li>
-    <li class="mb-2"><strong>Hidden</strong> — no new purchases, but everyone already covered stays covered until their term ends. Reversible with <em>Put back on sale</em>.</li>
-    <li class="mb-0"><strong>Retired</strong> — permanent. The terms can never be offered again.</li>
+    <li class="mb-2"><strong>Hidden</strong> — no new purchases. Everyone already covered stays covered until their current period ends; it doesn't renew. Reversible with <em>Put back on sale</em>: put it back before a student's period ends and their coverage carries on.</li>
+    <li class="mb-0"><strong>Retired</strong> — permanent. The terms can never be offered again, and current coverage ends when its period ends.</li>
 </ul>
 {% endcall %}
 
 {% call help.topic('ins-edit', 'edit_note', 'Editing a policy someone already bought') %}
-<p class="mb-0"><strong>Editing a policy does not change anyone's coverage.</strong> A purchase freezes the terms as they stood that day, so your edits apply to future buyers only. If you need current holders on new terms, hide the old policy and publish a replacement.</p>
+<p class="mb-0"><strong>Editing moves current holders to the new version at their next renewal.</strong> Each student finishes the period they've paid for on the terms they bought. From their next period they're covered by, and billed for, the new version. Students see the change on their insurance page before it's billed, and can cancel first.</p>
 {% endcall %}
 {% endblock %}
 
@@ -48,7 +48,7 @@
       </h5>
     </div>
     <div class="card-body">
-     When a student purchases an insurance product, it is considered an <strong>enforceable contract</strong> between the student and the class. Changes to the insurance policy only applies to future purchases. Any existing policies will follow the terms at time of purchase until the end of the coverage period.
+     When a student purchases an insurance product, it is considered an <strong>enforceable contract</strong> between the student and the class. A period a student has already started always runs on the terms they bought. When you edit a policy, current holders move to the new version at their next renewal.
     </div>
   </div>
 
@@ -98,7 +98,7 @@
           {% if policy.availability_state == 'IN_USE' %}
           <span class="badge bg-success" title="Students can purchase this policy">For sale</span>
           {% elif policy.availability_state == 'HIDDEN' %}
-          <span class="badge bg-secondary" title="Not purchasable; existing coverage continues until it winds down">Hidden — winding down</span>
+          <span class="badge bg-secondary" title="Not purchasable; current coverage ends with its current period and doesn't renew">Hidden — ending</span>
           {% else %}
           <span class="badge bg-dark">{{ policy.availability_state }}</span>
           {% endif %}
@@ -115,7 +115,8 @@
           </form>
           {% endif %}
           <form method="POST" action="{{ url_for('admin.delete_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline"
-                onsubmit="return confirm('Retire this policy? It will be permanently unavailable for new enrollment.');">
+                data-confirm="Retire this policy? It will be permanently unavailable for new enrollment."
+                data-confirm-title="Retire policy" data-confirm-label="Retire" data-confirm-danger>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="btn btn-sm btn-outline-danger" title="Retire permanently">Retire</button>
           </form>

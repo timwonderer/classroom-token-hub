@@ -2,7 +2,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.5 | 2026-10-07 | 5.4 | Normative |
+| DOM-STORE-001 | 5.7 | 2026-10-14 | 5.6 | Constitutional |
+
+> [!IMPORTANT]
+> **v5.7 (2026-10-14), insurance continuation (owner ruling 2026-10-14).** §VIII.E.1 adds *Continuation after a policy edit* and *Withdrawn offering*. When the teacher supersedes the version an entitlement was granted under, the entitlement still ends at its coverage boundary, and a new entitlement under the successor version begins there; the old entitlement's terms never change (`DOM-POL-001` §VII). When the offering is withdrawn with no successor on sale, renewal stops and coverage ends at the boundary. Previously the code renewed a superseded or withdrawn version indefinitely, and nothing in this document said otherwise.
+>
+> **v5.6 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: the header table said Normative while §III (below) already, correctly, says "Tier 1 — Constitutional." The header now matches the body. No substantive rule in this document changed.
 
 ## I. Purpose
 
@@ -365,9 +370,19 @@ Store consumes that answer as a boolean. It does not inspect obligation tables, 
 - if any payment has been applied to the next period's premium, that period is committed (`DOM-OBL-001` §V.8): it takes effect and coverage ends at its end, with no withdrawal and no refund. Its usability still follows the ordinary rule, so a partly paid premium gates it until fully satisfied, and the remainder stays owed;
 - if nothing has been paid on the next period's premium, coverage ends at the current period's end and that premium is withdrawn: it never becomes owed.
 
+**Continuation after a policy edit.** When the teacher supersedes the policy version an entitlement was granted under (`FEAT-CLASS-003` records the successor link, `DOM-POL-001A` §D), the entitlement does not take the new terms. At the assessment point of its current period, instead of succeeding its own lineage, the coordinating FEAT (`FEAT-STOR-007` §V.A):
+
+- stops the entitlement's renewal, so it ends at the end of the current period (the boundary) and records `EXPIRED` there, by the rule above;
+- grants a new `INSURANCE` entitlement under the latest version that supersedes it and is on sale, effective at that boundary, with its own premium lineage anchored at the boundary's class-local date;
+- assesses the new entitlement's first premium at once, as an advance premium due at the boundary, and attempts automatic satisfaction.
+
+The student does not purchase the new entitlement; it continues coverage they already hold, so coverage is continuous: no waiting period applies to it (`FEAT-STOR-003`), and the tier-group exclusion (`FEAT-CLASS-003` §VIII.3) does not block it, because the old entitlement ends at the instant the new one begins. Its first premium follows the advance-premium rules above (an unpaid premium gates the new period under the successor's own nonpayment mode). Before the assessment point the student can see the change ahead (`SPEC-ECON-003` §4.4.2) and may stop renewal, in which case no continuation occurs. A version superseded after its holder's next period was already assessed moves the holder at the following assessment point.
+
+**Withdrawn offering.** When the version an entitlement was granted under is no longer on sale (hidden or retired) and no version superseding it is on sale, the coordinating FEAT stops renewal at the current period's assessment point: coverage ends at the boundary by the rule above (`FEAT-STOR-002` §IX.C).
+
 "Cancel" means stop renewal after the coverage already purchased. It never undoes a completed purchase; a refund would be its own explicit contract.
 
-**Debt survives termination.** Termination, whether by nonpayment or by stopping renewal, does not erase, forgive, reverse, or void a premium for any period that began before the termination instant (`DOM-OBL-001` §IX.14). The only premiums that do not survive are unpaid advance premiums for periods beginning at or after it, which are withdrawn because they never became owed (`DOM-OBL-001` §V.8). Satisfying one after termination settles that obligation only and does not resurrect the entitlement. Coverage after termination requires a new purchase, which creates a new entitlement and a new premium lineage.
+**Debt survives termination.** Termination, whether by nonpayment or by stopping renewal, does not erase, forgive, reverse, or void a premium for any period that began before the termination instant (`DOM-OBL-001` §IX.14). The only premiums that do not survive are unpaid advance premiums for periods beginning at or after it, which are withdrawn because they never became owed (`DOM-OBL-001` §V.8). Satisfying one after termination settles that obligation only and does not resurrect the entitlement. Coverage after termination requires a new purchase, which creates a new entitlement and a new premium lineage; the only exception is a continuation after a policy edit, above.
 
 **Claim periods.** Claim allowance and payout capacity are scoped to one coverage period of the entitlement and reset with each period. A claim draws on the period containing its filing time (`FEAT-STOR-003` §XII).
 

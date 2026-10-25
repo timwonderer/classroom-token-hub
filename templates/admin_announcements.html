@@ -69,7 +69,7 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    <p class="mb-2">{{ announcement.message|nl2br|safe }}</p>
+                    <p class="mb-2">{{ announcement.message|nl2br }}</p>
                     <div class="text-muted small">
                         <span class="material-symbols-outlined me-1" aria-hidden="true">calendar_month</span>Created: {{ announcement.created_at | fmt_timestamp }}
                         {% if announcement.expires_at %}
@@ -178,8 +178,10 @@ function announceAnnouncements(message, kind) {
     feedback.focus();
 }
 
-function deleteAnnouncement(announcementId, title) {
-    if (confirm(`Are you sure you want to delete the announcement "${title}"? This action cannot be undone.`)) {
+async function deleteAnnouncement(announcementId, title) {
+    if (await window.AppCore.confirm(`Are you sure you want to delete the announcement "${title}"? This action cannot be undone.`, {
+        title: 'Delete announcement', confirmLabel: 'Delete', danger: true,
+    })) {
         const form = document.getElementById('delete-form');
         form.action = `/admin/announcements/delete/${announcementId}`;
         form.submit();

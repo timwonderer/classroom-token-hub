@@ -6,4 +6,4 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
-python3 scripts/adversarial/snapshot_db.py --name "$1"
+python3 -m scripts.adversarial.snapshot_db --name "$1"

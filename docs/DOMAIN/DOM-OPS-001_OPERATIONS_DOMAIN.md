@@ -2,13 +2,18 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.12    | 2026-10-02     | 2.11       | Normative       |
+| DOM-OPS-001      | 2.14    | 2026-10-23     | 2.13       | Constitutional  |
+
+> [!IMPORTANT]
+> **v2.14 (2026-10-23), owner ruling 2026-10-23.** §Application Availability Gate: health endpoints are public and need no credential; the Access redirect is the maintenance signal, and while the gate is closed the status collector reads nothing from the application. The service token existed only to let the collector reach production during maintenance, which it no longer does.
+
+> **v2.13 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
 
 *Revision 2.12 (2026-10-02; ratified by the owner 2026-10-02): §1 Public Request Monitoring — the closed component registry gains `hall_pass`. A 404 on a request-resolution route that `SPEC-OPS-006` designates is a failed request. It is never an outage or an incident. When such 404s reach `SPEC-OPS-006`'s rate-plus-minimum rule, they are a signal of a possible problem: they are reported on that component, and they qualify the overall summary as `Detected problems`, as a fresh 5xx does. Motivated by 2026-10-01, when a teacher's Approve or Reject and a student's Cancel answered 404 "Pending request not found." about half the time while the status page showed nothing: hall passes had no component, and no 404 counted.*
 
 ## 0. Authority Level and Dependencies
 
-Normative. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
+Constitutional. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
 
 ### Dependencies
 
@@ -71,9 +76,10 @@ checks remain required after admission. Access policy is managed outside the
 application; no application FEAT or sysadmin session may bypass it. Access login
 email is handled by Cloudflare, not requested or stored by the application.
 
-The origin must remain protected against paths around Cloudflare. Public health
-probes must use an explicitly authorized service token; local deployment probes
-remain independent. Gate messaging communicates an access restriction and MUST
+The origin must remain protected against paths around Cloudflare. Health endpoints
+are public and need no credential. The Access redirect is the maintenance signal:
+while the gate is closed, the status collector reads nothing from the application
+(SPEC-OPS-006). Local deployment probes remain independent. Gate messaging communicates an access restriction and MUST
 NOT be treated as evidence of application health or canonical incident state.
 Genuine service errors retain their normal HTTP error handling.
 

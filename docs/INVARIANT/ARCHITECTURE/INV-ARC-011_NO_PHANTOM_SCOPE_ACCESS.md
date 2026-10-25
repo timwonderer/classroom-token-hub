@@ -2,7 +2,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-011      | 1.0     | 2026-04-13     | N/A        | Foundational    |
+| INV-ARC-011      | 1.2     | 2026-10-18     | 1.1        | Constitutional   |
+
+> [!IMPORTANT]
+> **v1.2 (2026-10-18).** §V's core rule now names `class_id`, not `join_code`: a request referencing a non-existent `class_id` MUST fail. `class_id` is the isolation key and `join_code` only an ingress alias that resolves to it (`INV-CORE-000` §III.1), so phantom scope is defined against the canonical key.
+>
+> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 ## I. Purpose
 
@@ -14,7 +19,7 @@ Applies to all requests referencing tenant scope.
 
 ## III. Authority Level
 
-Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `class_id` Centric Isolation``, and Section III.5, `Definite Class Lifecycle`, and governed within the hierarchy described by `INV-CORE-001`.
+Constitutional within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `class_id` Centric Isolation``, and Section III.5, `Definite Class Lifecycle`, and governed within the hierarchy described by `INV-CORE-001`.
 
 ## IV. Dependencies
 
@@ -24,7 +29,7 @@ Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `cl
 
 ## V. Core Rule
 
-Requests referencing non-existent `join_code` MUST fail.
+Requests referencing non-existent `class_id` MUST fail.
 
 No fallback or recovery logic is permitted.
 

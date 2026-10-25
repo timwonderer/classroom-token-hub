@@ -333,10 +333,10 @@ is available.
 - passkey metadata = user-owned authentication capability
 - credential construction and verification = `SPEC-SEC-001` Section V.1, incorporated by Section VI
   of this document; `PEPPER_KEY` is a lookup-digest key and is never a credential input
+- `hall_pass_verify_token` = single capability token registered to user_id where `user_role = teacher` to grant limited read access to same-day hall pass record
 
 ## XV. Open Decisions
 
-- `hall_pass_verify_token` ownership and boundary scope
 - invalid public identifier residue removal order
 - bridge-table retirement order
 

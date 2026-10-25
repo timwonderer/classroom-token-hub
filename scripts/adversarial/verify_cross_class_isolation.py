@@ -30,6 +30,8 @@ def read_json(path: Path) -> dict | None:
 def main() -> int:
     app = create_app()
     with app.app_context():
+        topology = json.loads(artifact_path("topology.json").read_text(encoding="utf-8"))
+        class_ids = [topology[key] for key in ("ADVA1", "ADVA2", "ADVB1")]
         violations: list[dict] = []
         expected_violations: list[dict] = []
         injection = read_json(artifact_path("injection_report.json")) or {}
@@ -37,6 +39,7 @@ def main() -> int:
 
         tx_rows = (
             Transaction.query.join(Seat, Seat.id == Transaction.seat_id)
+            .filter(Transaction.class_id.in_(class_ids))
             .with_entities(Transaction.id, Transaction.class_id, Transaction.seat_id, Seat.class_id)
             .all()
         )
@@ -55,6 +58,7 @@ def main() -> int:
 
         bc_rows = (
             LedgerBalanceSnapshot.query.join(Seat, Seat.id == LedgerBalanceSnapshot.seat_id)
+            .filter(LedgerBalanceSnapshot.class_id.in_(class_ids))
             .with_entities(LedgerBalanceSnapshot.id, LedgerBalanceSnapshot.class_id, LedgerBalanceSnapshot.seat_id, Seat.class_id)
             .all()
         )
@@ -68,7 +72,10 @@ def main() -> int:
                     "seat_class_id": str(seat_class_id),
                     "invariant": "INV-ARC-004",
                 }
-                if injected_balance_cache_row_id and int(bc_id) == int(injected_balance_cache_row_id):
+                if (injected_balance_cache_row_id and int(bc_id) == int(injected_balance_cache_row_id)
+                        and str(bc_class_id) == injection.get("new_class_id")
+                        and int(seat_id) == injection.get("seat_id")
+                        and str(seat_class_id) == injection.get("seat_class_id")):
                     finding["classification"] = "expected_synthetic_injection"
                     expected_violations.append(finding)
                 else:
@@ -77,7 +84,7 @@ def main() -> int:
         report = {
             "generated_at": now_iso(),
             "check": "cross_class_isolation",
-            "status": "FAIL" if violations else "PASS",
+            "status": "FAIL" if violations else "PASS" if len(expected_violations) == 1 else "BLOCKED",
             "violation_count": len(violations),
             "violations": violations,
             "expected_injection_count": len(expected_violations),
@@ -93,7 +100,7 @@ def main() -> int:
                 }
             )
         )
-        return 1 if violations else 0
+        return 1 if violations else 0 if len(expected_violations) == 1 else 2
 
 
 if __name__ == "__main__":

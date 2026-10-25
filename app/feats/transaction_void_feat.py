@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.extensions import db
 from app.feats.base import requires_feat_context
 from app.models import EntitlementEvent, StoreProduct, Transaction
 from app.services import obligations_service
@@ -12,11 +11,11 @@ from app.services.ledger_correction_service import (
     lock_and_resolve_purchase_eligibility,
     reverse_transaction,
 )
+from app.services.entitlement_service import revoke_reversed_purchase_grants
 from app.services.ledger_posting_service import create_pending_transaction
 # TODO (Phase 4): store_entitlement_service deleted; must query EntitlementEvent directly
 # from app.services.store_entitlement_service import list_entitlement_history
 from app.utils.seat_scope import seat_scoped_filter
-from app.utils.canonical_temporal_resolver import utc_now
 from app.utils.transaction_idempotency import build_transaction_idempotency_key, void_refund_key
 
 
@@ -115,7 +114,11 @@ def _execute_void_transaction_impl(
     # the same operation (SPEC-OPS-001 §3.5, INV-OPS-004). Doing it first means
     # an ineligible grant refuses the whole correction before any money moves.
     if tx.type == 'purchase':
-        _void_purchase(tx)
+        # A reversal is teacher-directed: its entitlement events and ledger
+        # rows name the class teacher seat, not the purchaser (DOM-STORE-001).
+        from app.services.identity_service import resolve_teacher_seat_for_class
+        actor_seat_id = actor_seat_id or resolve_teacher_seat_for_class(tx.class_id).id
+        _void_purchase(tx, actor_seat_id=actor_seat_id)
 
     # One path, settled or not. Money is only ever reversed — a monetary
     # transaction must not be voided (INV-OPS-001), and marking the original
@@ -141,7 +144,7 @@ def _execute_void_transaction_impl(
     )
 
 
-def _void_purchase(tx: Transaction) -> None:
+def _void_purchase(tx: Transaction, *, actor_seat_id: int) -> None:
     """Revoke the grants this purchase produced, resolved by provenance.
 
     The grants are found through ``correlation_id``, not by parsing the item
@@ -176,13 +179,29 @@ def _void_purchase(tx: Transaction) -> None:
     eligibility = lock_and_resolve_purchase_eligibility(tx)
     if not eligibility.eligible:
         raise PurchaseNotReversible(eligibility.reason)
-    selected_items = list(eligibility.grants)
+    revoke_reversed_purchase(
+        tx, list(eligibility.grants), reason="reversal_propagated", actor_seat_id=actor_seat_id
+    )
 
+
+def revoke_reversed_purchase(
+    tx: Transaction,
+    grants: list[EntitlementEvent],
+    *,
+    reason: str,
+    actor_seat_id: int,
+) -> None:
+    """Invalidate what a reversed purchase granted and record the item removal.
+
+    Every path that reverses a purchase (this FEAT, issue resolution) ends here,
+    so the grants and the $0 ``void_item_removed`` row cannot drift apart. The
+    caller has already passed ``lock_and_resolve_purchase_eligibility``.
+    """
     # Every unit of one purchase shares a lineage. Any version of it answers the
     # question asked here (the name for the item-removal row), so take the newest.
     store_item = (
         StoreProduct.query
-        .filter_by(class_id=tx.class_id, product_lineage_uuid=selected_items[0].product_id)
+        .filter_by(class_id=tx.class_id, product_lineage_uuid=grants[0].product_id)
         .order_by(StoreProduct.created_at.desc())
         .first()
     )
@@ -199,32 +218,20 @@ def _void_purchase(tx: Transaction) -> None:
     # either way, so the capability reads identically. What differs is the
     # cause, and INV-OPS-002 requires the cause to stay recoverable — hence the
     # reversed transaction is named in the payload rather than the state.
-    revoked_at = utc_now()
-    for event in selected_items:
-        db.session.add(
-            EntitlementEvent(
-                class_id=event.class_id,
-                entitlement_id=event.entitlement_id,
-                target_seat_id=event.target_seat_id,
-                actor_seat_id=tx.actor_seat_id or event.actor_seat_id,
-                product_id=event.product_id,
-                entitlement_type=event.entitlement_type,
-                acquisition_type=event.acquisition_type,
-                event_type="REVOKED",
-                correlation_id=event.correlation_id,
-                payload={
-                    "reason": "reversal_propagated",
-                    "reversed_transaction_id": tx.id,
-                },
-                timestamp=revoked_at,
-            )
-        )
+    revoke_reversed_purchase_grants(
+        grants,
+        reversed_transaction_id=tx.id,
+        reason=reason,
+        actor_seat_id=actor_seat_id,
+    )
 
+    # Attributed like the REVERSAL row beside it: the reversing teacher, with
+    # the purchase's own mechanism (reverse_transaction for a debit).
     create_pending_transaction(
         seat_id=tx.seat_id,
         class_id=tx.class_id,
         target_seat_id=tx.seat_id,
-        actor_seat_id=tx.actor_seat_id or tx.seat_id,
+        actor_seat_id=actor_seat_id,
         mechanism=tx.mechanism.value if getattr(tx, "mechanism", None) else "system",
         amount=Decimal('0.00'),
         account_type=tx.account_type or 'checking',
@@ -234,5 +241,3 @@ def _void_purchase(tx: Transaction) -> None:
             "void", "purchase", tx.id, "item-removal"
         ),
     )
-    # Canonical entitlement state is authoritative; the void path only records
-    # the compensating ledger effect here.

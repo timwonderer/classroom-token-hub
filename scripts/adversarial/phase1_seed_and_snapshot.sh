@@ -25,17 +25,17 @@ if [[ -z "${PYTHON_BIN:-}" ]]; then
   fi
 fi
 
-echo "Using DATABASE_URL=${DATABASE_URL/@*/@***redacted***}"
+echo "Using explicitly configured isolated database"
 echo "Using PYTHON_BIN=${PYTHON_BIN}"
 
 echo "[1/4] snapshot golden_base"
-"${PYTHON_BIN}" scripts/adversarial/snapshot_db.py --name golden_base
+"${PYTHON_BIN}" -m scripts.adversarial.snapshot_db --name golden_base
 
 echo "[2/4] seed minimal phase1 topology"
-"${PYTHON_BIN}" scripts/adversarial/seed_phase1_minimal.py --env-file "$ENV_FILE"
+"${PYTHON_BIN}" -m scripts.adversarial.seed_phase1_minimal --env-file "$ENV_FILE"
 
 echo "[3/4] snapshot seeded_base"
-"${PYTHON_BIN}" scripts/adversarial/snapshot_db.py --name seeded_base
+"${PYTHON_BIN}" -m scripts.adversarial.snapshot_db --name seeded_base
 
 echo "[4/4] done"
 echo "Snapshots written under: ${ADVERSARIAL_SNAPSHOT_DIR}"

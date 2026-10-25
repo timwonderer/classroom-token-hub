@@ -33,7 +33,7 @@ Insurance has its own **Insurance** item in the sidebar. It is independent of Re
 
 The page has three tabs:
 
-1. **My coverage** — the policies you hold. Each card shows one badge — **Active**, **Waiting period**, **Premium overdue**, or **Cancelled** — and four facts: the **Premium**, the **Premium status** (Paid or Overdue), when **Claims** open, and the date of your **Next premium** (or, once you have cancelled, the day it is **Covered through**). The buttons on the right are **File a claim** (or *Claims open [date]* while you wait, or **Pay overdue premium** when a premium is unpaid), **View policy**, and **Cancel coverage**.
+1. **My coverage** — the policies you hold. Each card shows one badge — **Active**, **Waiting period**, **Premium overdue**, **Cancelled**, **Plan changing**, **Ending**, or **Starts [date]** — and four facts: the **Premium**, the **Premium status** (Paid or Overdue), when **Claims** open, and the date of your **Next premium** (or, once you have cancelled, the day it is **Covered through**). The buttons on the right are **File a claim** (or *Claims open [date]* while you wait, or **Pay overdue premium** when a premium is unpaid), **View policy**, and **Cancel coverage**.
 2. **Buy coverage** — everything you could buy. The page opens here when you hold no coverage yet.
 3. **My claims** — every claim you have filed, with the date of the loss, when you filed it, its status (**Waiting for review**, **Approved**, or **Rejected**, with your teacher's reason), and what it paid you.
 
@@ -112,6 +112,16 @@ Cancelling means **stop charging me for future periods**. It is not a refund and
 - Until then the card is outlined in yellow with a **Cancelled** badge and a note: *You cancelled this coverage* — it won't renew, and you're covered through [date]. After that date it drops off **My coverage**.
 
 You get *Coverage cancelled — it won't renew.* If you had already cancelled, it says *This coverage is already set to not renew.* If the passphrase is missing or wrong you get *Enter your passphrase to confirm the cancellation.* and nothing changes.
+
+### When your teacher changes your plan
+
+Your teacher can update a plan you hold. The period you're in always finishes on the terms you bought. At your next renewal your coverage moves to the updated plan, and from then on you pay its premium and get its coverage.
+
+- Before the change, your card shows **Plan changing** and a note: *Your teacher changed this plan*. It gives the new plan's name, premium and terms, and the date its first premium is charged.
+- If you don't want the new plan, **cancel this coverage before that date**. Your coverage ends when the current period does, and you're never charged for the new plan.
+- Once the move is set, your old card says *Moving to [new plan]* and a second card appears for the new plan with a **Starts [date]** badge. There's no new waiting period: you can claim on the new plan from the day it starts.
+
+If your teacher stops offering a plan instead, your card shows **Ending** and *This plan is ending*: it won't renew, and you're covered until your current period ends.
 
 ### Switching tiers
 

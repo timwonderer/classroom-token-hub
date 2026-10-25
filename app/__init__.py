@@ -62,7 +62,7 @@ if missing_vars:
 
 # -------------------- UTILITIES --------------------
 from app.utils.encryption import PIIEncryptedType
-from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown, docs_url_for
+from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown, docs_url_for, sanitize_for_log
 from app.utils.constants import THEME_PROMPTS
 
 
@@ -116,9 +116,18 @@ class RequestIdFilter(logging.Filter):
                 if request.url_rule and request.url_rule.rule:
                     record.endpoint = request.url_rule.rule
                 else:
+                    # request.url_rule is None for any unmatched route (every
+                    # 404), so this falls back to the raw, attacker-supplied
+                    # path -- unlike url_rule.rule, which is always one of
+                    # this app's own registered route patterns. Every log
+                    # record on every request carries this field, so an
+                    # unsanitized path here is log injection on a much wider
+                    # surface than the few explicit logger.warning(request.url)
+                    # call sites CodeQL's py/log-injection query flagged.
                     record.endpoint = request.path
             else:
                 record.endpoint = "-"
+        record.endpoint = sanitize_for_log(record.endpoint)
         if not hasattr(record, "method"):
             record.method = request.method if has_request_context() else "-"
         if not hasattr(record, "error_class"):
@@ -419,6 +428,15 @@ def create_app():
     def ensure_request_id():
         g.request_id = _get_request_id()
 
+    # Audit S10: "display_metadata" was once a session-cached DisplayMetadata
+    # dict holding a decrypted name (see app/utils/display_metadata.py). That
+    # setter is gone, but a browser that still carries a pre-fix signed cookie
+    # would otherwise keep that plaintext name at rest indefinitely -- nothing
+    # else in the request cycle touches this key. Scrub it unconditionally.
+    @app.before_request
+    def purge_legacy_display_metadata():
+        session.pop("display_metadata", None)
+
     # Registered before capture_correlation_context: Flask runs before_request
     # hooks in registration order, and correlation must read the principal this
     # request is admitted as, not one a superseded cookie still names. Otherwise
@@ -498,7 +516,9 @@ def create_app():
             response.headers.setdefault("X-Request-Id", request_id)
         # Prometheus is an infrastructure caller, not a CTH user request. It
         # has no canonical actor/class context and must not enter TLCP traces.
-        if request.path == "/metrics":
+        # Static assets are not relevant traces (DOM-SUP-001): ~20 per page
+        # crowded real routes out of the ticket correlation pack.
+        if request.path == "/metrics" or request.endpoint == "static":
             return response
         if not app.config.get("TLCP_REQUEST_TRACE_ENABLED", not app.config.get("TESTING")):
             # Off under TESTING unless a test opts in (the tlcp_trace_enabled
@@ -613,10 +633,8 @@ def create_app():
         # nginx: it is a host-local caller such as the Prometheus /metrics
         # scrape or an operator's curl over Tailscale. It cannot have
         # bypassed Cloudflare, so there is nothing to warn about.
-        if request.remote_addr in ('127.0.0.1', '::1') and not any(
-            request.headers.get(h)
-            for h in ('X-CF-Edge-IP', 'X-Real-IP', 'X-Forwarded-For', 'CF-Connecting-IP')
-        ):
+        from app.utils.ip_handler import is_host_local_request
+        if is_host_local_request():
             return None
 
         # Only check in production
@@ -627,8 +645,11 @@ def create_app():
                 if not validate_cloudflare_request():
                     real_ip = get_real_ip()
                     app.logger.warning(
-                        f"Request not from Cloudflare IP: {request.remote_addr} "
-                        f"(real_ip: {real_ip}, path: {request.path}, method: {request.method})"
+                        "Request not from Cloudflare IP: %s (real_ip: %s, path: %s, method: %s)",
+                        sanitize_for_log(request.remote_addr),
+                        sanitize_for_log(real_ip),
+                        sanitize_for_log(request.path),
+                        sanitize_for_log(request.method),
                     )
             except Exception as e:
                 # Don't break requests if Cloudflare monitoring fails
@@ -962,7 +983,8 @@ def create_app():
     def prometheus_metrics():
         # Exempt from the per-client default limits: only a local scraper can
         # reach it, and a one-minute scrape alone exceeds "500 per day".
-        if request.remote_addr not in {"127.0.0.1", "::1"}:
+        from app.utils.ip_handler import is_host_local_request
+        if not is_host_local_request():
             return "Not Found", 404
         return metrics_payload(), 200, {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"}
 

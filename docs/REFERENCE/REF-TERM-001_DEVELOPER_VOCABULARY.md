@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| REF-TERM-001     | 1.1     | 2026-09-30     | 1.0        | Normative       |
+| REF-TERM-001     | 1.2     | 2026-10-14     | 1.1        | Normative       |
+
+> [!IMPORTANT]
+> **v1.2 (2026-10-14), documentation modernization.** Labelled two citations of the retired v1 `ARC-OPS-007_Database_Schema.md` as archived (the `ARC-*` namespace is retired per `DOCS_PLATFORM_ROADMAP.md` Phase 1; current schema authority is `DOM-CORE-002`). No vocabulary changes.
 
 ## I. Purpose
 
@@ -12,7 +15,7 @@ Define the authoritative developer-facing vocabulary for the Classroom Token Hub
 
 This glossary covers terms used in specifications, code review, domain contracts, and internal documentation. It does not include:
 
-- Schema-level field names or table names without independent conceptual meaning (see `ARC-OPS-007_Database_Schema.md`)
+- Schema-level field names or table names without independent conceptual meaning (see `ARC-OPS-007_Database_Schema.md`, archived v1 — not carried into v2; current schema authority is `DOM-CORE-002`)
 - Feature-specific behavioral rules that belong in their respective feature specs
 - User-facing vocabulary (see `REF-TERM-002`)
 
@@ -299,7 +302,7 @@ How often accrued interest joins the future earning base. Distinct from Accrual 
 
 The following term categories are intentionally excluded from this glossary:
 
-### Moved to Schema Documentation (`ARC-OPS-007`)
+### Moved to Schema Documentation (`ARC-OPS-007`, archived v1 — not carried into v2; current schema authority is `DOM-CORE-002`)
 
 Database column names, table names, and implementation artifacts that carry no independent architectural meaning: `account_balances`, `anonymous_code`, `balance_cache`, `class_economies`, `ClassEconomy`, `ClassMembership`, `done_for_day_date`, `hall_pass_verify_token`, `money_action_cooldown_until`, `payroll_fines`, `payroll_rewards`, `queue_enabled`, `queue_limit`, `recovery_status`, `redemption_audit_logs`, `redemption_prompt`, `rent_hall_passes`, `student_recovery_codes`, `tap_enabled`, `teacher_public_id`, `teacher_public_token`, `user_reports`.
 

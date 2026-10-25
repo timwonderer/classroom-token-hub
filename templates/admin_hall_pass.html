@@ -5,35 +5,31 @@
 
 {% block page_icon %}confirmation_number{% endblock %}
 {% block contextual_help_body %}
-{{ help.panel_lead("Set hall-pass limits, review requests, and see who is out of class.") }}
+{{ help.panel_lead("Set the out limit, work the pass queue, and share the Office Verification link.") }}
 
-{% call help.topic('hp-limits', 'settings', 'Hall Pass Limits') %}
-<p>Turn granting on or off and set how many students may be out at once.</p>
-{% call cards.alert_card('info', 'Disabling granting stops new passes', icon='block', body_class='mb-0') %}
-    <p class="mb-0">When granting is disabled, no new hall passes may be issued.</p>
+{% call help.topic('hp-limits', 'settings', 'Out Limit') %}
+<p>The <strong>Out Limit</strong> field above the tabs caps how many students may be out of class at once, from 1 to 50. It saves as you change it &mdash; watch for the <strong>Saved!</strong> badge.</p>
+{% call cards.alert_card('warning', 'A lower limit can block approvals', icon='warning', body_class='mb-0') %}
+    <p class="mb-0">Lowering the limit can leave <strong>Left Class</strong> unavailable on Issued passes until a slot opens.</p>
 {% endcall %}
 {% endcall %}
 
-{% call help.topic('hp-settings', 'tune', 'Settings Breakdown') %}
-<ul class="mb-0">
-    <li><strong>Granting toggle:</strong> enables or disables new hall-pass issuance.</li>
-    <li><strong>Out-of-class limit:</strong> caps how many students can be out at the same time.</li>
-    <li><strong>Terminal:</strong> student-facing kiosk to request passes.</li>
-    <li><strong>Verification display:</strong> screen showing currently issued and active passes.</li>
-</ul>
-{% call cards.alert_card('warning', 'A lower limit can block approvals', icon='warning', body_class='mt-3 mb-0') %}
-    <p class="mb-0">Lowering the limit can block new approvals until slots open.</p>
+{% call help.topic('hp-configure', 'tune', 'Configure: pass types and destinations') %}
+<p class="mb-0">The <strong>Configure</strong> tab sets up destinations (e.g. Library, Nurse) and each one's own out-at-once limit. Setting a destination's limit to 0 blocks it. <strong>Total Students Out At Once</strong> there is a read-only sum of those destination limits &mdash; approvals stop at whichever is smaller, that sum or the Out Limit above.</p>
 {% endcall %}
+
+{% call help.topic('hp-off', 'block', 'Turning hall passes off entirely') %}
+<p class="mb-0">This page has no on/off switch of its own. To stop hall passes for the class altogether, turn the Hall Pass feature off from <strong>Class Tools &rsaquo; Economy Features</strong>.</p>
 {% endcall %}
 
 {% call help.topic('hp-issue', 'check_circle', 'Issue and Track Passes') %}
-<p class="mb-0">Issued passes appear in the Issued tab until the student leaves class.</p>
+<p class="mb-0">Issued passes appear in the Issued tab until you mark the student <strong>Left Class</strong>, which starts the duration clock.</p>
 {% endcall %}
 
 {% call help.topic('hp-track', 'logout', 'Track Students Out') %}
-<p>Use the Issued and Out tabs to track who is waiting and who has left the room.</p>
+<p>Use the Issued and Out tabs to track who is waiting and who has left the room. The History tab holds everything, filterable by type and date.</p>
 {% call cards.alert_card('warning', 'Mark students as returned', icon='assignment_return', body_class='mb-0') %}
-    <p class="mb-0">Mark students as returned to keep active pass state accurate.</p>
+    <p class="mb-0">Mark students as returned to keep active pass state accurate and free up a slot.</p>
 {% endcall %}
 {% endcall %}
 
@@ -619,8 +615,10 @@ function showHistoryError(message) {
     `;
 }
 
-function rotateVerifyToken() {
-    if (!confirm('Regenerate the hall pass verification link? The current link will be immediately invalid.')) {
+async function rotateVerifyToken() {
+    if (!(await window.AppCore.confirm('Regenerate the hall pass verification link? The current link will be immediately invalid.', {
+        title: 'Regenerate link', confirmLabel: 'Regenerate', danger: true,
+    }))) {
         return;
     }
     // csrfFetch, not fetch: this call previously omitted X-CSRFToken entirely and

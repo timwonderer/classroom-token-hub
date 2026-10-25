@@ -52,6 +52,8 @@ class HallPassSettingsMissing(ValueError):
 class PayrollEventResult:
     payroll_event: PayrollEvent
     ledger_transaction: Transaction | None
+    # True when idempotency_key matched an event already recorded: nothing was written.
+    replayed: bool = False
 
 
 def _require_context(ctx: CanonicalContext | None) -> CanonicalContext:
@@ -115,6 +117,16 @@ def _enforce_hall_pass_settings(
     destination: str,
     reference_time_utc,
 ) -> str:
+    # F7: the queue/simultaneous counts below are a read over the whole class's
+    # hall-pass logs, with the actual write (the new HallPassLog, via the
+    # caller) coming later in this same transaction. Without a class-wide lock,
+    # two concurrent approvals for two different students each read the same
+    # "currently out" count before either has inserted its row, so both pass
+    # the limit check. Locking the class row here (the same idiom used for
+    # payroll/ledger class-wide serialization elsewhere in this module and in
+    # ledger_posting_service.py) makes the second approval wait for the first
+    # transaction to commit, so it then counts the first approval's row.
+    ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     settings = require_hall_pass_settings(ctx.class_id, reference_time_utc)
     pass_types = settings.get_pass_types()
     normalized_destination = (destination or "").strip().lower()
@@ -143,9 +155,15 @@ def _enforce_hall_pass_settings(
         .order_by(HallPassLog.timestamp.asc(), HallPassLog.id.asc())
         .all()
     )
+    # F7: an issued-but-not-yet-"left" pass still occupies a queue slot. Only
+    # counting "left" let a teacher approve many passes back to back — each
+    # approval's count was 0 because none of those students had tapped out
+    # yet — and then have all of them leave at once, exceeding the limit the
+    # earlier approvals were supposed to be checked against. "returned" is the
+    # only state that frees the slot.
     currently_out = [
         log for log in todays_logs
-        if _latest_hall_pass_attendance_state(log) == "left"
+        if _latest_hall_pass_attendance_state(log) in ("approved", "left")
     ]
 
     queue_limit = min(settings.max_queue_limit, sum(item.get("max_queue", 0) for item in pass_types)) if settings else None
@@ -216,6 +234,18 @@ def _record_hall_pass_log_impl(
     FEAT-PROD-002 boundary for a top-level (route) ingress.
     """
     ctx = _require_context(ctx)
+    if not requested_by_seat_id or not ctx.class_id:
+        raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
+    # Lock the seat before _enforce_hall_pass_settings locks the class below.
+    # execute_account_transfer / allocate_creation_posting_sequence lock
+    # Seat then ClassEconomy; a hall-pass approval that locked them in the
+    # opposite order could deadlock against a concurrent transfer for the
+    # same student (PR #1550 review). Locking the seat first here, whether or
+    # not this destination consumes a pass, keeps every writer that takes
+    # both locks in the same Seat -> ClassEconomy order.
+    from app.services.entitlement_service import lock_hall_pass_holder
+
+    lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
@@ -250,18 +280,13 @@ def _record_hall_pass_log_impl(
     )
     consume_pass = pass_type.get("consume_pass", True) if pass_type else True
 
-    if not requested_by_seat_id or not ctx.class_id:
-        raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
     used_pass = None
     if consume_pass:
-        # Serialize with every other write that can end this seat's passes
-        # (other approvals, reversal, removal, perk expiry): the second waits
-        # and then sees the pass spent. The unique index on
-        # hall_pass_logs.hall_pass_id is the database's own guarantee that an
-        # entitlement_id is used at most once.
-        from app.services.entitlement_service import lock_hall_pass_holder
-
-        lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
+        # The seat lock taken above is the same serialization point every
+        # other write that can end this seat's passes uses (other approvals,
+        # reversal, removal, perk expiry): the second waits and then sees the
+        # pass spent. The unique index on hall_pass_logs.hall_pass_id is the
+        # database's own guarantee that an entitlement_id is used at most once.
         if hall_pass_entitlement_id:
             # A request is for one particular pass, and its availability was
             # decided when it was submitted (DOM-STORE-001 §IX: submitted_at is
@@ -398,7 +423,7 @@ def _record_payroll_event_impl(
                 if idempotency_key
                 else None
             )
-            return PayrollEventResult(payroll_event=existing_event, ledger_transaction=existing_tx)
+            return PayrollEventResult(payroll_event=existing_event, ledger_transaction=existing_tx, replayed=True)
 
     # The FEAT owns the canonical command correlation shared with Ledger effects.
     correlation_id = get_correlation_id()

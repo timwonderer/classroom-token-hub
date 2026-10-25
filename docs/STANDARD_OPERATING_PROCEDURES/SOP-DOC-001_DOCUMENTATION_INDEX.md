@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.25 | 2026-10-06 | 3.24 | Normative |
+| SOP-DOC-001 | 3.39 | 2026-10-23 | 3.38 | Normative |
 
 ---
 
@@ -117,6 +117,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-000 — Canonical Monetary Resolution Workflow](../FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md)
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
+- [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
 - [FEAT-OBL-003 — Satisfy Obligation](../FEATURE-EXECUTION/FEAT-OBL-003_SATISFY_OBLIGATION.md)
 - [FEAT-OBL-004 — Insurance Policy Purchase / Enrollment](../FEATURE-EXECUTION/FEAT-OBL-004_INSURANCE_POLICY_PURCHASE.md)
@@ -153,7 +154,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
-- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
+- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001/DOM-LED-001 and FEAT-PROD-003/005/006 for canonical interval eligibility, exact historical reconstruction/graph attribution and atomic correction.
 - [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning PROD/Ledger/Operations/Policies contracts and FEAT-PROD-006/005/003: pure assessment, distinct immutable-source historical reconstruction and existing atomic correction; original canonical lineage remains separately reported.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
@@ -175,7 +176,9 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.7: §XIV lists the forward-only Ledger posting, compensation provenance, and attendance invalidation revisions.
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.10: §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
+- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.0: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
+- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.0: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row.
 - [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -188,6 +191,7 @@ Archived material is deliberately absent; see §VI.
 
 ### Procedures — Security (SOP-SEC)
 - [SOP-SEC-001 — Credentials and Identity Lookup Operations](SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md)
+- [SOP-SEC-002 — SAST Findings Review and Disposition](SECURITY/SOP-SEC-002_SAST_FINDINGS_REVIEW_AND_DISPOSITION.md)
 
 ### Procedures — Testing (SOP-TEST)
 - [SOP-TEST-001 — Validation Execution and Reporting](TESTING/SOP-TEST-001_Validation_Execution_And_Reporting.md)
@@ -275,6 +279,53 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.39 (2026-10-23):**
+- Register DOM-OPS-001 v2.14, SPEC-OPS-006 v1.6, SOP-DEP-001 v2.11 and SOP-DEP-002 v1.16: health endpoints are public and need no credential; while the Access gate is closed the status collector reads nothing from the application (owner ruling 2026-10-23).
+
+**Version 3.38 (2026-10-22):**
+- Register SPEC-ECON-001 v1.4, SOP-DB-001 v1.8 and SOP-DEP-002 v1.15: the backlog moved from the post-launch tracker (archived to `docs/archive/v2-tracking-2026/POST_LAUNCH_TRACKER_2026.md`) to GitHub Issues and the CTH Backlog project; release-record follow-ups are filed as issues.
+
+**Version 3.37 (2026-10-22):**
+- Register SOP-DEP-002 v1.14: CHANGELOG entries carry a release-notes section tag; release notes are rendered as Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes.
+
+**Version 3.36 (2026-10-22):**
+- Register SOP-DEP-002 v1.13: §VII.A step 7 closes the pre-release SSH tunnel to production (`prerelease.sh restore`, or `close-tunnel` for an abandoned run).
+
+**Version 3.35 (2026-10-22):**
+- Register SOP-DEP-001A v1.0 (Initial Deployment Browser Validation) and SOP-DEP-001B v1.0 (Release Functional Browser Validation), extracted from SOP-DEP-001 §XI with separate mechanisms: initial deployment requires every item; a release checks directly changed, connected and known-problem features. Register SOP-DEP-001 v2.10 (§XI points to the templates) and SOP-DEP-002 v1.12 (§VIII uses them). Owner rulings, 2026-10-22 (v2.3.0).
+
+**Version 3.34 (2026-10-21):**
+- Register SPEC-OPS-006 v1.5: the endpoint check is FAIL (`HTTP_UNAVAILABLE`) only on an HTTP 5xx; any other non-redirect, non-authentication HTTP error (e.g. 429, 404) is UNKNOWN under the new closed diagnostic `HTTP_REFUSED` (owner ruling 2026-10-21).
+
+**Version 3.33 (2026-10-19):**
+- Register DOM-LED-001 v2.17: deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating the invariant's own canonical/legacy table as the only lawful `ledger_transaction.type` values (`NULL` still permitted). Closes the set of lawful values; does not yet enforce canonical spelling on new rows (the write-time casing validator is separate, later scope). Also registers FEAT-LED-005 v1.3 (reconciles this PR's and #1599's independently-recorded v1.2 histories into one: both the route/registry cutover and the DB `CHECK` constraint have now landed) and SPEC-ITR-001 v1.6 (§6.6/P4 updated to reflect the constraint's partial enforcement). No existing row's `type` value changes. PR 5 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+
+**Version 3.32 (2026-10-18):**
+- Register the `FEAT-LED-005` route cutover (internal-transfer route now opens `FEAT-LED-005`, not `FEAT-LED-000`; `app/feats/base.py` registry entry added; `FEAT-LED-005` v1.2 and `FEAT-LED-000` v0.7 update from prospective to live-runtime status) and the SPEC-ITR-001 v1.4/DOM-ITR-001 v1.9 code cutover: `ledger_provenance_query_service.py`'s §6.3 classifier now uses the closed `Transaction.type` exclusion set (`SYSTEM_ORIGINATED_TYPE_VALUES`) instead of the removed `SYSTEM_ORIGINATED_FEAT_CODES` `feat_code` membership test. DOM-ITR-001 §XIII's INV-ITR-015 row moves from KNOWN NONCOMPLIANCE to RESOLVED. The DB `CHECK` constraint and write-time casing validator on `Transaction.type` remain a separate, not-yet-landed PR (SPEC-ITR-001 §6.6). PR 4 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation (#1599).
+
+**Version 3.31 (2026-10-18):**
+- Register DOM-LED-001 v2.16: INV-LED-014 names `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the sole pure constructor of a transfer's two-leg effect vector's shared fields, replacing the standalone internal-transfer command's and the overdraft-protection funding legs' independent inline effect-dict construction with one shared builder. `create_transfer_pair` keeps its own dedicated `_command_fingerprint` reservation/replay path (SPEC-LED-002 §4.2); only the two effects' shared fields are now built in common. No effect shape, invariant, or historical row changes. PR 3 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+
+**Version 3.30 (2026-10-18):**
+- Register DOM-LED-001 v2.15 (INV-LED-016 mechanism actor attribution, INV-LED-017 closed type vocabulary with its authoritative canonical/legacy enumeration table), FEAT-LED-000 v0.6 (disclaims prior route-level orchestration misuse), and the new FEAT-LED-005 v1.1 (Internal Account Transfer; prospective pending its own cutover PR). Contracts only; no code changed. Part of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+
+**Version 3.29 (2026-10-16):**
+- Register SOP-DEP-001 v2.9: §XI evidence standard and per-line results table recorded during the checks; §XI.A forbids deliberate cross-scope attempts on a host serving live classes (owner rulings, 2026-10-16).
+
+**Version 3.28 (2026-10-14), developer-documentation modernization pass:**
+- Register the Authority Level correction: `INV-ARC-000` through `INV-ARC-016`, `INV-ARC-021` and `INV-ARC-022` (all v+0.1, "Foundational" → "Constitutional"), and `DOM-OPS-001` v2.13, `DOM-ITR-001` v1.8, `DOM-STORE-001` v5.6, `DOM-SUP-001` v1.9 (all "Normative" → "Constitutional," `DOM-STORE-001`'s header now matching its own already-correct body). Label corrections only; no dependency, scope, or rule changed in any of the 23 documents. Also registers `SOP-DOC-000` v3.5, carved out of the same reconciliation since it is the document defining the tier scheme: corrected from "Foundational (Tier 0)" to "Normative (Tier 2 — SOP Tier)," matching its own §V/§VI taxonomy.
+
+**Version 3.27 (2026-10-14), developer-documentation modernization pass:**
+- Register SOP-SEC-002 v1.0 (2026-10-11): CodeQL gating configuration, per-alert disposition and recurring backlog review, written off `INCIDENT_2026-10-11_SEC-SAST-GAP-001.md`. This index had already listed SOP-SEC-002 but carried no Change Note for it.
+- Register SOP-DEP-002 v1.11: corrected its post-migration verification checklist from `join_code`-keyed routes to the actual route contract, matching SOP-DEP-001 §XI.
+- Register SOP-DB-003 v1.4: added SOP-DB-004 to Dependencies and a pointer to its `M2 DATA` classification, which SOP-DB-003's own three-box classification doesn't cover.
+- Register INV-ARC-020 v1.2: a later edit reintroduced the same archived `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md` citation an earlier revision had already dropped from its Dependencies; removed again.
+- Register FEAT-OBL-004 v1.0: promoted from DRAFT to final Normative (owner ruling), resolving the open question that `FEAT-STOR-001` v3.2 already shipped assuming its authority.
+
+**Version 3.26 (2026-10-14), developer-documentation modernization pass:**
+- Register DOM-CLASS-003 v2.6 and FEAT-CLASS-005 v1.3: §V/§IX and §XI stopped describing the overdraft/NSF fee as an active charge (CTH charges none, owner ruling 2026-10-07, `DOM-OBL-001` §II.C), and now name only the flat fee as rebalance-selectable — the overdraft-protection setting (`economic_engine.overdraft_protection_enabled`) and the progressive fee are changed through the Economic Engine evolution command directly, not through the rebalance preview.
+- Register FEAT-IDEN-101 v1.3, FEAT-IDEN-107 v1.2, DOM-IDEN-007 v1.3, DOM-IDEN-002 v2.10, FEAT-OBL-002 v2.2 and FEAT-OBL-004 v0.5 (DRAFT): staleness corrections (credential-hashing wording, an idempotency-lock gap, a table-name typo, and a broken dependency citation) — see `CHANGELOG.md` for detail.
 
 **Version 3.25 (2026-10-06):**
 - Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.

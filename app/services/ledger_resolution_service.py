@@ -10,6 +10,7 @@ from app.extensions import db
 from app.models import Transaction, _quantize_currency
 from app.services.ledger_balance_query_service import get_available_balances
 from app.services.ledger_command_service import create_reserved_effects
+from app.services.ledger_transfer_service import build_transfer_effect_pair
 
 
 @dataclass(frozen=True)
@@ -221,21 +222,21 @@ def apply_resolved_ledger_plan(*, resolved_plan, idempotency_key):
                 f"{p.class_id}:{get_active_feat_name()}:{idempotency_key}:funding".encode()
             ).hexdigest()[:32]
         )
-        for account, amount, text in [
-            ("savings", -transfer, "to checking"),
-            ("checking", transfer, "from savings"),
-        ]:
-            effects.append(
-                dict(
-                    common,
-                    target_seat_id=p.seat_id,
-                    correlation_id=funding_correlation,
-                    account_type=account,
-                    amount=amount,
-                    type="Withdrawal" if amount < 0 else "Deposit",
-                    description=f"Overdraft protection transfer {text}",
-                )
+        effects.extend(
+            build_transfer_effect_pair(
+                seat_id=p.seat_id,
+                class_id=p.class_id,
+                target_seat_id=p.seat_id,
+                actor_seat_id=p.actor_seat_id,
+                mechanism=p.mechanism,
+                correlation_id=funding_correlation,
+                amount=transfer,
+                from_account="savings",
+                to_account="checking",
+                withdraw_description="Overdraft protection transfer to checking",
+                deposit_description="Overdraft protection transfer from savings",
             )
+        )
     principal_index = None
     if p.debit_amount:
         principal_index = len(effects)
