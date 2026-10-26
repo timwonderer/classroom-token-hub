@@ -27,9 +27,11 @@ from uuid import uuid4
 
 
 def _make_tier(classroom, group, level, **overrides):
+    from tests.helpers.insurance_domain import provision_tier_group
+    group_id = provision_tier_group(classroom.class_id, group)
     return configure_insurance_definition(
         class_id=classroom.class_id,
-        submission=_submission(tier_group=group, tier_level=level, **overrides),
+        submission=_submission(tier_group_id=group_id, tier_level=level, **overrides),
         canonical_context=_teacher_ctx(classroom),
         correlation_id=f"corr_{uuid4().hex}",
         idempotency_key=f"FEAT-CLASS-003:tier:{uuid4().hex}",
@@ -133,7 +135,7 @@ def test_grouped_tier_can_be_edited(app):
         replacement = configure_insurance_definition(
             class_id=classroom.class_id,
             submission=_submission(
-                tier_group="Paycheck Protection", tier_level=2, premium="14.00"
+                tier_group_id=original.tier_group_id, tier_level=2, premium="14.00"
             ),
             canonical_context=_teacher_ctx(classroom),
             supersedes_policy_uuid=original.policy_uuid,

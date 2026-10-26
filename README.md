@@ -168,6 +168,7 @@ The app won't start without the six keys above. Everything else is optional, exc
 
 | Variable | Purpose |
 | -------- | ------- |
+| `CONFIGURATION_EXPORT_KEY` | Dedicated random signing key for class configuration files and confirmations; unset disables transfers. Rotation immediately invalidates all outstanding files and confirmations; no fallback keys |
 | `TEST_DATABASE_URL` | PostgreSQL database that the test suite rebuilds |
 | `CSRF_SECRET_KEY` | A separate CSRF signing key (defaults to `SECRET_KEY`) |
 | `SECRET_KEY_FALLBACKS` | Previous secret keys, so a rotation doesn't sign everyone out |

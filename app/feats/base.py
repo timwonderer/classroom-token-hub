@@ -194,6 +194,9 @@ class InvariantViolation(Exception):
 
 # Canonical FEAT Registry
 FEAT_REGISTRY = {
+    "FEAT-CLASS-009": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Issue configuration export"},
+    "FEAT-CLASS-010": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Import configuration"},
+    "FEAT-CLASS-011": {"domain": "Class Configuration", "blast_radius": "LOW", "desc": "Expire configuration receipts"},
     "FEAT-IDEN-101": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Initial Signup and TOTP Setup"},
     "FEAT-IDEN-103": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Initiation"},
     "FEAT-IDEN-104": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Confirmation for Teacher Recovery"},

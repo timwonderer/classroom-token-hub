@@ -299,6 +299,7 @@ def create_app():
         SECRET_KEY_FALLBACKS=secret_key_fallbacks,
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        CONFIGURATION_EXPORT_KEY=os.getenv("CONFIGURATION_EXPORT_KEY", "").strip(),
         SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -352,6 +353,13 @@ def create_app():
     db.init_app(app)
     init_feat_enforcement(app)
     migrate.init_app(app, db)
+    @app.before_request
+    def configuration_upload_limits():
+        # Apply before CSRF parses the form so a valid 1 MiB file remains uploadable.
+        if request.blueprint == "configuration":
+            request.max_content_length = 4 * 1024 * 1024
+            request.max_form_memory_size = 3 * 1024 * 1024
+
     csrf.init_app(app)
     limiter.init_app(app)
 
@@ -961,6 +969,8 @@ def create_app():
     app.register_blueprint(sysadmin_bp)
     app.register_blueprint(student_bp)
     app.register_blueprint(admin_bp)
+    from app.routes.configuration import configuration_bp
+    app.register_blueprint(configuration_bp)
     app.register_blueprint(docs_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(recovery_bp)

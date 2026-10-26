@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-POL-001 | 2.1 | 2026-09-24 | 2.0 | Normative |
+| FEAT-POL-001 | 2.2 | 2026-10-25 | 2.1 | Normative |
 
 ## I. Purpose
 
@@ -178,6 +178,35 @@ capacity below the configured class-wide limit.
 
 The student break-reason selector SHALL read the active hall-pass policy
 payload. Historical policy rows SHALL remain readable for provenance.
+
+## Configuration portability and canonical insurance groups
+
+Owner ruling 2026-10-25 incorporates SPEC-CLASS-001. Policies exposes pure portable
+projections and shared definition commands to FEAT-CLASS-009/010 without coordinating
+other domains. FEAT-POL-001 describes the definition contract; it is not an executor
+that other FEATs call. Existing exclusive-writer wording does not forbid these declared
+FEATs from composing the same domain commands.
+
+Hall-pass import replaces the complete definition with a new row and retires the old
+one; selected destinations are not merged. Store/insurance imports create independent
+products and groups with fresh identifiers, never predecessor links to destination
+products. Rent-linked products and source rent-product links are excluded. Destination
+rent-product links survive replacement of the other rent settings.
+
+`insurance_policies.tier_group_id` is a nullable canonical UUID scoped by class_id.
+`tier_group` and `tier_name` are presentation only. Membership and unique active ranks
+use `(class_id, tier_group_id, tier_level)`, never labels. New groups always receive a
+fresh identifier, including same-name groups. Editing a member preserves group identity.
+
+The one-time successor migration groups the existing available definitions by their
+exact stored class/label membership (the pre-cutover contract), creates new UUID groups,
+publishes identical-term successors and retires predecessors from new selection. Old
+definition payloads and operational facts are not rewritten. Existing coverage migrates
+through normal succession at its boundary. Purchase exclusion resolves predecessor
+coverage through explicit successor links to canonical group identity; it never falls
+back to labels. The migration must refuse ambiguous live coverage without a successor
+path rather than invent membership. This is a forward-only cutover, not a dual writer.
+
 
 ## XIII. Amendment
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.8 | 2026-10-03 | 3.7 | Constitutional |
+| DOM-CLASS-001 | 3.9 | 2026-10-25 | 3.8 | Constitutional |
 
 ## I. Purpose
 
@@ -180,6 +180,23 @@ execution transaction. An outdated, narrower confirmation must be rejected.
 Unclaim retains the Seat and does not trigger this rule. Initial empty-class
 creation remains valid until roster setup; there is no empty-class or stale-class
 background inference.
+
+## Configuration portability (owner ruling 2026-10-25)
+
+Class Configuration owns the class-scoped `configuration_import_receipts` execution
+records: `(class_id, operation_id)` primary key, actor Seat, request fingerprint,
+expiry, accepted timestamp and minimal result. Class deletion cascades receipts.
+Receipts contain no uploaded file, product definitions or principal references.
+They expire with the export and may be deleted by an explicit, logged cleanup command;
+this does not delete audit evidence. Expired confirmation authority is always rejected,
+including after cleanup. Receipts are not audit records or permanent import history.
+
+FEAT-CLASS-009 issues exports, FEAT-CLASS-010 previews/confirms imports, and
+FEAT-CLASS-011 cleans expired receipts for one class. Each owns one execution boundary
+and composes domain guards/queries/commands, never another FEAT. The referenced
+SPEC-CLASS-001 is incorporated in full. Import neither enables features nor rebalances
+prices. It cannot modify class identity, labels, timezone, membership or past activity.
+
 
 ## XI. Amendment
 

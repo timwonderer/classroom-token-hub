@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.40 | 2026-10-24 | 3.39 | Normative |
+| SOP-DOC-001 | 3.41 | 2026-10-25 | 3.40 | Normative |
 
 ---
 
@@ -447,3 +447,10 @@ Their surviving content lives at:
 ## IX. Amendment
 
 Revisions to this document must increment the version number, update the effective date, and remain consistent with the CTH documentation standard.
+
+## Configuration portability registration (2026-10-25)
+
+- [FEAT-CLASS-010_CONFIGURATION_IMPORT](../FEATURE-EXECUTION/FEAT-CLASS-010_CONFIGURATION_IMPORT.md)
+- [FEAT-CLASS-011_CONFIGURATION_RECEIPT_CLEANUP](../FEATURE-EXECUTION/FEAT-CLASS-011_CONFIGURATION_RECEIPT_CLEANUP.md)
+- [FEAT-CLASS-009](../FEATURE-EXECUTION/FEAT-CLASS-009_CONFIGURATION_EXPORT.md)
+- [SPEC-CLASS-001](../SPEC/SPEC-CLASS-001_CONFIGURATION_PORTABILITY.md)

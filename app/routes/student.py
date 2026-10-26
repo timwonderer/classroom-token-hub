@@ -1820,6 +1820,7 @@ def insurance_marketplace():
                 claimable_dates_per_week_equivalent=d.claimable_dates_per_week_equivalent,
                 tier_name=d.tier_name,
                 tier_group=d.tier_group,
+                tier_group_id=d.tier_group_id,
                 tier_level=d.tier_level,
                 owned=has_active_insurance_coverage(seat_id, class_id, d.policy_uuid),
             )
@@ -1832,15 +1833,15 @@ def insurance_marketplace():
     _grouped: dict = {}
     ungrouped_policies = []
     for p in available_policies:
-        if p.tier_group:
-            _grouped.setdefault(p.tier_group, []).append(p)
+        if p.tier_group_id:
+            _grouped.setdefault(p.tier_group_id, []).append(p)
         else:
             ungrouped_policies.append(p)
     grouped_policies = []
     for name in sorted(_grouped):
         tiers = sorted(_grouped[name], key=lambda t: (t.tier_level or 0))
         grouped_policies.append(SimpleNamespace(
-            name=name,
+            name=tiers[0].tier_group,
             tiers=tiers,
             owned=has_active_coverage_in_group(seat_id, class_id, name),
         ))

@@ -93,7 +93,7 @@
             {% set economy_open = current_page in ['economic_engine', 'payroll', 'store', 'banking', 'interpretation'] %}
             {% set bills_open = current_page in ['rent', 'insurance'] %}
             {% set settings_open = current_page in ['settings', 'passkey_settings', 'account_delete'] %}
-            {% set class_tools_open = current_page in ['customizations', 'feature_settings', 'class_delete'] %}
+            {% set class_tools_open = current_page in ['customizations', 'feature_settings', 'class_delete', 'configuration_transfer'] %}
 
             <!-- Dropdown Navigation -->
             <div class="d-flex flex-column gap-2 mt-2">
@@ -183,6 +183,7 @@
                         <a href="{{ url_for('admin.customizations') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'customizations' %}active{% endif %}" {% if current_page == 'customizations' %}aria-current="page"{% endif %}>
                             <span class="material-symbols-outlined" aria-hidden="true">style</span> Customizations
                         </a>
+                        <a href="{{ url_for('configuration.settings') }}" class="nav-link nav-sub-link {% if current_page == 'configuration_transfer' %}active{% endif %}" {% if current_page == 'configuration_transfer' %}aria-current="page"{% endif %}>Copy Configuration</a>
                         <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}" {% if current_page == 'feature_settings' %}aria-current="page"{% endif %}>
                             <span class="material-symbols-outlined" aria-hidden="true">tune</span> Economy Features
                         </a>

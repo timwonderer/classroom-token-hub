@@ -41,7 +41,7 @@ def _tier_post(client, group, level, *, group_new=None, title="Tier"):
         "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY", "bill_preview_days": "3", "nonpayment_mode": "ACCUMULATE",
         "reimbursement_percentage": "80", "payout_multiple": "3",
         "claims_per_week_equivalent": "1", "claim_window_days": "7",
-        "title": title, "tier_group": group, "tier_level": str(level),
+        "title": title, "tier_group_id": group, "tier_level": str(level),
     }
     if group_new is not None:
         data["tier_group_new"] = group_new
@@ -75,7 +75,9 @@ def test_admin_duplicate_rank_in_group_rejected_via_route(app, client):
 
     assert _tier_post(client, "__new__", 1, group_new="Paycheck Protection").status_code == 302
     # Now the group exists; join it and try Basic again.
-    resp = _tier_post(client, "Paycheck Protection", 1)
+    with app.app_context():
+        group_id = InsurancePolicy.query.filter_by(class_id=class_id).one().tier_group_id
+    resp = _tier_post(client, group_id, 1)
     assert resp.status_code == 200  # re-rendered form with error, not a redirect
 
     with app.app_context():

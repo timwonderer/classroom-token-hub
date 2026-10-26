@@ -38,3 +38,5 @@ f1f1f1f1f1f1  # f1f1f1f1f1f1_repoint_legacy_fks_to_users.py: downgrade() raises
 f2c9d1a6b7e8  # f2c9d1a6b7e8_reconcile_ledger_table_split.py: downgrade() does nothing
 f8b2d6e0a410  # f8b2d6e0a410_ledger_compensation_provenance.py: downgrade() raises
 f9a3c7d1e620  # f9a3c7d1e620_attendance_interval_invalidation.py: downgrade() raises
+
+c8f1a2b3d490  # configuration portability: successor publication; downgrade raises

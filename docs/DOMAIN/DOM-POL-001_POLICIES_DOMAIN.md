@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.8 | 2026-10-03 | 2.7 | Constitutional |
+| DOM-POL-001 | 2.9 | 2026-10-25 | 2.8 | Constitutional |
 
 ## I. Purpose
 
@@ -249,6 +249,35 @@ Policies incorporates SPEC-PROD-002 §VI.1 through FEAT-PROD-006/005/003. Its ex
 ### X.3 Graph-setting contribution
 
 Policies incorporates SPEC-PROD-002 §VI.2 for retained original inputs covering every fragment/remainder/top-up window. Legacy windows select the original rate at their historical execution boundary; closed sessions select the setting in force at close under their original descriptor. FEAT supplies the immutable DTOs to PROD. Policies does not assign scans to pairs, compute cents/top-up deltas, verify Operations internals or query another domain. No new persistence, default-rate bridge or policy selection fallback is authorized.
+
+## Configuration portability and canonical insurance groups
+
+Owner ruling 2026-10-25 incorporates SPEC-CLASS-001. Policies exposes pure portable
+projections and shared definition commands to FEAT-CLASS-009/010 without coordinating
+other domains. FEAT-POL-001 describes the definition contract; it is not an executor
+that other FEATs call. Existing exclusive-writer wording does not forbid these declared
+FEATs from composing the same domain commands.
+
+Hall-pass import replaces the complete definition with a new row and retires the old
+one; selected destinations are not merged. Store/insurance imports create independent
+products and groups with fresh identifiers, never predecessor links to destination
+products. Rent-linked products and source rent-product links are excluded. Destination
+rent-product links survive replacement of the other rent settings.
+
+`insurance_policies.tier_group_id` is a nullable canonical UUID scoped by class_id.
+`tier_group` and `tier_name` are presentation only. Membership and unique active ranks
+use `(class_id, tier_group_id, tier_level)`, never labels. New groups always receive a
+fresh identifier, including same-name groups. Editing a member preserves group identity.
+
+The one-time successor migration groups the existing available definitions by their
+exact stored class/label membership (the pre-cutover contract), creates new UUID groups,
+publishes identical-term successors and retires predecessors from new selection. Old
+definition payloads and operational facts are not rewritten. Existing coverage migrates
+through normal succession at its boundary. Purchase exclusion resolves predecessor
+coverage through explicit successor links to canonical group identity; it never falls
+back to labels. The migration must refuse ambiguous live coverage without a successor
+path rather than invent membership. This is a forward-only cutover, not a dual writer.
+
 
 ## XI. Amendment
 

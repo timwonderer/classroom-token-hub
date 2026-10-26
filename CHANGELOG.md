@@ -8,6 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+
+- Class-scoped configuration file export/import with authenticated five-day files, atomic imports, and temporary retry receipts. Insurance tier groups now use canonical identities; migration preserves existing coverage through explicit successors.
+- Accessibility: configuration transfer forms have explicit labels and grouped selections; Copy Configuration navigation announces the current page. Rendered start, upload, and confirmation stages are covered by accessibility smoke assertions.
+
 ### Changed
 
 - <!-- notes: internal --> **One tab icon across every Classroom Token Hub site.** The icon is now the gold store symbol from the wordmark's middle row on Advisor Green (`static/images/icon-192.png`, `icon-512.png`), replacing the text-and-dollar icon. The public site (`classroomtokenhub.com`) and the status page had no tab icon; they now carry byte-identical copies (`github-pages/assets/icon-192.png`, `status_service/static/icon-192.png`), since each publishes only its own directory. `tests/test_favicon_mirrors.py` fails if a copy drifts from the source, with a mutation proof. The service worker cache moves to `classroom-token-hub-v13` so installed apps pick up the new icon. A tab icon is browser chrome, not the on-page brand mark, so `SPEC-DES-001` §IX is unchanged.

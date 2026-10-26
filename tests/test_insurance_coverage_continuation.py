@@ -222,7 +222,7 @@ def test_grouped_tier_edit_continues_despite_the_group_exclusion(world):
     w = world(tier_group="Cover Plans", tier_level=1)
     w.fund(PURCHASE - timedelta(hours=1), Decimal("40.00"))
     w.buy()
-    successor = _edit(w, tier_group="Cover Plans", tier_level=1, premium="11.00")
+    successor = _edit(w, tier_group_id=defs.get_insurance_definition(w.policy_uuid, class_id=w.class_id).tier_group_id, tier_level=1, premium="11.00")
     w.renew(PREVIEW_2)
     assert _grants(w)[1].payload["policy_uuid"] == successor
 
