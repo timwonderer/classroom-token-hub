@@ -51,6 +51,15 @@ _VALID_ACCRUAL_FREQS = ('daily', 'weekly', 'monthly')
 _VALID_PAYOUT_FREQS = ('weekly', 'monthly')
 
 
+def validate_banking_schedule(values):
+    calculation = values.get("interest_calculation_type")
+    cadence = values.get("compound_frequency")
+    if calculation == "compound" and cadence not in ("daily", "weekly", "monthly"):
+        raise ValueError("Compound interest requires a daily, weekly, or monthly cadence")
+    if calculation == "simple" and cadence not in (None, "never"):
+        raise ValueError("Simple interest cannot have a compounding cadence")
+
+
 def _validate_engine_field(field_name: str, value):
     """Validate a single EconomicEngine field update. Returns (ok, error_message)."""
     if field_name == 'economy_policy_mode':
@@ -372,6 +381,12 @@ def evolve_economic_engine(
         for field_name in _CARRY_FORWARD_FIELDS
     }
     carried_fields.update(updates)
+    if {"interest_calculation_type", "compound_frequency"} & updates.keys():
+        try:
+            validate_banking_schedule(carried_fields)
+        except ValueError as exc:
+            return EconomicEngineEvolutionResult(success=False, correlation_id=corr_id,
+                error_code="INVALID_UPDATES", error_message=str(exc))
 
     new_engine = EconomicEngine(
         economic_version_id=new_engine_id,

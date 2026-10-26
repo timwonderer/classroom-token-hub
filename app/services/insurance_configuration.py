@@ -321,6 +321,10 @@ def submit_insurance_definition(*, class_id, submission, actor_seat_id, availabi
         if predecessor is None:
             raise defs.InsuranceDefinitionNotFound(supersedes_policy_uuid)
         definition["supersedes_policy_uuid"] = predecessor.policy_uuid
+        if predecessor.tier_group_id:
+            if definition.get("tier_group_id") not in (None, predecessor.tier_group_id):
+                raise InsuranceContractViolation("Editing a member must preserve its tier group")
+            definition["tier_group_id"] = predecessor.tier_group_id
     group_id = definition.get("tier_group_id")
     if group_id:
         group = db.session.get(InsuranceTierGroup, (class_id, group_id))

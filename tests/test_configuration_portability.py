@@ -444,3 +444,59 @@ def test_future_rent_anchor_does_not_hide_invalid_recurrence(app):
         transfer._preview_timing(context, {"rent": {
             "first_rent_due_date": datetime(2035, 1, 1, tzinfo=timezone.utc),
             "frequency_type": "invalid", "due_day_of_month": 1}})
+
+
+def test_session_expires_while_waiting_for_class_lock(app, monkeypatch):
+    from threading import Event
+    from sqlalchemy import text, event
+    from flask import session
+    from datetime import timedelta
+    from app.auth import SESSION_TIMEOUT_MINUTES
+    import time
+    context, nonce = setup_transfer(app)
+    raw, token = prepare(context, nonce)
+    transfer.confirm_import(context, nonce, raw, token)
+    before = transfer.identity.now()
+    db.session.remove()
+    waiting, backend = Event(), []
+    engine = db.engine
+    def observe(conn, cursor, statement, parameters, execution_context, executemany):
+        if "FROM classes" in statement and "FOR UPDATE" in statement:
+            backend.append(conn.connection.driver_connection.get_backend_pid())
+            waiting.set()
+    event.listen(engine, "before_cursor_execute", observe)
+    try:
+        with engine.connect() as lock:
+            transaction = lock.begin()
+            lock.execute(text("SELECT class_id FROM classes WHERE class_id=:id FOR UPDATE"), {"id": context.class_id})
+            def execute():
+                with app.test_request_context("/admin/configuration/", method="POST"):
+                    session["last_activity"] = before.isoformat()
+                    return transfer.confirm_import(context, nonce, raw, token)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(execute)
+                assert waiting.wait(10)
+                deadline = time.monotonic() + 10
+                while not lock.execute(text("SELECT cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": backend[-1]}).scalar():
+                    assert time.monotonic() < deadline
+                    time.sleep(.01)
+                monkeypatch.setattr(transfer.identity, "now", lambda: before + timedelta(minutes=SESSION_TIMEOUT_MINUTES + 1))
+                transaction.commit()
+                with pytest.raises(ConfigurationError, match="session expired"):
+                    future.result(timeout=15)
+    finally:
+        event.remove(engine, "before_cursor_execute", observe)
+
+
+@pytest.mark.parametrize("calculation,cadence", [("compound", "never"), ("compound", None), ("simple", "daily")])
+def test_banking_schedule_rejects_contradictions(app, calculation, cadence):
+    from app.services.configuration_fields import SCHEMAS
+    context, _ = setup_transfer(app)
+    values = {field: None for field in SCHEMAS["banking"]}
+    values.update(interest_rate="0.05", interest_calculation_type=calculation, compound_frequency=cadence)
+    with pytest.raises(ValueError, match="[Cc]ompound"):
+        transfer._validate({"banking": values}, context)
+    values.update(interest_calculation_type=None, compound_frequency=None)
+    decoded = transfer._validate({"banking": values}, context)["banking"]
+    assert decoded["interest_calculation_type"] is None
+    assert decoded["compound_frequency"] is None

@@ -8,7 +8,7 @@ from app.services.configuration_artifact import ConfigurationError, StrictJSON, 
 from app.services.configuration_fields import SCHEMAS, SCHEDULES, project, decode
 from app.services.configuration_policy_inventory import policy_inventory
 from app.services.class_configuration_query_service import get_current_economic_engine, get_class_features
-from app.services.economic_configuration_commands import evolve_economic_engine, _validate_engine_field
+from app.services.economic_configuration_commands import evolve_economic_engine, _validate_engine_field, validate_banking_schedule
 from app.services.insurance_configuration import create_tier_group, submit_insurance_definition, _validate_and_build_definition
 from app.services.store_service import publish_product, _validate_definition
 from app.services.payroll.settings import save_payroll_setting
@@ -22,6 +22,8 @@ FAMILIES = frozenset(SCHEMAS) | {"hall_pass"}
 def execution_authority(context, session_nonce, *, lock):
     user = identity.execution_authority(context, session_nonce, lock=lock)
     classroom = receipts.class_scope(context.class_id, lock=lock)
+    if lock:
+        user = identity.execution_authority(context, session_nonce, lock=False)
     identity.assert_actor_seat(context)
     if classroom is None or classroom.teacher_user_id != user.id:
         raise ConfigurationError("You must own this class to transfer its configuration")
@@ -97,6 +99,8 @@ def _validate(groups, context):
                     valid, message = _validate_engine_field(field, value)
                     if not valid:
                         raise ConfigurationError(message)
+    if "banking" in decoded:
+        validate_banking_schedule(decoded["banking"])
     if count > MAX_ENTRIES:
         raise ConfigurationError("Configuration exceeds the 1,000 entry limit")
     return decoded
