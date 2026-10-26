@@ -36,6 +36,7 @@ from sqlalchemy import event
 FIXTURE_MODULES = (
     "tests.a11y_fixtures.public",
     "tests.a11y_fixtures.admin",
+    "tests.a11y_fixtures.configuration",
     "tests.a11y_fixtures.student",
 )
 

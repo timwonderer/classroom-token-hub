@@ -49,6 +49,7 @@ TABLE_DOMAIN = {
     "class_features": "DOM-CLASS",
     "economic_engine": "DOM-CLASS",
     "feature_settings": "DOM-CLASS",
+    "configuration_import_receipts": "DOM-CLASS",
     # DOM-PROD-001 — productivity and payroll facts
     "attendance_sessions": "DOM-PROD",
     "attendance_interval_invalidation": "DOM-PROD",
@@ -98,6 +99,7 @@ TABLE_DOMAIN = {
     "store_item_visibility": "DOM-POL",
     "store_products": "DOM-POL",
     "insurance_policies": "DOM-POL",
+    "insurance_tier_groups": "DOM-POL",
 }
 
 # INV-ARC-021 §V.7 enumerates these and only these as legal cross-domain
