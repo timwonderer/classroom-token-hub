@@ -215,8 +215,8 @@ never print or commit values.
   transparent re-key.
 - `AUDIT_HMAC_KEY` — audit-lineage key, independent of all other keys.
 - `CONFIGURATION_EXPORT_KEY` — signing key for class configuration files and
-  import confirmations (SPEC-CLASS-001), independent of all other keys. Unset,
-  every export and import is refused. Rotation invalidates every outstanding
+  import confirmations (SPEC-CLASS-001), independent of all other keys. If it is
+  missing or blank, every export and import is refused. Rotation invalidates every outstanding
   configuration file and confirmation.
 - `DATABASE_URL` — the new v2 database only.
 - `FLASK_ENV=production`, and `FLASK_APP` where CLI operations require it.
@@ -486,7 +486,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
-| 2.12 | 2026-10-26 | §VI secrets: add `CONFIGURATION_EXPORT_KEY`, required by class configuration export/import (SPEC-CLASS-001). Without it the page loads but every transfer is refused, which the browser check before release found. |
+| 2.12 | 2026-10-26 | §VI secrets: add `CONFIGURATION_EXPORT_KEY`, required by class configuration export/import (SPEC-CLASS-001). If it is missing or blank, the page loads but every transfer is refused, which the browser check before release found. |
 | 2.11 | 2026-10-23 | §VI Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23. |
 | 2.10 | 2026-10-22 | §XI's checklist is extracted into two templates with separate mechanisms: `SOP-DEP-001A` (initial deployment: every item evidenced before the gate opens) and `SOP-DEP-001B` (release: scope from the diff, covering directly changed, connected and known-problem features; out-of-scope features need no row). Both allow results recorded after the checks from contemporaneous evidence. §XI.A stays here. §XIII, §XV and §XVI cite the templates; §XIII drops the before-go/no-go ordering for known risks. Owner rulings, 2026-10-22 (v2.3.0). |
 | 2.9 | 2026-10-16 | §XI: one result set for every line (*evidenced*, *in part*, *failed*, *blocked*, *not exercised*), replacing pass/fail/blocked; a line is evidenced when the exercised features ran through it and behaved as asserted; a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |

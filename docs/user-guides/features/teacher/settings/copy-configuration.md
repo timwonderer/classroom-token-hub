@@ -49,7 +49,7 @@ The file works for **five days**, and only in classes you own. Each new export r
 - Store items linked to rent do not carry the rent link. Link them again in this class's Store.
 - Purchases, bills, coverage, and other activity that already happened keep their original terms.
 
-You can change anything you imported afterwards through the usual settings pages.
+You can change anything you imported afterward through the usual settings pages.
 
 ## Common issues
 

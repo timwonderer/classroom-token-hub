@@ -534,7 +534,7 @@ def test_transfer_displays_class_time_without_changing_receipt_instants(app):
 
 
 def test_preview_values_read_as_teachers_set_them():
-    from app.services.configuration_display import family_labels, preview_sections
+    from app.services.configuration_display import preview_sections
     payroll = {"pay_rate": "1.75000000", "overtime_threshold": None, "overtime_threshold_unit": None,
         "max_time_per_day": "90.0", "max_time_per_day_unit": "minutes", "pay_schedule_type": "biweekly",
         "first_pay_date": "2026-11-09"}
@@ -543,9 +543,14 @@ def test_preview_values_read_as_teachers_set_them():
     assert list(rows) == ["Pay rate", "Overtime after", "Maximum paid time per day", "Pay schedule", "First payday"]
     assert rows == {"Pay rate": "$105.00 per hour", "Overtime after": "Not set",
         "Maximum paid time per day": "90 minutes", "Pay schedule": "Bi-weekly", "First payday": "November 9, 2026"}
-    hall = preview_sections({"hall_pass": {"max_queue_limit": 3,
-        "pass_type_payload": [{"pass_name": "Bathroom", "max_queue": 2, "consume_pass": True}]}})[0]
-    assert section["title"] == "Payroll" and hall["title"] == "Hall passes"
+    assert section["title"] == "Payroll"
+
+
+def test_preview_describes_hall_pass_limits_as_passes_out():
+    from app.services.configuration_display import family_labels, preview_sections
+    [hall] = preview_sections({"hall_pass": {"max_queue_limit": 3,
+        "pass_type_payload": [{"pass_name": "Bathroom", "max_queue": 2, "consume_pass": True}]}})
+    assert hall["title"] == "Hall passes"
     assert hall["blocks"][0]["rows"] == [{"label": "Out limit", "value": "3"},
         {"label": "Bathroom", "value": "Up to 2 out at once · uses a pass"}]
     assert family_labels(["hall_pass", "store"]) == ["Hall passes", "Store"]
