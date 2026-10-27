@@ -183,7 +183,9 @@
                         <a href="{{ url_for('admin.customizations') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'customizations' %}active{% endif %}" {% if current_page == 'customizations' %}aria-current="page"{% endif %}>
                             <span class="material-symbols-outlined" aria-hidden="true">style</span> Customizations
                         </a>
-                        <a href="{{ url_for('configuration.settings') }}" class="nav-link nav-sub-link {% if current_page == 'configuration_transfer' %}active{% endif %}" {% if current_page == 'configuration_transfer' %}aria-current="page"{% endif %}>Copy Configuration</a>
+                        <a href="{{ url_for('configuration.settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'configuration_transfer' %}active{% endif %}" {% if current_page == 'configuration_transfer' %}aria-current="page"{% endif %}>
+                            <span class="material-symbols-outlined" aria-hidden="true">content_copy</span> Copy Configuration
+                        </a>
                         <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}" {% if current_page == 'feature_settings' %}aria-current="page"{% endif %}>
                             <span class="material-symbols-outlined" aria-hidden="true">tune</span> Economy Features
                         </a>
@@ -280,6 +282,7 @@
                 'add_class': 'user-guides/features/teacher/classroom/class-setup',
                 'settings': 'user-guides/features/teacher/settings',
                 'customizations': 'user-guides/features/teacher/settings/customizations',
+                'configuration_transfer': 'user-guides/features/teacher/settings/copy-configuration',
                 'feature_settings': 'user-guides/features/teacher/settings/economy-features',
                 'feature_disabled': 'user-guides/features/teacher/settings/economy-features',
                 'passkey_settings': 'user-guides/features/teacher/settings/passkey',

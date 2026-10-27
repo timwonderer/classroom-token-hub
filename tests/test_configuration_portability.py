@@ -8,6 +8,7 @@ from tests.helpers import temporal
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats import configuration_portability as transfer
+from app.utils.temporal_display import format_timestamp
 from app.models import User, ConfigurationImportReceipt, StoreProduct
 from app.services.configuration_artifact import ConfigurationError, sign, verify, StrictJSON
 from app.services.context_resolver import CanonicalContext
@@ -518,14 +519,31 @@ def test_transfer_displays_class_time_without_changing_receipt_instants(app):
         raw = transfer.export_configuration(context, nonce, {"payroll": True})
         preview = transfer.preview_import(context, nonce, raw)
         envelope = verify(raw, "export")
-        assert preview["expires_at"] == "2030-01-20T09:00:00-08:00"
+        assert preview["expires_at"] == "Jan 20, 2030, 9:00 AM PST"
         assert verify(preview["token"], "confirmation")["expires_at"] == envelope["expires_at"]
         result = transfer.confirm_import(context, nonce, raw, preview["token"])
         stored = ConfigurationImportReceipt.query.filter_by(class_id=context.class_id,
             operation_id=result["operation_id"]).one()
         view = transfer.import_result_view(context, result)
-        assert view["payroll_effective_display"].endswith("-08:00")
-        assert transfer.identity.instant(view["payroll_effective_display"]) == transfer.identity.instant(result["payroll_effective_at"])
+        assert view["payroll_effective_display"] == format_timestamp(context, transfer.identity.instant(result["payroll_effective_at"]))
+        assert view["payroll_effective_display"].endswith(" PST")
         assert stored.result == result
         assert "payroll_effective_display" not in stored.result
+        assert transfer.family_labels(["hall_pass", "store"]) == ["Hall passes", "Store"]
         assert transfer.confirm_import(context, nonce, raw, preview["token"]) == result
+
+
+def test_preview_values_read_as_teachers_set_them():
+    from app.services.configuration_display import preview_sections
+    payroll = {"pay_rate": "1.75000000", "overtime_threshold": None, "overtime_threshold_unit": None,
+        "max_time_per_day": "90.0", "max_time_per_day_unit": "minutes", "pay_schedule_type": "biweekly",
+        "first_pay_date": "2026-11-09"}
+    [section] = preview_sections({"payroll": payroll})
+    rows = {row["label"]: row["value"] for row in section["blocks"][0]["rows"]}
+    assert list(rows) == ["Pay rate", "Overtime after", "Maximum paid time per day", "Pay schedule", "First payday"]
+    assert rows == {"Pay rate": "$105.00 per hour", "Overtime after": "Not set",
+        "Maximum paid time per day": "90 minutes", "Pay schedule": "Bi-weekly", "First payday": "November 9, 2026"}
+    hall = preview_sections({"hall_pass": {"max_queue_limit": 3,
+        "pass_type_payload": [{"pass_name": "Bathroom", "max_queue": 2, "consume_pass": True}]}})[0]
+    assert section["title"] == "Payroll" and hall["title"] == "Hall passes"
+    assert hall["blocks"][0]["rows"][1] == {"label": "Bathroom", "value": "Up to 2 waiting · uses a pass"}
