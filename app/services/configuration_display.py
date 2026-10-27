@@ -43,6 +43,8 @@ VALUE_LABELS = {"biweekly": "Bi-weekly"}
 MONEY = {"flat_overdraft_fee", "rent_amount", "late_penalty_amount", "price", "premium"}
 PERCENT = {"reimbursement_percentage", "bulk_discount_percentage"}
 DATES = {"first_pay_date", "first_rent_due_date", "activation_at", "auto_delist_date", "collective_goal_expires_at"}
+# Teacher-authored text, shown exactly as written.
+VERBATIM = {"description", "redemption_prompt", "tier_name", "marketing_badge"}
 # Shown inside another row's value, never as their own row.
 FOLDED = {"overtime_threshold_unit", "max_time_per_day_unit", "custom_frequency_unit", "bulk_discount_quantity",
     "name", "title"}
@@ -77,15 +79,19 @@ def value_text(field, value, row):
         return f"{_plural(value, 'hour')} per week"
     if field == "interest_rate":
         return f"{_number(Decimal(value) * 100)}% per year"
-    if field in ("overtime_threshold", "max_time_per_day"):
-        return _plural(value, row.get(field + "_unit") or "minute")
+    if field in ("overtime_threshold", "max_time_per_day"):  # payroll reads a missing unit as hours
+        return _plural(value, row.get(field + "_unit") or "hours")
     if field == "custom_frequency_value":
         return _plural(value, row.get("custom_frequency_unit") or "day")
     if field == "progressive_overdraft_fee":
-        return ", ".join(f"Tier {key[-1]}: {_money(amount)}" for key, amount in sorted(value.items()))
+        # percent of CWI per overdraft in the fee period (ledger_resolution_service._fee_amount)
+        names = {"tier_1": "1st overdraft", "tier_2": "2nd", "tier_3": "3rd and later"}
+        return ", ".join(f"{names[key]}: {_number(amount)}% of CWI" for key, amount in sorted(value.items()))
     if field == "bulk_discount_percentage":
         quantity = row.get("bulk_discount_quantity")
         return f"{_number(value)}% off" + (f" when buying {quantity} or more" if quantity else "")
+    if field in VERBATIM:
+        return value
     if field in MONEY:
         return _money(value)
     if field in PERCENT:
@@ -105,6 +111,10 @@ def rows(values, family):
         for field in sorted(values, key=lambda f: order.index(f) if f in order else len(order)) if field not in FOLDED]
 
 
+def family_labels(families):
+    return [FAMILY_LABELS.get(family, family) for family in families]
+
+
 def preview_sections(groups):
     """One section per family; store items, insurance policies and hall passes get one block each."""
     sections = []
@@ -116,9 +126,9 @@ def preview_sections(groups):
                 "rows": rows(policy, family)} for group in values for policy in group["policies"]]
         elif family == "hall_pass":
             passes = [{"label": item["pass_name"],
-                "value": f"Up to {item['max_queue']} waiting · " + ("uses a pass" if item["consume_pass"] else "free")}
+                "value": f"Up to {item['max_queue']} out at once · " + ("uses a pass" if item["consume_pass"] else "free")}
                 for item in values["pass_type_payload"]]
-            blocks = [{"heading": None, "rows": [{"label": "Waiting list limit", "value": value_text("max_queue_limit", values["max_queue_limit"], values)}] + passes}]
+            blocks = [{"heading": None, "rows": [{"label": "Out limit", "value": value_text("max_queue_limit", values["max_queue_limit"], values)}] + passes}]
         else:
             blocks = [{"heading": None, "rows": rows(values, family)}]
         sections.append({"title": FAMILY_LABELS.get(family, family), "icon": FAMILY_ICONS.get(family, "settings"), "blocks": blocks})

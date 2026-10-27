@@ -7,7 +7,6 @@ from app.services import configuration_identity as identity, configuration_recei
 from app.services.configuration_artifact import ConfigurationError, StrictJSON, sign, verify, digest, instant, MAX_ENTRIES
 from app.services.configuration_fields import SCHEMAS, SCHEDULES, project, decode
 from app.services.configuration_policy_inventory import policy_inventory
-from app.services.configuration_display import FAMILY_LABELS, preview_sections
 from app.services.class_configuration_query_service import get_current_economic_engine, get_class_features
 from app.services.economic_configuration_commands import evolve_economic_engine, _validate_engine_field, validate_banking_schedule
 from app.services.insurance_configuration import create_tier_group, submit_insurance_definition, _validate_and_build_definition
@@ -239,13 +238,8 @@ def local_timestamp(context, timestamp):
     return format_timestamp(context, timestamp)
 
 
-def family_labels(families):
-    return [FAMILY_LABELS.get(family, family) for family in families]
-
-
 def import_result_view(context, result):
     view = dict(result)
-    view["skipped_labels"] = family_labels(result.get("skipped") or [])
     if result.get("payroll_effective_at"):
         view["payroll_effective_display"] = local_timestamp(context, instant(result["payroll_effective_at"]))
     return view
@@ -312,7 +306,7 @@ def preview_import(context, session_nonce, raw, selection=None, schedules=None):
         "digest": digest(raw), "reference": envelope["reference"], "expires_at": envelope["expires_at"],
         "selection": selection, "schedules": schedules or {}, "state": state}
     return {"token": sign(token, "confirmation").decode("utf-8"), "groups": groups,
-        "skipped": skipped, "skipped_labels": family_labels(skipped), "sections": preview_sections(groups), "timing": timing, "timezone": classroom.class_timezone, "expires_at": local_timestamp(context, instant(envelope["expires_at"]))}
+        "skipped": skipped, "timing": timing, "timezone": classroom.class_timezone, "expires_at": local_timestamp(context, instant(envelope["expires_at"]))}
 
 
 def confirm_import(context, session_nonce, raw, confirmation):

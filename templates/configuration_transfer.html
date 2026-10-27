@@ -82,34 +82,34 @@
 <p class="mb-3">Copy this class’s settings into another class you own. Export a file here, then switch to the other class and import it. Files expire after five days, and a new export replaces your previous one.</p>
 
 {% if stage == 'done' %}
-{% call cards.alert_card('success', 'Import complete', icon='check_circle', role='status', body_class='mb-3') %}
+{% call cards.alert_card('success', 'Import complete', icon='check_circle', role='status', body_class='mb-3', heading_tag='h2') %}
 <p class="mb-2">The selected settings are now in this class. Activity that already happened keeps its original terms.</p>
 {% if result.payroll_effective_at %}<p class="mb-2">New payroll settings take effect {{ result.payroll_effective_display }}.</p>{% endif %}
-{% if result.skipped %}<p class="mb-2">Skipped because these features are off in this class: {{ result.skipped_labels | join(', ') }}.</p>{% endif %}
+{% if result.skipped %}<p class="mb-2">Skipped because these features are off in this class: {{ skipped_labels | join(', ') }}.</p>{% endif %}
 <a href="{{ url_for('configuration.settings') }}" class="btn btn-primary">Back to Copy Configuration</a>
 {% endcall %}
 
 {% elif stage == 'confirm' %}
-{% call cards.top_card('Review the import', icon='fact_check', body_class='mb-4') %}
+{% call cards.top_card('Review the import', icon='fact_check', body_class='mb-4', heading_tag='h2') %}
 <div class="card-body">
   <p class="mb-3">Dates use this class’s time zone ({{ preview.timezone }}). You can change anything afterwards through the usual settings. Confirm before {{ preview.expires_at }}.</p>
   {% if preview.skipped %}
   {% call cards.alert_card('warning', 'Some settings will be skipped', icon='warning', body_class='mb-3') %}
-  <p class="mb-0">These features are off in this class, so their settings will not be imported: {{ preview.skipped_labels | join(', ') }}.</p>
+  <p class="mb-0">These features are off in this class, so their settings will not be imported: {{ skipped_labels | join(', ') }}.</p>
   {% endcall %}
   {% endif %}
-  {% for section in preview.sections %}
-  {% call cards.nested_card(section.title, icon=section.icon, body_class='mb-3') %}
+  {% for section in sections %}
+  {% call cards.nested_card(section.title, icon=section.icon, body_class='mb-3', heading_tag='h3') %}
   <div class="card-body">
     {% for block in section.blocks %}
-    {% if block.heading %}<h3 class="fs-6 fw-semibold{% if not loop.first %} mt-4{% endif %}">{{ block.heading }}</h3>{% endif %}
+    {% if block.heading %}<h4 class="fs-6 fw-semibold{% if not loop.first %} mt-4{% endif %}">{{ block.heading }}</h4>{% endif %}
     {{ value_table(block.rows) }}
     {% endfor %}
   </div>
   {% endcall %}
   {% endfor %}
   {% if preview.timing %}
-  {% call cards.nested_card('When changes take effect', icon='event', body_class='mb-3') %}
+  {% call cards.nested_card('When changes take effect', icon='event', body_class='mb-3', heading_tag='h3') %}
   <div class="card-body">
     <table class="table table-sm mb-0"><tbody>
       {% for label, value in preview.timing.items() %}<tr><th scope="row" class="fw-normal w-50">{{ label }}</th><td>{{ value }}</td></tr>{% endfor %}
@@ -130,7 +130,7 @@
 {% endcall %}
 
 {% elif stage == 'choose' %}
-{% call cards.top_card('Choose what to import', icon='checklist', body_class='mb-4') %}
+{% call cards.top_card('Choose what to import', icon='checklist', body_class='mb-4', heading_tag='h2') %}
 <form method="post">
   <div class="card-body">
     {% if form.csrf_token is defined %}{{ form.csrf_token(id="selection_csrf_token") }}{% endif %}
@@ -146,12 +146,12 @@
 {% endcall %}
 
 {% else %}
-{% call cards.alert_card('info', 'Rent links stay behind', icon='info', body_class='mb-4') %}
+{% call cards.alert_card('info', 'Rent links stay behind', icon='info', body_class='mb-4', heading_tag='h2') %}
 <p class="mb-0">Store items linked to rent are not exported. Link items to rent again in the other class’s Store.</p>
 {% endcall %}
 <div class="row g-4">
   <div class="col-lg-6">
-    {% call cards.top_card('Export this class', icon='download', body_class='h-100') %}
+    {% call cards.top_card('Export this class', icon='download', body_class='h-100', heading_tag='h2') %}
     <form method="post" class="d-flex flex-column h-100">
       <div class="card-body">
         {% if form.csrf_token is defined %}{{ form.csrf_token(id="selection_csrf_token") }}{% endif %}
@@ -167,7 +167,7 @@
     {% endcall %}
   </div>
   <div class="col-lg-6">
-    {% call cards.top_card('Import into this class', icon='upload', body_class='h-100') %}
+    {% call cards.top_card('Import into this class', icon='upload', body_class='h-100', heading_tag='h2') %}
     <form method="post" enctype="multipart/form-data" class="d-flex flex-column h-100">
       <div class="card-body">
         {% if form.csrf_token is defined %}{{ form.csrf_token(id="upload_csrf_token") }}{% endif %}
