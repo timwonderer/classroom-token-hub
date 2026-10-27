@@ -5694,6 +5694,7 @@ def _insurance_definition_view(row):
         tier_level=row.tier_level,
         tier_name=row.tier_name,
         tier_group=row.tier_group,
+        tier_group_id=row.tier_group_id,
         availability_state=row.availability_state,
     )
 
@@ -5715,9 +5716,10 @@ def _insurance_submission_from_form(form):
     # A "__new__" selection carries the name in ``tier_group_new``. When the policy
     # is not tiered (the toggle is off), the group + rank fields are submitted blank
     # so FEAT-CLASS-003 treats it as an ungrouped ("single") offering.
-    tier_group = _v("tier_group")
-    if tier_group == "__new__":
-        tier_group = _v("tier_group_new")
+    tier_group_id = _v("tier_group_id")
+    tier_group = _v("tier_group_new") if tier_group_id == "__new__" else None
+    if tier_group_id == "__new__":
+        tier_group_id = None
 
     return {
         "insurance_type": _v("insurance_type"),
@@ -5741,6 +5743,7 @@ def _insurance_submission_from_form(form):
         "tier_level": _v("tier_level"),
         "tier_name": _v("tier_name"),
         "tier_group": tier_group,
+        "tier_group_id": tier_group_id,
         "title": _v("title"),
         "description": _v("description"),
         "marketing_badge": _v("marketing_badge"),
@@ -5769,6 +5772,7 @@ def _insurance_submission_from_row(row):
         "tier_level": row.tier_level,
         "tier_name": row.tier_name,
         "tier_group": row.tier_group,
+        "tier_group_id": row.tier_group_id,
         "title": row.title,
         "description": row.description,
         "marketing_badge": row.marketing_badge,
@@ -5785,17 +5789,17 @@ def _existing_tier_groups(class_id):
     rows = insurance_defs.list_insurance_definitions(
         class_id=class_id, availability_states=[insurance_defs.IN_USE],
     )
-    groups: dict[str, set] = {}
-    for r in rows:
-        if not r.tier_group:
+    groups = {}
+    for row in rows:
+        if not row.tier_group_id:
             continue
-        taken = groups.setdefault(r.tier_group, set())
-        if r.tier_level in (1, 2, 3):
-            taken.add(r.tier_level)
-    return [
-        {"name": name, "taken": sorted(taken)}
-        for name, taken in sorted(groups.items())
-    ]
+        group = groups.setdefault(row.tier_group_id, {
+            "id": row.tier_group_id, "name": row.tier_group, "taken": [],
+        })
+        if row.tier_level in (1, 2, 3):
+            group["taken"].append(row.tier_level)
+    return sorted(groups.values(), key=lambda group: (group["name"], group["id"]))
+
 
 
 @admin_bp.route('/insurance', methods=['GET'])

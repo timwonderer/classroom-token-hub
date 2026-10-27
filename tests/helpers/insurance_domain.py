@@ -101,3 +101,16 @@ def establish_paid_premium_lineage(
             return cycles
         cycle_start = cycle_end
         n += 1
+
+
+def provision_tier_group(class_id, key):
+    """Stable explicit test identity; labels are never queried for membership."""
+    from uuid import uuid5, NAMESPACE_URL
+    from app.extensions import db
+    from app.models import InsuranceTierGroup
+    from app.feats.base import FEATContext
+    group_id = str(uuid5(NAMESPACE_URL, class_id + key))
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"group:{uuid4()}"):
+        if db.session.get(InsuranceTierGroup, (class_id, group_id)) is None:
+            db.session.add(InsuranceTierGroup(class_id=class_id, group_id=group_id, name=key))
+    return group_id

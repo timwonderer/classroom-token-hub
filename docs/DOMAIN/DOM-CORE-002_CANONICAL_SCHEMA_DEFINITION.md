@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.17    | 2026-10-09     | 1.16       | Constitutional |
+| DOM-CORE-002 | 1.18 | 2026-10-25 | 1.17 | Constitutional |
 
 ---
 
@@ -377,6 +377,70 @@ Only the tables defined in this document are valid within the V2 system.
 No additional tables may be introduced without amendment to this document.
 
 ---
+
+## Configuration portability (owner ruling 2026-10-25)
+
+Class Configuration owns the class-scoped `configuration_import_receipts` execution
+records: `(class_id, operation_id)` primary key, actor Seat, request fingerprint,
+expiry, accepted timestamp and minimal result. Class deletion cascades receipts.
+Receipts contain no uploaded file, product definitions or principal references.
+They expire with the export and may be deleted by an explicit, logged cleanup command;
+this does not delete audit evidence. Expired confirmation authority is always rejected,
+including after cleanup. Receipts are not audit records or permanent import history.
+
+FEAT-CLASS-009 issues exports, FEAT-CLASS-010 previews/confirms imports, and
+FEAT-CLASS-011 cleans expired receipts for one class. Each owns one execution boundary
+and composes domain guards/queries/commands, never another FEAT. The referenced
+SPEC-CLASS-001 is incorporated in full. Import neither enables features nor rebalances
+prices. It cannot modify class identity, labels, timezone, membership or past activity.
+
+## Configuration export verification capability (owner ruling 2026-10-25)
+
+Identity owns `users.configuration_export_verifier` (nullable SHA-256 verifier of a
+256-bit random reference) and `configuration_export_expires_at` (nullable UTC).
+Only teacher principals use them. They hold no configuration or source-class identity.
+One reference is current per teacher; issuance replaces it and expires in five days.
+This is verification state, not cross-class economic authority. Export resolves one
+source CanonicalContext; import independently resolves one owned destination context.
+Identity exposes explicit lock, verification and rotation commands. The principal row
+lock is held through the encompassing FEAT commit/rollback. Expiry and the current
+reference are rechecked after waiting, before any receipt lookup. Account deletion
+removes this state. SPEC-CLASS-001 is incorporated for artifact and execution binding.
+
+## Configuration portability and canonical insurance groups
+
+Owner ruling 2026-10-25 incorporates SPEC-CLASS-001. Policies exposes pure portable
+projections and shared definition commands to FEAT-CLASS-009/010 without coordinating
+other domains. FEAT-POL-001 describes the definition contract; it is not an executor
+that other FEATs call. Existing exclusive-writer wording does not forbid these declared
+FEATs from composing the same domain commands.
+
+Hall-pass import replaces the complete definition with a new row and retires the old
+one; selected destinations are not merged. Store/insurance imports create independent
+products and groups with fresh identifiers, never predecessor links to destination
+products. Rent-linked products and source rent-product links are excluded. Destination
+rent-product links survive replacement of the other rent settings.
+
+`insurance_policies.tier_group_id` is a nullable canonical UUID scoped by class_id.
+`tier_group` and `tier_name` are presentation only. Membership and unique active ranks
+use `(class_id, tier_group_id, tier_level)`, never labels. New groups always receive a
+fresh identifier, including same-name groups. Editing a member preserves group identity.
+
+The one-time successor migration groups the existing available definitions by their
+exact stored class/label membership (the pre-cutover contract), creates new UUID groups,
+publishes identical-term successors and retires predecessors from new selection. Old
+definition payloads and operational facts are not rewritten. Existing coverage migrates
+through normal succession at its boundary. Purchase exclusion resolves predecessor
+coverage through explicit successor links to canonical group identity; it never falls
+back to labels. The migration must refuse ambiguous live coverage without a successor
+path rather than invent membership. This is a forward-only cutover, not a dual writer.
+
+
+### Canonical group storage
+
+Policies owns `insurance_tier_groups` with composite primary key `(class_id, group_id)`
+and display `name`. Class deletion cascades groups. Policies reference it through a
+class-scoped composite foreign key. This is group identity, not policy versioning.
 
 ## VIII. Amendment
 

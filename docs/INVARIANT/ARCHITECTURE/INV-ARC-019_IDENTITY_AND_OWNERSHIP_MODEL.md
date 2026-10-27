@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-019      | 1.6     | 2026-09-28     | 1.5 | Constitutional |
+| INV-ARC-019 | 1.7 | 2026-10-25 | 1.6 | Constitutional |
 
 ---
 
@@ -341,6 +341,20 @@ is available.
 - bridge-table retirement order
 
 ---
+
+## Configuration export verification capability (owner ruling 2026-10-25)
+
+Identity owns `users.configuration_export_verifier` (nullable SHA-256 verifier of a
+256-bit random reference) and `configuration_export_expires_at` (nullable UTC).
+Only teacher principals use them. They hold no configuration or source-class identity.
+One reference is current per teacher; issuance replaces it and expires in five days.
+This is verification state, not cross-class economic authority. Export resolves one
+source CanonicalContext; import independently resolves one owned destination context.
+Identity exposes explicit lock, verification and rotation commands. The principal row
+lock is held through the encompassing FEAT commit/rollback. Expiry and the current
+reference are rechecked after waiting, before any receipt lookup. Account deletion
+removes this state. SPEC-CLASS-001 is incorporated for artifact and execution binding.
+
 
 ## XVI. Amendment
 

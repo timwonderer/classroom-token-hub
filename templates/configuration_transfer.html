@@ -1,0 +1,68 @@
+{% extends "layout_admin.html" %}
+{% set current_page = 'configuration_transfer' %}
+{% block page_title %}Copy Class Configuration{% endblock %}
+{% block title %}Copy Class Configuration{% endblock %}
+{% macro show_values(value) %}
+{% if value is mapping %}<dl>{% for key, child in value.items() %}<dt>{{ key | replace('_', ' ') | capitalize }}</dt><dd>{{ show_values(child) }}</dd>{% endfor %}</dl>
+{% elif value is sequence and value is not string %}<ul>{% for child in value %}<li>{{ show_values(child) }}</li>{% endfor %}</ul>
+{% elif value is sameas true %}Yes{% elif value is sameas false %}No{% elif value is none %}Not set{% else %}{{ value }}{% endif %}
+{% endmacro %}
+{% block content %}
+<p>Export this class’s configuration to a file. Open another class you own and upload the file there.</p>
+<p>Files expire after five days. Creating a new export replaces your previous export immediately.</p>
+<div class="alert alert-info">Rent-linked products stay in the origin class. To link an item to rent, do so again using the destination class’s Store.</div>
+{% if stage == 'done' %}
+<div class="alert alert-success" role="status">Import complete.</div>
+{% if result.payroll_effective_at %}<p>Payroll effective date and time: {{ result.payroll_effective_display }}.</p>{% endif %}
+{% if result.skipped %}<p>Skipped because these features are off: {{ result.skipped | join(', ') }}.</p>{% endif %}
+<a href="{{ url_for('configuration.settings') }}" class="btn btn-primary">Back to configuration transfer</a>
+{% elif stage == 'confirm' %}
+<h2>Review this class’s import</h2>
+<p>Calendar dates use <strong>{{ preview.timezone }}</strong>. You can change these dates later through the usual settings.</p>
+<p>This confirmation expires at {{ preview.expires_at }}.</p>
+{% if preview.skipped %}<div class="alert alert-warning">Skipped because these features are off: {{ preview.skipped | join(', ') }}.</div>{% endif %}
+{% for family, values in preview.groups.items() %}
+<details open class="mb-3"><summary class="fw-bold">{{ family | replace('_', ' ') | title }}</summary>
+{{ show_values(values) }}
+</details>{% endfor %}
+<dl>{% for label, value in preview.timing.items() %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+<p>Hall pass settings replace this class’s destinations. Store and insurance imports add new independent offerings. Previously issued activity retains its terms.</p>
+<form method="post">{% if form.csrf_token is defined %}{{ form.csrf_token(id="confirm_csrf_token") }}{% endif %}<input type="hidden" name="action" value="confirm">
+<input type="hidden" name="artifact" value="{{ raw }}"><input type="hidden" name="confirmation" value="{{ preview.token }}">
+<button class="btn btn-primary" type="submit">Confirm import into this class</button>
+<a class="btn btn-secondary" href="{{ url_for('configuration.settings') }}">Cancel</a></form>
+{% else %}
+<h2>{{ 'Choose what to import' if stage == 'choose' else 'Export this class' }}</h2>
+<form method="post">{% if form.csrf_token is defined %}{{ form.csrf_token(id="selection_csrf_token") }}{% endif %}
+<input type="hidden" name="action" value="{{ 'preview' if stage == 'choose' else 'export' }}">
+{% if stage == 'start' %}<input type="hidden" name="inventory_digest" value="{{ inventory_digest }}">{% endif %}
+{% if stage == 'choose' %}<input type="hidden" name="artifact" value="{{ raw }}">{% endif %}
+{% for family, values in groups.items() %}
+<fieldset class="border rounded p-3 mb-3"><legend class="fs-5">
+<label><input type="checkbox" name="include_{{ family }}" value="yes" checked> {{ family | replace('_', ' ') | title }}</label></legend>
+{% if family in entries %}{% for label in entries[family] %}<div><label><input type="checkbox" name="entry_{{ family }}" value="{{ loop.index0 }}" checked> {{ label }}</label></div>{% endfor %}{% endif %}
+{% if stage == 'choose' and family in schedules %}
+<label class="form-label mt-2" for="schedule_{{ family }}">Schedule</label>
+<select class="form-select" name="schedule_{{ family }}" id="schedule_{{ family }}">
+<option value="exported">Use origin class’s schedule</option>
+{% if family != 'store' and family in destination %}<option value="destination">Keep destination class’s schedule</option>{% endif %}
+<option value="custom">Enter schedule below</option></select>
+<details class="mt-2"><summary>Dates and schedule for “Enter schedule”</summary>
+{% set rows = values if family == 'store' else [values] %}
+{% for row in rows %}{% set index = loop.index0 %}
+{% if family == 'store' %}<h3 class="fs-6 mt-2">{{ row.name }}</h3>{% endif %}
+{% for field in schedules[family] %}
+{% set input_name = 'custom_' ~ family ~ '_' ~ (index ~ '_' if family == 'store' else '') ~ field %}
+<label class="form-label" for="{{ input_name }}">{{ field | replace('_', ' ') | capitalize }}</label>
+<input class="form-control mb-2" id="{{ input_name }}" name="{{ input_name }}" value="{{ row[field] if row[field] is not none else '' }}" type="{{ 'date' if schemas[family][field] in ['date','end_date'] else 'number' if schemas[family][field] == 'int' else 'text' }}">
+{% endfor %}{% endfor %}</details>
+{% endif %}</fieldset>{% endfor %}
+<button type="submit" class="btn btn-primary">{{ 'Preview import' if stage == 'choose' else 'Download configuration' }}</button></form>
+{% if stage == 'start' %}
+<h2 class="mt-4">Import into this class</h2>
+<form method="post" enctype="multipart/form-data">{% if form.csrf_token is defined %}{{ form.csrf_token(id="upload_csrf_token") }}{% endif %}<input type="hidden" name="action" value="upload">
+<label for="configuration" class="form-label">Configuration file (up to 1 MiB)</label>
+<input class="form-control mb-2" type="file" name="configuration" id="configuration" accept=".cthconfig" required>
+<button type="submit" class="btn btn-primary">Upload and choose configuration</button></form>
+{% endif %}{% endif %}
+{% endblock %}

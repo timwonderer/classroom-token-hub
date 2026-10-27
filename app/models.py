@@ -163,6 +163,9 @@ class User(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now, nullable=False)
 
+    configuration_export_verifier = db.Column(db.String(64), nullable=True)
+    configuration_export_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     # Hall pass public verification token (256-bit, capability-based, rotatable)
     # Used for /verify/hallpass/<token> and not derived from teacher authority
     hall_pass_verify_token = db.Column(db.String(64), unique=True, nullable=True, index=True)
@@ -2816,6 +2819,26 @@ class FeatureSettings(db.Model):
 # replaces ``is_retired``.
 
 
+class InsuranceTierGroup(db.Model):
+    """POL-owned identity; names never determine membership (INV-ARC-014)."""
+    __tablename__ = 'insurance_tier_groups'
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), primary_key=True)
+    group_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(60), nullable=False)
+
+
+class ConfigurationImportReceipt(db.Model):
+    """Temporary class-owned request deduplication, never permanent audit history."""
+    __tablename__ = 'configuration_import_receipts'
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), primary_key=True)
+    operation_id = db.Column(db.String(36), primary_key=True)
+    actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False)
+    fingerprint = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    accepted_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    result = db.Column(db.JSON, nullable=False)
+
+
 class InsurancePolicy(db.Model):
     """Immutable insurance policy definition-of-record — STOR-owned, POL-managed.
 
@@ -2877,6 +2900,7 @@ class InsurancePolicy(db.Model):
     description = db.Column(db.Text, nullable=True)
     tier_name = db.Column(db.String(60), nullable=True)
     tier_group = db.Column(db.String(60), nullable=True)
+    tier_group_id = db.Column(db.String(36), nullable=True)
     marketing_badge = db.Column(db.String(40), nullable=True)  # key into insurance_policy_service.MARKETING_BADGES
     # The version this row replaces (edit or reactivation), same class; NULL = replaces nothing.
     # Set at creation, never changed (DOM-POL-001A §D). Decides where holders continue.
@@ -2961,6 +2985,7 @@ class InsurancePolicy(db.Model):
             ")",
             name='ck_insurance_policies_type_subset',
         ),
+        db.ForeignKeyConstraint(['class_id', 'tier_group_id'], ['insurance_tier_groups.class_id', 'insurance_tier_groups.group_id'], name='fk_insurance_policy_group'),
         db.Index('ix_insurance_policies_class_avail', 'class_id', 'availability_state'),
         # Tier-group backstop: at most one IN_USE policy per (class, group, rank),
         # so a group holds at most three active tiers (basic/mid/premium). Primary
@@ -2969,10 +2994,10 @@ class InsurancePolicy(db.Model):
         # hidden versions are excluded, so editing (mint new + retire old) is free.
         db.Index(
             'uq_insurance_policies_group_rank_in_use',
-            'class_id', 'tier_group', 'tier_level',
+            'class_id', 'tier_group_id', 'tier_level',
             unique=True,
             postgresql_where=sa.text(
-                "availability_state = 'IN_USE' AND tier_group IS NOT NULL"
+                "availability_state = 'IN_USE' AND tier_group_id IS NOT NULL"
             ),
         ),
     )

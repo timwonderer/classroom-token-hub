@@ -309,13 +309,15 @@ def test_file_claim_productivity_form_renders_and_submits(app, client):
 
 
 def _make_tier(classroom, group, level, premium="10.00"):
+    from tests.helpers.insurance_domain import provision_tier_group
+    group_id = provision_tier_group(classroom.class_id, group)
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
             insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
-            title=f"{group} {level}", tier_group=group, tier_level=str(level),
+            title=f"{group} {level}", tier_group_id=group_id, tier_level=str(level),
         ),
         canonical_context=_teacher_ctx(classroom),
         correlation_id=f"corr_{uuid4().hex}",

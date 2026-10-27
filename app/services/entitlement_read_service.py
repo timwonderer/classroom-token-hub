@@ -587,21 +587,21 @@ def get_active_insurance_grant(
 def has_active_coverage_in_group(
     seat_id: int,
     class_id: str,
-    tier_group: str,
+    tier_group_id: str,
 ) -> bool:
     """True iff the seat holds active INSURANCE coverage for ANY policy in a group.
 
     Tier groups are mutually exclusive: a seat may hold at most one active coverage
-    per ``tier_group`` (FEAT-CLASS-003 §VIII.3). This scans the seat's active
+    per ``tier_group_id`` (FEAT-CLASS-003 §VIII.3). This scans the seat's active
     (GRANTED, no EXPIRED/REVOKED terminal) insurance grants, resolves each to its
-    policy's ``tier_group``, and reports whether any matches. Ungrouped policies
-    (NULL ``tier_group``) never participate in group exclusion.
+    policy's ``tier_group_id``, and reports whether any matches. Ungrouped policies
+    (NULL ``tier_group_id``) never participate in group exclusion.
 
     Purity: Pure (read-only query).
     """
     from app.models import InsurancePolicy
 
-    if not tier_group:
+    if not tier_group_id:
         return False
 
     granted = (
@@ -618,8 +618,17 @@ def has_active_coverage_in_group(
         policy_uuid = (grant.payload or {}).get("policy_uuid")
         if not policy_uuid:
             continue
-        policy = db.session.get(InsurancePolicy, policy_uuid)
-        if policy is None or policy.tier_group != tier_group:
+        policy = InsurancePolicy.query.filter_by(class_id=class_id, policy_uuid=policy_uuid).one_or_none()
+        # Follow explicit definition succession, including the migration predecessor.
+        seen = set()
+        while policy is not None and policy.tier_group_id != tier_group_id:
+            if policy.policy_uuid in seen:
+                raise ValueError("Cyclic insurance succession")
+            seen.add(policy.policy_uuid)
+            policy = InsurancePolicy.query.filter_by(class_id=class_id,
+                supersedes_policy_uuid=policy.policy_uuid).order_by(
+                    InsurancePolicy.created_at.desc(), InsurancePolicy.policy_uuid.desc()).first()
+        if policy is None or policy.tier_group_id != tier_group_id:
             continue
         terminal = (
             EntitlementEvent.query

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-CLASS-003 | 0.2 | 2026-10-14 | 0.1 | Normative |
+| FEAT-CLASS-003 | 0.3 | 2026-10-25 | 0.2 | Normative |
 
 ## I. Purpose
 
@@ -86,13 +86,13 @@ INV-ARC-000 §VIII.2, INV-ARC-021 §V.2).
 
 A **tier group** is a teacher-named set of mutually-exclusive insurance policies a
 student chooses one of (e.g. a "Paycheck Protection" line offered as Basic / Mid /
-Premium). A group is not its own table: membership is the `tier_group` label carried
+Premium). A group is a class-scoped `insurance_tier_groups` identity: membership is the canonical `tier_group_id` carried
 on each `insurance_policies` row, class-scoped.
 
 ### 1. Ranks
 
 Grouped tiers occupy the three ordinal ranks `tier_level ∈ {1, 2, 3}` = basic / mid /
-premium. An ungrouped ("single") offering carries no `tier_group` (and no group
+premium. An ungrouped ("single") offering carries no `tier_group_id` (and no group
 semantics attach to a bare `tier_level`). A grouped policy MUST carry a rank in
 {1,2,3}; a missing or out-of-range rank fails closed.
 
@@ -107,12 +107,12 @@ re-adding a rank after retiring its prior tier is lawful.
 
 Primary enforcement is this FEAT's create-time guard (reject a duplicate `IN_USE`
 rank in the group, or a fourth active tier). A partial unique index
-`(class_id, tier_group, tier_level) WHERE availability_state = 'IN_USE' AND
-tier_group IS NOT NULL` is the concurrent-create backstop.
+`(class_id, tier_group_id, tier_level) WHERE availability_state = 'IN_USE' AND
+tier_group_id IS NOT NULL` is the concurrent-create backstop.
 
 ### 3. Mutual exclusion at purchase
 
-A seat holds at most one active insurance coverage per `tier_group`. This extends
+A seat holds at most one active insurance coverage per `tier_group_id`. This extends
 FEAT-OBL-004's single-active-coverage invariant from per-`policy_uuid` to
 per-group: purchasing a policy whose group the seat already holds active coverage
 in fails closed. Enforcement lives in FEAT-OBL-004 (the purchase authority), not here.
@@ -141,3 +141,30 @@ This FEAT guarantees:
 
 **0.2 (2026-10-14)** records the successor link on edit and reactivation (owner ruling
 2026-10-14).
+## Configuration portability and canonical insurance groups
+
+Owner ruling 2026-10-25 incorporates SPEC-CLASS-001. Policies exposes pure portable
+projections and shared definition commands to FEAT-CLASS-009/010 without coordinating
+other domains. FEAT-POL-001 describes the definition contract; it is not an executor
+that other FEATs call. Existing exclusive-writer wording does not forbid these declared
+FEATs from composing the same domain commands.
+
+Hall-pass import replaces the complete definition with a new row and retires the old
+one; selected destinations are not merged. Store/insurance imports create independent
+products and groups with fresh identifiers, never predecessor links to destination
+products. Rent-linked products and source rent-product links are excluded. Destination
+rent-product links survive replacement of the other rent settings.
+
+`insurance_policies.tier_group_id` is a nullable canonical UUID scoped by class_id.
+`tier_group` and `tier_name` are presentation only. Membership and unique active ranks
+use `(class_id, tier_group_id, tier_level)`, never labels. New groups always receive a
+fresh identifier, including same-name groups. Editing a member preserves group identity.
+
+The one-time successor migration groups the existing available definitions by their
+exact stored class/label membership (the pre-cutover contract), creates new UUID groups,
+publishes identical-term successors and retires predecessors from new selection. Old
+definition payloads and operational facts are not rewritten. Existing coverage migrates
+through normal succession at its boundary. Purchase exclusion resolves predecessor
+coverage through explicit successor links to canonical group identity; it never falls
+back to labels. The migration must refuse ambiguous live coverage without a successor
+path rather than invent membership. This is a forward-only cutover, not a dual writer.

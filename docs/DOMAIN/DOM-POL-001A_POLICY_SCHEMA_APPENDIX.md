@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001A | 2.4 | 2026-10-14 | 2.3 | Constitutional Appendix |
+| DOM-POL-001A | 2.5 | 2026-10-25 | 2.4 | Constitutional Appendix |
 
 ## I. Purpose
 
@@ -121,16 +121,17 @@ Domain-level persistence notes:
 
 The immutable `insurance_policies` definition rows carry optional tier-group columns:
 
-- `tier_group` (string) — the class-scoped group label; NULL = an ungrouped ("single") offering;
+- `tier_group_id` (UUID) — canonical class-scoped group identity; NULL = an ungrouped offering;
+- `tier_group` (string) — presentation label only;
 - `tier_level` (integer ordinal) — the rank within the group: 1 = basic, 2 = mid, 3 = premium;
 - `tier_name` — presentation label for the group/tier.
 
-A tier group is not a table — it is the shared `tier_group` label across member rows.
+A tier group is identified by `tier_group_id`; `tier_group` is display metadata only.
 Within one group at most one **available (`IN_USE`)** row may occupy each rank, so a
 group holds at most three active tiers. The constraint is scoped to `IN_USE` rows
 because definitions are immutable (an edit mints a new `policy_uuid` and retires the
 prior row); a partial unique index
-`(class_id, tier_group, tier_level) WHERE availability_state = 'IN_USE' AND tier_group
+`(class_id, tier_group_id, tier_level) WHERE availability_state = 'IN_USE' AND tier_group_id
 IS NOT NULL` backstops the FEAT-CLASS-003 command guard. The group-level semantics
 (rank set, three-tier cap, one-active-coverage-per-group at purchase) are specified in
 FEAT-CLASS-003 §VIII.
@@ -207,6 +208,41 @@ The current working boundary is:
 - Class Configuration decides whether a capability exists in the class.
 - Policies defines the class-scoped reference material for that capability.
 - Store and Entitlements and Obligations own the resulting operational facts.
+
+## Configuration portability and canonical insurance groups
+
+Owner ruling 2026-10-25 incorporates SPEC-CLASS-001. Policies exposes pure portable
+projections and shared definition commands to FEAT-CLASS-009/010 without coordinating
+other domains. FEAT-POL-001 describes the definition contract; it is not an executor
+that other FEATs call. Existing exclusive-writer wording does not forbid these declared
+FEATs from composing the same domain commands.
+
+Hall-pass import replaces the complete definition with a new row and retires the old
+one; selected destinations are not merged. Store/insurance imports create independent
+products and groups with fresh identifiers, never predecessor links to destination
+products. Rent-linked products and source rent-product links are excluded. Destination
+rent-product links survive replacement of the other rent settings.
+
+`insurance_policies.tier_group_id` is a nullable canonical UUID scoped by class_id.
+`tier_group` and `tier_name` are presentation only. Membership and unique active ranks
+use `(class_id, tier_group_id, tier_level)`, never labels. New groups always receive a
+fresh identifier, including same-name groups. Editing a member preserves group identity.
+
+The one-time successor migration groups the existing available definitions by their
+exact stored class/label membership (the pre-cutover contract), creates new UUID groups,
+publishes identical-term successors and retires predecessors from new selection. Old
+definition payloads and operational facts are not rewritten. Existing coverage migrates
+through normal succession at its boundary. Purchase exclusion resolves predecessor
+coverage through explicit successor links to canonical group identity; it never falls
+back to labels. The migration must refuse ambiguous live coverage without a successor
+path rather than invent membership. This is a forward-only cutover, not a dual writer.
+
+
+### Canonical group storage
+
+Policies owns `insurance_tier_groups` with composite primary key `(class_id, group_id)`
+and display `name`. Class deletion cascades groups. Policies reference it through a
+class-scoped composite foreign key. This is group identity, not policy versioning.
 
 ## VIII. Amendment
 
