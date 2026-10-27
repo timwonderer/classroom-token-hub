@@ -6,7 +6,7 @@ developer-facing and is published by the separate technical site. The split is
 about who owns the rendering, not about access: the repository is public.
 
 Regression this pins: the boundary used to be read off
-`docs-site/route-map.json`, which lists `user-guides` as migrated, and
+`app/utils/docs_route_map.json`, which once listed `user-guides` as migrated, and
 `get_external_docs_target(None)` returns `""` rather than `None` for the index.
 Together those meant that configuring `EXTERNAL_DOCS_BASE_URL` redirected the
 working in-app help centre — and its index — off the application entirely.

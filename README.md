@@ -123,7 +123,7 @@ Route ──▶ FEAT (app/feats/) ──▶ Domain services (app/services/) ─�
 | --- | --- | --- |
 | Flask application | `app/`, `templates/`, `static/`, `wsgi.py` | Teacher, student and sysadmin surfaces; served by gunicorn behind nginx |
 | Status service | `status_service/`, `status/` | Public status page and an IAP-protected operator console; deployed by `deploy-status.yml` |
-| Developer docs site | `docs-generator-proof/` | Hugo + Hextra build of the documentation tree (the former Docusaurus build in `docs-site/` is kept as a fallback) |
+| Developer docs site | `docs-generator-proof/` | Hugo + Hextra build of the documentation tree |
 | Public site | `github-pages/` | Marketing pages and the public timeline, published by `github-pages.yml` |
 
 The application doesn't serve the marketing site, and the marketing site doesn't serve the application.

@@ -328,18 +328,12 @@ SURFACES = (
          "status_service/static/status.css"),
         ("--bs-",),
     ),
-    Surface(
-        "guide",
-        ("docs-site/src/css/tokens.css",),
-        ("docs-site/src/css/tokens.css", "docs-site/src/css/custom.css"),
-        ("--ifm-", "--docusaurus-", "--doc-sidebar-"),
-    ),
     # The published developer docs (Hugo + Hextra): the public stylesheet and the
     # docs token layer, plus its own sheet mapping Hextra's properties onto them.
     Surface(
         "developer-docs",
-        ("docs-site/src/css/tokens.css", "github-pages/style.css"),
-        ("docs-generator-proof/assets/css/custom.css",),
+        ("docs-generator-proof/brand/css/tokens.css", "github-pages/style.css"),
+        ("docs-generator-proof/brand/css/tokens.css", "docs-generator-proof/assets/css/custom.css"),
         ("--hx-", "--hextra-"),
     ),
 )

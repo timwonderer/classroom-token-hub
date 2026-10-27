@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-DES-001 | 2.5 | 2026-10-24 | `FEAT-DES-001` v1.1 (archived) | Normative |
+| SPEC-DES-001 | 2.6 | 2026-10-26 | `FEAT-DES-001` v1.1 (archived) | Normative |
 
 > Supersedes `docs/archive/v1-docs/FEATURES/DESIGN/FEAT-DES-001_Design_System.md` (archived, non-normative). That document described the v1 token set and carries values that no longer match the implementation; it governs nothing and is retained as history only.
 
@@ -31,7 +31,7 @@ Does not govern:
 
 - page rendering structure, view models, or builder organization — governed by `SPEC-UI-001`
 - accessibility requirements — governed by `INV-ARC-020`, which this document is subordinate to and must not weaken
-- `github-pages/`, `docs-generator-proof/` and `docs-site/` — separately published artifacts. See §XIII.
+- `github-pages/` and `docs-generator-proof/` — separately published artifacts. See §XIII.
 - domain, mutation, or persistence authority
 
 ---
@@ -412,9 +412,9 @@ The token layer conforms when:
 
 ## XIII. Separately Published Artifacts
 
-`github-pages/` and `docs-site/` maintain their own stylesheets and are outside the runtime token layer. They are nonetheless **brand surfaces** and MUST NOT contradict §VI.4.
+`github-pages/` and `docs-generator-proof/` maintain their own stylesheets and are outside the runtime token layer. They are nonetheless **brand surfaces** and MUST NOT contradict §VI.4.
 
-The developer documentation site published at `/docs/` is built from `docs-generator-proof/` with Hugo + Hextra (it replaced the Docusaurus build in `docs-site/` on 2026-10-24). It loads `github-pages/style.css` byte-for-byte as its public stylesheet and `docs-site/src/css/tokens.css` as its token layer, and its own stylesheet, `docs-generator-proof/assets/css/custom.css`, is **subordinate to this specification** on the same terms as `status.css`: every design value in it MUST resolve through a token defined in those two layers, and it MUST NOT introduce a colour. Hextra's own custom properties (`--hx-*`, `--hextra-*`) are framework-owned and are mapped onto project tokens there, never the reverse. `docs-site/` remains a brand surface while it stays in the repository as the fallback build.
+The developer documentation site published at `/docs/` is built from `docs-generator-proof/` with Hugo + Hextra (it replaced the Docusaurus build in `docs-site/` on 2026-10-24, and `docs-site/` was removed on 2026-10-26). It loads `github-pages/style.css` byte-for-byte as its public stylesheet and `docs-generator-proof/brand/css/tokens.css` as its token layer, and its own stylesheet, `docs-generator-proof/assets/css/custom.css`, is **subordinate to this specification** on the same terms as `status.css`: every design value in it MUST resolve through a token defined in those two layers, and it MUST NOT introduce a colour. Hextra's own custom properties (`--hx-*`, `--hextra-*`) are framework-owned and are mapped onto project tokens there, never the reverse.
 
 `github-pages/style.css` carried `--secondary: #d3af37` and `--primary-color: #236960` through v2.1; both were reconciled on 2026-09-19. `status_service/` is served from the same stylesheet: `status_service/static/cth-public.css` is a byte-identical copy of `github-pages/style.css`, and a divergence between them is therefore a diff, not a silent fork. It held one for roughly a day — a copy frozen immediately before the 2026-09-19 fix, which left `.toc a:hover` accessible on one host and at 3.16:1 on the other — and that is the failure mode the byte-identity requirement exists to prevent.
 

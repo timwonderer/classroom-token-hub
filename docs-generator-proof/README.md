@@ -4,8 +4,7 @@ This directory builds the developer documentation published at
 <https://classroomtokenhub.com/docs/> from `docs/`. `.github/workflows/github-pages.yml`
 runs `bootstrap.py`, `build.py` and `check.py` on every change and deploys the result;
 a failing check stops the deploy. It replaced the Docusaurus build in `docs-site/` on
-October 24, 2026; `docs-site/` stays in the repository as a fallback until the Hugo site
-has been confirmed live, and still supplies the brand fonts and token layer.
+October 24, 2026; `docs-site/` was removed on October 26.
 
 [The comparison](COMPARISON.md) and [evidence/](evidence/) record why Hugo was chosen
 over the Zensical prototype. They are history: the Zensical harness that produced them
@@ -57,12 +56,11 @@ browser JavaScript.
 `build.py` owns the publication policy. Only the allowlisted roots in `GROUPS`, the two
 durable `TRACKING` files and the one listed illustration publish; `user-guides`,
 `ops`, `archive`, the rest of `TRACKING`, and anything new outside the allowlist stay
-private. Engineering notes (`docs-site/blog`) are not authorized for publication and
-are not staged. Each document keeps its canonical headings and source-relative links,
+private. Engineering notes are not authorized for publication. Each document keeps its canonical headings and source-relative links,
 gets its GitHub edit link and last-commit date, and the generated catalog and category
 pages label every document with its own `h1`.
 
-Brand: fonts and tokens come from `docs-site/src`; `github-pages/style.css` is copied
+Brand: fonts and the token layer live in `brand/`; `github-pages/style.css` is copied
 byte-for-byte; the hero renders the required `templates/macros/docs_hero.html` macro;
 the footer is generated from `github-pages/learnmore.html` with relative public links
 made absolute and the year filled at build time. Hextra's favicons and web manifest
@@ -91,7 +89,5 @@ assistive-technology review was performed.
 
 - Fix the source heading defects `check.py` reports as warnings, in the documents
   themselves.
-- Once the Hugo site is confirmed live, delete the Docusaurus build in `docs-site/`
-  (moving the fonts and token layer here first) and drop its `SPEC-DES-001` surface.
 - Complete a broader rendered and assistive-technology review; no human
   assistive-technology review has been done.
