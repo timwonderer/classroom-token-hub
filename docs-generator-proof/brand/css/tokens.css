@@ -1,19 +1,20 @@
 /*
  * Design tokens for the developer docs site.
  *
- * SPEC-DES-001 §XIII: docs-site/ is outside the runtime token layer but is a
- * brand surface, and MUST NOT contradict the canonical brand values in §VI.4.
+ * SPEC-DES-001 §XIII: the developer docs site is outside the runtime token
+ * layer but is a brand surface, and MUST NOT contradict the canonical brand
+ * values in §VI.4.
  * Every value below is transcribed from static/css/tokens.css — the base layer
  * plus the Teacher (Advisor Green) theme, which is the default identity and the
  * one a documentation reader has no role to select.
  *
  * This file is the only place in the site where a design value appears as a
- * literal. custom.css maps Infima's variables onto these tokens and states no
- * value of its own (§VI.4, §XII).
+ * literal. assets/css/custom.css maps Hextra's variables onto these tokens and
+ * states no value of its own (§VI.4, §XII).
  *
- * Infima declares its own palette at `:root:not(#\#):not(#\#)` — two id-worth
- * of specificity — so a plain `:root` block here would never win the cascade.
- * The same escape hatch is used to state ours.
+ * The raised `:root:not(#\#)…` specificity outranks the plain `:root` blocks in
+ * Hextra's compiled CSS and in github-pages/style.css, both loaded first, so
+ * these values win wherever the three define the same token.
  */
 
 :root:not(#\#):not(#\#):not(#\#) {

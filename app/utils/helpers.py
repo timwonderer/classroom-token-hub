@@ -26,12 +26,11 @@ import markdown
 import bleach
 
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_DOCS_ROUTE_MAP_PATH = _PROJECT_ROOT / "docs-site" / "route-map.json"
+_DOCS_ROUTE_MAP_PATH = Path(__file__).resolve().parent / "docs_route_map.json"
 
 
 def _load_external_docs_route_map():
-    """Load the public-doc migration map shared with the Docusaurus site."""
+    """Load the map of renamed developer-doc paths the technical site serves."""
     try:
         return json.loads(_DOCS_ROUTE_MAP_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -103,8 +102,8 @@ def get_external_docs_base_url():
 
 # The in-app site owns exactly one tree: docs/user-guides, the help centre for
 # teachers and students. Technical documentation is published separately. This
-# boundary is decided here rather than by docs-site/route-map.json: that map
-# still lists `user-guides` as migrated, and honouring it would redirect the
+# boundary is decided here rather than by docs_route_map.json: that map
+# once listed `user-guides` as migrated, and honouring it would redirect the
 # working in-app help centre off the application the moment an external docs
 # base URL is configured.
 USER_GUIDES_DIR = "user-guides"
@@ -135,7 +134,7 @@ def get_external_docs_target(doc_path=None):
 def docs_url_for(doc_path=None, prefer_external=None):
     """
     Build a docs URL that can target either the in-app Flask docs renderer
-    or the external Docusaurus site during the migration.
+    or the external technical docs site.
     """
     raw_doc_path = (doc_path or "").strip()
     base_path, _, anchor = raw_doc_path.partition("#")
@@ -151,7 +150,7 @@ def docs_url_for(doc_path=None, prefer_external=None):
     if external_target is None and not is_user_guide_doc_path(normalized_doc_path):
         # Unmapped and developer-facing. The technical site publishes the docs/
         # tree at its own repository-relative paths, so the deep link survives
-        # unchanged; route-map.json only has to carry the exceptions, which are
+        # unchanged; docs_route_map.json only has to carry the exceptions, which are
         # the paths that were renamed on the way over.
         external_target = normalized_doc_path
     if prefer_external and external_base and external_target is not None:

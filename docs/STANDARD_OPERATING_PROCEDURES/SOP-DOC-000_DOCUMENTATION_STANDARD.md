@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-000      | 3.6     | 2026-10-24     | SOP-DOC-000 v3.5 | Normative |
+| SOP-DOC-000      | 3.7     | 2026-10-26     | SOP-DOC-000 v3.6 | Normative |
 
 > [!IMPORTANT]
 > **v3.5 (2026-10-14), review correction.** The header and §III labelled this document "Foundational (Tier 0)," but its own §V places `docs/STANDARD_OPERATING_PROCEDURES/` (Prefix `SOP-*`) in Tier 2, and §VI's Directory Taxonomy says so explicitly for this document by name: "plus the documentation SOPs at its root (Tier 2)." This document never carved itself out as an exception to the scheme it defines — it is a `SOP-*` document at that root, and its own rule places it in Tier 2 like any other. Corrected the header and §III to agree with §V/§VI. No change to the tier definitions themselves, the directory taxonomy, or any other document's classification.
@@ -213,7 +213,7 @@ In `app/utils/helpers.py`: `USER_GUIDES_DIR`, `is_user_guide_doc_path()` and
 a link and the route it points at cannot disagree. `tests/dom/docs/test_docs_platform_split.py`
 pins it.
 
-The boundary is **not** read from `docs-site/route-map.json`. That map lists
+The boundary is **not** read from `app/utils/docs_route_map.json`. That map once listed
 `user-guides` as migrated, and honouring it sent the working in-app help centre
 — and its index — off the application as soon as an external docs base URL was
 configured. A migration map may rename a destination; it does not decide
@@ -244,6 +244,10 @@ The following checks enforce this; run them before merging a relocation:
 ---
 
 ## XII. Change Notes
+
+**Version 3.7 (2026-10-26):**
+- §X: the retired Docusaurus workspace `docs-site/` is removed. The route map of renamed
+  developer-doc paths moved to `app/utils/docs_route_map.json`, the application code that reads it.
 
 **Version 3.6 (2026-10-24):**
 - §X: the technical site is built with Hugo + Hextra from `docs-generator-proof/`, replacing the

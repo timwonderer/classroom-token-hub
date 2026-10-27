@@ -1,6 +1,6 @@
 """The public documentation site publishes contracts, not working state.
 
-The Docusaurus site built from `../docs` with an *exclude* list, which failed
+The retired Docusaurus site built from `../docs` with an *exclude* list, which failed
 open: a new file dropped into a directory was published unless someone
 remembered to exclude it. That is how a filled deployment worksheet — one
 production host's state, ticked boxes and all — reached a public site nobody had

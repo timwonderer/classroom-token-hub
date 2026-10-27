@@ -160,7 +160,7 @@ def stage_theme():
     (SITE / 'themes/hextra').symlink_to(CACHE / 'hextra', target_is_directory=True)
     static = SITE / 'static'
     (static / 'assets/css').mkdir(parents=True)
-    shutil.copytree(ROOT / 'docs-site/src/fonts', static / 'assets/fonts')
+    shutil.copytree(HERE / 'brand/fonts', static / 'assets/fonts')
     # The application's tab icon, so every CTH surface shows the same one.
     (static / 'assets/images').mkdir()
     shutil.copy2(ROOT / 'static/images/icon-192.png', static / 'assets/images/icon-192.png')
@@ -169,7 +169,7 @@ def stage_theme():
         shutil.copy2(DOCS / asset, static / asset)
     # Use current brand tokens/fonts and the existing Jinja wordmark macro.
     for name in ('tokens.css', 'fonts.css'):
-        shutil.copy2(ROOT / 'docs-site/src/css' / name, static / 'assets/css' / name)
+        shutil.copy2(HERE / 'brand/css' / name, static / 'assets/css' / name)
     # SPEC-DES-001 §XIII: consume the public stylesheet without a divergent copy.
     shutil.copy2(ROOT / 'github-pages/style.css', static / 'assets/css/public.css')
     footers = re.findall(r'<footer\b.*?</footer>', (ROOT / 'github-pages/learnmore.html').read_text(), re.S)

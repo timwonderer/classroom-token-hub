@@ -221,7 +221,7 @@ run only when the PR touches the paths they watch.
 | Accessibility Gate | `.github/workflows/accessibility-gate.yml` | `templates/`, `static/css/`, `app/routes/`, `app/forms.py` |
 | Documentation Link Checks | `.github/workflows/docs-links.yml` | `README.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`, `docs/`, `lychee.toml` |
 | Lint Workflows | `.github/workflows/actionlint.yml` | `.github/workflows/` |
-| Deploy GitHub Pages Site | `.github/workflows/github-pages.yml` | `github-pages/`, `docs-generator-proof/`, `docs-site/src/`, `docs/` (build only on PRs) |
+| Deploy GitHub Pages Site | `.github/workflows/github-pages.yml` | `github-pages/`, `docs-generator-proof/`, `docs/` (build only on PRs) |
 | Deploy status service to Google Cloud | `.github/workflows/deploy-status.yml` | `status/`, `status_service/`, `tests/test_status_*.py` (tests only on PRs) |
 
 The full test suite (`.github/workflows/full-suite.yml`) runs nightly and on manual
