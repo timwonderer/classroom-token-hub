@@ -15,9 +15,10 @@ def transfer_state(stage):
             "entries": {"store": ["Pencil"]}, "schedules": SCHEDULES, "schemas": SCHEMAS,
             "raw": "fictional-artifact", "inventory_digest": "fictional-digest",
             "preview": {"groups": groups, "skipped": ["insurance"], "token": "fictional-token",
-                "timezone": "America/Los_Angeles", "expires_at": "2030-01-20T12:00:00+00:00",
+                "timezone": "America/Los_Angeles", "expires_at": "2030-01-20T04:00:00-08:00",
                 "timing": {"Payroll effective date and time": "2030-01-18T00:00:00-08:00"}},
-            "result": {"skipped": [], "payroll_effective_at": "2030-01-18T00:00:00-08:00"}}
+            "result": {"skipped": [], "payroll_effective_at": "2030-01-18T08:00:00+00:00",
+                "payroll_effective_display": "2030-01-18T00:00:00-08:00"}}
     return context
 
 

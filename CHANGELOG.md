@@ -10,8 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Added
 
-- Class-scoped configuration file export/import with authenticated five-day files, atomic imports, and temporary retry receipts. Insurance tier groups now use canonical identities; migration preserves existing coverage through explicit successors.
-- Accessibility: configuration transfer forms have explicit labels and grouped selections; Copy Configuration navigation announces the current page. Rendered start, upload, and confirmation stages are covered by accessibility smoke assertions.
+- <!-- notes: internal, highlight --> Class-scoped configuration file export/import with authenticated five-day files, atomic imports, and temporary retry receipts. Insurance tier groups now use canonical identities; migration preserves existing coverage through explicit successors.
+- <!-- notes: accessibility --> Accessibility: configuration transfer forms have explicit labels and grouped selections; Copy Configuration navigation announces the current page. Rendered start, upload, and confirmation stages are covered by accessibility smoke assertions.
 
 ### Changed
 

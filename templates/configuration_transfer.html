@@ -13,7 +13,7 @@
 <div class="alert alert-info">Rent-linked products stay in the origin class. To link an item to rent, do so again using the destination class’s Store.</div>
 {% if stage == 'done' %}
 <div class="alert alert-success" role="status">Import complete.</div>
-{% if result.payroll_effective_at %}<p>Payroll effective date and time: {{ result.payroll_effective_at }}.</p>{% endif %}
+{% if result.payroll_effective_at %}<p>Payroll effective date and time: {{ result.payroll_effective_display }}.</p>{% endif %}
 {% if result.skipped %}<p>Skipped because these features are off: {{ result.skipped | join(', ') }}.</p>{% endif %}
 <a href="{{ url_for('configuration.settings') }}" class="btn btn-primary">Back to configuration transfer</a>
 {% elif stage == 'confirm' %}

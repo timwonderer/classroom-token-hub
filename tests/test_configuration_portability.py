@@ -3,6 +3,8 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from uuid import uuid4
 import pytest
+from datetime import date
+from tests.helpers import temporal
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats import configuration_portability as transfer
@@ -32,16 +34,28 @@ def prepare(context, nonce):
     return raw, preview["token"]
 
 
-def test_retry_new_operation_and_rotation(app):
+def test_identical_retry_creates_one_product(app):
     context, nonce = setup_transfer(app)
     raw, token = prepare(context, nonce)
     before = StoreProduct.query.filter_by(class_id=context.class_id).count()
     result = transfer.confirm_import(context, nonce, raw, token)
     assert transfer.confirm_import(context, nonce, raw, token) == result
     assert StoreProduct.query.filter_by(class_id=context.class_id).count() == before + 1
+
+
+def test_deliberate_import_creates_new_product_identity(app):
+    context, nonce = setup_transfer(app)
+    raw, token = prepare(context, nonce)
+    result = transfer.confirm_import(context, nonce, raw, token)
     second = transfer.preview_import(context, nonce, raw)
     result2 = transfer.confirm_import(context, nonce, raw, second["token"])
     assert result2["store"] != result["store"]
+
+
+def test_rotation_revokes_successful_retry(app):
+    context, nonce = setup_transfer(app)
+    raw, token = prepare(context, nonce)
+    transfer.confirm_import(context, nonce, raw, token)
     transfer.export_configuration(context, nonce, {"store": [0]})
     with pytest.raises(ConfigurationError, match="replaced"):
         transfer.confirm_import(context, nonce, raw, token)
@@ -414,11 +428,10 @@ def test_schedule_choices_keep_receiving_payroll_effective_rule(app):
 
 def test_changed_receiving_boundary_requires_new_preview(app, monkeypatch):
     from app.services.payroll import schedule
-    from datetime import timedelta
     context, nonce = setup_transfer(app)
     raw, token = prepare(context, nonce)
     boundary = schedule.effective_date_for_new_setting(context.class_id, transfer.identity.now())
-    monkeypatch.setattr(schedule, "effective_date_for_new_setting", lambda *args: boundary + timedelta(days=7))
+    monkeypatch.setattr(schedule, "effective_date_for_new_setting", lambda *_args: temporal.calendar_days_later(boundary, 7, class_id=context.class_id))
     with pytest.raises(ConfigurationError, match="Preview the import again"):
         transfer.confirm_import(context, nonce, raw, token)
     assert ConfigurationImportReceipt.query.filter_by(class_id=context.class_id).count() == 0
@@ -426,23 +439,21 @@ def test_changed_receiving_boundary_requires_new_preview(app, monkeypatch):
 
 def test_execution_rechecks_http_session_deadline(app):
     from flask import session
-    from datetime import timedelta
     from app.auth import SESSION_TIMEOUT_MINUTES
     context, nonce = setup_transfer(app)
     raw, token = prepare(context, nonce)
     with app.test_request_context("/admin/configuration/", method="POST"):
-        session["last_activity"] = (transfer.identity.now() - timedelta(minutes=SESSION_TIMEOUT_MINUTES + 1)).isoformat()
+        session["last_activity"] = temporal.shifted(temporal.now(), minutes=-(SESSION_TIMEOUT_MINUTES + 1)).isoformat()
         with pytest.raises(ConfigurationError, match="session expired"):
             transfer.confirm_import(context, nonce, raw, token)
     assert ConfigurationImportReceipt.query.filter_by(class_id=context.class_id).count() == 0
 
 
 def test_future_rent_anchor_does_not_hide_invalid_recurrence(app):
-    from datetime import datetime, timezone
     context, _ = setup_transfer(app)
     with pytest.raises(ValueError, match="unsupported frequency_type"):
         transfer._preview_timing(context, {"rent": {
-            "first_rent_due_date": datetime(2035, 1, 1, tzinfo=timezone.utc),
+            "first_rent_due_date": temporal.class_wall_time(context.class_id, date(2035, 1, 1), 0),
             "frequency_type": "invalid", "due_day_of_month": 1}})
 
 
@@ -450,13 +461,12 @@ def test_session_expires_while_waiting_for_class_lock(app, monkeypatch):
     from threading import Event
     from sqlalchemy import text, event
     from flask import session
-    from datetime import timedelta
     from app.auth import SESSION_TIMEOUT_MINUTES
     import time
     context, nonce = setup_transfer(app)
     raw, token = prepare(context, nonce)
     transfer.confirm_import(context, nonce, raw, token)
-    before = transfer.identity.now()
+    before = temporal.now()
     db.session.remove()
     waiting, backend = Event(), []
     engine = db.engine
@@ -480,7 +490,7 @@ def test_session_expires_while_waiting_for_class_lock(app, monkeypatch):
                 while not lock.execute(text("SELECT cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": backend[-1]}).scalar():
                     assert time.monotonic() < deadline
                     time.sleep(.01)
-                monkeypatch.setattr(transfer.identity, "now", lambda: before + timedelta(minutes=SESSION_TIMEOUT_MINUTES + 1))
+                monkeypatch.setattr(transfer.identity, "now", lambda: temporal.shifted(before, minutes=SESSION_TIMEOUT_MINUTES + 1))
                 transaction.commit()
                 with pytest.raises(ConfigurationError, match="session expired"):
                     future.result(timeout=15)
@@ -500,3 +510,22 @@ def test_banking_schedule_rejects_contradictions(app, calculation, cadence):
     decoded = transfer._validate({"banking": values}, context)["banking"]
     assert decoded["interest_calculation_type"] is None
     assert decoded["compound_frequency"] is None
+
+
+def test_transfer_displays_class_time_without_changing_receipt_instants(app):
+    context, nonce = setup_transfer(app)
+    with temporal.pinned_clock(temporal.class_wall_time(context.class_id, date(2030, 1, 15), 9)):
+        raw = transfer.export_configuration(context, nonce, {"payroll": True})
+        preview = transfer.preview_import(context, nonce, raw)
+        envelope = verify(raw, "export")
+        assert preview["expires_at"] == "2030-01-20T09:00:00-08:00"
+        assert verify(preview["token"], "confirmation")["expires_at"] == envelope["expires_at"]
+        result = transfer.confirm_import(context, nonce, raw, preview["token"])
+        stored = ConfigurationImportReceipt.query.filter_by(class_id=context.class_id,
+            operation_id=result["operation_id"]).one()
+        view = transfer.import_result_view(context, result)
+        assert view["payroll_effective_display"].endswith("-08:00")
+        assert transfer.identity.instant(view["payroll_effective_display"]) == transfer.identity.instant(result["payroll_effective_at"])
+        assert stored.result == result
+        assert "payroll_effective_display" not in stored.result
+        assert transfer.confirm_import(context, nonce, raw, preview["token"]) == result

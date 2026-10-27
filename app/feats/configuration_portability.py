@@ -233,6 +233,19 @@ def _state(context):
     return current, digest(StrictJSON.dumps(state))
 
 
+def local_timestamp(context, timestamp):
+    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+    return canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=context,
+        primitive="localize_timestamp", timestamp=timestamp).result["local_timestamp"].isoformat()
+
+
+def import_result_view(context, result):
+    view = dict(result)
+    if result.get("payroll_effective_at"):
+        view["payroll_effective_display"] = local_timestamp(context, instant(result["payroll_effective_at"]))
+    return view
+
+
 def _preview_timing(context, decoded):
     from types import SimpleNamespace
     from app.services.payroll.schedule import effective_date_for_new_setting, first_boundary_after, pay_cadence
@@ -241,8 +254,7 @@ def _preview_timing(context, decoded):
     from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
     now = identity.now()
     def local(timestamp):
-        return canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=context,
-            primitive="localize_timestamp", timestamp=timestamp).result["local_timestamp"].isoformat()
+        return local_timestamp(context, timestamp)
     timing = {}
     if "payroll" in decoded:
         row = decoded["payroll"]
@@ -295,7 +307,7 @@ def preview_import(context, session_nonce, raw, selection=None, schedules=None):
         "digest": digest(raw), "reference": envelope["reference"], "expires_at": envelope["expires_at"],
         "selection": selection, "schedules": schedules or {}, "state": state}
     return {"token": sign(token, "confirmation").decode("utf-8"), "groups": groups,
-        "skipped": skipped, "timing": timing, "timezone": classroom.class_timezone, "expires_at": envelope["expires_at"]}
+        "skipped": skipped, "timing": timing, "timezone": classroom.class_timezone, "expires_at": local_timestamp(context, instant(envelope["expires_at"]))}
 
 
 def confirm_import(context, session_nonce, raw, confirmation):

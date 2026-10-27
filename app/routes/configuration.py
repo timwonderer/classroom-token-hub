@@ -105,7 +105,7 @@ def settings():
             elif action == "confirm":
                 result = transfer.confirm_import(context, nonce, request.form.get("artifact", ""), request.form.get("confirmation", ""))
                 flash("Configuration imported into this class. Existing activity keeps its original terms.", "success")
-                return render_template("configuration_transfer.html", form=form, stage="done", result=result)
+                return render_template("configuration_transfer.html", form=form, stage="done", result=transfer.import_result_view(context, result))
             elif action == "cleanup":
                 count = transfer.cleanup_receipts(context, nonce)
                 flash(f"Removed {count} expired retry receipts.", "success")
