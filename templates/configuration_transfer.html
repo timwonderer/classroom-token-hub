@@ -1,7 +1,21 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
+{% import 'macros/help.html' as help %}
 {% set current_page = 'configuration_transfer' %}
 {% block page_title %}Copy Class Configuration{% endblock %}
 {% block title %}Copy Class Configuration{% endblock %}
+{% block contextual_help_body %}
+{{ help.panel_lead("Export one class's configuration to a file, then import it into another class you own.") }}
+{% call help.topic('transfer-export', 'upload_file', 'Exporting') %}
+<p class="mb-0">Pick the groups of settings you want (payroll, rent, hall pass, store, insurance, and so on) and download a <strong>.cthconfig</strong> file. The export expires after five days, and creating a new one immediately replaces the previous export.</p>
+{% endcall %}
+{% call help.topic('transfer-import', 'download', 'Importing') %}
+<p class="mb-0">Upload a <strong>.cthconfig</strong> file in another class you own, choose which groups to bring in, and review the import before confirming. Hall pass settings replace the destination class's current ones; store and insurance imports add new independent offerings. Previously issued activity keeps its original terms.</p>
+{% endcall %}
+{% call help.topic('transfer-limits', 'block', 'What is not copied') %}
+<p class="mb-0">Rent-linked store items stay tied to the class they were created in. If you want an imported item linked to rent in the destination class, link it again there using that class's Store.</p>
+{% endcall %}
+{% endblock %}
 {% macro show_values(value) %}
 {% if value is mapping %}<dl>{% for key, child in value.items() %}<dt>{{ key | replace('_', ' ') | capitalize }}</dt><dd>{{ show_values(child) }}</dd>{% endfor %}</dl>
 {% elif value is sequence and value is not string %}<ul>{% for child in value %}<li>{{ show_values(child) }}</li>{% endfor %}</ul>
@@ -10,9 +24,13 @@
 {% block content %}
 <p>Export this class’s configuration to a file. Open another class you own and upload the file there.</p>
 <p>Files expire after five days. Creating a new export replaces your previous export immediately.</p>
-<div class="alert alert-info">Rent-linked products stay in the origin class. To link an item to rent, do so again using the destination class’s Store.</div>
+{% call cards.alert_card('info', 'Rent-linked items are not copied', icon='info', heading_tag='h2', body_class='mb-3') %}
+<p class="mb-0">Rent-linked products stay in the origin class. To link an item to rent, do so again using the destination class’s Store.</p>
+{% endcall %}
 {% if stage == 'done' %}
-<div class="alert alert-success" role="status">Import complete.</div>
+{% call cards.alert_card('success', 'Import complete', icon='check_circle', heading_tag='h2', role='status', body_class='mb-3') %}
+<p class="mb-0">Import complete.</p>
+{% endcall %}
 {% if result.payroll_effective_at %}<p>Payroll effective date and time: {{ result.payroll_effective_display }}.</p>{% endif %}
 {% if result.skipped %}<p>Skipped because these features are off: {{ result.skipped | join(', ') }}.</p>{% endif %}
 <a href="{{ url_for('configuration.settings') }}" class="btn btn-primary">Back to configuration transfer</a>
@@ -20,7 +38,11 @@
 <h2>Review this class’s import</h2>
 <p>Calendar dates use <strong>{{ preview.timezone }}</strong>. You can change these dates later through the usual settings.</p>
 <p>This confirmation expires at {{ preview.expires_at }}.</p>
-{% if preview.skipped %}<div class="alert alert-warning">Skipped because these features are off: {{ preview.skipped | join(', ') }}.</div>{% endif %}
+{% if preview.skipped %}
+{% call cards.alert_card('warning', 'Some groups will be skipped', icon='warning', body_class='mb-3') %}
+<p class="mb-0">Skipped because these features are off: {{ preview.skipped | join(', ') }}.</p>
+{% endcall %}
+{% endif %}
 {% for family, values in preview.groups.items() %}
 <details open class="mb-3"><summary class="fw-bold">{{ family | replace('_', ' ') | title }}</summary>
 {{ show_values(values) }}
