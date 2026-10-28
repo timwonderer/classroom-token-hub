@@ -78,6 +78,7 @@ from app.services.entitlement_read_service import (
     get_active_entitlements,
     get_entitlement_status,
     derive_display_status,
+    entitlement_expires_at,
 )
 from app.services import insurance_definition_service as insurance_defs
 from app.services import insurance_coverage_service as insurance_coverage
@@ -2304,6 +2305,22 @@ def file_claim(policy_uuid):
     else:
         form.transaction_id.choices = []  # SelectField requires choices even when unused
 
+    # One rendered form is one submission (FEAT-STOR-003 §XIII). A resubmit carries
+    # the same nonce and is answered with the claim it already filed, before form
+    # validation, which would refuse it: a claimed transaction leaves the choices.
+    from app.services.insurance_claim_service import list_claims_for_entitlement
+
+    claim_nonce = (request.form.get('claim_nonce') or '').strip()[:64] or uuid.uuid4().hex
+    claim_key = f"corr_ins-claim:{entitlement_id}:{claim_nonce}"
+    if request.method == 'POST' and any(
+        claim.correlation_id == claim_key
+        for claim in list_claims_for_entitlement(
+            class_id=class_id, entitlement_id=entitlement_id, target_seat_id=seat_id,
+        )
+    ):
+        flash("Insurance claim submitted.", "success")
+        return redirect(url_for("student.student_insurance"))
+
     if claimable and form.validate_on_submit():
         claim_subject = {"policy_claim_type": policy.insurance_type}
         if is_transaction_type:
@@ -2335,6 +2352,8 @@ def file_claim(policy_uuid):
             entitlement_id=entitlement_id,
             canonical_context=context,
             claim_subject=claim_subject,
+            correlation_id=claim_key,
+            idempotency_key=claim_key,
         )
         if result.success:
             flash("Insurance claim submitted.", "success")
@@ -2366,6 +2385,7 @@ def file_claim(policy_uuid):
         claimable=claimable,
         prior_claims=prior_claims,
         claim_date_max=build_claim_date_max(context),
+        claim_nonce=uuid.uuid4().hex,
     )
 
 
@@ -2536,23 +2556,39 @@ def shop():
         if store_service.is_product_visible_to_seat(item.product_lineage_uuid, seat.id)
     ]
 
+    # My Items lists what the student can still use or is waiting on. It read
+    # the event history, so a used item showed as two cards, finished items
+    # piled up, and anything older than the newest 100 events fell off.
     entitlements = []
+    seen_lineages = set()
     product_by_key = _resolve_entitlement_products(class_id)
-    for entry in get_entitlement_history(
-        seat_id=seat.id, class_id=class_id,
-        exclude_entitlement_types=("INSURANCE", "HALL_PASS"),
-    ):
-        item = _product_for_entitlement(product_by_key, entry)
+    grants = sorted(
+        get_active_entitlements(seat_id=seat.id, class_id=class_id),
+        key=lambda grant: grant.timestamp, reverse=True,
+    )
+    for grant in grants:
+        # Insurance is governed by InsurancePolicy and hall passes have their
+        # own panel (#1705); neither is rendered as a store item here.
+        if grant.entitlement_type in ("INSURANCE", "HALL_PASS") or grant.entitlement_id in seen_lineages:
+            continue
+        seen_lineages.add(grant.entitlement_id)
+        status = derive_display_status(grant.entitlement_id)
+        if status not in ("purchased", "processing"):
+            continue
+        item = _product_for_entitlement(product_by_key, {
+            "policy_uuid": (grant.payload or {}).get("policy_uuid"),
+            "product_id": grant.product_id,
+        })
         if item is None:
             continue
         entitlements.append(SimpleNamespace(
-            id=entry["entitlement_id"],
+            id=grant.entitlement_id,
             seat_id=seat.id,
             class_id=class_id,
             store_item=item,
-            status=derive_display_status(entry["entitlement_id"]),
-            purchase_date=datetime.fromisoformat(entry["timestamp"]),
-            expiry_date=None,
+            status=status,
+            purchase_date=grant.timestamp,
+            expiry_date=entitlement_expires_at(grant),
         ))
 
     # Check if student has paid rent this month using canonical rent settings only.
@@ -2990,7 +3026,7 @@ def login():
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
 
 
-@requires_feat_context("FEAT-IDEN-001")
+@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
 def _complete_student_login(form):
     """The validated login submission: authenticate and establish the session."""
     is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -3219,7 +3255,7 @@ def logout():
 
 @student_bp.route('/switch-class/<class_public_id>', methods=['POST'])
 @login_required
-@requires_feat_context("FEAT-IDEN-001")
+@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
 def switch_class(class_public_id):
     """Switch to a different class. The URL carries the class's public id
     (DOM-OPS-001 §7: an internal class_id never appears in a URL); it resolves

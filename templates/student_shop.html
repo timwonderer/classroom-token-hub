@@ -420,6 +420,10 @@
     }
 
     let currentItemData = {};
+    // Names one purchase command (FEAT-STOR-001 §IX). It survives a double-click
+    // or a retry after a lost response, so the server replays instead of charging
+    // twice; changing the purchase or getting an answer starts a new one.
+    let purchaseRequestId = crypto.randomUUID();
 
     // Buy Item Modal Logic
     const buyItemModal = document.getElementById('buyItemModal');
@@ -553,6 +557,7 @@
     document.getElementById('quantity').addEventListener('input', updateTotalPrice);
 
     function updateTotalPrice() {
+        purchaseRequestId = crypto.randomUUID();
         const quantity = parseInt(document.getElementById('quantity').value) || 1;
         let unitPrice = currentItemData.basePrice;
         let hasDiscount = false;
@@ -640,11 +645,13 @@
             body: JSON.stringify({
                 policy_uuid: policyUuid,
                 passphrase: passphrase,
-                quantity: quantity
+                quantity: quantity,
+                client_purchase_id: purchaseRequestId
             })
         })
         .then(response => response.json())
         .then(data => {
+            purchaseRequestId = crypto.randomUUID();
             if (data.status === 'success') {
                 const modal = bootstrap.Modal.getInstance(buyItemModal);
                 announceStorePage(data.message || 'Purchase completed.');

@@ -90,17 +90,10 @@ def store_purchase_refund_key(purchase_id, reason):
     )
 
 
-def purchase_transaction_key(student_id, class_id, item_id, client_idempotency_token):
-    return build_transaction_idempotency_key(
-        "purchase",
-        "student",
-        student_id,
-        "class",
-        class_id,
-        "item",
-        item_id,
-        client_idempotency_token,
-    )
+def purchase_transaction_key(seat_id, client_purchase_id):
+    # Class and product are not in the key: the FEAT-STOR-001 reservation is
+    # scoped by class_id and binds the product and quantity as canonical intent.
+    return build_transaction_idempotency_key("purchase", "seat", seat_id, client_purchase_id)
 
 
 def void_refund_key(transaction_id):

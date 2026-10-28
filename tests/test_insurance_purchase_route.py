@@ -497,3 +497,31 @@ def test_cancel_modal_promises_the_date_cancelling_actually_gives(app, client):
     assert "You cancelled this coverage" in after
     assert f"through <strong>{promised.group(1)}</strong>" in after
     assert f'id="cancel-{policy_uuid}"' not in after, "no second cancel once cancelled"
+
+
+def test_resubmitted_claim_form_returns_the_original_claim(app, client):
+    """A double-submitted claim form is one submission (FEAT-STOR-003 §XIII):
+    the repeat lands on the same claim and succeeds, rather than being refused
+    as a duplicate subject or filing a second claim."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        student = classroom.students[0]
+        _fund(student.seat)
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        txn_id = _make_claimable_txn(student.seat)
+        class_id, seat_id = classroom.class_id, student.seat.id
+        login_student(client, student)
+
+    form = {"transaction_id": str(txn_id), "claim_nonce": uuid4().hex}
+    first = client.post(f"/student/insurance/claim/{policy_uuid}", data=form)
+    second = client.post(f"/student/insurance/claim/{policy_uuid}", data=form)
+
+    assert first.status_code == 302
+    assert second.status_code == 302, "the resubmission was refused instead of replayed"
+    with app.app_context():
+        assert InsuranceClaim.query.filter_by(class_id=class_id, target_seat_id=seat_id).count() == 1

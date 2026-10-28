@@ -361,7 +361,7 @@ def build_entitlement_card_view(
         purchased_at=purchase_date,
         expires_at=expires_at,
         purchased_at_display=format_timestamp(SimpleNamespace(class_id=class_id), purchase_date),
-        expires_at_display=format_date(SimpleNamespace(class_id=class_id), expires_at),
+        expires_at_display=format_timestamp(SimpleNamespace(class_id=class_id), expires_at),
         has_expiry_date=has_expiry_date,
         redemption_prompt=redemption_prompt,
         can_redeem_immediately=can_redeem_immediately,

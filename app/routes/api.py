@@ -279,6 +279,14 @@ def purchase_item():
     data = request.get_json(silent=True) or {}
     policy_uuid = data.get('policy_uuid')
     passphrase = data.get('passphrase')
+    # One rendered Confirm is one purchase command (FEAT-STOR-001 §IX): the shop
+    # sends the same id on a double-click or a retry, so the FEAT replays the
+    # original purchase instead of charging again. A client without one (a page
+    # cached before this field existed) still gets a keyed, if unprotected, write.
+    client_purchase_id = str(data.get('client_purchase_id') or '').strip() or uuid.uuid4().hex
+    idempotency_key = purchase_transaction_key(context.seat_id, client_purchase_id)
+    if len(idempotency_key) > MAX_IDEMPOTENCY_KEY_LENGTH:
+        return jsonify({"status": "error", "message": "Purchase request ID is too long."}), 400
 
     try:
         quantity = int(data.get('quantity', 1))
@@ -300,6 +308,7 @@ def purchase_item():
         canonical_context=context,
         policy_uuid=policy_uuid,
         quantity=quantity,
+        idempotency_key=idempotency_key,
     )
 
     if not result.success:
