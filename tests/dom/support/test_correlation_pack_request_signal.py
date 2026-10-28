@@ -72,3 +72,29 @@ def test_DOM_SUP_001__polling_cannot_evict_a_refused_purchase_from_the_ticket(
     page = client.get(f"/sysadmin/issues/{ref}").get_data(as_text=True)
     assert '<th scope="col">Status</th>' in page
     assert "<td><code>403</code></td>" in page
+
+
+def test_DOM_SUP_001__a_trace_past_its_ttl_never_reaches_a_ticket(client):
+    """The TTL holds in the snapshot itself, not only when cleanup happens to run."""
+    from app.services.tlcp import DEFAULT_TRACE_TTL_DAYS, create_ticket_correlation_pack
+    from tests.helpers import temporal
+
+    seat = initialize("chemistry_p1", client.application).students[0].seat
+    now = temporal.now()
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="trace:ttl"):
+        for request_id, created_at in (
+            ("expired", temporal.shifted(now, hours=-24 * (DEFAULT_TRACE_TTL_DAYS + 1))),
+            ("recent", temporal.shifted(now, hours=-1)),
+        ):
+            db.session.add(ActorRequestTrace(
+                actor_type=seat.role, actor_public_id=seat.public_id, class_id=seat.class_id,
+                request_id=request_id, method="GET", endpoint="/student/shop",
+                status_code=200, created_at=created_at,
+            ))
+        db.session.flush()
+
+    pack = create_ticket_correlation_pack(
+        issue_id=0, actor_type=seat.role, actor_public_id=seat.public_id,
+        class_id=seat.class_id, ticket_created_at=now, include_recent_error=False,
+    )
+    assert [row["request_id"] for row in pack["request_trace_json"]] == ["recent"]
