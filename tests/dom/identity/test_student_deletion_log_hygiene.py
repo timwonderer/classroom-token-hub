@@ -55,4 +55,6 @@ def test_delete_student_failure_log_omits_student_pii(client, caplog, monkeypatc
     assert "Error deleting student" in text, "failure path did not log at all"
     assert full_name not in text, "student full name reached the application log"
     assert first_name not in text, "student first name reached the application log"
-    assert f"seat_id={seat_id}" in text, "log must still identify the seat"
+    # Identified by public id; the internal seat id stays in the database (DOM-OPS-001 §7).
+    assert f"seats={student.seat.public_id}" in text, "log must still identify the seat"
+    assert f"seat_id={seat_id}" not in text

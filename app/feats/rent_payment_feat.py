@@ -39,6 +39,7 @@ from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 
 from app.models import ObligationAssessment, Seat, RentSettings, _quantize_currency
+from app.services.tlcp import class_log_ref
 from app.services import obligations_service
 from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.ledger_balance_query_service import get_available_balance
@@ -210,7 +211,7 @@ def _award_satisfaction_perks(settings: RentSettings, seat: Seat, correlation_id
             logger.warning(
                 "Rent perk references missing store product lineage=%s class=%s",
                 lineage,
-                seat.class_id,
+                class_log_ref(seat.class_id),
             )
             continue
 
@@ -245,8 +246,8 @@ def _award_satisfaction_perks(settings: RentSettings, seat: Seat, correlation_id
                 "Rent perk refused by holding limit lineage=%s class=%s seat=%s "
                 "limit=%s on_hand=%s requested=%s",
                 lineage,
-                seat.class_id,
-                seat.id,
+                class_log_ref(seat.class_id),
+                seat.public_id,
                 exc.holding_limit,
                 exc.on_hand,
                 exc.grant_quantity,

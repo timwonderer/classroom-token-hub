@@ -749,7 +749,7 @@ def build_class_obligation_summary(
         if profile:
             student_name = f"{profile.first_name} {profile.last_name}".strip()
         else:
-            student_name = f"Seat {seat.id}"
+            student_name = "Unnamed student"
 
         student_rows.append({
             'seat_id': seat.id,
@@ -872,7 +872,7 @@ def get_outstanding_rent_by_seat(class_id: str) -> list[dict]:
         profile = db.session.query(IdentityProfile).filter_by(seat_id=seat.id).first()
         student_name = (
             f"{profile.first_name} {profile.last_name}".strip()
-            if profile else f"Seat {seat.id}"
+            if profile else "Unnamed student"
         )
         rows.append({
             'seat_id': seat.id,

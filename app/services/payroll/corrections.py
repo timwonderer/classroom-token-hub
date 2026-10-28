@@ -192,7 +192,7 @@ def _is_legacy(event: PayrollEvent) -> bool:
 
 def _student_name(seat: Seat) -> str:
     profile = getattr(seat, "identity_profile", None)
-    return (profile.full_name if profile else None) or f"Seat {seat.id}"
+    return (profile.full_name if profile else None) or "Unnamed student"
 
 
 def build_class_correction_proposal(

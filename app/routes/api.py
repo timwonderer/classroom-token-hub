@@ -932,12 +932,10 @@ def checkout_hall_pass():
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
     current_app.logger.info(
-        "HALL_PASS_CHECKOUT_DEBUG: seat_id=%s pass_id=%s pass_requested_by_seat_id=%s pass_class_id=%s session_class_id=%s",
-        getattr(student, "id", None),
+        "HALL_PASS_CHECKOUT_DEBUG: pass_id=%s requested_by_this_seat=%s pass_in_session_class=%s",
         pass_id,
-        log_entry.requested_by_seat_id,
-        log_entry.class_id,
-        getattr(getattr(g, "canonical_context", None), "class_id", None),
+        student is not None and log_entry.requested_by_seat_id == student.id,
+        log_entry.class_id == getattr(getattr(g, "canonical_context", None), "class_id", None),
     )
     
     if not student or log_entry.requested_by_seat_id != student.id:
@@ -980,8 +978,7 @@ def checkout_hall_pass():
         })
     except PermissionError as exc:
         current_app.logger.error(
-            "HALL_PASS_CHECKOUT_IDENTITY_MISSING: seat_id=%s pass_id=%s message=%s",
-            getattr(student, "id", None),
+            "HALL_PASS_CHECKOUT_IDENTITY_MISSING: pass_id=%s message=%s",
             pass_id,
             str(exc),
         )
@@ -1016,12 +1013,10 @@ def checkin_hall_pass():
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
     current_app.logger.info(
-        "HALL_PASS_CHECKIN_DEBUG: seat_id=%s pass_id=%s pass_requested_by_seat_id=%s pass_class_id=%s session_class_id=%s",
-        getattr(student, "id", None),
+        "HALL_PASS_CHECKIN_DEBUG: pass_id=%s requested_by_this_seat=%s pass_in_session_class=%s",
         pass_id,
-        log_entry.requested_by_seat_id,
-        log_entry.class_id,
-        getattr(getattr(g, "canonical_context", None), "class_id", None),
+        student is not None and log_entry.requested_by_seat_id == student.id,
+        log_entry.class_id == getattr(getattr(g, "canonical_context", None), "class_id", None),
     )
     
     if not student or log_entry.requested_by_seat_id != student.id:
@@ -1060,8 +1055,7 @@ def checkin_hall_pass():
         })
     except PermissionError as exc:
         current_app.logger.error(
-            "HALL_PASS_CHECKIN_IDENTITY_MISSING: seat_id=%s pass_id=%s message=%s",
-            getattr(student, "id", None),
+            "HALL_PASS_CHECKIN_IDENTITY_MISSING: pass_id=%s message=%s",
             pass_id,
             str(exc),
         )
@@ -1133,7 +1127,7 @@ def update_hall_pass_settings():
             "message": "Hall passes are not set up for this class yet. Add at least one pass type first.",
         }), 409
     except ValueError as exc:
-        _log_api_client_error("update_hall_pass_settings", exc, extra=f"class_id={class_id}")
+        _log_api_client_error("update_hall_pass_settings", exc)
         return jsonify({"status": "error", "message": "Hall pass settings are invalid."}), 400
 
     return jsonify({
@@ -1398,7 +1392,7 @@ def rotate_hall_pass_verify_token():
             idempotency_key=f"feat:settings:hall-pass-token:{user_id}:{uuid.uuid4().hex}",
         )
     except LookupError as exc:
-        _log_api_client_error("rotate_hall_pass_verify_token", exc, extra=f"user_id={user_id}")
+        _log_api_client_error("rotate_hall_pass_verify_token", exc)
         return jsonify({"status": "error", "message": "Hall pass verification settings were not found."}), 404
     except SQLAlchemyError:
         db.session.rollback()
@@ -1643,18 +1637,18 @@ def handle_tap():
 
 
     if not verify_password(pin, student_user.pin_hash or ''):
-        current_app.logger.warning(f"TAP ERROR: Invalid PIN for student {student_user.id}")
+        current_app.logger.warning("TAP ERROR: Invalid PIN")
         return jsonify({"error": "Invalid PIN"}), 403
 
     context = resolve_canonical_context()
     class_id = context.class_id if context else None
     if not class_id:
-        current_app.logger.warning("ATTENDANCE ERROR: Missing class_id context for user_id=%s", student_user.id)
+        current_app.logger.warning("ATTENDANCE ERROR: Missing class context")
         return jsonify({"error": "Unable to resolve class context for this period."}), 400
 
     action = data.get("action")
 
-    current_app.logger.info("TAP DEBUG: class_id=%s action=%s", class_id, action)
+    current_app.logger.info("TAP DEBUG: action=%s", action)
 
     # Support both old and new action names
     action_map = {
@@ -1721,20 +1715,18 @@ def handle_tap():
             reason_code=reason_code,
             idempotency_key=f"prod_attendance:{class_id}:{seat_id}:{normalized_action}:{secrets.token_hex(12)}",
         )
-        current_app.logger.info("TAP success - seat %s class_id=%s action=%s", seat_id, class_id, action)
+        current_app.logger.info("TAP success - action=%s", action)
     except ValueError as e:
         db.session.rollback()
         current_app.logger.warning(
-            "TAP rejected for seat %s class_id=%s action=%s: %s",
-            seat_id,
-            class_id,
+            "TAP rejected - action=%s: %s",
             action,
             e,
         )
         return jsonify({"error": "Unable to record the attendance request."}), 409
     except SQLAlchemyError as e:
         db.session.rollback()
-        current_app.logger.error(f"TAP failed for seat {seat_id}: {e}", exc_info=True)
+        current_app.logger.error("TAP failed: %s", e, exc_info=True)
         return jsonify({"error": "Database error"}), 500
 
     refreshed_event = (

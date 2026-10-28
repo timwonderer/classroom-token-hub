@@ -164,8 +164,7 @@ def _complete_sysadmin_login(form):
             decrypted_secret = decrypt_totp(user.totp_secret_encrypted)
         except (TypeError, ValueError):
             current_app.logger.warning(
-                "System admin login failed: invalid encrypted TOTP secret for user_id=%s",
-                user.id,
+                "System admin login failed: invalid encrypted TOTP secret",
             )
             decrypted_secret = None
         if decrypted_secret:
@@ -175,8 +174,7 @@ def _complete_sysadmin_login(form):
                 totp_valid = totp.verify(totp_code, valid_window=1)
             except (binascii.Error, TypeError, ValueError):
                 current_app.logger.warning(
-                    "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
-                    user.id,
+                    "System admin login failed: TOTP secret is not valid base32",
                 )
                 totp_valid = False
             if totp_valid:

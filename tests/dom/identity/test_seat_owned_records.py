@@ -251,8 +251,11 @@ def test_operational_actor_logging_uses_scoped_seat_never_principal(app, caplog)
         g.canonical_context = SimpleNamespace(user_id=918273, seat_id=456789, class_id='class-scope')
         operational_event_service.record(event_type='test', domain='test', class_id='class-scope')
         scoped = next(record for record in reversed(caplog.records) if record.msg == 'OPERATIONAL_EVENT %s').args
-        assert scoped['actor_seat_id'] == 456789
-        assert 'user_id' not in scoped and 918273 not in scoped.values()
+        # The line names the scoped seat by public id only; the internal seat,
+        # class and principal ids never reach it (DOM-OPS-001 §7).
+        assert 'actor_seat' in scoped and 'actor_seat_id' not in scoped
+        assert 'user_id' not in scoped and 'class_id' not in scoped
+        assert not any(value in (918273, 456789, 'class-scope') for value in scoped.values())
         operational_event_service.record(event_type='test', domain='test', class_id=None)
         unscoped = next(record for record in reversed(caplog.records) if record.msg == 'OPERATIONAL_EVENT %s').args
-        assert unscoped['actor_seat_id'] is None
+        assert unscoped['actor_seat'] == '-'

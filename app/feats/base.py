@@ -10,6 +10,7 @@ from enum import Enum, auto
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import event
 from app.extensions import db
+from app.utils.helpers import loggable_token
 
 logger = logging.getLogger(__name__)
 
@@ -440,8 +441,8 @@ class FEATContext:
 
         self.log_event("FEAT-ENTRY", {
             "feat": self.feat_name,
-            "correlation_id": self.correlation_id,
-            "idempotency_key": self.idempotency_key or "NONE",
+            "correlation_id": loggable_token(self.correlation_id),
+            "idempotency_key": loggable_token(self.idempotency_key),
         })
         return self
 
@@ -494,13 +495,13 @@ def increment_commit_count():
         if _feat_context.commit_count == 1:
             logger.info(
                 f"FEAT-COMMIT-OWNERSHIP: {name} | First commit owned by {name} | "
-                f"Correlation={get_correlation_id()}"
+                f"Correlation={loggable_token(get_correlation_id())}"
             )
 
         if _feat_context.commit_count > 1:
             msg = (
                 f"FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in {name}. "
-                f"Count={_feat_context.commit_count}. Correlation={get_correlation_id()}"
+                f"Count={_feat_context.commit_count}. Correlation={loggable_token(get_correlation_id())}"
             )
             
             if meta["blast_radius"] == "HIGH":
