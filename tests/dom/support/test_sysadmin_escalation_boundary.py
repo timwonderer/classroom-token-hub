@@ -28,7 +28,7 @@ from bs4 import BeautifulSoup
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import Issue, IssueCategory, IssueStatusHistory, Transaction
+from app.models import Issue, IssueCategory, IssueStatusHistory
 from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
 from tests.dom.interpretation.helpers import create_sysadmin, login_sysadmin
 from tests.helpers.canonical_classroom import login_teacher
@@ -175,14 +175,13 @@ def _assert_operator_cannot_mutate(operator, issue):
         assert response.status_code == 404, target
     assert operator.post(f"/sysadmin/issues/{ref}/start-review").status_code == 404
     assert operator.post(f"/sysadmin/issues/{ref}/resolve", data={
-        "resolution_note": "fixed", "eligible_for_reward": "on", "reward_amount": "5.00",
+        "resolution_note": "fixed",
     }).status_code == 404
 
     db.session.expire_all()
     after = db.session.get(Issue, issue.id)
     assert (after.status, after.sysadmin_notes, after.sysadmin_reviewed_at) == (status, notes, None)
     assert IssueStatusHistory.query.filter_by(issue_id=issue.id).count() == history
-    assert Transaction.query.filter_by(type="bug_reward").count() == 0
 
 
 # -- tests -------------------------------------------------------------------
