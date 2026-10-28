@@ -1,7 +1,7 @@
 ---
 title: Commercial Use Policy
 roles: [teacher, student]
-description: Detailed guidance on permitted commercial services and prohibited software monetization
+description: Project commercial-use expectations and proposed conditional services permission; pending legal review
 category: legal
 keywords: [commercial, services, monetization, prohibited, permitted, hosting, support]
 searchable: true
@@ -12,123 +12,125 @@ related:
 
 # Commercial Use Policy
 
-This project is licensed to ensure that the software itself remains free, open, and non-commercial, while allowing others to offer services around it.
+> **Proposed revision — not an effective commercial license.** This page records project
+> intent and proposed conditions for legal review. It does not grant new commercial rights,
+> amend PolyForm, or establish that the earlier policy created enforceable obligations.
+> The [license text](license.md) remains the published baseline. The effect of earlier
+> commercial-policy statements and any existing permissions requires separate review.
 
-**The intent of this policy is to prevent monetization of the software, features, or updates, while permitting monetization of labor and infrastructure.**
+## Project principle
 
-This document is intentionally explicit. Ambiguity will be interpreted conservatively.
+**Commercial providers may sell services around CTH. They may not sell CTH itself.**
 
----
+Classroom Token Hub is an open-source project with a noncommercial open-source philosophy.
+Its educational purpose depends on educators being able to inspect, study, and modify the
+software under its published licensing terms. This identity does not imply unrestricted
+commercial rights.
 
-## Permitted Commercial Activities (Services Only)
+The distinction is simple: **hosting with a free side of CTH, not CTH with a side of hosting.**
+The substance of an arrangement matters, including what customers receive and what payment
+controls. Calling a software-access charge “hosting” does not make it a service charge.
 
-Commercial entities may charge fees **only** for services that are external to the software itself, including:
+## Current license and proposed permission
 
-- **Hosting or infrastructure costs** (e.g., servers, uptime, backups)
-- **Deployment, setup, or installation assistance**
-- **Ongoing operations and maintenance** of hosted instances
-- **Technical support and troubleshooting**
-- **Service-level agreements (SLAs)**
-- **Managed or turn-key deployments** for schools or districts
+The published software license is PolyForm Noncommercial License 1.0.0. Its permitted-purpose
+provisions govern use; its text does not contain the specific commercial-services permission
+or contribution-back duty proposed here. An educational customer's permitted use does not,
+by itself, establish a vendor's rights to operate a commercial service.
 
-**These fees may include reasonable profit margins for the service provision itself (labor, infrastructure, support), but may not include charges for access to, use of, or features within the software.**
+The intended mechanism is a separate, versioned CTH commercial-services license, subject to
+confirmation that the relevant rights holders can grant it. It would provide **automatic,
+conditional permission** to qualifying providers. Compliant providers would not need an
+individual written agreement or discretionary approval.
 
-**Key Distinction:** You may charge for **your work** (hosting, support, deployment), but not for **the software** (features, access, licenses).
+The following sections describe that proposed permission. They are not operative grants or
+new obligations until the legal instrument, its scope, and its effective date are settled.
 
----
+## Services the proposed permission would cover
 
-## Prohibited Commercial Activities (Software Monetization)
+Providers could charge reasonable fees, including profit, for their own:
 
-Commercial entities may **not**, under any circumstances:
+- Hosting, infrastructure, installation, and deployment.
+- Operations, maintenance, backups, and availability guarantees.
+- Technical support, troubleshooting, and service-level agreements.
+- Managed deployments for schools and districts.
 
-- Charge for access to the software
-- Charge per seat, per user, per student, or per teacher
-- Sell licenses or subscriptions to the software
-- Restrict, gate, or throttle features based on payment
-- Offer paid tiers (e.g., "basic", "pro", "enterprise")
-- Charge for updates, upgrades, or new features
-- Charge for bug fixes or security patches
-- Repackage the software as a proprietary or closed product
-- Represent the software as their own or obscure its origin
+Recurring service fees and service tiers would be permitted. Differences must reflect actual
+infrastructure, resource usage, support, or service guarantees. Software features must not
+become paid entitlements. The proposal does not require providers to donate their labor or
+infrastructure, or promise free hosting indefinitely.
 
-**Any attempt to recharacterize software access or features as a "service" will be treated as a violation of the license.**
+All CTH functionality available in the corresponding freely distributed release would remain
+available without a software feature charge. This does not require every provider to deploy
+every release immediately. Charging for installation or maintenance labor is distinct from
+charging for the right to obtain an update or patch.
 
----
+## Software monetization the proposed permission would exclude
 
-## Clarifying Examples (Non-Exhaustive)
+Providers would not be permitted to:
 
-### Allowed Examples
+- Charge CTH software license or access fees, including per-student, per-teacher, or per-seat software fees.
+- Sell existing CTH features as premium functionality, or gate, throttle, or disable standard features based on payment.
+- Charge for access to CTH updates, bug fixes, or security patches.
+- Present existing features as proprietary, exclusive, or independently developed premium offerings.
+- Repackage CTH as proprietary software, obscure its origin, or imply project endorsement.
+- Disguise any of these arrangements as hosting, support, or another service.
 
-**Allowed:** A company hosts the software for teachers and charges a monthly hosting fee (e.g., $50/month for server costs + support).
+A higher-capacity server or faster support response may justify a different service fee.
+A higher payment merely to unlock more student accounts or an existing CTH module would not.
+A bundle must not make software rights conditional on buying unrelated services.
 
-**Allowed:** A district pays a vendor $5,000 to deploy and configure the software on the district's infrastructure.
+## Examples under the proposal
 
-**Allowed:** A provider offers support contracts or uptime guarantees (e.g., $100/month for 24/7 support).
+| Arrangement | Intended treatment |
+|---|---|
+| Monthly fee for a managed server, backups, and support, with no paid CTH feature tiers | Permitted service |
+| One-time installation on a district's infrastructure | Permitted service |
+| Higher fee for measured storage, compute, or bandwidth | Permitted service, provided resource billing is not disguised software licensing |
+| Higher fee for faster support or stronger availability guarantees | Permitted service |
+| Payment to enable hall passes, payroll, or another standard feature | Excluded software monetization |
+| Per-student charge for the right to use CTH | Excluded software monetization |
+| Payment to download a security fix; separate payment for installation labor | Download charge excluded; installation labor may be a service |
 
-**Allowed:** A consultant charges $150/hour to help a school configure payroll, store items, and rent settings.
+Handling service nonpayment, suspension, resource limits, and customer exit requires precise
+terms so that legitimate service billing cannot conceal a software-access paywall. Those terms
+remain under legal review; these examples do not settle them.
 
-**Allowed:** A hosting company offers managed instances with guaranteed uptime, backups, and technical support for a monthly service fee.
+## Contribution back
 
-### Not Allowed Examples
+**The intended commercial condition remains: commercial providers must contribute CTH bug
+fixes, security fixes, and general improvements upstream.** It is not a duty supplied by
+PolyForm itself, and it must not disappear through a change of terminology or use of a fork.
 
-**Prohibited:** Charging teachers to "unlock" features or modules (e.g., "$10/month for hall pass feature").
+The proposed instrument must define covered modifications, submission materials and licensing
+rights, a measurable deadline, and what happens if upstream declines or cannot accept a change.
+A proposed approach is to require an offer of usable source and associated tests/documentation,
+with rights sufficient for upstream distribution, rather than require upstream acceptance.
+That approach and its deadline are not yet adopted terms.
 
-**Prohibited:** Charging for updates, patches, or bug fixes (e.g., "Pay $50 to get version 1.7").
+Security fixes need a private reporting path and coordinated disclosure provisions. Contribution
+must not require publication of student data, credentials, or confidential deployment information.
+The obligation should concern changes to CTH, not independently developed software merely used
+alongside it. The boundary for extensions and integrations remains to be defined.
 
-**Prohibited:** Selling a hosted version with exclusive or enhanced functionality not available in the open-source version.
+## Attribution and independent development
 
-**Prohibited:** Branding the software as a proprietary product or platform (e.g., "SchoolBankPro powered by our technology").
+The proposed commercial terms would require preserving applicable notices, identifying CTH
+and its origin, and avoiding claims of ownership, exclusivity, or endorsement that a provider
+does not have. Third-party components retain their own license terms.
 
-**Prohibited:** Offering tiered pricing based on feature access (e.g., "Basic: $20/month for 50 students; Pro: $50/month for unlimited students").
+CTH welcomes independent implementations of classroom economy ideas, including commercial
+competitors. It does not seek exclusive control over economic concepts or impose its philosophy
+on other developers. Independent implementation is distinct from copying or adapting protected
+CTH code; describing a derivative as independent does not resolve its licensing requirements.
 
-**Prohibited:** Charging per-user, per-seat, or per-student pricing models (e.g., "$2 per student per month").
+## Status and questions
 
-**Prohibited:** Requiring payment to access critical bug fixes or security patches (all users must receive these for free).
+No new termination, penalty, cure period, or enforcement power is established by this draft.
+PolyForm's own provisions remain in its license text. The proposed commercial instrument needs
+its own clear treatment of compliance, breach, cure, and the relationship between grants.
 
-**These examples are illustrative, not limiting.**
+Contact [dev@classroomtokenhub.com](mailto:dev@classroomtokenhub.com) with questions. Contact
+is a clarification route, not a proposed requirement for individual permission.
 
-### Gray Areas Clarified
-
-**Q: Can I charge different service fees based on instance size or resource usage?**
-A: Yes, if the pricing reflects actual infrastructure costs (e.g., larger database, more server resources, higher bandwidth). No, if it's based on feature access or user counts within the software.
-
-**Q: Can I offer a "premium support" tier with faster response times?**
-A: Yes, different service levels (response time, availability, SLAs) are permitted. The software features themselves must remain identical across all service tiers.
-
-**Q: Can I charge more for commercial organizations vs nonprofits?**
-A: For services (hosting, support): Yes, you may set your own service pricing. For the software itself: No, because commercial organizations are already prohibited from using the software under the PolyForm Noncommercial License.
-
-**Q: Can I include this software as part of a larger paid service offering?**
-A: Only if the software itself remains free and separately available. You cannot bundle it in a way that requires payment to access it. The software's availability and features cannot be conditioned on purchasing your other services.
-
----
-
-## Contributions and Modifications
-
-**All bug fixes, security fixes, and general improvements made by commercial entities must be contributed back to the upstream project.**
-
-Forks that exist solely to avoid this obligation are not permitted for commercial use.
-
----
-
-## Attribution and Representation
-
-Commercial entities must:
-
-- **Preserve all copyright notices and attributions**
-- **Clearly acknowledge the original project and author**
-- **Avoid any implication of ownership, endorsement, or exclusive rights**
-
----
-
-## Enforcement
-
-Use of this software for commercial purposes outside the bounds described above constitutes a **violation of the PolyForm Noncommercial License**.
-
-The project maintainer reserves the right to determine whether a particular use case complies with this policy.
-
-For commercial service inquiries or clarification, contact the project maintainer.
-
----
-
-**Last Updated:** 2026-01-05
+**Draft updated:** 2026-10-26. Legal mechanism and effective terms pending review.

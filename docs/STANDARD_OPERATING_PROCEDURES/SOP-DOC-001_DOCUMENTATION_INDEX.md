@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.40 | 2026-10-24 | 3.39 | Normative |
+| SOP-DOC-001 | 3.41 | 2026-10-26 | 3.40 | Normative |
 
 ---
 
@@ -212,6 +212,7 @@ Archived material is deliberately absent; see §VI.
 
 ### Principles (PRN)
 - [PRN-PHL-001 — Design Principles, Philosophy, and Memory](../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md)
+- [PRN-PHL-002 — Classroom Token Hub Open-Source Philosophy](../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-002_Classroom_Token_Hub_Open_Source_Philosophy.md)
 - [PRN-SNP-001 — Why Classroom Token Hub Does Not Implement SSO](../PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-001_Why_Classroom_Token_Hub_Does_Not_Implement_SSO.md)
 - [PRN-SNP-002 — Trust-Based Account Recovery](../PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-002_Trust_Based_Account_Recovery.md)
 
@@ -279,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.41 (2026-10-26):**
+- Register PRN-PHL-002 v1.0: affirmative noncommercial open-source philosophy; informative only, with commercial permission pending legal review.
 
 **Version 3.40 (2026-10-24):**
 - Register SPEC-TIME-001 v1.3: `shift_calendar_days`, `localize_timestamp` and `same_instant` primitives; `elapsed_duration` truncates once; a decision may not compare timestamps directly; no private resolver wrappers; the resolver's `utc_now` is its internal clock and test seam (owner rulings 2026-10-24).
