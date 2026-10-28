@@ -42,7 +42,6 @@ DISALLOWED_TRANSACTION_TYPES = frozenset({
     "overdraft_fee",             # penalty fees are not insurable
     "interest",                  # credited income, not a loss
     "payroll",                   # income, not a loss
-    "bug_reward",                # reward income, not a loss
     "void_item_removed",         # bookkeeping reversal, not a loss
 })
 

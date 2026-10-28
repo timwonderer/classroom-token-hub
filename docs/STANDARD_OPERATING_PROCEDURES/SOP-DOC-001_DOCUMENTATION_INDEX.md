@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.43 | 2026-10-27 | 3.42 | Normative |
+| SOP-DOC-001 | 3.44 | 2026-10-27 | 3.43 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.44 (2026-10-27):**
+- Register DOM-LED-001 v2.18: `bug_reward` leaves INV-LED-017's closed `ledger_transaction.type` vocabulary with the retired sysadmin bug reward (owner ruling 2026-10-27). Migration `e3b7c1d9a2f4` re-creates `ck_ledger_transaction_type_closed_vocabulary` without it and refuses to run while any `bug_reward` row exists.
 
 **Version 3.43 (2026-10-27):**
 - Register DOM-SUP-001 v1.10 and SPEC-OPS-004 v1.5: the sysadmin bug reward is retired until badges are formally implemented (owner ruling 2026-10-27). Resolving an escalated issue returns it to the teacher and moves no money; `issues.eligible_for_reward` is no longer set, and is dropped by a later contract migration; `user_reports` loses its reward status and fields.
