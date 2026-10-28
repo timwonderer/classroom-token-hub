@@ -445,9 +445,11 @@
                         <p class="mb-0"><span id="transfer-summary"></span></p>
                     {% endcall %}
                     <div class="mb-3">
-                        <label for="passphrase" class="form-label">Enter your PIN to confirm:</label>
-                        <input type="password" class="form-control" name="pin" id="passphrase"
-                            autocomplete="current-password" required autofocus>
+                        <label for="transferPin" class="form-label">Enter your PIN to confirm:</label>
+                        {# Not current-password: Chrome would save the PIN as the account
+                           password and autofill it into every passphrase prompt. #}
+                        <input type="password" class="form-control" name="pin" id="transferPin"
+                            inputmode="numeric" autocomplete="off" required autofocus>
                     </div>
                     <input type="hidden" name="from_account" id="modal_from_account">
                     <input type="hidden" name="to_account" id="modal_to_account">
@@ -502,7 +504,7 @@
 
         // Focus on passphrase input when modal is shown
         document.getElementById('passphraseModal').addEventListener('shown.bs.modal', function () {
-            document.getElementById('passphrase').focus();
+            document.getElementById('transferPin').focus();
         });
     });
 
