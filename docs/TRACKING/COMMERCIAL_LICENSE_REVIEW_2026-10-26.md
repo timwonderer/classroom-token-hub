@@ -1,12 +1,13 @@
 # Commercial-services licensing review — 2026-10-26
 
-**Status: proposed structure for qualified legal review; not a license or adopted terms.**
+**Status: proposed structure for project licensing review; not a license or adopted terms.**
 
 ## Settled project intent
 
 The owner requests automatic conditional permission for reasonable, profitable services around
-CTH, without software monetization or individual approval. Contribution of commercial providers'
-CTH fixes and general improvements upstream remains required in the intended policy. Independent
+CTH, without software monetization or individual approval. As clarified by the owner on
+2026-10-27, contributions of fixes and improvements are welcome but voluntary, with no
+submission deadlines or contribution-compliance monitoring. Independent
 implementations and commercial competition are welcome. The philosophy is recorded in
 [PRN-PHL-002](../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-002_Classroom_Token_Hub_Open_Source_Philosophy.md).
 
@@ -16,12 +17,12 @@ Keep the standard repository `LICENSE` and its reproduced text unchanged. Propos
 versioned **CTH Commercial Services License** from the rights holders, available automatically
 on compliance with stated conditions. This would be an additional route for covered commercial
 activities, not an assertion that PolyForm itself permits those activities. A public exception
-could also implement the objective, but counsel must determine whether an exception or a separate
-grant most clearly handles rights, conditions, and remedies.
+could also implement the objective, and the project review should compare which form most clearly expresses the intended
+rights and conditions without changing PolyForm.
 
 The candidate instrument would explicitly identify covered releases and material, grant the
 necessary rights to operate, copy, modify, and distribute for qualifying services, and attach
-the no-software-monetization, attribution, and contribution-back conditions to that grant.
+the no-software-monetization and attribution conditions to that grant.
 Customer rights and distribution notices need independent treatment; a provider must not be
 assumed to sublicense rights it does not hold. Warranty, patent rights, acceptance, applicable
 law, cure, and termination must be drafted expressly rather than inherited ambiguously.
@@ -34,7 +35,7 @@ assumed to authorize relicensing for commercial services.
 Do not edit PolyForm into a custom license while retaining its name. The PolyForm project's
 license-text reuse instructions require removing its name and site references when modifying
 the license text. A separate CTH instrument avoids presenting custom clauses as standard PolyForm;
-counsel should verify the final packaging and references.
+the final packaging and references must keep the two distinct.
 [PolyForm reuse instructions](https://github.com/polyformproject/polyform-licenses/blob/1.0.0/README.md).
 
 ## Decisions and legal questions before activation
@@ -46,11 +47,7 @@ counsel should verify the final packaging and references.
 | Service economics | Reasonable profit for actual services; no software entitlements | Define objective evidence of a service fee and reasonableness without discretionary approval; address pooled infrastructure, usage meters and account-based proxies. |
 | Continuity | Permit legitimate service billing without software lock-in | Specify nonpayment suspension, termination, export, handover, and self-hosting rights; distinguish infrastructure availability from software licensing. |
 | Covered functionality | No charge for standard features in the corresponding free release | Define corresponding release, resource limits, legitimate configuration choices, and treatment of provider-developed extensions. |
-| Contribution scope | Cover CTH bug fixes, security fixes and general improvements made in covered commercial activity | Define modifications and general improvements, treatment of affiliates, forks, extensions, integrations, and pre-existing changes; exclude independent software and confidential operational data. |
-| Submission | Offer usable source, relevant tests/docs and adequate upstream licensing rights | Define the submission channel, acceptable materials, and fallback if upstream is unavailable. Upstream rejection must not put compliance outside the provider's control. |
-| Timing | Tie submission to first commercial deployment or distribution | Choose an explicit deadline; none is adopted here. Address internal testing, abandoned changes, and updates already deployed. |
-| Security | Private reporting first, with coordinated disclosure | Define private-submission deadline, embargo and public-release trigger, plus a fallback if maintainers do not respond. Never require student data or credentials. |
-| Contribution rights | Allow incorporation and redistribution in CTH, including its intended services model | Verify incoming rights support both licenses; choose contribution terms. Avoid accidental copyright assignment or relicense of incompatible third-party code. |
+| Voluntary contribution rights | Review licensing of changes actually offered upstream | Verify rights needed to incorporate and distribute accepted changes; this does not create a duty for providers to submit changes. |
 | Breach | Objective obligations, notice, proportionate cure and defined consequences | Decide condition versus covenant, enforcement standing, termination/reinstatement and customer continuity. Do not transplant PolyForm's cure provisions without deciding their application. |
 | Versioning | Publish a stable version, covered releases, and effective date | Decide prospective scope and treatment of existing grants; do not imply retroactive amendment or unilateral revocation. |
 | Prior policy | Preserve historical evidence while reconciling future documentation | Determine whether earlier wording granted rights or generated reliance; a new draft disclaimer cannot decide or erase that effect. |
@@ -61,7 +58,7 @@ These corrections are proposed, not applied, because the final grant is unresolv
 
 | Source | Existing problem | Proposed correction at legal finalization |
 |---|---|---|
-| `docs/user-guides/legal/commercial.md` before this draft | Services permission and contribution-back attributed to PolyForm; all policy violations described as PolyForm violations | Separate actual license terms from additional commercial grant and conditions; use the correct instrument's remedies. The working revision is explicitly a proposal. |
+| `docs/user-guides/legal/commercial.md` before this draft | Services permission and contribution-back attributed to PolyForm; all policy violations described as PolyForm violations | Separate actual license terms from additional commercial grant and conditions; make contributions voluntary and use the correct instrument's remedies. The working revision is explicitly a proposal. |
 | `docs/user-guides/legal/license.md`, Quick Summary | Blanket bans on paid hosting and for-profit internal use conflict with services intent and oversimplify purpose-based licensing | Preserve reproduced license text; summarize its permitted-purpose clauses accurately and link separately to any effective commercial-services grant. |
 | `docs/user-guides/legal/attribution.md`, Commercial Services and License Rationale | Says services are already permitted and PolyForm supplies that permission; asserts legal clarity/international recognition without substantiation | Attribute service rights to the adopted instrument, distinguish mission from legal effects, remove unsupported legal assurances. |
 | `README.md`, License | Blanket prohibition on SaaS, paid services and other for-profit use conflicts with intended services permission | Describe the baseline and adopted additional permission separately, with links to each. |
@@ -74,8 +71,10 @@ and informative status follow SOP-DOC-000 and INV-CORE-001. The PRN does not gov
 
 ## Completion gate
 
-Qualified counsel should resolve the questions above and prepare the effective instrument.
-The owner must then settle outstanding policy choices and authorize finalization. Reconcile
+Review the proposed language against PolyForm, the owner's intentions, and concrete provider
+scenarios. Record unresolved questions without claiming guaranteed enforceability. Paid legal
+review is not a project prerequisite. The owner settles policy choices and authorizes
+finalization. Reconcile
 all public summaries in the same release, record the effective version, and verify links and
 published rendering. These working drafts neither authorize deployment of new legal terms nor
 claim an enforceable commercial permission is already established.

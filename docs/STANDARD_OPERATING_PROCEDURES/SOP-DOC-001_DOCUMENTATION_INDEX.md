@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.41 | 2026-10-26 | 3.40 | Normative |
+| SOP-DOC-001 | 3.42 | 2026-10-27 | 3.41 | Normative |
 
 ---
 
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.42 (2026-10-27):**
+- Register PRN-PHL-002 v1.1: upstream contributions are welcome but voluntary, not a commercial condition.
 
 **Version 3.41 (2026-10-26):**
 - Register PRN-PHL-002 v1.0: affirmative noncommercial open-source philosophy; informative only, with commercial permission pending legal review.

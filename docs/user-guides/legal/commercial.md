@@ -35,7 +35,7 @@ controls. Calling a software-access charge “hosting” does not make it a serv
 
 The published software license is PolyForm Noncommercial License 1.0.0. Its permitted-purpose
 provisions govern use; its text does not contain the specific commercial-services permission
-or contribution-back duty proposed here. An educational customer's permitted use does not,
+proposed here. An educational customer's permitted use does not,
 by itself, establish a vendor's rights to operate a commercial service.
 
 The intended mechanism is a separate, versioned CTH commercial-services license, subject to
@@ -96,22 +96,15 @@ Handling service nonpayment, suspension, resource limits, and customer exit requ
 terms so that legitimate service billing cannot conceal a software-access paywall. Those terms
 remain under legal review; these examples do not settle them.
 
-## Contribution back
+## Voluntary contributions
 
-**The intended commercial condition remains: commercial providers must contribute CTH bug
-fixes, security fixes, and general improvements upstream.** It is not a duty supplied by
-PolyForm itself, and it must not disappear through a change of terminology or use of a fork.
+Bug fixes, security fixes, and improvements are welcome. Contributing upstream is voluntary
+and is not a condition of the proposed commercial-services permission. Providers do not need
+to submit changes, meet contribution deadlines, or obtain upstream acceptance.
 
-The proposed instrument must define covered modifications, submission materials and licensing
-rights, a measurable deadline, and what happens if upstream declines or cannot accept a change.
-A proposed approach is to require an offer of usable source and associated tests/documentation,
-with rights sufficient for upstream distribution, rather than require upstream acceptance.
-That approach and its deadline are not yet adopted terms.
-
-Security fixes need a private reporting path and coordinated disclosure provisions. Contribution
-must not require publication of student data, credentials, or confidential deployment information.
-The obligation should concern changes to CTH, not independently developed software merely used
-alongside it. The boundary for extensions and integrations remains to be defined.
+If you choose to report a security issue, use the project's private
+[security reporting process](https://github.com/timwonderer/classroom-token-hub/blob/main/SECURITY.md).
+Do not include student data, credentials, or confidential deployment information.
 
 ## Attribution and independent development
 
@@ -133,4 +126,4 @@ its own clear treatment of compliance, breach, cure, and the relationship betwee
 Contact [dev@classroomtokenhub.com](mailto:dev@classroomtokenhub.com) with questions. Contact
 is a clarification route, not a proposed requirement for individual permission.
 
-**Draft updated:** 2026-10-26. Legal mechanism and effective terms pending review.
+**Draft updated:** 2026-10-27. Legal mechanism and effective terms pending review.

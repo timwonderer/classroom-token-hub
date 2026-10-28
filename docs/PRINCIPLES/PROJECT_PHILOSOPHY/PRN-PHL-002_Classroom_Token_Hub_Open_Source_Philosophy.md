@@ -9,7 +9,7 @@ roles: [teacher, developer]
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| PRN-PHL-002 | 1.0 | 2026-10-26 | None | Informative |
+| PRN-PHL-002 | 1.1 | 2026-10-27 | 1.0 | Informative |
 
 ## Purpose and authority
 
@@ -72,10 +72,9 @@ hosting” describes the arrangement the policy excludes. Invoice wording cannot
 for examining what payment actually buys or controls.
 
 The intended permission is automatic for providers who meet the published conditions.
-Individual written approval is not the desired model. Contribution of CTH fixes and general
-improvements upstream is also an intended commercial condition, with scope, timing, and safe
-security disclosure to be established in the legal instrument. PolyForm does not itself
-supply that contribution-back duty.
+Individual written approval is not the desired model. Contributions of fixes and improvements
+are welcome but voluntary. Commercial permission should not depend on submission deadlines,
+upstream acceptance, or the maintainer monitoring whether providers contribute.
 
 ## Independent work and competition
 
@@ -109,7 +108,7 @@ helps readers understand the terms; it does not establish a hierarchy of legitim
 
 CTH currently publishes PolyForm Noncommercial License 1.0.0. Its philosophical commitments
 are broader than what that text alone implements. A separate commercial-services instrument
-is proposed to express conditional permission and contribution obligations without rewriting
+is proposed to express conditional services permission without rewriting
 the standard PolyForm text. Rights-holder authority, third-party compatibility, and enforcement
 remain legal questions, not conclusions supplied by this PRN.
 
@@ -123,6 +122,9 @@ and legal terms, and accurately describe the status of any commercial permission
 here cannot create license rights or override INV, DOM, FEAT, or incorporated SPEC contracts.
 
 ## Change Notes
+
+**Version 1.1 (2026-10-27):** Made upstream contributions voluntary, removing them as a proposed
+commercial condition and removing submission and monitoring expectations.
 
 **Version 1.0 (2026-10-26):** Established CTH's affirmative noncommercial open-source philosophy,
 its services principle, and its respect for independently developed alternatives. Recorded
