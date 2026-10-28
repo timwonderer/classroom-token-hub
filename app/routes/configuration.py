@@ -6,6 +6,7 @@ from app.auth import admin_required
 from app.feats import configuration_portability as transfer
 from app.services.configuration_artifact import ConfigurationError, MAX_BYTES, digest, StrictJSON
 from app.services.configuration_fields import SCHEDULES, SCHEMAS
+from app.services.configuration_display import FAMILY_LABELS, FIELD_LABELS, family_labels, preview_sections
 from app.services.insurance_configuration import InsuranceContractViolation
 from app.services.store_service import StoreServiceError
 
@@ -76,7 +77,7 @@ def settings():
     preview = None
     if request.method == "POST":
         if not form.validate_on_submit():
-            return render_template("configuration_transfer.html", form=form, groups=groups,
+            return render_template("configuration_transfer.html", labels=FAMILY_LABELS, field_labels=FIELD_LABELS, form=form, groups=groups,
                 entries=_entries(groups), stage=stage, destination=destination, schedules=SCHEDULES, schemas=SCHEMAS), 400
         try:
             action = request.form.get("action")
@@ -105,7 +106,8 @@ def settings():
             elif action == "confirm":
                 result = transfer.confirm_import(context, nonce, request.form.get("artifact", ""), request.form.get("confirmation", ""))
                 flash("Configuration imported into this class. Existing activity keeps its original terms.", "success")
-                return render_template("configuration_transfer.html", form=form, stage="done", result=transfer.import_result_view(context, result))
+                return render_template("configuration_transfer.html", labels=FAMILY_LABELS, field_labels=FIELD_LABELS, form=form, stage="done",
+                    result=transfer.import_result_view(context, result), skipped_labels=family_labels(result.get("skipped") or []))
             elif action == "cleanup":
                 count = transfer.cleanup_receipts(context, nonce)
                 flash(f"Removed {count} expired retry receipts.", "success")
@@ -116,6 +118,8 @@ def settings():
             flash(str(exc), "danger")
             stage = "start"
             groups = destination
-    return render_template("configuration_transfer.html", form=form, groups=groups, entries=_entries(groups),
+    return render_template("configuration_transfer.html", labels=FAMILY_LABELS, field_labels=FIELD_LABELS, form=form, groups=groups, entries=_entries(groups),
         stage=stage, raw=raw, destination=destination, schedules=SCHEDULES, schemas=SCHEMAS, preview=preview,
+        sections=preview_sections(preview["groups"]) if preview else [],
+        skipped_labels=family_labels(preview["skipped"]) if preview else [],
         inventory_digest=digest(StrictJSON.dumps(groups)))
