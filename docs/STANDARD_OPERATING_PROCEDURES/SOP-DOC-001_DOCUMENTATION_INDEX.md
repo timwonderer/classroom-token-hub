@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.41 | 2026-10-25 | 3.40 | Normative |
+| SOP-DOC-001 | 3.45 | 2026-10-27 | 3.44 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.45 (2026-10-27):**
+- Register DOM-OPS-001 v2.15: `classes.class_id`, `seats.id` and `users.id` stay inside the database; log lines, telemetry, operator-facing pages and URLs name a class by `class_public_id` or `join_code` and an actor by `seats.public_id`, including inside composed idempotency keys and correlation ids (owner ruling 2026-10-27).
 
 **Version 3.40 (2026-10-24):**
 - Register SPEC-TIME-001 v1.3: `shift_calendar_days`, `localize_timestamp` and `same_instant` primitives; `elapsed_duration` truncates once; a decision may not compare timestamps directly; no private resolver wrappers; the resolver's `utc_now` is its internal clock and test seam (owner rulings 2026-10-24).

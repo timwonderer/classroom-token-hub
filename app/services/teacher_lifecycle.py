@@ -78,5 +78,5 @@ def purge_stale_teacher_accounts():
             ))
         except Exception:
             db.session.rollback()
-            logging.getLogger(__name__).exception("Teacher lifecycle destruction failed for user_id=%s", user_id)
+            logging.getLogger(__name__).exception("Teacher lifecycle destruction failed")
     return deleted

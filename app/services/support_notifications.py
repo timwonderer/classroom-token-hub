@@ -46,7 +46,7 @@ def _log_outcome(level, message, *args):
     # production formatter cannot attach actor/class/request context to alerts.
     current_app.logger.log(level, message, *args, extra={
         "request_id": "-", "actor_type": "-", "actor_public_id": "-",
-        "class_id": "-", "endpoint": "-", "method": "-",
+        "class_public_id": "-", "endpoint": "-", "method": "-",
         "error_class": "-", "error_message": "-", "correlation_version": "-",
     })
 

@@ -130,7 +130,7 @@
                         </div>
                         <select id="class-switcher-select" class="form-select form-select-sm">
                             {% for class_option in available_classes %}
-                            <option value="{{ class_option.class_id }}" {% if class_option.is_current %}selected{% endif %}>
+                            <option value="{{ class_option.class_public_id }}" {% if class_option.is_current %}selected{% endif %}>
                                 {{ class_option.class_identifier }} with {{ class_option.teacher_name }}
                             </option>
                             {% endfor %}
@@ -369,10 +369,10 @@
 
             if (classSwitcher) {
                 classSwitcher.addEventListener('change', function () {
-                    const classId = this.value;
-                    if (!classId) return;
+                    const classPublicId = this.value;
+                    if (!classPublicId) return;
 
-                    window.AppCore.csrfFetch(`/student/switch-class/${classId}`, {
+                    window.AppCore.csrfFetch(`/student/switch-class/${classPublicId}`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'

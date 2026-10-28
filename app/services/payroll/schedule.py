@@ -43,6 +43,7 @@ from types import SimpleNamespace
 
 from app.extensions import db
 from app.models import PayrollEvent
+from app.services.tlcp import class_log_ref
 from app.services.payroll.settings import (
     classes_with_payroll_settings,
     current_payroll_setting,
@@ -318,7 +319,7 @@ def due_payroll_occurrences(*, now=None) -> list[tuple[str, datetime]]:
                     reference=now,
                 ).is_later
         except Exception:
-            logger.exception("Could not derive the next payroll date for class %s; skipping it", class_id)
+            logger.exception("Could not derive the next payroll date for class %s; skipping it", class_log_ref(class_id))
             continue
         if is_due:
             due.append((class_id, occurrence))

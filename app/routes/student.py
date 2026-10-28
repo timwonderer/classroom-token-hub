@@ -51,7 +51,7 @@ from app.forms import (
 )
 
 # Import utility functions
-from app.utils.helpers import is_safe_url, render_template_with_fallback as render_template
+from app.utils.helpers import is_safe_url, loggable_token, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.ip_handler import get_real_ip
@@ -189,7 +189,7 @@ def _student_login_hard_fail(*, student_id: int, reason: str, is_json: bool, sta
         extra={
             "actor_type": "student",
             "actor_public_id": "-",
-            "class_id": "-",
+            "class_public_id": "-",
             "error_class": "InvariantViolation",
             "correlation_version": "v1",
         },
@@ -314,7 +314,7 @@ from app.utils.display_name_session import (
     clear_teacher_display_name_cache,
 )
 from app.session_lifetime import SESSION_EXPIRES_AT_KEY
-from app.services.tlcp import has_recent_error_for_actor
+from app.services.tlcp import class_log_ref, has_recent_error_for_actor
 from app.services.context_resolver import (
     resolve_canonical_context,
     ContextResolutionError,
@@ -1084,7 +1084,7 @@ def add_class():
             first_name=first_name,
             last_name=last_name,
             dedupe_code=dedupe_code,
-            correlation_id=f"corr_iden_bind_{context.user_id}_{uuid.uuid4().hex}",
+            correlation_id=f"corr_iden_bind_{uuid.uuid4().hex}",
             idempotency_key=f"feat:iden:bind-class:{context.user_id}:{display_join_code}",
         )
 
@@ -1271,9 +1271,7 @@ def dashboard():
     now_utc = dashboard_time.canonical_now_utc
     # --- DASHBOARD DEBUG LOGGING ---
     current_app.logger.info(
-        "DASHBOARD DEBUG: Student %s class_id=%s active=%s done=%s seconds=%s",
-        student.id,
-        scope.class_id,
+        "DASHBOARD DEBUG: active=%s done=%s seconds=%s",
         attendance_state.get("active"),
         attendance_state.get("done"),
         attendance_state.get("duration"),
@@ -1676,7 +1674,7 @@ def transfer():
                         to_account=to_account,
                     )
                 current_app.logger.info(
-                    f"Transfer {amount} from {from_account} to {to_account} for seat {seat_id}"
+                    f"Transfer {amount} from {from_account} to {to_account}"
                 )
             except InsufficientFunds as e:
                 # The checks above ran before the seat row was locked, so a
@@ -1699,7 +1697,7 @@ def transfer():
             except SQLAlchemyError as e:
                 db.session.rollback()
                 current_app.logger.error(
-                    f"Transfer failed for student {student.id}: {e}", exc_info=True
+                    f"Transfer failed: {e}", exc_info=True
                 )
                 if is_json:
                     return jsonify(status="error", message="Transfer failed."), 500
@@ -2931,10 +2929,8 @@ def rent_pay(period):
             return redirect(url_for('student.rent'))
 
     current_app.logger.info(
-        "rent_pay dispatch: seat_id=%s class_id=%s correlation_id=%s",
-        seat_id,
-        class_id,
-        correlation_id,
+        "rent_pay dispatch: correlation_id=%s",
+        loggable_token(correlation_id),
     )
 
     # Delegate the whole atomic transaction to the canonical FEAT. This settles
@@ -2955,7 +2951,7 @@ def rent_pay(period):
             current_app.logger.info(
                 "rent_pay FEAT error: code=%s correlation_id=%s",
                 result.error_code,
-                correlation_id,
+                loggable_token(correlation_id),
             )
             flash(result.error_message or "Rent payment could not be completed.", "error")
         return redirect(url_for('student.rent'))
@@ -3079,7 +3075,7 @@ def _complete_student_login(form):
     if not seat_options:
         return _student_login_hard_fail(
             student_id=linked_user.id,
-            reason=f"User {linked_user.id} login has no valid class seats.",
+            reason="login has no valid class seats.",
             is_json=is_json,
         )
 
@@ -3093,13 +3089,12 @@ def _complete_student_login(form):
         )
         if valid_persisted_selection is None:
             current_app.logger.error(
-                "TLCP-INVARIANT-VIOLATION: User %s login has invalid persisted class %s.",
-                linked_user.id,
-                persisted_class_id,
+                "TLCP-INVARIANT-VIOLATION: login has invalid persisted class %s.",
+                class_log_ref(persisted_class_id),
                 extra={
                     "actor_type": "student",
                     "actor_public_id": "-",
-                    "class_id": "-",
+                    "class_public_id": "-",
                     "error_class": "InvariantViolation",
                     "correlation_version": "v1",
                 },
@@ -3126,7 +3121,7 @@ def _complete_student_login(form):
     if target_seat is None:
         return _student_login_hard_fail(
             student_id=linked_user.id,
-            reason=f"User {linked_user.id} login failed to resolve seat for class {valid_persisted_selection['class_id']}.",
+            reason=f"login failed to resolve seat for class {class_log_ref(valid_persisted_selection['class_id'])}.",
             is_json=is_json,
         )
 
@@ -3169,8 +3164,7 @@ def select_class_context():
     seat_options = _get_identity_bound_seat_options(linked_user.id)
     if not seat_options:
         current_app.logger.critical(
-            "P0 INCIDENT: User %s has no surviving seats during class-context gate.",
-            linked_user.id,
+            "P0 INCIDENT: a signed-in student has no surviving seats during class-context gate.",
         )
         session.clear()
         flash("Account scope incident detected. Contact support immediately.", "error")
@@ -3182,7 +3176,7 @@ def select_class_context():
         if selected_class_id not in allowed_class_ids:
             return _student_login_hard_fail(
                 student_id=linked_user.id,
-                reason=f"User {linked_user.id} selected invalid class {selected_class_id} during class-context switch.",
+                reason=f"selected invalid class {class_log_ref(selected_class_id)} during class-context switch.",
                 is_json=False,
                 status_code=302,
             )
@@ -3195,7 +3189,7 @@ def select_class_context():
         if selected_seat is None:
             return _student_login_hard_fail(
                 student_id=linked_user.id,
-                reason=f"User {linked_user.id} selected class {selected_class_id} but seat context failed to resolve.",
+                reason=f"selected class {class_log_ref(selected_class_id)} but seat context failed to resolve.",
                 is_json=False,
                 status_code=302,
             )
@@ -3228,14 +3222,19 @@ def logout():
     return redirect(url_for('student.login'))
 
 
-@student_bp.route('/switch-class/<class_id>', methods=['POST'])
+@student_bp.route('/switch-class/<class_public_id>', methods=['POST'])
 @login_required
 @requires_feat_context("FEAT-IDEN-001")
-def switch_class(class_id):
-    """Switch to a different class using class_id as the stable backend reference."""
+def switch_class(class_public_id):
+    """Switch to a different class. The URL carries the class's public id
+    (DOM-OPS-001 §7: an internal class_id never appears in a URL); it resolves
+    to class_id here, and authority is checked against that."""
     from app.models import Seat
 
     student = _get_canonical_student_from_context()
+    class_id = db.session.query(ClassEconomy.class_id).filter_by(class_public_id=class_public_id).scalar()
+    if class_id is None:
+        return jsonify(status="error", message="You don't have access to that class."), 403
     try:
         resolved_switch = resolve_student_class_switch_scope(actor=student, class_id=class_id)
         access_policy_service.assert_can_switch_class(resolved_switch.scope)
@@ -3348,7 +3347,7 @@ def submit_general_issue():
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
                 include_recent_error=include_recent_error,
-                correlation_id=f"corr_support_issue_{class_context.class_id}_{uuid.uuid4().hex}",
+                correlation_id=f"corr_support_issue_{uuid.uuid4().hex}",
                 idempotency_key=f"feat:sup:issue:{class_context.class_id}:general:{class_context.seat_id}:{uuid.uuid4().hex}",
             )
 
@@ -3412,7 +3411,7 @@ def report_transaction_issue(transaction_id):
                 related_transaction_id=transaction_id,
                 related_record_type='transaction',
                 include_recent_error=include_recent_error,
-                correlation_id=f"corr_support_issue_{class_context.class_id}_{uuid.uuid4().hex}",
+                correlation_id=f"corr_support_issue_{uuid.uuid4().hex}",
                 idempotency_key=f"feat:sup:issue:{class_context.class_id}:transaction:{transaction_id}:{uuid.uuid4().hex}",
             )
 
@@ -3480,7 +3479,7 @@ def report_attendance_session_issue(attendance_session_id):
                 related_record_type='attendance_session',
                 related_record_id=attendance_session_id,
                 include_recent_error=include_recent_error,
-                correlation_id=f"corr_support_issue_{class_context.class_id}_{uuid.uuid4().hex}",
+                correlation_id=f"corr_support_issue_{uuid.uuid4().hex}",
                 idempotency_key=f"feat:sup:issue:{class_context.class_id}:attendance:{attendance_session_id}:{uuid.uuid4().hex}",
             )
 
@@ -3543,7 +3542,7 @@ def verify_recovery(code_id):
         # Verify passphrase
         user = get_current_user()
         if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
-            current_app.logger.warning(f"Recovery verification failed: incorrect passphrase for student {student.id}")
+            current_app.logger.warning("Recovery verification failed: incorrect passphrase for student %s", student.public_id)
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,

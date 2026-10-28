@@ -741,7 +741,7 @@
                     </div>
                     <div class="card-body">
                         <p><strong>Current Balance:</strong> <span class="badge bg-primary fs-5">{{ hall_pass_balance }}</span></p>
-                        <form action="{{ url_for('admin.adjust_hall_pass_entitlements', seat_id=student.id) }}" method="post"
+                        <form action="{{ url_for('admin.adjust_hall_pass_entitlements', seat_public_id=student.public_id) }}" method="post"
                             class="row g-3 align-items-end">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <div class="col-md-4">

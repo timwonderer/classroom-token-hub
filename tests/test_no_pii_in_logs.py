@@ -1,11 +1,11 @@
-"""Logs carry seat and class ids, never a student's name (INV-ARC-005 §V).
+"""Logs carry public seat and class ids, never a student's name (INV-ARC-005 §V).
 
 On 2026-10-02 the production journal showed one line per student for every
 bulk hall-pass adjustment, each carrying the student's full name — decrypted
 from ``identity_profiles``, whose names are stored with ``PIIEncryptedType``
-precisely so they never sit in plaintext (INV-ARC-018). The route now logs
-``seat_id`` and ``class_id``; attribution by id is what INV-ARC-018 prescribes
-for audit records as well.
+precisely so they never sit in plaintext (INV-ARC-018). The route now names the
+seat by ``seats.public_id`` alone: the internal ids stay inside the database
+(DOM-OPS-001 §7), and the line prefix already carries the class's public id.
 
 Two layers: a behavioural regression on the route that shipped the defect, and
 a structural guard over ``app/`` so the next logger call cannot read a name off
@@ -44,8 +44,9 @@ def test_bulk_hall_pass_adjustment_logs_seat_and_class_not_name(client, app, cap
     lines = [r.getMessage() for r in caplog.records if "hall pass entitlements" in r.getMessage()]
     assert len(lines) == 1, lines
     line = lines[0]
-    assert f"seat_id={student.seat_id}" in line
-    assert f"class_id={classroom.class_id}" in line
+    assert f"seat={student.seat.public_id}" in line
+    assert f"seat_id={student.seat_id}" not in line
+    assert classroom.class_id not in line
 
     every_message = "\n".join(r.getMessage() for r in caplog.records)
     assert student.first_name not in every_message
@@ -162,12 +163,12 @@ def test_detector_resolves_the_real_logger_method_alias():
     injected into the real ``log_fn(...)`` call is reported."""
     path = APP_ROOT / "services" / "operational_event_service.py"
     source = path.read_text(encoding="utf-8")
-    real_call = 'log_fn("OPERATIONAL_EVENT %s", payload)'
+    real_call = 'log_fn("OPERATIONAL_EVENT %s", log_payload)'
     assert real_call in source, "the alias this proof mutates has moved; update the proof"
     assert find_pii_in_log_calls(source) == []
 
     mutated = source.replace(
-        real_call, 'log_fn("OPERATIONAL_EVENT %s %s", payload, seat.identity_profile.full_name)'
+        real_call, 'log_fn("OPERATIONAL_EVENT %s %s", log_payload, seat.identity_profile.full_name)'
     )
     assert len(find_pii_in_log_calls(mutated)) == 1
 
@@ -175,8 +176,8 @@ def test_detector_resolves_the_real_logger_method_alias():
 def test_detector_is_quiet_on_lawful_log_lines():
     source = '''
 current_app.logger.info(
-    "Admin adjusted hall pass entitlements seat_id=%s class_id=%s: %s %s, new value: %s",
-    student.id, student.class_id, update_type, value, new_value,
+    "Admin adjusted hall pass entitlements seat=%s: %s %s, new value: %s",
+    student.public_id, update_type, value, new_value,
 )
 logger.info("class %s renamed", class_row.display_name)
 logger.exception("Unhandled exception", extra={"route": request.path})
