@@ -8,6 +8,7 @@ from tests.helpers import temporal
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats import configuration_portability as transfer
+from app.utils.temporal_display import format_timestamp
 from app.models import User, ConfigurationImportReceipt, StoreProduct
 from app.services.configuration_artifact import ConfigurationError, sign, verify, StrictJSON
 from app.services.context_resolver import CanonicalContext
@@ -518,14 +519,96 @@ def test_transfer_displays_class_time_without_changing_receipt_instants(app):
         raw = transfer.export_configuration(context, nonce, {"payroll": True})
         preview = transfer.preview_import(context, nonce, raw)
         envelope = verify(raw, "export")
-        assert preview["expires_at"] == "2030-01-20T09:00:00-08:00"
+        assert preview["expires_at"] == "Jan 20, 2030, 9:00 AM PST"
         assert verify(preview["token"], "confirmation")["expires_at"] == envelope["expires_at"]
         result = transfer.confirm_import(context, nonce, raw, preview["token"])
         stored = ConfigurationImportReceipt.query.filter_by(class_id=context.class_id,
             operation_id=result["operation_id"]).one()
         view = transfer.import_result_view(context, result)
-        assert view["payroll_effective_display"].endswith("-08:00")
-        assert transfer.identity.instant(view["payroll_effective_display"]) == transfer.identity.instant(result["payroll_effective_at"])
+        assert view["payroll_effective_display"] == format_timestamp(context, transfer.identity.instant(result["payroll_effective_at"]))
+        assert view["payroll_effective_display"].endswith(" PST")
         assert stored.result == result
         assert "payroll_effective_display" not in stored.result
+        assert not {"sections", "skipped_labels"} & set(preview)  # page view data is built by the route, not the FEAT
         assert transfer.confirm_import(context, nonce, raw, preview["token"]) == result
+
+
+def test_preview_values_read_as_teachers_set_them():
+    from app.services.configuration_display import preview_sections
+    payroll = {"pay_rate": "1.75000000", "overtime_threshold": None, "overtime_threshold_unit": None,
+        "max_time_per_day": "90.0", "max_time_per_day_unit": "minutes", "pay_schedule_type": "biweekly",
+        "first_pay_date": "2026-11-09"}
+    [section] = preview_sections({"payroll": payroll})
+    rows = {row["label"]: row["value"] for row in section["blocks"][0]["rows"]}
+    assert list(rows) == ["Pay rate", "Overtime after", "Maximum paid time per day", "Pay schedule", "First payday"]
+    assert rows == {"Pay rate": "$105.00 per hour", "Overtime after": "Not set",
+        "Maximum paid time per day": "90 minutes", "Pay schedule": "Bi-weekly", "First payday": "November 9, 2026"}
+    assert section["title"] == "Payroll"
+
+
+def test_preview_describes_hall_pass_limits_as_passes_out():
+    from app.services.configuration_display import family_labels, preview_sections
+    [hall] = preview_sections({"hall_pass": {"max_queue_limit": 3,
+        "pass_type_payload": [{"pass_name": "Bathroom", "max_queue": 2, "consume_pass": True}]}})
+    assert hall["title"] == "Hall passes"
+    assert hall["blocks"][0]["rows"] == [{"label": "Out limit", "value": "3"},
+        {"label": "Bathroom", "value": "Up to 2 out at once · uses a pass"}]
+    assert family_labels(["hall_pass", "store"]) == ["Hall passes", "Store"]
+
+
+def test_preview_values_follow_domain_meaning():
+    from app.services.configuration_display import value_text
+    # payroll reads a missing unit as hours (payroll.settings.daily_limit_seconds)
+    assert value_text("max_time_per_day", "2", {"max_time_per_day_unit": None}) == "2 hours"
+    # progressive overdraft tiers are percent of CWI, not dollars
+    assert value_text("progressive_overdraft_fee", {"tier_1": "5", "tier_2": "10", "tier_3": "15"}, {}) == (
+        "1st overdraft: 5% of CWI, 2nd: 10% of CWI, 3rd and later: 15% of CWI")
+    # teacher-authored text is shown exactly as it will be imported
+    for field in ("description", "redemption_prompt", "tier_name", "marketing_badge"):
+        assert value_text(field, "Use CODE_A", {}) == "Use CODE_A"
+
+
+def _page_headings(html):
+    """Heading levels inside <main>, outside the help offcanvas and hidden elements."""
+    from html.parser import HTMLParser
+    void = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+    class Outline(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack, self.levels = [], []
+
+        def handle_starttag(self, tag, attrs):
+            if tag in void:
+                return
+            attrs = dict(attrs)
+            classes = (attrs.get("class") or "").split()
+            skipped = "offcanvas" in classes or "d-none" in classes or "hidden" in attrs or attrs.get("aria-hidden") == "true"
+            self.stack.append((tag == "main", skipped))
+            inside_main = any(main for main, _ in self.stack)
+            if tag in ("h1", "h2", "h3", "h4", "h5", "h6") and inside_main and not any(help for _, help in self.stack):
+                self.levels.append(int(tag[1]))
+
+        def handle_endtag(self, tag):
+            if tag not in void and self.stack:
+                self.stack.pop()
+
+    outline = Outline()
+    outline.feed(html)
+    return outline.levels
+
+
+def test_INV_ARC_020__transfer_page_headings_never_skip_a_level(app):
+    from tests.a11y_fixtures import load_registry, render_state
+    states = [s for s in load_registry() if s.template == "configuration_transfer.html"]
+    assert {s.state for s in states} == {"start", "choose", "confirm", "done"}
+    for state in states:
+        levels = _page_headings(render_state(app, state).html)
+        assert levels and levels[0] == 1, (state.state, levels)
+        assert all(b <= a + 1 for a, b in zip(levels, levels[1:])), (state.state, levels)
+
+
+def test_heading_outline_detector_reports_a_skipped_level():
+    levels = _page_headings('<nav><h4>side</h4></nav><main><h1>T</h1><div class="offcanvas"><h5>help</h5></div>'
+        '<div class="d-none"><h3>hidden</h3></div><h2>A</h2><h5>skip</h5></main>')
+    assert levels == [1, 2, 5]
