@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.17 | 2026-10-18 | 2.16 | Constitutional |
+| DOM-LED-001 | 2.18 | 2026-10-27 | 2.17 | Constitutional |
 
 ---
 
@@ -97,7 +97,6 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
   | `payroll` | — |
   | `payroll_correction` | — |
   | `manual_payment` | — |
-  | `bug_reward` | — |
   | `issue_reversal` | — |
   | `issue_compensation` | — |
   | `rent_payment` | — |
@@ -308,6 +307,8 @@ Every origin independently enforces §VII.1A: total attributable recovery never 
 `resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
 
 ## X. Change Notes
+
+**2.18 (2026-10-27)** removes `bug_reward` from INV-LED-017's enumeration (owner ruling 2026-10-27: the sysadmin bug reward is retired until badges are formally implemented; DOM-SUP-001 v1.10). No row has ever carried it and nothing writes it. Migration `e3b7c1d9a2f4` re-creates `ck_ledger_transaction_type_closed_vocabulary` from the amended table and refuses to run while any `bug_reward` row exists, so the vocabulary stays closed over every existing row. Like its predecessor the constraint is `NOT VALID`; validating it against existing rows remains a separate step.
 
 **2.17 (2026-10-18)** deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating this invariant's own canonical/legacy table as the only lawful `type` values (`NULL` still permitted). This closes the *set* of lawful values; it does not yet enforce the *spelling* a new row must use within that set — the write-time casing validator (rejecting a legacy spelling on a new row) remains separate, later scope, since it requires retiring every current legacy-cased writer and updating every read-site comparison that still expects the legacy spelling (most critically `app/utils/transaction_idempotency.py`'s idempotent-type and fingerprint-exclusion sets). No existing row's `type` value changes.
 
