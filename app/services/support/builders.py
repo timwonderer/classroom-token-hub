@@ -53,7 +53,6 @@ def build_teacher_issue_view(ctx, issue, student_display_name, class_label):
         ],
         'page_url': issue.page_url,
         'system_metadata': issue.system_metadata,
-        'eligible_for_reward': issue.eligible_for_reward,
         'share_class_name_with_sysadmin': issue.share_class_name_with_sysadmin,
         # Relationships resolved to plain lists by the caller when needed.
         'resolution_actions': [],
