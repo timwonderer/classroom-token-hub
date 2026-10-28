@@ -29,6 +29,7 @@ DEFAULT_NOISE_ENDPOINT_PREFIXES = (
     "/sw.js",
     "/favicon.ico",
     "/api/set-timezone",
+    "/api/student-status",  # the dashboard polls it every 10s
 )
 
 def _int_env(name: str, default: int) -> int:
@@ -473,6 +474,9 @@ def persist_request_trace(
     """
     if not context or not context.get("actor_public_id") or not context.get("class_id"):
         return
+    # Successful noise would evict real requests from the per-actor cap; failures stay.
+    if _is_noise_endpoint(context.get("endpoint")) and (status_code or 0) < 400:
+        return
 
     sess = _session if _session is not None else db.session
     # after_request may run after this request destroyed its own class/seat.
@@ -651,11 +655,16 @@ def create_ticket_correlation_pack(
     error_window_hours = _int_env("TLCP_ERROR_WINDOW_HOURS", DEFAULT_ERROR_WINDOW_HOURS)
 
     fetch_limit = trace_limit * _int_env("TLCP_TRACE_FETCH_MULTIPLIER", DEFAULT_TRACE_FETCH_MULTIPLIER)
+    # The TTL holds here regardless of when the probabilistic cleanup last ran.
+    trace_cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=ticket_created_at, elapsed_seconds=-ttl_days * 86400,
+    ).shifted_timestamp_utc
     trace_rows = (
         ActorRequestTrace.query.filter_by(
             actor_type=actor_type,
             actor_public_id=actor_public_id,
         )
+        .filter(ActorRequestTrace.created_at >= trace_cutoff)
         .order_by(ActorRequestTrace.created_at.desc(), ActorRequestTrace.id.desc())
         .limit(fetch_limit)
         .all()
