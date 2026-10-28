@@ -239,7 +239,7 @@ def _issue(status: str, **overrides) -> dict:
             {"id": 7, "amount": -4.5, "description": "Cafeteria lunch", "date_display": "Jan 12, 2030"},
             {"id": 6, "amount": 10.0, "description": "Payroll", "date_display": "Jan 10, 2030"},
         ],
-        "page_url": "/student/shop", "system_metadata": None, "eligible_for_reward": False,
+        "page_url": "/student/shop", "system_metadata": None,
         "share_class_name_with_sysadmin": False, "resolution_actions": [], "status_history": [],
         "_resolution_actions_count": 0,
     }

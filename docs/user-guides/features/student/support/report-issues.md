@@ -4,7 +4,7 @@ category: features
 subcategory: student-support
 roles: [student]
 description: Report a wrong transaction or a broken feature, write a report your teacher can act on, and follow the six statuses through to Closed.
-keywords: [report issue, help and support, knowledge base, my issues, general issue, transaction issue, escalate, status, bug reward]
+keywords: [report issue, help and support, knowledge base, my issues, general issue, transaction issue, escalate, status]
 related:
   - user-guides/diagnostics/student/support
   - user-guides/features/teacher/classroom/student-issues
@@ -76,7 +76,7 @@ Before you file anything the tab reads *You haven't submitted any issues yet.*
 > **"It doesn't work" cannot be fixed.** Your teacher only sees what you typed. Compare *the store is broken* with *when I press Purchase on the Blue Pencil, the page goes blank and my balance does not change* — the second one can be acted on today.
 
 > [!NOTE]
-> **Escalation is not your teacher ignoring you.** **Escalated to Developer** means the problem was real and bigger than your classroom. If you have found a genuine bug, you can receive a reward for it.
+> **Escalation is not your teacher ignoring you.** **Escalated to Developer** means the problem was real and bigger than your classroom.
 
 > [!TIP]
 > The counter under **What did you expect to happen?** counts up to 1000, but that field is actually limited to 500 characters — a longer answer is rejected when you submit. Keep it to a couple of sentences and you will not hit it.

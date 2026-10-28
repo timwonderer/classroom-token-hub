@@ -8,10 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-27 — Copy class configuration between classes, time logic through one resolver, and hardened production checks
+
 ### Added
 
-- <!-- notes: internal, highlight --> Class-scoped configuration file export/import with authenticated five-day files, atomic imports, and temporary retry receipts. Insurance tier groups now use canonical identities; migration preserves existing coverage through explicit successors.
-- <!-- notes: accessibility --> Accessibility: configuration transfer forms have explicit labels and grouped selections; Copy Configuration navigation announces the current page. Rendered start, upload, and confirmation stages are covered by accessibility smoke assertions.
+- <!-- notes: internal, highlight --> Class-scoped configuration file export/import with authenticated five-day files, atomic imports, and temporary retry receipts. Insurance tier groups now use canonical identities; migration preserves existing coverage through explicit successors. Requires the new `CONFIGURATION_EXPORT_KEY` secret (`SOP-DEP-001` 2.12); without it the page loads but every export and import is refused. The import review shows each setting as its settings page does (pay rate per hour, times with units, class-local dates) instead of stored values. Teacher guide: `docs/user-guides/features/teacher/settings/copy-configuration.md`.
+- <!-- notes: accessibility --> Accessibility: configuration transfer forms have explicit labels and grouped selections; Copy Configuration navigation announces the current page. Rendered start, upload, and confirmation stages are covered by accessibility smoke assertions. The page has a contextual help panel, its alerts use the shared alert cards, every switch and checkbox has its own label, a feature's items are hidden and disabled while its switch is off, and the import review shows labeled tables instead of raw field names. Headings follow the page outline (h1, then h2 cards, h3 features, h4 items); `cards.top_card` and `cards.nested_card` take a `heading_tag`, defaulting to their previous h5/h6.
 
 ### Changed
 
@@ -33,6 +35,8 @@ and this project follows semantic versioning principles.
 
 ### Removed
 
+- <!-- notes: security-reliability --> **The sysadmin bug reward is retired until badges are formally implemented** (owner ruling 2026-10-27). Resolving an escalated ticket records the technical fix and returns it to the teacher; the form no longer offers a reward, and the resolve route ignores `eligible_for_reward` and `reward_amount` if a request still sends them, so a hand-built POST can no longer credit a student. Production has never issued one. DOM-SUP-001 v1.10 and SPEC-OPS-004 v1.5 record the change; the `issues.eligible_for_reward` column and the `bug_reward` ledger type are dropped by a follow-up contract migration.
+- <!-- notes: internal --> **`bug_reward` is no longer a lawful ledger transaction type** (DOM-LED-001 v2.18). Migration `e3b7c1d9a2f4` re-creates `ck_ledger_transaction_type_closed_vocabulary` without it, still `NOT VALID`, and refuses to run while any `bug_reward` row exists; production has none. It also leaves the idempotent-type set and the insurance non-loss list. Downgrade re-admits it exactly.
 - <!-- notes: internal --> **The Docusaurus workspace `docs-site/` is retired** (`SOP-DOC-000` 3.7, `SPEC-DES-001` 2.6). The developer docs have been built with Hugo + Hextra since the cutover, so the Docusaurus config, its npm `package.json` and lockfile (the project's only Node dependencies), the React pages, sidebars and engineering-notes blog are deleted. The brand fonts and token layer the Hugo build still uses moved to `docs-generator-proof/brand/`, and the map of renamed developer-doc paths moved to `app/utils/docs_route_map.json`, beside the helper that reads it. The Docusaurus design-linter surface and `tests/test_docs_site_image_advisory_guard.py` (which guarded a Docusaurus-only `image-size` advisory) are removed; the docs brand-conformance tests now check the Hugo site. `requirements.txt` is unchanged: it carried no Docusaurus dependency.
 
 ### Fixed

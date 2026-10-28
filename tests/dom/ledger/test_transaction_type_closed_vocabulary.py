@@ -31,7 +31,7 @@ from tests.helpers.ledger import (
     record_ledger_fixture,
 )
 
-# Mirrors models.py Transaction.__table_args__ / migration a4d7e9c2f1b6 exactly.
+# Mirrors models.py Transaction.__table_args__ / migration e3b7c1d9a2f4 exactly.
 _ALLOWED_TYPES = (
     "interest", "Interest",
     "reversal", "REVERSAL",
@@ -46,7 +46,6 @@ _ALLOWED_TYPES = (
     "payroll",
     "payroll_correction",
     "manual_payment",
-    "bug_reward",
     "issue_reversal",
     "issue_compensation",
     "rent_payment",
@@ -130,6 +129,7 @@ def test_INV_LED_017__null_type_is_accepted(client, app):
         "deleted",
         "",
         "payroll ",  # trailing whitespace
+        "bug_reward",  # retired by DOM-LED-001 v2.18 with the sysadmin bug reward
     ],
 )
 def test_INV_LED_017__out_of_vocabulary_type_is_rejected(client, app, type_value):
