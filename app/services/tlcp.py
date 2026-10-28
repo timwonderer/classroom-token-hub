@@ -29,6 +29,7 @@ DEFAULT_NOISE_ENDPOINT_PREFIXES = (
     "/sw.js",
     "/favicon.ico",
     "/api/set-timezone",
+    "/api/student-status",  # the dashboard polls it every 10s
 )
 
 def _int_env(name: str, default: int) -> int:
@@ -442,6 +443,9 @@ def persist_request_trace(
     committing (or rolling back) the provided session.
     """
     if not context or not context.get("actor_public_id") or not context.get("class_id"):
+        return
+    # Successful noise would evict real requests from the per-actor cap; failures stay.
+    if _is_noise_endpoint(context.get("endpoint")) and (status_code or 0) < 400:
         return
 
     sess = _session if _session is not None else db.session

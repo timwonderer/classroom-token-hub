@@ -284,6 +284,7 @@
                                         <th scope="col">Timestamp</th>
                                         <th scope="col">Method</th>
                                         <th scope="col">Endpoint</th>
+                                        <th scope="col">Status</th>
                                         <th scope="col">Request ID</th>
                                     </tr>
                                 </thead>
@@ -293,6 +294,7 @@
                                         <td>{{ trace.timestamp_display }}</td>
                                         <td><code>{{ trace.method }}</code></td>
                                         <td><code>{{ trace.endpoint }}</code></td>
+                                        <td><code>{{ trace.status_code or 'n/a' }}</code></td>
                                         <td>
                                             <code>{{ trace.request_id or 'n/a' }}</code>
                                             {% if trace.request_id %}
