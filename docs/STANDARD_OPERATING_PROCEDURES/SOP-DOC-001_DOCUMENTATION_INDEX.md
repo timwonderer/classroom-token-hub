@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.43 | 2026-10-27 | 3.42 | Normative |
+| SOP-DOC-001 | 3.42 | 2026-10-27 | 3.41 | Normative |
 
 ---
 
@@ -280,7 +280,7 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
-**Version 3.43 (2026-10-27):**
+**Version 3.42 (2026-10-27):**
 - Register DOM-SUP-001 v1.10 and SPEC-OPS-004 v1.5: the sysadmin bug reward is retired until badges are formally implemented (owner ruling 2026-10-27). Resolving an escalated issue returns it to the teacher and moves no money; `issues.eligible_for_reward` is no longer set, and is dropped by a later contract migration; `user_reports` loses its reward status and fields.
 
 **Version 3.40 (2026-10-24):**
