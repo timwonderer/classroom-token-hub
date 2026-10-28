@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+
+- <!-- notes: security-reliability --> **Logs and URLs no longer carry internal identities** (DOM-OPS-001 v2.15, owner ruling 2026-10-27). Every application log line named its class by the internal `class_id`, and several messages printed internal seat and user ids (for example `DASHBOARD DEBUG: Student 211`, `TAP success - seat 211`, `user_id=…`). The line prefix now carries `class_public_id`; every log call that printed one now names seats by `seats.public_id` and classes by `class_public_id`, or drops the id where the prefix already names the actor, and the authentication principal is omitted. `FEAT-ENTRY` and `FEAT-COMMIT-OWNERSHIP` print idempotency keys and correlation ids as label plus fingerprint (`loggable_token`), since a composed key carries the ids it was built from; stored keys are unchanged. `/student/switch-class/` and `/admin/student/…/adjust-hall-pass-entitlements` take public ids, so nginx no longer logs the internal ones; the hall-pass adjustment now also resolves the seat within the teacher's active class only. Teacher-facing fallbacks that showed `Seat 211` read *Unnamed student*. Fresh support and identity-bind correlation ids no longer embed the class or user id. A structural guard (`tests/test_DOM_OPS_001__logs_carry_no_internal_identity.py`) rejects any log call reading an internal identity; it reports 103 on the previous tree.
+
 ## [2.4.0] - 2026-10-27 — Copy class configuration between classes, time logic through one resolver, and hardened production checks
 
 ### Added

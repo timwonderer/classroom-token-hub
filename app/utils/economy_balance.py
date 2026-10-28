@@ -293,9 +293,10 @@ class EconomyBalanceChecker:
                         expected_weekly_hours = _quantize_currency(engine.expected_weekly_hours)
                         notes.append(f"Using expected weekly hours from EconomicEngine: {expected_weekly_hours} hours")
             except Exception:
+                from app.services.tlcp import class_log_ref
                 logger.exception(
-                    "Failed to resolve expected_weekly_hours from EconomicEngine for class_id=%s",
-                    getattr(payroll_settings, 'class_id', None),
+                    "Failed to resolve expected_weekly_hours from EconomicEngine for class %s",
+                    class_log_ref(getattr(payroll_settings, 'class_id', None)),
                 )
 
             if expected_weekly_hours is None:

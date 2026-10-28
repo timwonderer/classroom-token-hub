@@ -51,8 +51,8 @@ def student_layout(*, current_page: str = "", features: dict | None = None) -> d
     return {
         "student_layout_view": build_student_layout_context_view(metadata),
         "available_classes": [
-            {"class_id": CLASS_ID, "class_identifier": CLASS_NAME, "teacher_name": "Alex Teacher",
-             "is_current": True},
+            {"class_id": CLASS_ID, "class_public_id": CLASS_ID, "class_identifier": CLASS_NAME,
+             "teacher_name": "Alex Teacher", "is_current": True},
         ],
         "feature_settings": settings,
         "current_page": current_page,

@@ -8,6 +8,7 @@ import logging
 import secrets
 from typing import Callable, NamedTuple
 from app.feats.base import FEATContextError, requires_feat_context
+from app.services.tlcp import class_log_ref, seat_log_ref
 # TODO (Phase 4): insurance_billing deleted; move to Obligations domain
 # from app.utils.insurance_billing import get_insurance_billing_snapshot
 
@@ -128,8 +129,8 @@ def enforce_daily_limits_job():
                 except Exception as e:
                     logger.error(
                         "Error checking daily limit for seat %s in class %s: %s",
-                        seat_id,
-                        class_id,
+                        seat_log_ref(seat_id),
+                        class_log_ref(class_id),
                         e,
                         exc_info=True,
                     )
@@ -220,7 +221,7 @@ def run_rent_reconciliation_job():
             if result.cycles_created or result.perks_expired:
                 logger.info(
                     "Rent reconciliation for class %s: reason=%s cycles=%s assessments=%s perks_expired=%s",
-                    class_id,
+                    class_log_ref(class_id),
                     result.reason,
                     result.cycles_created,
                     result.assessments_created,
@@ -229,7 +230,7 @@ def run_rent_reconciliation_job():
         except Exception:
             failed += 1
             db.session.rollback()
-            logger.exception("Rent reconciliation failed for class %s", class_id)
+            logger.exception("Rent reconciliation failed for class %s", class_log_ref(class_id))
             continue
 
     logger.info(
@@ -336,12 +337,12 @@ def run_automatic_payroll_job():
             # from the occurrence, so paydays do not drift.
             skipped += 1
             db.session.rollback()
-            logger.info("Automatic payroll for class %s deferred: no payable attendance", class_id)
+            logger.info("Automatic payroll for class %s deferred: no payable attendance", class_log_ref(class_id))
             continue
         except Exception:
             failed += 1
             db.session.rollback()
-            logger.exception("Automatic payroll failed for class %s", class_id)
+            logger.exception("Automatic payroll failed for class %s", class_log_ref(class_id))
             continue
 
     logger.info(
@@ -645,7 +646,7 @@ def run_collective_goal_expiry_job():
             db.session.rollback()
             logger.exception(
                 "Collective-goal expiry failed for lineage %s in class %s",
-                lineage, class_id,
+                lineage, class_log_ref(class_id),
             )
             continue
 
@@ -740,7 +741,7 @@ def run_savings_interest_job():
         except Exception:
             failed += 1
             db.session.rollback()
-            logger.exception("Savings-interest payout failed for class %s", class_id)
+            logger.exception("Savings-interest payout failed for class %s", class_log_ref(class_id))
     logger.info(
         "Savings-interest job completed; posted %s payout(s), failed %s class(es)",
         posted, failed,

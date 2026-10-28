@@ -107,7 +107,11 @@ def student_setup_pin_passphrase(
 
 
 def student_switch_class(client: FlaskClient, class_id: str):
-    return client.post(f"/student/switch-class/{class_id}")
+    """POST the switch for ``class_id``, addressed by its public id as the switcher does."""
+    from app.models import ClassEconomy
+
+    class_row = ClassEconomy.query.filter_by(class_id=class_id).first()
+    return client.post(f"/student/switch-class/{class_row.class_public_id if class_row else class_id}")
 
 
 def admin_set_current_class(client: FlaskClient, class_id: str):

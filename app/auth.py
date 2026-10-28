@@ -477,9 +477,10 @@ def switch_student_session_context(student, *, class_id: str, seat_id: int):
             db.session.flush()
     
     # Log the transition for audit clarity
+    from app.services.tlcp import class_log_ref
     current_app.logger.info(
-        f"SESSION-CONTEXT-SWITCH: Student {student.id} moved from class {old_class} "
-        f"to {class_id} (Seat {seat_id})."
+        "SESSION-CONTEXT-SWITCH: seat %s moved from class %s to %s.",
+        seat.public_id if seat else "-", class_log_ref(old_class), class_log_ref(class_id),
     )
     return seat
 

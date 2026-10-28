@@ -97,6 +97,22 @@ def nl2br_filter(s):
 REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
 
 
+# Every field is public: the class appears only as its class_public_id (DOM-OPS-001 §7).
+DEFAULT_LOG_FORMAT = (
+    "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
+    "[actor=%(actor_type)s:%(actor_public_id)s class_public_id=%(class_public_id)s] "
+    "[endpoint=%(endpoint)s method=%(method)s] "
+    "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s"
+)
+JSON_LOG_FORMAT = (
+    '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
+    '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_public_id)s",'
+    '"class_public_id":"%(class_public_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
+    '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
+    '"message":"%(message)s"}'
+)
+
+
 class RequestIdFilter(logging.Filter):
     def filter(self, record):
         context = getattr(g, "correlation_context", None) if has_request_context() else None
@@ -109,8 +125,9 @@ class RequestIdFilter(logging.Filter):
             record.actor_type = context.get("actor_type", "-") if context else "-"
         if not hasattr(record, "actor_public_id"):
             record.actor_public_id = context.get("actor_public_id", "-") if context else "-"
-        if not hasattr(record, "class_id"):
-            record.class_id = context.get("class_id", "-") if context else "-"
+        if not hasattr(record, "class_public_id"):
+            # Never the internal class_id: it does not leave the database (DOM-OPS-001 §7).
+            record.class_public_id = context.get("class_public_id", "-") if context else "-"
         if not hasattr(record, "endpoint"):
             if has_request_context():
                 if request.url_rule and request.url_rule.rule:
@@ -170,7 +187,7 @@ def register_error_handlers(app):
                 "request_id": getattr(g, "request_id", None),
                 "actor_type": context.get("actor_type"),
                 "actor_public_id": context.get("actor_public_id"),
-                "class_id": context.get("class_id"),
+                "class_public_id": context.get("class_public_id"),
                 "endpoint": endpoint,
                 "error_class": e.__class__.__name__,
                 "error_message": sanitized_message,
@@ -366,21 +383,9 @@ def create_app():
     # -------------------- LOGGING --------------------
     log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
-    log_format = os.getenv(
-        "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
-        "[actor=%(actor_type)s:%(actor_public_id)s class_id=%(class_id)s] "
-        "[endpoint=%(endpoint)s method=%(method)s] "
-        "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
-    )
+    log_format = os.getenv("LOG_FORMAT", DEFAULT_LOG_FORMAT)
     if log_format.strip().lower() == "json":
-        log_format = (
-            '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
-            '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_public_id)s",'
-            '"class_id":"%(class_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
-            '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
-            '"message":"%(message)s"}'
-        )
+        log_format = JSON_LOG_FORMAT
 
     # The handlers live on the root logger, not on app.logger. A root logger
     # with no handlers is configured implicitly by the first module-level
@@ -616,7 +621,7 @@ def create_app():
                         text("SET LOCAL app.current_user_id = :user_id"),
                         {"user_id": user_id}
                     )
-                    app.logger.debug(f"RLS context set for user_id={user_id}")
+                    app.logger.debug("RLS context set")
             except Exception as e:
                 # Log but don't fail the request - RLS will just filter to empty results
                 app.logger.error(f"Failed to set RLS tenant context: {str(e)}")

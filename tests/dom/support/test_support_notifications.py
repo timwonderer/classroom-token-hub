@@ -315,7 +315,7 @@ def test_concurrent_student_escalations_emit_one_notification(client, monkeypatc
 
 @pytest.mark.parametrize("outcome", ["success", "http_failure", "transport_failure", "configuration_failure"])
 def test_formatted_delivery_logs_have_no_request_or_actor_context(delivery_app, monkeypatch, outcome):
-    from app import RequestIdFilter
+    from app import DEFAULT_LOG_FORMAT, RequestIdFilter
 
     class Connection:
         def __init__(self, *args, **kwargs):
@@ -337,12 +337,9 @@ def test_formatted_delivery_logs_have_no_request_or_actor_context(delivery_app, 
     output = StringIO()
     handler = logging.StreamHandler(output)
     handler.addFilter(RequestIdFilter())
-    # Render every request field used by the production formatter. Pytest
-    # replaces root handlers between tests, so do not depend on that registry.
-    handler.setFormatter(logging.Formatter(
-        "[%(request_id)s] actor=%(actor_type)s:%(actor_public_id)s "
-        "class_id=%(class_id)s endpoint=%(endpoint)s method=%(method)s: %(message)s"
-    ))
+    # Render with the production format itself. Pytest replaces root
+    # handlers between tests, so do not depend on that registry.
+    handler.setFormatter(logging.Formatter(DEFAULT_LOG_FORMAT))
     logger = delivery_app.logger
     previous_level = logger.level
     logger.setLevel(logging.INFO)
@@ -350,12 +347,15 @@ def test_formatted_delivery_logs_have_no_request_or_actor_context(delivery_app, 
     try:
         with delivery_app.test_request_context("/private-path-sentinel", method="POST"):
             g.request_id = "request-id-sentinel"
-            g.correlation_context = {"actor_type": "teacher", "actor_public_id": "actor-id-sentinel", "class_id": "class-id-sentinel"}
+            g.correlation_context = {
+                "actor_type": "teacher", "actor_public_id": "actor-id-sentinel",
+                "class_id": "class-id-sentinel", "class_public_id": "class-public-id-sentinel",
+            }
             notifications._deliver({"value1": "label", "value2": "secret-ticket", "value3": "time"})
     finally:
         logger.removeHandler(handler)
         logger.setLevel(previous_level)
     rendered = output.getvalue()
     assert "support_notification_" in rendered
-    for forbidden in ("request-id-sentinel", "actor-id-sentinel", "class-id-sentinel", "private-path-sentinel", "secret-test-key", "secret-ticket"):
+    for forbidden in ("request-id-sentinel", "actor-id-sentinel", "class-id-sentinel", "class-public-id-sentinel", "private-path-sentinel", "secret-test-key", "secret-ticket"):
         assert forbidden not in rendered

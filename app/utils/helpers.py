@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from pathlib import Path
 
 from flask import request, current_app, g, session, render_template, url_for
@@ -336,3 +337,24 @@ def sanitize_for_log(value) -> str:
     return "".join(
         c if c.isprintable() else f"\\x{ord(c):02x}" for c in text
     )
+
+
+_RANDOM_CORRELATION_ID = re.compile(r"corr_[0-9a-f]{32}")
+_TOKEN_LABEL = re.compile(r"[A-Za-z]+(?=[_:-]|$)(?:[_-][A-Za-z]+(?=[_:-]|$))*")
+
+
+def loggable_token(value) -> str:
+    """An idempotency key or correlation id in the form that may leave the database.
+
+    A composed token such as ``prod_attendance:<class_id>:...`` carries the
+    internal identities it was built from (DOM-OPS-001 §7). Only a randomly
+    generated correlation id leaves verbatim; any other keeps its leading word
+    label and a fingerprint of the whole value, which still matches the stored one.
+    """
+    if not value:
+        return "NONE"
+    text = str(value)
+    if _RANDOM_CORRELATION_ID.fullmatch(text):
+        return text
+    label = _TOKEN_LABEL.match(text)
+    return f"{label.group(0) if label else ''}#{hashlib.sha256(text.encode()).hexdigest()[:12]}"
