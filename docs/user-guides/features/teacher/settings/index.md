@@ -14,6 +14,7 @@ This section groups teacher account settings and controls.
 ## Class Tools
 - [Customizations](customizations.md)
 - [Economy Features](economy-features.md)
+- [Copy Configuration](copy-configuration.md)
 
 ## Security
 - [Passkey and Login Security](passkey.md)

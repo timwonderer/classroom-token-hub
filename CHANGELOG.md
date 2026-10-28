@@ -8,10 +8,16 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- <!-- notes: internal --> **The scheduled Full Test Suite can run the unsafe-markup guard.** `tests/test_no_unsafe_jinja_markup.py` compares templates against a base commit's baseline and refuses to run in CI without `JINJA_GUARD_BASE_SHA`. Only `constitutional-ci.yml` set it, from the pull request, so the scheduled `full-suite.yml`, which has no pull request, failed the guard on every run (`ab42b3f42`). The workflow now passes the commit under test, so the scheduled run checks `main` against its own committed baseline while `constitutional-ci` keeps checking pull requests against theirs.
+
+## [2.4.0] - 2026-10-27 — Copy class configuration between classes, time logic through one resolver, and hardened production checks
+
 ### Added
 
-- <!-- notes: internal, highlight --> Class-scoped configuration file export/import with authenticated five-day files, atomic imports, and temporary retry receipts. Insurance tier groups now use canonical identities; migration preserves existing coverage through explicit successors.
-- <!-- notes: accessibility --> Accessibility: configuration transfer forms have explicit labels and grouped selections; Copy Configuration navigation announces the current page. Rendered start, upload, and confirmation stages are covered by accessibility smoke assertions.
+- <!-- notes: internal, highlight --> Class-scoped configuration file export/import with authenticated five-day files, atomic imports, and temporary retry receipts. Insurance tier groups now use canonical identities; migration preserves existing coverage through explicit successors. Requires the new `CONFIGURATION_EXPORT_KEY` secret (`SOP-DEP-001` 2.12); without it the page loads but every export and import is refused. The import review shows each setting as its settings page does (pay rate per hour, times with units, class-local dates) instead of stored values. Teacher guide: `docs/user-guides/features/teacher/settings/copy-configuration.md`.
+- <!-- notes: accessibility --> Accessibility: configuration transfer forms have explicit labels and grouped selections; Copy Configuration navigation announces the current page. Rendered start, upload, and confirmation stages are covered by accessibility smoke assertions. The page has a contextual help panel, its alerts use the shared alert cards, every switch and checkbox has its own label, a feature's items are hidden and disabled while its switch is off, and the import review shows labeled tables instead of raw field names. Headings follow the page outline (h1, then h2 cards, h3 features, h4 items); `cards.top_card` and `cards.nested_card` take a `heading_tag`, defaulting to their previous h5/h6.
 
 ### Changed
 
@@ -38,8 +44,6 @@ and this project follows semantic versioning principles.
 - <!-- notes: internal --> **The Docusaurus workspace `docs-site/` is retired** (`SOP-DOC-000` 3.7, `SPEC-DES-001` 2.6). The developer docs have been built with Hugo + Hextra since the cutover, so the Docusaurus config, its npm `package.json` and lockfile (the project's only Node dependencies), the React pages, sidebars and engineering-notes blog are deleted. The brand fonts and token layer the Hugo build still uses moved to `docs-generator-proof/brand/`, and the map of renamed developer-doc paths moved to `app/utils/docs_route_map.json`, beside the helper that reads it. The Docusaurus design-linter surface and `tests/test_docs_site_image_advisory_guard.py` (which guarded a Docusaurus-only `image-size` advisory) are removed; the docs brand-conformance tests now check the Hugo site. `requirements.txt` is unchanged: it carried no Docusaurus dependency.
 
 ### Fixed
-
-- <!-- notes: internal --> **The scheduled Full Test Suite is green again on `main`.** Three tests failed on `ab42b3f42`. The Copy Class Configuration page (`templates/configuration_transfer.html`, #1672) opened the generic placeholder help panel and used three raw Bootstrap alerts; it now has its own help (exporting, importing, what is not copied) and uses `cards.alert_card`, with the success message announced as a status. The unsafe-markup guard refused to run because `full-suite.yml`, which has no pull request to take a base from, never set `JINJA_GUARD_BASE_SHA`; the workflow now passes the commit under test, so the scheduled run checks `main` against its own committed baseline while `constitutional-ci` keeps checking pull requests against theirs.
 
 - <!-- notes: security-reliability --> **The production deploy workflows installed Tailscale 1.94.2** (`release-v2.yml`, `login-notice.yml`, `tailscale-ssh-smoke-test.yml`). Pinning `tailscale/github-action` by SHA did not pin the client: v4.2.0 defaults `version` to 1.94.2, which predates Tailscale's 2026-10-21 bulletin TS-2026-013 (distrust of the compromised eMudhra certificate authorities, fixed in 1.104.2). The three workflows now pin the action at v4.3.0 (`99a8333`), whose default is 1.104.2; Dependabot's weekly `github-actions` update keeps the client current with the SHA. The production host was upgraded from Tailscale 1.102.4 to 1.104.2 on 2026-10-24 (`docs/ops/audits/HOST_UPGRADE_2026-10-24_TAILSCALE.md`); the host package sits outside `unattended-upgrades`, tracked in #1665. No exploitation was found and no credentials were rotated.
 
