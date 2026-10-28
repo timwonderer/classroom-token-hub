@@ -234,9 +234,8 @@ def _state(context):
 
 
 def local_timestamp(context, timestamp):
-    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
-    return canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=context,
-        primitive="localize_timestamp", timestamp=timestamp).result["local_timestamp"].isoformat()
+    from app.utils.temporal_display import format_timestamp
+    return format_timestamp(context, timestamp)
 
 
 def import_result_view(context, result):
