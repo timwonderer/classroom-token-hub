@@ -85,6 +85,11 @@ jobs:
           # an unset secret expands to an empty string, which defeats the
           # setdefault() the suite relies on.
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+          # The unsafe-markup guard compares against a base commit's baseline,
+          # which constitutional-ci takes from the pull request. A scheduled
+          # run of main has no pull request: it checks the commit under test
+          # against its own committed baseline.
+          JINJA_GUARD_BASE_SHA: ${{ github.sha }}
         run: pytest -q
 
       - name: Upload pytest artifacts

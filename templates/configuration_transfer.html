@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set current_page = 'configuration_transfer' %}
 {% block page_title %}Copy Class Configuration{% endblock %}
 {% block title %}Copy Class Configuration{% endblock %}
@@ -7,12 +8,34 @@
 {% elif value is sequence and value is not string %}<ul>{% for child in value %}<li>{{ show_values(child) }}</li>{% endfor %}</ul>
 {% elif value is sameas true %}Yes{% elif value is sameas false %}No{% elif value is none %}Not set{% else %}{{ value }}{% endif %}
 {% endmacro %}
+{% block contextual_help_body %}
+{{ help.panel_lead("Copy this class's settings into another class you own: export a file here, then upload it in the other class.") }}
+
+{% call help.topic('transfer-export', 'download', 'Exporting') %}
+<p class="mb-2">Choose which groups to include (economy, banking, payroll, rent, store, insurance and hall passes) and, within a group, which entries. Then download the file.</p>
+<p class="mb-0">The file works for five days. Exporting again replaces your previous file at once, so the older file stops working.</p>
+{% endcall %}
+
+{% call help.topic('transfer-import', 'upload', 'Importing') %}
+<p class="mb-2">Open the class you want to set up, upload the file, and pick what to bring in. For each group you can use the origin class's schedule, keep this class's schedule, or enter dates yourself.</p>
+<p class="mb-0">Nothing changes until you confirm on the review page. The import then applies all at once, or not at all if anything fails.</p>
+{% endcall %}
+
+{% call help.topic('transfer-limits', 'info', 'What is not copied') %}
+<ul class="mb-0">
+  <li>Students, balances and activity stay in their own class.</li>
+  <li>Rent-linked store items stay in the origin class; link them again from this class's Store.</li>
+  <li>Groups for features that are off in this class are skipped and listed on the review page.</li>
+  <li>Hall pass destinations replace this class's destinations. Store and insurance items are added as new offerings.</li>
+</ul>
+{% endcall %}
+{% endblock %}
 {% block content %}
 <p>Export this class’s configuration to a file. Open another class you own and upload the file there.</p>
 <p>Files expire after five days. Creating a new export replaces your previous export immediately.</p>
-<div class="alert alert-info">Rent-linked products stay in the origin class. To link an item to rent, do so again using the destination class’s Store.</div>
+{% call cards.alert_card('info', 'Rent-linked items are not copied', icon='info', body_class='mb-3', heading_tag='h2') %}<p class="mb-0">Rent-linked products stay in the origin class. To link an item to rent, do so again using the destination class’s Store.</p>{% endcall %}
 {% if stage == 'done' %}
-<div class="alert alert-success" role="status">Import complete.</div>
+{% call cards.alert_card('success', 'Import complete', icon='check_circle', role='status', body_class='mb-3', heading_tag='h2') %}<p class="mb-0">This class now uses the configuration you confirmed.</p>{% endcall %}
 {% if result.payroll_effective_at %}<p>Payroll effective date and time: {{ result.payroll_effective_display }}.</p>{% endif %}
 {% if result.skipped %}<p>Skipped because these features are off: {{ result.skipped | join(', ') }}.</p>{% endif %}
 <a href="{{ url_for('configuration.settings') }}" class="btn btn-primary">Back to configuration transfer</a>
@@ -20,7 +43,7 @@
 <h2>Review this class’s import</h2>
 <p>Calendar dates use <strong>{{ preview.timezone }}</strong>. You can change these dates later through the usual settings.</p>
 <p>This confirmation expires at {{ preview.expires_at }}.</p>
-{% if preview.skipped %}<div class="alert alert-warning">Skipped because these features are off: {{ preview.skipped | join(', ') }}.</div>{% endif %}
+{% if preview.skipped %}{% call cards.alert_card('warning', 'Some groups will be skipped', icon='warning', body_class='mb-3') %}<p class="mb-0">Skipped because these features are off: {{ preview.skipped | join(', ') }}.</p>{% endcall %}{% endif %}
 {% for family, values in preview.groups.items() %}
 <details open class="mb-3"><summary class="fw-bold">{{ family | replace('_', ' ') | title }}</summary>
 {{ show_values(values) }}
