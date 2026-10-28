@@ -107,3 +107,27 @@ def test_DOM_OPS_001__loggable_token_passes_random_correlation_ids_through():
 
     assert loggable_token("corr_6877a79fe7f048f3a995fa3456a6fbe3") == "corr_6877a79fe7f048f3a995fa3456a6fbe3"
     assert loggable_token(None) == "NONE"
+
+
+def test_DOM_OPS_001__log_refs_survive_an_aborted_transaction(app):
+    """Log references run in exception handlers, after the failure they report.
+
+    A failed statement aborts the PostgreSQL transaction; a lookup must then
+    degrade to "-" rather than raise a second error over the original one.
+    """
+    import sqlalchemy as sa
+
+    from app import db
+    from app.services.tlcp import class_log_ref, seat_log_ref
+    from tests.helpers.classroom_initializer import initialize
+
+    classroom = initialize("chemistry_p1", app)
+    seat_id = classroom.students[0].seat.id
+    with app.app_context():
+        with pytest.raises(sa.exc.DBAPIError):
+            db.session.execute(sa.text("SELECT 1/0"))
+        assert class_log_ref(classroom.class_id) == "-"
+        assert seat_log_ref(seat_id) == "-"
+        db.session.rollback()
+        assert class_log_ref(classroom.class_id) != "-"
+        assert seat_log_ref(seat_id) == classroom.students[0].seat.public_id
