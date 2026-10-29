@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-10-29 — Rent-linked store items copy correctly, and production releases are gated on the droplet, not in GitHub
+
+Released as `44b869e` on 2026-10-29 at 05:55 UTC by release run [40826089677](https://github.com/timwonderer/classroom-token-hub/actions/runs/40826089677). No migration. Record: [DEPLOY_2026-10-29_44b869e.md](docs/ops/audits/DEPLOY_2026-10-29_44b869e.md). Includes v2.4.0 (`3ce50ec`), released 2026-10-29 at 03:07 UTC by release run [40810333156](https://github.com/timwonderer/classroom-token-hub/actions/runs/40810333156), outside `SOP-DEP-002` §VII.A — see the Security entry below and the `[2.4.0]` section; no separate record was filed for it.
+
 ### Changed
 
 - <!-- notes: fixed --> **Copy Configuration exports store items that are linked to rent; only the rent link stays behind** (owner ruling 2026-10-28; `SPEC-CLASS-001` 1.1, `SPEC-STORE-001` 1.7, `DOM-POL-001` 2.10, `DOM-POL-001A` 2.6, `DOM-CORE-002` 1.19, `FEAT-POL-001` 2.3, `FEAT-CLASS-003` 0.4). The export left rent perks out entirely, so a class with eleven store items offered seven. They now copy like any other item, without their rent link; the teacher links them to rent again in the other class. An item students can't buy directly (handed out only when rent is paid) keeps its settings and arrives hidden until the teacher links it or gives it a price, because an item on sale that isn't rent-linked must be directly purchasable.
@@ -23,6 +27,8 @@ and this project follows semantic versioning principles.
 - <!-- notes: security-reliability --> **Logs and URLs no longer carry internal identities** (DOM-OPS-001 v2.15, owner ruling 2026-10-27). Every application log line named its class by the internal `class_id`, and several messages printed internal seat and user ids (for example `DASHBOARD DEBUG: Student 211`, `TAP success - seat 211`, `user_id=…`). The line prefix now carries `class_public_id`; every log call that printed one now names seats by `seats.public_id` and classes by `class_public_id`, or drops the id where the prefix already names the actor, and the authentication principal is omitted. `FEAT-ENTRY` and `FEAT-COMMIT-OWNERSHIP` print idempotency keys and correlation ids as label plus fingerprint (`loggable_token`), since a composed key carries the ids it was built from; stored keys are unchanged. `/student/switch-class/` and `/admin/student/…/adjust-hall-pass-entitlements` take public ids, so nginx no longer logs the internal ones; the hall-pass adjustment now also resolves the seat within the teacher's active class only. Teacher-facing fallbacks that showed `Seat 211` read *Unnamed student*. Fresh support and identity-bind correlation ids no longer embed the class or user id. A structural guard (`tests/test_DOM_OPS_001__logs_carry_no_internal_identity.py`) rejects any log call reading an internal identity; it reports 103 on the previous tree.
 
 ## [2.4.0] - 2026-10-27 — Copy class configuration between classes, time logic through one resolver, and hardened production checks
+
+Released as `3ce50ec` on 2026-10-29 at 03:07 UTC by release run [40810333156](https://github.com/timwonderer/classroom-token-hub/actions/runs/40810333156). Migrations `c8f1a2b3d490`, `e3b7c1d9a2f4`. Dispatched before the maintenance window opened and before `SOP-DEP-002` §VII.A steps 4-8 ran (backup, restore check, balance baseline) — see the Security entry under `[2.4.1]`. No release record was filed for this revision; the `infra/release-gate` work in `[2.4.1]` exists because of this gap.
 
 ### Added
 
