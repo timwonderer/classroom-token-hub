@@ -116,8 +116,9 @@ on a custom database URL.
   classes (#1672), all time logic goes through the canonical temporal resolver (`SPEC-TIME-001`), displayed
   times are built by page builders rather than templates, and the developer docs move to Hugo + Hextra. See
   the `[2.4.0]` section of the CHANGELOG. Migrations `c8f1a2b3d490` and `e3b7c1d9a2f4`. Dispatched before the
-  maintenance window opened and before `SOP-DEP-002` §VII.A steps 4-8 ran; no release record was filed for
-  this revision. The droplet-side release gate in v2.4.1 exists because of this gap.
+  maintenance window opened and before `SOP-DEP-002` §VII.A steps 4-8 ran; the record, written afterwards, names
+  those checks as not run (`docs/ops/audits/DEPLOY_2026-10-29_3ce50ec.md`). The droplet-side release gate in
+  v2.4.1 exists because of this gap.
 - **v2.4.1** (`44b869e`, deployed 2026-10-29 05:55 UTC): Copy Configuration exports rent-linked store items,
   with only the rent link itself staying behind (#1687, owner ruling 2026-10-28); production releases are now
   gated on the droplet rather than in GitHub (`infra/release-gate/`). No migration. See the `[2.4.1]` section
