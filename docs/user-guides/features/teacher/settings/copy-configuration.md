@@ -46,7 +46,7 @@ The file works for **five days**, and only in classes you own. Each new export r
 - **Hall passes** replace this class's existing destinations.
 - **Store items** and **insurance policies** are added as new offerings. Existing ones are not changed.
 - Settings for a feature that is off in this class are skipped, and the page tells you which.
-- Store items linked to rent do not carry the rent link. Link them again in this class's Store.
+- Store items linked to rent are copied, but not the rent link. Link them again in this class's Store. An item students can't buy directly (one only given when rent is paid) arrives hidden until you link it to rent or give it a price.
 - Purchases, bills, coverage, and other activity that already happened keep their original terms.
 
 You can change anything you imported afterward through the usual settings pages.

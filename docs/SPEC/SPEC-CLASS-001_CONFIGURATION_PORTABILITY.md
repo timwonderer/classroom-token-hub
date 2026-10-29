@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-CLASS-001 | 1.0 | 2026-10-25 | None | Normative |
+| SPEC-CLASS-001 | 1.1 | 2026-10-28 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -44,13 +44,16 @@ No archives, dynamic dispatch, ORM serialization or historical format conversion
 Current effective economic mode/weekly hours and banking fields; families with no configured capacity or interest rate are absent. Nullable banking terms retain their unset values, including the nullable overdraft-protection flag; current effective
 payroll SETTING_FIELDS (excluding retired rounding_mode); current IN_USE rent settings
 excluding satisfaction_benefits and source timestamps; current IN_USE hall-pass queue
-limit and selected pass entries; selected IN_USE store definitions excluding rent-linked
-products, source identities and collective instance codes; selected IN_USE insurance
+limit and selected pass entries; selected IN_USE store definitions, rent-linked ones included,
+excluding source identities, rent-product links and collective instance codes; selected IN_USE insurance
 terms excluding succession/attribution/identity. No hidden, retired or pending version
 picker. A current product's future sale date remains a portable calendar input.
 No stock remainder, claim usage, balances, seat visibility or operational history.
-Rent-linked products stay in the origin; teachers must link an item again using the
-destination Store. Existing destination rent-product relationships are preserved.
+Rent-product links stay in the origin (owner ruling 2026-10-28): an imported product is
+not rent-linked until the teacher links it again using the destination Store. A product
+that is not directly purchasable is imported HIDDEN with its terms unchanged, since an
+unlinked product on sale must be directly purchasable (SPEC-STORE-001). Existing
+destination rent-product relationships are preserved.
 
 ## VII. Schedules and preview
 

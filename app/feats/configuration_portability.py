@@ -10,7 +10,7 @@ from app.services.configuration_policy_inventory import policy_inventory
 from app.services.class_configuration_query_service import get_current_economic_engine, get_class_features
 from app.services.economic_configuration_commands import evolve_economic_engine, _validate_engine_field, validate_banking_schedule
 from app.services.insurance_configuration import create_tier_group, submit_insurance_definition, _validate_and_build_definition
-from app.services.store_service import publish_product, _validate_definition
+from app.services.store_service import HIDDEN, IN_USE, publish_product, _validate_definition
 from app.services.payroll.settings import save_payroll_setting
 from app.services.admin_settings_service import supersede_rent_settings
 from app.services.hall_pass_configuration import save_hall_pass_setup_config
@@ -363,7 +363,10 @@ def confirm_import(context, session_nonce, raw, confirmation):
         for definition in decoded.get("store", []):
             if definition["item_type"] == "collective":
                 definition["collective_goal_instance_code"] = str(uuid4())
-            row = publish_product(class_id=context.class_id, definition=definition, actor_seat_id=context.seat_id)
+            # Arrives unlinked; a grant-only item stays hidden until the teacher links or prices it (SPEC-STORE-001).
+            state = IN_USE if definition.get("direct_purchase_allowed", True) else HIDDEN
+            row = publish_product(class_id=context.class_id, definition=definition, actor_seat_id=context.seat_id,
+                availability_state=state)
             results["store"].append(row.policy_uuid)
         results["insurance"] = []
         for group in decoded.get("insurance", []):

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.45 | 2026-10-27 | 3.44 | Normative |
+| SOP-DOC-001 | 3.46 | 2026-10-28 | 3.45 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.46 (2026-10-28):**
+- Register DOM-CORE-002 v1.19, DOM-POL-001 v2.10, DOM-POL-001A v2.6, FEAT-POL-001 v2.3, FEAT-CLASS-003 v0.4, SPEC-CLASS-001 v1.1 and SPEC-STORE-001 v1.7: configuration export includes rent-linked store products without their rent-product links; a product not directly purchasable imports HIDDEN with its terms unchanged (owner ruling 2026-10-28).
 
 **Version 3.45 (2026-10-27):**
 - Register DOM-OPS-001 v2.15: `classes.class_id`, `seats.id` and `users.id` stay inside the database; log lines, telemetry, operator-facing pages and URLs name a class by `class_public_id` or `join_code` and an actor by `seats.public_id`, including inside composed idempotency keys and correlation ids (owner ruling 2026-10-27).
