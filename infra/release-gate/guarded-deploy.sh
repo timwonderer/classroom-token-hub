@@ -9,13 +9,23 @@
 # Why a forced command: sshd runs THIS script for every session that authenticates with this key,
 # ignoring whatever command the client asked for (available below as $SSH_ORIGINAL_COMMAND). A change
 # to .github/workflows/release-v2.yml can change what command release-v2.yml *tries* to send; it cannot
-# change what sshd actually executes on the other end of this key. The two checks below — the Access
-# gate is closed, a real recent signed backup/restore exists — are the actual safety conditions
-# SOP-DEP-002 §VII.A steps 4-7 require before any of the workflow's SSH calls (transport check, deploy,
-# health probe) are allowed to run. Re-checking them unconditionally on every call, rather than trying
-# to tell "this one's the dangerous command" from the text of $SSH_ORIGINAL_COMMAND, means there is
-# nothing here that parses or trusts the shape of that string except the one place it's load-bearing:
-# pulling out a revision to cross-check against the evidence, when one is present.
+# change what sshd actually executes on the other end of this key.
+#
+# What this does NOT do, after an earlier version of this file did: it does not `exec` or otherwise run
+# $SSH_ORIGINAL_COMMAND, and it does not read or forward the client's stdin into a shell. A review
+# caught that passing the original command through — even after the gate and evidence checks passed —
+# meant a modified release-v2.yml could send `bash -s` with arbitrary stdin and get an unrestricted
+# root shell for as long as the evidence stayed fresh, which is exactly the legitimate release window.
+# Root ownership and living outside the git checkout do not help against that: the deploy key itself
+# runs as root, so passing its command through at all is the hole. Instead, $SSH_ORIGINAL_COMMAND is
+# only ever used to CLASSIFY the request into one of three fixed, hardcoded operations below and, for
+# the deploy operation, to pull out a revision that is validated as exactly 40 hex characters before
+# it touches anything. No other text from the client — not the command, not stdin — is ever executed.
+# A command that doesn't match one of the three known shapes refuses, rather than guessing.
+#
+# Consequence: if release-v2.yml's transport-check or health-check text ever changes, the matching
+# clause below has to change with it, by hand, on the droplet — a mismatch fails closed (refuses
+# everything) rather than open.
 #
 # Incident this exists to prevent: v2.4.0 (2026-10-29) was dispatched through the real, unmodified
 # release-v2.yml before the maintenance window opened — an agent misread "the Cloudflare gate closes at
@@ -33,6 +43,7 @@ ALLOWED_SIGNERS="$RELEASE_GATE_DIR/allowed_signers"
 MAX_EVIDENCE_AGE_SECONDS=7200   # one sitting: backup, counts, restore, evidence (SOP-DEP-002 §VII.A 5-7a)
 GATE_URL=https://app.classroomtokenhub.com/static/manifest.json   # same probe as status_service/collector.py
 ACCESS_LOGIN_DOMAIN=cloudflareaccess.com
+APP_DIR=/root/classroom-economy
 
 fail() { echo "guarded-deploy: $1" >&2; exit 1; }
 
@@ -43,13 +54,20 @@ fail() { echo "guarded-deploy: $1" >&2; exit 1; }
 # static public asset that is redirected to cloudflareaccess.com (exactly, or a subdomain of it) means
 # the gate is closed. A 200, a different redirect, or a bare 401/403 does not establish a closed gate,
 # and this refuses rather than guess either way.
-GATE_HEADERS=$(curl -s -o /dev/null -D - --max-time 10 "$GATE_URL") \
+#
+# Headers are stripped of carriage returns as soon as they're captured. An HTTP/2 redirect has no
+# reason phrase ("HTTP/2 302", not "HTTP/2 302 Found"), which makes the status code the LAST field on
+# the line — if a trailing \r were still attached, it would land on the code itself ("302\r"), never
+# match the "3??" pattern below, and misclassify a genuinely closed gate as open, blocking every
+# legitimate release. Stripping \r from the whole response up front, not just from the Location line,
+# closes that regardless of which field ends up last.
+GATE_HEADERS=$(curl -s -o /dev/null -D - --max-time 10 "$GATE_URL" | tr -d '\r') \
   || fail "could not reach $GATE_URL to check whether the Access gate is closed"
 GATE_STATUS=$(printf '%s' "$GATE_HEADERS" | head -n1 | awk '{print $2}')
 # tolower($0), not awk's IGNORECASE: that flag is a gawk extension that mawk (Debian/Ubuntu's default
 # /usr/bin/awk) silently ignores, which would make this match nothing and fail the deploy with no
 # evidence as to why.
-GATE_LOCATION=$(printf '%s' "$GATE_HEADERS" | tr -d '\r' | awk 'tolower($0) ~ /^location:/{print $2; exit}')
+GATE_LOCATION=$(printf '%s' "$GATE_HEADERS" | awk 'tolower($0) ~ /^location:/{print $2; exit}')
 GATE_HOST=$(python3 -c "
 import sys
 from urllib.parse import urlsplit
@@ -80,13 +98,55 @@ EVIDENCE_AGE=$(( NOW_EPOCH - EVIDENCE_EPOCH ))
 { [ "$EVIDENCE_AGE" -ge 0 ] && [ "$EVIDENCE_AGE" -le "$MAX_EVIDENCE_AGE_SECONDS" ]; } \
   || fail "release evidence is ${EVIDENCE_AGE}s old (limit ${MAX_EVIDENCE_AGE_SECONDS}s); run prerelease.sh backup/counts/restore/evidence again"
 
-# If the requested command names an exact revision — the deploy step always does — the evidence must
-# be for that exact revision, not an old backup replayed against a different SHA. Calls that name no
-# revision (the transport check, the health probe) only need a fresh, validly signed evidence to exist.
-if [[ "$SSH_ORIGINAL_COMMAND" =~ RELEASE_REVISION=\'([0-9a-fA-F]{40})\' ]]; then
+# --- 3. Classify the request into exactly one hardcoded operation, then run OUR code, not theirs ----
+# $SSH_ORIGINAL_COMMAND is only ever matched against these shapes. Nothing it or stdin contains is
+# executed as a command past this point — see the file header for why.
+
+do_transport_check() {
+  test -d "$APP_DIR"
+  echo "SSH transport ready on $(hostname)"
+}
+
+do_health_check() {
+  local deadline=$((SECONDS + 30))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ "$(curl --fail --silent --max-time 2 http://127.0.0.1:8000/health || true)" = "ok" ]; then
+      echo "Production health passed"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Health check failed: /health on 127.0.0.1:8000 did not return ok within 30s"
+  return 1
+}
+
+do_deploy() {
+  local revision="$1"   # already validated below: exactly 40 hex characters, nothing else
+  set -euo pipefail
+  cd "$APP_DIR"
+  git fetch --no-tags origin "$revision"
+  git reset --hard "$revision"
+  git clean -fd docs/
+  source venv/bin/activate
+  pip install --requirement requirements.txt
+  flask db upgrade
+  systemctl restart classroom-economy
+  systemctl is-active --quiet classroom-economy
+  echo "Released exact revision $revision"
+}
+
+if [ "$SSH_ORIGINAL_COMMAND" = 'set -e; test -d ~/classroom-economy; echo "SSH transport ready on $(hostname)"' ]; then
+  do_transport_check
+
+elif [ "$SSH_ORIGINAL_COMMAND" = 'deadline=$((SECONDS + 30)); while [ "$SECONDS" -lt "$deadline" ]; do if [ "$(curl --fail --silent --max-time 2 http://127.0.0.1:8000/health || true)" = "ok" ]; then echo "Production health passed"; exit 0; fi; sleep 2; done; echo "Health check failed: /health on 127.0.0.1:8000 did not return ok within 30s"; exit 1' ]; then
+  do_health_check
+
+elif [[ "$SSH_ORIGINAL_COMMAND" =~ ^RELEASE_REVISION=\'([0-9a-fA-F]{40})\'\ bash\ -s$ ]]; then
   REQUESTED_REVISION=$(printf '%s' "${BASH_REMATCH[1]}" | tr 'A-F' 'a-f')   # evidence.revision is lowercased on write
   [ "$EVIDENCE_REVISION" = "$REQUESTED_REVISION" ] \
     || fail "release evidence is for revision $EVIDENCE_REVISION, not the requested $REQUESTED_REVISION"
-fi
+  do_deploy "$REQUESTED_REVISION" </dev/null   # the heredoc stdin release-v2.yml sends is never read; see file header
 
-exec bash -c "$SSH_ORIGINAL_COMMAND"
+else
+  fail "command does not match a known release operation"
+fi

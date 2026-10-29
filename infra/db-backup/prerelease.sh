@@ -49,6 +49,9 @@ latest() { ls -t "$CTH_BACKUP_STATE_DIR"/points/*."$1" 2>/dev/null | head -1 || 
 case "${1:-}" in
 backup)
   pg_dump --version
+  # A new point invalidates any earlier counts/restore receipt for this state dir: `evidence` must not
+  # be able to read a stale .ok left over from a previous point taken the same day.
+  rm -f "$CTH_BACKUP_STATE_DIR/counts.ok" "$CTH_BACKUP_STATE_DIR/restore.ok"
   if ! tunnel_up && lsof -nP -iTCP:55433 -sTCP:LISTEN >/dev/null; then
     echo "port 55433 is already in use by something this script does not own (a tunnel from before control"
     echo "sockets?): close it first, e.g. lsof -nP -iTCP:55433 -sTCP:LISTEN"; exit 1
@@ -91,6 +94,9 @@ print(f"{len(m['table_counts'])} tables, {sum(m['table_counts'].values())} rows;
 sys.exit(1 if bad else 0)
 EOF
   rm -f /tmp/cth_live_counts.$$
+  # Reached only on a real "manifest == live" pass: `set -e` aborts above on any mismatch or error,
+  # so `evidence` can trust this receipt without re-deriving the comparison itself.
+  touch "$CTH_BACKUP_STATE_DIR/counts.ok"
   ;;
 restore)
   ID=~/cth-backup/identity.txt
@@ -106,6 +112,10 @@ restore)
     --target-url 'postgresql://postgres:verify@127.0.0.1:55432/cth_restore_check' \
     --live-url "$CTH_BACKUP_SOURCE_URL" 2>&1 | sed -E "$REDACT"
   docker stop cth-verify
+  # Reached only after the restore + no-resurrection checks both passed (pipefail plus `set -e` abort
+  # the script above on either failing); `evidence` requires this receipt rather than trusting that a
+  # manifest alone means restore was ever actually run.
+  touch "$CTH_BACKUP_STATE_DIR/restore.ok"
   ;;
 evidence)
   # Signs and uploads the one artifact infra/release-gate/guarded-deploy.sh will accept: proof that
@@ -117,16 +127,23 @@ evidence)
   REVISION="${2:-}"
   [[ "$REVISION" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "usage: $0 evidence <40-character revision SHA>"; exit 2; }
   M=$(latest manifest.json); [ -n "$M" ] || { echo "no point in $CTH_BACKUP_STATE_DIR (run backup first)"; exit 1; }
+  # A manifest existing only means `backup` once produced a point in this state dir — it says nothing
+  # about whether `counts` or `restore` were ever run against it, let alone passed. Require both
+  # receipts, which only `counts` and `restore` themselves create, and only on a real pass.
+  [ -f "$CTH_BACKUP_STATE_DIR/counts.ok" ] || { echo "no counts.ok in $CTH_BACKUP_STATE_DIR; run counts first"; exit 1; }
+  [ -f "$CTH_BACKUP_STATE_DIR/restore.ok" ] || { echo "no restore.ok in $CTH_BACKUP_STATE_DIR; run restore first"; exit 1; }
   KEY=~/cth-backup/evidence_signing_key
   [ -f "$KEY" ] || { echo "missing $KEY (infra/release-gate/README.md step 1)"; exit 1; }
   E="$CTH_BACKUP_STATE_DIR/evidence.json"
+  # taken_at is the manifest's own backup timestamp, not "now": evidence must attest to how old the
+  # verified point actually is, not how recently someone ran this command against an old one.
   python3 - "$M" "$REVISION" > "$E" <<'EOF'
-import json, sys, datetime
+import json, sys
 manifest = json.load(open(sys.argv[1]))
 print(json.dumps({
     "revision": sys.argv[2].lower(),
     "manifest_sha256": manifest["artifact_sha256"],
-    "taken_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+    "taken_at": manifest["taken_at"],
 }))
 EOF
   rm -f "$E.sig"
