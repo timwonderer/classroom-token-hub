@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.18 | 2026-10-29 | 1.17 | Normative |
+| SOP-DEP-002 | 1.19 | 2026-10-29 | 1.18 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -67,9 +67,12 @@ Current branch verification references:
   approved deployment path;
 - transport smoke test: `.github/workflows/tailscale-ssh-smoke-test.yml`
 - migration safety check: `bash scripts/check-migrations.sh`
-- droplet-side release gate: `infra/release-gate/` — a forced SSH command that refuses every one of
-  `release-v2.yml`'s calls to production unless the Access gate is closed and step 7a's evidence is
-  fresh and valid. Enforced by `sshd`, independent of anything in this repository's own CI config.
+- droplet-side release gate: `infra/release-gate/` — two forced SSH commands, enforced by `sshd`,
+  independent of anything in this repository's own CI config. `guarded-deploy.sh`, on its own
+  dedicated key (`RELEASE_DEPLOY_KEY`), refuses every one of `release-v2.yml`'s calls to production
+  unless the Access gate is closed and step 7a's evidence is fresh and valid. `guarded-ci.sh`, on the
+  shared `DO_DEPLOY_KEY`, restricts `login-notice.yml` and `tailscale-ssh-smoke-test.yml` to exactly
+  those two operations, so that repository secret cannot be used for an ungated deploy.
 
 The production release lineage is configured as the protected environment
 variable `V2_RELEASE_LINEAGE_REF`. A release request MUST provide a full
@@ -322,6 +325,18 @@ Record:
 ## XIII. Amendment
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.19 (2026-10-29):** v1.18 restricted `release-v2.yml` to its own dedicated key
+(`RELEASE_DEPLOY_KEY`) but left `DO_DEPLOY_KEY` itself unrestricted — and `DO_DEPLOY_KEY` is a
+repository secret, available to any workflow, so the same identity the whole gate exists to constrain
+could have simply pointed `release-v2.yml` (or a new workflow) back at `DO_DEPLOY_KEY` and deployed
+with no gate at all. `infra/release-gate/guarded-ci.sh` closes this: `DO_DEPLOY_KEY`'s
+`authorized_keys` line now carries its own forced command, restricted to exactly the two operations
+`login-notice.yml` and `tailscale-ssh-smoke-test.yml` use — a deploy-shaped command sent over this key
+is refused regardless of which workflow sent it. Every key GitHub Actions can use against the droplet
+is now forced-command-restricted to a fixed, hardcoded set of operations; none passes a client command
+through to a shell. Found before the v1.18 install was completed, so nothing needed to be undone.
+Owner direction, 2026-10-29.
 
 **Version 1.18 (2026-10-29):** `release-v2.yml`'s SSH authentication key is now `RELEASE_DEPLOY_KEY`, a
 key dedicated to that workflow, instead of the `DO_DEPLOY_KEY` secret shared with `login-notice.yml`

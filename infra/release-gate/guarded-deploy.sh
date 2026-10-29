@@ -10,7 +10,10 @@
 # tailscale-ssh-smoke-test.yml also authenticate with. Those two workflows send commands this script
 # does not recognize (see the three-way classifier below), so forcing this script onto DO_DEPLOY_KEY's
 # authorized_keys line would refuse every one of their requests the moment it was installed. Only
-# RELEASE_DEPLOY_KEY's line gets this forced command; DO_DEPLOY_KEY's line is untouched and unrestricted.
+# RELEASE_DEPLOY_KEY's line gets this forced command. DO_DEPLOY_KEY's line is NOT left unrestricted,
+# though: it gets its own forced command, guarded-ci.sh (same directory), because being a repository
+# secret it could otherwise be pointed at a deploy by editing any workflow — restricting only this key
+# would not have closed that gap. See guarded-ci.sh's own header for why that matters here.
 #
 # Why a forced command: sshd runs THIS script for every session that authenticates with this key,
 # ignoring whatever command the client asked for (available below as $SSH_ORIGINAL_COMMAND). A change
