@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.17 | 2026-10-29 | 1.16 | Normative |
+| SOP-DEP-002 | 1.18 | 2026-10-29 | 1.17 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -322,6 +322,14 @@ Record:
 ## XIII. Amendment
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.18 (2026-10-29):** `release-v2.yml`'s SSH authentication key is now `RELEASE_DEPLOY_KEY`, a
+key dedicated to that workflow, instead of the `DO_DEPLOY_KEY` secret shared with `login-notice.yml`
+and `tailscale-ssh-smoke-test.yml`. Discovered while installing v1.17's gate: `guarded-deploy.sh` only
+recognizes `release-v2.yml`'s three command shapes, so forcing it onto `DO_DEPLOY_KEY`'s
+`authorized_keys` line would have refused every request from those other two workflows the moment it
+was installed. `infra/release-gate/README.md` installs the new key directly with the forced command
+already on its line; `DO_DEPLOY_KEY`'s existing line is untouched. Owner direction, 2026-10-29.
 
 **Version 1.17 (2026-10-29):** §VI adds the droplet-side release gate (`infra/release-gate/`) and §VII.A
 adds step 7a, which produces the signed evidence that gate requires. Added after v2.4.0 (2026-10-29)

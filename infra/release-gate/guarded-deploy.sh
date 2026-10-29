@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-# Forced command for the release workflow's deploy key, installed BY HAND on the droplet at
-# /root/release-gate/guarded-deploy.sh (see README.md in this directory for the install steps — this
-# repository copy is the reviewable source, not the live file). Deliberately outside
+# Forced command for `RELEASE_DEPLOY_KEY`, a key dedicated to release-v2.yml, installed BY HAND on the
+# droplet at /root/release-gate/guarded-deploy.sh (see README.md in this directory for the install
+# steps — this repository copy is the reviewable source, not the live file). Deliberately outside
 # ~/classroom-economy: that directory is reset to the release SHA on every deploy
 # (`git reset --hard`, `git clean -fd docs/`), and anything inside it is something a pull request can
 # edit. This file is root-owned, 0700, and nothing under version control can create, edit or delete it.
+#
+# This is a SEPARATE key from the shared DO_DEPLOY_KEY that login-notice.yml and
+# tailscale-ssh-smoke-test.yml also authenticate with. Those two workflows send commands this script
+# does not recognize (see the three-way classifier below), so forcing this script onto DO_DEPLOY_KEY's
+# authorized_keys line would refuse every one of their requests the moment it was installed. Only
+# RELEASE_DEPLOY_KEY's line gets this forced command; DO_DEPLOY_KEY's line is untouched and unrestricted.
 #
 # Why a forced command: sshd runs THIS script for every session that authenticates with this key,
 # ignoring whatever command the client asked for (available below as $SSH_ORIGINAL_COMMAND). A change
