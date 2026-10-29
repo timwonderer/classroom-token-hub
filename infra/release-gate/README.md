@@ -23,30 +23,41 @@ file that `git reset --hard` never touches and that no PR can reach, is not.
    The private key stays at `~/cth-backup/evidence_signing_key` and is never copied anywhere, including
    off-host backup storage. Only `prerelease.sh evidence` (run by hand from the Mac mini) uses it.
 
-2. **Allowed signers file, on the droplet**, built from that key's public half
-   (`~/cth-backup/evidence_signing_key.pub`):
+2. **Allowed signers file.** The public key only exists on the Mac mini (from step 1); the
+   `allowed_signers` file it builds is consumed on the droplet. These are two different machines —
+   run each part where it's labeled, not both on the droplet.
+
+   **On the Mac mini**, copy the `.pub` file up:
+
+   ```bash
+   scp ~/cth-backup/evidence_signing_key.pub root@cth:/tmp/evidence_signing_key.pub
+   ```
+
+   **On the droplet, as root**, build `allowed_signers` from the file you just copied up, then remove it:
 
    ```bash
    install -d -m 0700 /root/release-gate /root/release-gate/evidence
-   printf 'cth-release-evidence namespaces="cth-release" %s\n' "$(cat ~/cth-backup/evidence_signing_key.pub | cut -d' ' -f1-2)" \
+   printf 'cth-release-evidence namespaces="cth-release" %s\n' "$(cut -d' ' -f1-2 < /tmp/evidence_signing_key.pub)" \
      > /root/release-gate/allowed_signers
    chmod 600 /root/release-gate/allowed_signers
+   rm -f /tmp/evidence_signing_key.pub
    ```
 
-   (Run that `printf`/`cut` on the Mac mini and paste the result over SSH, or `scp` the `.pub` file up
-   and build the line on the droplet — either way, only the public key crosses the network.)
+   Only the public key ever crosses the network; the private key in step 1 never leaves the Mac mini.
 
-3. **The gate script itself**, copied by hand — not deployed, not symlinked from the git checkout:
+3. **The gate script itself, on the droplet, as root** — copied by hand from the app checkout already
+   on the droplet, not deployed, not symlinked:
 
    ```bash
+   cd ~/classroom-economy/infra/release-gate
    install -m 0700 -o root -g root guarded-deploy.sh /root/release-gate/guarded-deploy.sh
    ```
 
    Re-run this `install` line whenever this file changes in the repository; nothing does it
    automatically, by design.
 
-4. **The forced command**, on the `DO_DEPLOY_KEY` line in `/root/.ssh/authorized_keys`. Find that
-   line (it's the only key `release-v2.yml` uses) and prefix it:
+4. **The forced command, on the droplet, as root**, on the `DO_DEPLOY_KEY` line in
+   `/root/.ssh/authorized_keys`. Find that line (it's the only key `release-v2.yml` uses) and prefix it:
 
    ```text
    command="/root/release-gate/guarded-deploy.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty ssh-ed25519 AAAA... do-deploy-key-comment
