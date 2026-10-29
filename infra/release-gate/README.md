@@ -105,15 +105,30 @@ attempt sent over this key is refused there regardless of which workflow sent it
 
    **On the droplet, as root**, append the public half as a brand-new line in
    `/root/.ssh/authorized_keys` — do not touch the existing `DO_DEPLOY_KEY` line or any other line, and
-   put the forced-command prefix on it from the start, since nothing else will ever use this key:
+   put the forced-command prefix on it from the start, since nothing else will ever use this key. The
+   line is the prefix below, a single space, then the *entire, unmodified contents* of
+   `~/cth-backup/release_deploy_key.pub` (which already starts with `ssh-ed25519` — don't type that
+   token again or it will be duplicated). Easiest done by copying the `.pub` file to the droplet and
+   building the line there in one command:
+
+   Mac mini:
+   ```bash
+   scp ~/cth-backup/release_deploy_key.pub root@cth:/tmp/release_deploy_key.pub
+   ```
+
+   Droplet, as root (back up the file first):
+   ```bash
+   cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bak
+   printf 'command="/root/release-gate/guarded-deploy.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty %s\n' \
+     "$(cat /tmp/release_deploy_key.pub)" >> /root/.ssh/authorized_keys
+   rm -f /tmp/release_deploy_key.pub
+   ```
+
+   The resulting line looks like:
 
    ```text
    command="/root/release-gate/guarded-deploy.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty ssh-ed25519 AAAA... cth-release-deploy
    ```
-
-   (Paste the actual public key from `~/cth-backup/release_deploy_key.pub` after `ssh-ed25519`, keeping
-   the `cth-release-deploy` comment or whatever comment `ssh-keygen` generated, so a future read of this
-   file can tell at a glance which key this line is.)
 
 5. **Restrict the existing `DO_DEPLOY_KEY` line too, on the droplet, as root.** This is not optional —
    see "Restricting the new key is not enough on its own" above. Find `DO_DEPLOY_KEY`'s line in
