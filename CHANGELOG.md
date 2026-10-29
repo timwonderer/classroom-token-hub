@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- <!-- notes: fixed --> **Copy Configuration exports store items that are linked to rent; only the rent link stays behind** (owner ruling 2026-10-28; `SPEC-CLASS-001` 1.1, `SPEC-STORE-001` 1.7, `DOM-POL-001` 2.10, `DOM-POL-001A` 2.6, `DOM-CORE-002` 1.19, `FEAT-POL-001` 2.3, `FEAT-CLASS-003` 0.4). The export left rent perks out entirely, so a class with eleven store items offered seven. They now copy like any other item, without their rent link; the teacher links them to rent again in the other class. An item students can't buy directly (handed out only when rent is paid) keeps its settings and arrives hidden until the teacher links it or gives it a price, because an item on sale that isn't rent-linked must be directly purchasable.
+
 ### Security
 
 - <!-- notes: security-reliability --> **The shared `DO_DEPLOY_KEY` is now restricted too, closing a bypass of the release gate below.** Giving `release-v2.yml` its own key (`RELEASE_DEPLOY_KEY`, previous entry) didn't by itself close the gap: `DO_DEPLOY_KEY` is a repository secret available to any workflow, so the same identity the gate exists to constrain could still have pointed `release-v2.yml` (or a new workflow) back at `DO_DEPLOY_KEY` and deployed with no gate at all. `infra/release-gate/guarded-ci.sh` is a new forced command for `DO_DEPLOY_KEY`'s `authorized_keys` line, restricted to exactly the two operations `login-notice.yml` and `tailscale-ssh-smoke-test.yml` use; a deploy-shaped command sent over this key is refused regardless of which workflow sent it. Found before the dedicated-key install was completed, so nothing needed to be undone. `SOP-DEP-002` v1.19. Owner direction, 2026-10-29.

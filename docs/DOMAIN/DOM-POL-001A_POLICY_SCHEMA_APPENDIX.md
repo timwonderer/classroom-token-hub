@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001A | 2.5 | 2026-10-25 | 2.4 | Constitutional Appendix |
+| DOM-POL-001A | 2.6 | 2026-10-28 | 2.5 | Constitutional Appendix |
 
 ## I. Purpose
 
@@ -220,7 +220,10 @@ FEATs from composing the same domain commands.
 Hall-pass import replaces the complete definition with a new row and retires the old
 one; selected destinations are not merged. Store/insurance imports create independent
 products and groups with fresh identifiers, never predecessor links to destination
-products. Rent-linked products and source rent-product links are excluded. Destination
+products. Rent-linked products export as ordinary products; their source rent-product
+links are excluded (owner ruling 2026-10-28), so an imported product is not rent-linked
+until the teacher links it in the destination Store. One not directly purchasable is
+imported HIDDEN with its terms unchanged (SPEC-STORE-001). Destination
 rent-product links survive replacement of the other rent settings.
 
 `insurance_policies.tier_group_id` is a nullable canonical UUID scoped by class_id.
