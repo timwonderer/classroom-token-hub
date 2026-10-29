@@ -45,16 +45,30 @@ file that `git reset --hard` never touches and that no PR can reach, is not.
 
    Only the public key ever crosses the network; the private key in step 1 never leaves the Mac mini.
 
-3. **The gate script itself, on the droplet, as root** — copied by hand from the app checkout already
-   on the droplet, not deployed, not symlinked:
+3. **The gate script itself**, copied by hand — not deployed, not symlinked. Do **not** `git pull` or
+   `git reset` the droplet's `~/classroom-economy` checkout to get this file: that checkout is
+   production app code, pinned to the last deployed revision by the release SOP, and advancing it
+   outside a real release is exactly the kind of unreviewed change this gate exists to prevent. This
+   file was added after the droplet's current deployed revision, so it may not even be present there
+   yet.
+
+   **On the Mac mini**, from this repo (make sure it's on `main`, post-merge of the PR that added this
+   file), copy the script up:
 
    ```bash
-   cd ~/classroom-economy/infra/release-gate
-   install -m 0700 -o root -g root guarded-deploy.sh /root/release-gate/guarded-deploy.sh
+   scp infra/release-gate/guarded-deploy.sh root@cth:/tmp/guarded-deploy.sh
    ```
 
-   Re-run this `install` line whenever this file changes in the repository; nothing does it
-   automatically, by design.
+   **On the droplet, as root**, install it from the copy and remove the copy:
+
+   ```bash
+   install -d -m 0700 /root/release-gate
+   install -m 0700 -o root -g root /tmp/guarded-deploy.sh /root/release-gate/guarded-deploy.sh
+   rm -f /tmp/guarded-deploy.sh
+   ```
+
+   The `install -d` is harmless to repeat if step 2 already created the directory. Re-run this step
+   whenever `guarded-deploy.sh` changes in the repository; nothing does it automatically, by design.
 
 4. **The forced command, on the droplet, as root**, on the `DO_DEPLOY_KEY` line in
    `/root/.ssh/authorized_keys`. Find that line (it's the only key `release-v2.yml` uses) and prefix it:
