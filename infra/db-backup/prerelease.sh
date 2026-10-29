@@ -4,6 +4,8 @@
 #   bash infra/db-backup/prerelease.sh backup    # stops the app, takes and verifies one point
 #   bash infra/db-backup/prerelease.sh counts    # compares that point's table counts with live production
 #   bash infra/db-backup/prerelease.sh restore   # restores it with ~/cth-backup/identity.txt, then deletes the identity
+#   bash infra/db-backup/prerelease.sh evidence <sha>   # signs + uploads proof of the above for release-v2.yml's
+#                                                        # droplet-side gate (infra/release-gate/guarded-deploy.sh)
 #   bash infra/db-backup/prerelease.sh close-tunnel   # closes the tunnel if a run is abandoned before `restore`
 #
 # All three steps reach production through one SSH tunnel (127.0.0.1:55433), owned through a control socket so it
@@ -105,8 +107,40 @@ restore)
     --live-url "$CTH_BACKUP_SOURCE_URL" 2>&1 | sed -E "$REDACT"
   docker stop cth-verify
   ;;
+evidence)
+  # Signs and uploads the one artifact infra/release-gate/guarded-deploy.sh will accept: proof that
+  # THIS run's backup, counts and restore all passed, for THIS exact revision, recently. Run after
+  # `restore` reports PASS and before tagging/dispatching (SOP-DEP-002 §VII.A step 7a). Needs
+  # ~/cth-backup/evidence_signing_key, a key that never leaves this Mac and is never uploaded anywhere
+  # except its already-public counterpart in the droplet's allowed_signers file — see
+  # infra/release-gate/README.md.
+  REVISION="${2:-}"
+  [[ "$REVISION" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "usage: $0 evidence <40-character revision SHA>"; exit 2; }
+  M=$(latest manifest.json); [ -n "$M" ] || { echo "no point in $CTH_BACKUP_STATE_DIR (run backup first)"; exit 1; }
+  KEY=~/cth-backup/evidence_signing_key
+  [ -f "$KEY" ] || { echo "missing $KEY (infra/release-gate/README.md step 1)"; exit 1; }
+  E="$CTH_BACKUP_STATE_DIR/evidence.json"
+  python3 - "$M" "$REVISION" > "$E" <<'EOF'
+import json, sys, datetime
+manifest = json.load(open(sys.argv[1]))
+print(json.dumps({
+    "revision": sys.argv[2].lower(),
+    "manifest_sha256": manifest["artifact_sha256"],
+    "taken_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+}))
+EOF
+  rm -f "$E.sig"
+  ssh-keygen -Y sign -f "$KEY" -n cth-release "$E" >/dev/null
+  ssh root@cth 'mkdir -p /root/release-gate/evidence && chmod 700 /root/release-gate /root/release-gate/evidence'
+  # Uploaded as two separate files; a run interrupted between them leaves either a signature with no
+  # matching data or data with a stale signature — guarded-deploy.sh's verify step rejects either and
+  # fails closed, so there is no unsafe partial state to guard against here.
+  scp -q "$E.sig" root@cth:/root/release-gate/evidence/latest.json.sig
+  scp -q "$E" root@cth:/root/release-gate/evidence/latest.json
+  echo "evidence uploaded for revision $REVISION: $(cat "$E")"
+  ;;
 close-tunnel)
   close_tunnel
   ;;
-*) echo "usage: $0 backup|counts|restore|close-tunnel"; exit 2 ;;
+*) echo "usage: $0 backup|counts|restore|evidence|close-tunnel"; exit 2 ;;
 esac
