@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-10-22 UTC
-**Current Released Version:** 2.3.0 (`339c775cd`), deployed 2026-10-22 UTC. v2.0.0 launched 2026-09-26
+**Last Updated:** 2026-10-29 UTC
+**Current Released Version:** 2.4.1 (`44b869e`), deployed 2026-10-29 UTC. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -50,7 +50,7 @@ Run once after clone:
 `hooks/post-checkout` rewrites `DATABASE_URL` in `.env` on every checkout. Check it before relying
 on a custom database URL.
 
-## Current State (2026-10-22)
+## Current State (2026-10-29)
 
 ### In production
 
@@ -112,6 +112,17 @@ on a custom database URL.
   contextual-help corrections (#1619 to #1622). Migration `a4d7e9c2f1b6` adds a `NOT VALID` CHECK constraint on
   `ledger_transaction.type`. See the `[2.3.0]` section of the CHANGELOG and
   `docs/ops/audits/DEPLOY_2026-10-22_339c775cd.md`.
+- **v2.4.0** (`3ce50ec`, deployed 2026-10-29 03:07 UTC): Copy Configuration exports class settings between
+  classes (#1672), all time logic goes through the canonical temporal resolver (`SPEC-TIME-001`), displayed
+  times are built by page builders rather than templates, and the developer docs move to Hugo + Hextra. See
+  the `[2.4.0]` section of the CHANGELOG. Migrations `c8f1a2b3d490` and `e3b7c1d9a2f4`. Dispatched before the
+  maintenance window opened and before `SOP-DEP-002` §VII.A steps 4-8 ran; the record, written afterwards, names
+  those checks as not run (`docs/ops/audits/DEPLOY_2026-10-29_3ce50ec.md`). The droplet-side release gate in
+  v2.4.1 exists because of this gap.
+- **v2.4.1** (`44b869e`, deployed 2026-10-29 05:55 UTC): Copy Configuration exports rent-linked store items,
+  with only the rent link itself staying behind (#1687, owner ruling 2026-10-28); production releases are now
+  gated on the droplet rather than in GitHub (`infra/release-gate/`). No migration. See the `[2.4.1]` section
+  of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-29_44b869e.md`.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and
