@@ -33,7 +33,7 @@
                 </div>
                 <div class="landing-welcome">
                     <h1>Privacy &amp; Data Handling Policies</h1>
-                    <small>Last updated: September 16, 2026</small>
+                    <small>Last updated: October 29, 2026</small>
                     <a href="index.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
                         <span>Return to Home</span>
@@ -92,7 +92,7 @@
                         <h2>Display Names, Notes, and Classroom Content</h2>
                         <p>Names help students claim the correct roster entry and help teachers recognize students. Encrypted display names are decrypted only where the application needs them: the provisioning teacher’s roster and the student’s own interface. Teachers’ display names and class labels can be visible to students in that class.</p>
                         <p>Roster notes are encrypted, teacher-entered context about a student’s participation in one class. They are free text; CTH does not inspect or classify their contents. Notes are not automatically included in support snapshots. Other free-text fields, such as support explanations and transaction descriptions, do not all receive this field encryption.</p>
-                        <p>Teachers can export class roster or student information. Downloaded files are held outside CTH and need to be handled under the school’s own access and retention practices.</p>
+                        <p>Teachers can export class roster or student information. Teachers can also export a class configuration file (settings, store items, insurance policies, hall-pass destinations) to copy into another class they own. It contains no roster records, balances, or activity, but it does carry any text a teacher typed into those settings, such as item descriptions, so a name written there travels with it. It can be imported only by the teacher who exported it, and stops working after five days or as soon as that teacher exports a newer one. Downloaded files are held outside CTH and need to be handled under the school’s own access and retention practices.</p>
                     </section>
 
                     <section class="public-section" id="activity-data">
@@ -112,7 +112,7 @@
 
                     <section class="public-section" id="encryption">
                         <h2>Encryption, Credentials, and Sessions</h2>
-                        <ul><li><strong>Protected database fields:</strong> display names, roster notes, and authenticator secrets use Fernet encryption. The application decrypts them when needed. This does not encrypt every activity record, support report, or diagnostic field.</li><li><strong>Lookup fields:</strong> usernames and temporary roster-name matching values use keyed HMAC-SHA256 digests. Successful claiming clears the temporary name hashes and distinguishing code; encrypted display names remain for classroom use.</li><li><strong>PINs and passphrases:</strong> stored as salted scrypt hashes for credential verification.</li><li><strong>Passkeys:</strong> the application stores the registered public key and credential metadata. Passkey authentication does not send the private key to CTH.</li><li><strong>Session cookies:</strong> the application uses signed, HTTP-only, SameSite=Lax cookies and enables the Secure flag in production. Signed cookies protect against alteration; they are not encrypted. Pending teacher signup data, including its authenticator secret, is held encrypted on the server, with a random reference in the browser. Signup attempts expire after 30 minutes, are removed on completion or restart, and are cleared by scheduled cleanup after expiry.</li><li><strong>Session expiry:</strong> students have a ten-minute limit from login; teachers have a ten-minute inactivity timeout. Sign out when finished, especially on a shared device.</li></ul>
+                        <ul><li><strong>Protected database fields:</strong> display names, roster notes, and authenticator secrets use Fernet encryption. The application decrypts them when needed. This does not encrypt every activity record, support report, or diagnostic field.</li><li><strong>Lookup fields:</strong> usernames and temporary roster-name matching values use keyed HMAC-SHA256 digests. Successful claiming clears the temporary name hashes and distinguishing code; encrypted display names remain for classroom use.</li><li><strong>PINs and passphrases:</strong> stored as salted scrypt hashes for credential verification.</li><li><strong>Passkeys:</strong> passkey sign-in is provided by Bitwarden Passwordless.dev. When a passkey is added, that service receives the username and an account reference and holds the passkey’s public key. CTH stores the credential’s identifier, the name given to the device, and when it was added and last used. The private key never leaves the device.</li><li><strong>Session cookies:</strong> the application uses signed, HTTP-only, SameSite=Lax cookies and enables the Secure flag in production. Signed cookies protect against alteration; they are not encrypted. Pending teacher signup data, including its authenticator secret, is held encrypted on the server, with a random reference in the browser. Signup attempts expire after 30 minutes, are removed on completion or restart, and are cleared by scheduled cleanup after expiry. Student account setup is held in temporary memory-only storage, with the new username encrypted, for at most 30 minutes, and is erased when setup completes.</li><li><strong>Session expiry:</strong> students have a ten-minute limit from login; teachers have a ten-minute inactivity timeout. Sign out when finished, especially on a shared device.</li></ul>
                         <p>HTTPS/TLS protects connections when configured on the deployed service. Infrastructure access, backups, and key custody require their own controls. Someone with both stored encrypted data and the application’s encryption key can decrypt it.</p>
                     </section>
 
@@ -140,7 +140,7 @@
                         <h2>Technical Data, Cookies, and Service Providers</h2>
                         <p>The application records operational events and request traces to investigate errors and support reports. These can contain timestamps, request identifiers, endpoints, outcomes, and pseudonymous participant references. Support captures technical diagnostics at submission; classroom balances, transaction details, student report text, and class labels are included only with the teacher’s separate permissions described above.</p>
                         <p>The application uses session and security cookies. Its public pages also request external resources:</p>
-                        <ul><li><strong>GitHub Pages:</strong> serves the public information site.</li><li><strong>Google Fonts:</strong> supplies the public site’s fonts and icon font.</li><li><strong>jsDelivr:</strong> supplies public-page styling and application assets.</li><li><strong>Cloudflare Turnstile:</strong> provides bot checks on selected application forms when configured. Server verification sends a challenge token and can include the visitor’s IP address.</li></ul>
+                        <ul><li><strong>GitHub Pages:</strong> serves the public information site.</li><li><strong>Google Fonts:</strong> supplies the public site’s fonts and icon font.</li><li><strong>jsDelivr:</strong> supplies public-page styling and application assets.</li><li><strong>Cloudflare Turnstile:</strong> provides bot checks on sign-in, sign-up, account claiming, recovery, and hall-pass verification forms. Server verification sends a challenge token and can include the visitor’s IP address.</li><li><strong>Bitwarden Passwordless.dev:</strong> supports teacher passkey registration and sign-in; teacher sign-in pages load its script.</li></ul>
                         <p>External requests disclose network and browser information to the receiving provider. Hosting and monitoring services can also process request and diagnostic data depending on deployment.</p>
                         <p>Contact support with questions about service providers and retention of technical data.</p>
                     </section>
@@ -166,22 +166,16 @@
         <div class="landing-shell landing-footer-grid">
             <div class="landing-footer-links">
                 <a href="./index.html" target="_self">Home</a>
-                <a href="https://github.com/timwonderer/classroom-token-hub" target="_blank" rel="noopener">Project Repository <span class="visually-hidden">(opens in a new tab)</span></a>
-                <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog <span class="visually-hidden">(opens in a new tab)</span></a>
+                <a href="./district.html" target="_self">District Partners</a>
+                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">System Status <span class="visually-hidden">(opens in a new tab)</span></a>
             </div>
             <div class="landing-footer-links">
-                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">System Status <span class="visually-hidden">(opens in a new tab)</span></a>
                 <a href="./terms.html" target="_self">Terms of Service</a>
                 <a href="./privacy.html" target="_self">Privacy Policy</a>
-                <a href="./district.html" target="_self">District Partners</a>
-            </div>
-            <div class="landing-footer-links">
                 <a href="/docs/" target="_self">Developer Documentation</a>
-                <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing <span class="visually-hidden">(opens in a new tab)</span></a>
-                <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">License <span class="visually-hidden">(opens in a new tab)</span></a>
             </div>
             <div class="landing-footer-meta">
-                <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under PolyForm Noncommercial v1.0.0</p>
+                <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm Noncommercial v1.0.0 <span class="visually-hidden">(opens in a new tab)</span></a></p>
                 <p><em>This app is developed, operated, maintained, and self-funded by a full-time high school teacher. As such, we do not display advertisements, use third-party tracking tools, or collect information about you unless it is necessary for the operation of the platform.</em></p>
                 <p><a class="text-decoration-none text-white" href="mailto:support@classroomtokenhub.com">Need help? Reach us at support@classroomtokenhub.com</a></p>
             </div>

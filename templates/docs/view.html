@@ -85,7 +85,6 @@
 
                     <!-- Navigation Accordion -->
                     <div class="accordion accordion-flush" id="docsAccordion">
-                        {% if audience == 'user' %}
                         <!-- Diagnostics / User Guides -->
                         <div class="accordion-item">
                             <h2 class="accordion-header">
@@ -233,98 +232,6 @@
                                 </div>
                             </div>
                         </div>
-                        {% endif %}
-
-                        {% if audience == 'devops' %}
-                        <!-- Technical Reference -->
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button
-                                    class="accordion-button {% if not (doc_path.startswith('INVARIANT/') or doc_path.startswith('DOMAIN/') or doc_path.startswith('SPEC/') or doc_path.startswith('FEATURE-EXECUTION/')) %}collapsed{% endif %}"
-                                    type="button" data-bs-toggle="collapse" data-bs-target="#technicalCollapse"
-                                    aria-controls="technicalCollapse" aria-expanded="{% if doc_path.startswith('INVARIANT/') or doc_path.startswith('DOMAIN/') or doc_path.startswith('SPEC/') or doc_path.startswith('FEATURE-EXECUTION/') %}true{% else %}false{% endif %}">
-                                    <span class="material-symbols-outlined me-2" aria-hidden="true">code</span>
-                                    Technical Reference
-                                </button>
-                            </h2>
-                            <div id="technicalCollapse"
-                                class="accordion-collapse collapse {% if doc_path.startswith('INVARIANT/') or doc_path.startswith('DOMAIN/') or doc_path.startswith('SPEC/') or doc_path.startswith('FEATURE-EXECUTION/') %}show{% endif %}">
-                                <div class="accordion-body p-0">
-                                    <ul class="nav flex-column">
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL') }}">
-                                                Execution Model
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION') }}">
-                                                Canonical Schema
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY') }}">
-                                                Economy Spec
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE') }}">
-                                                Domain Authority Summary
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Reference & Project Info -->
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button
-                                    class="accordion-button {% if not (doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/')) %}collapsed{% endif %}"
-                                    type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse"
-                                    aria-controls="projectCollapse" aria-expanded="{% if doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}true{% else %}false{% endif %}">
-                                    <span class="material-symbols-outlined me-2" aria-hidden="true">folder</span>
-                                    Reference & Project
-                                </button>
-                            </h2>
-                            <div id="projectCollapse"
-                                class="accordion-collapse collapse {% if doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}show{% endif %}">
-                                <div class="accordion-body p-0">
-                                    <ul class="nav flex-column">
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook') }}">
-                                                Deployment
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History') }}">
-                                                Design Principles &amp; Project History
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link"
-                                                href="https://github.com/timwonderer/classroom-token-hub/blob/main/DEVELOPMENT.md"
-                                                target="_blank" rel="noopener">
-                                                Development <span class="visually-hidden">(opens in a new tab)</span>
-                                            </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX') }}">
-                                                Docs Index
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
             </aside>
