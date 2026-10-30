@@ -396,24 +396,13 @@ def build_breadcrumbs(doc_path, docs_root):
 
 # -------------------- ROUTES --------------------
 
-def get_docs_audience():
-    """The in-app site serves one audience.
-
-    Operators used to be able to flip a cookie to 'devops' and browse the
-    technical tree in here. That tree is published by the technical site now, so
-    the toggle would only produce a second, staler rendering of the same files.
-    """
-    return 'user'
-
-
 @docs_bp.route('/')
 def index():
     """Documentation homepage with categories."""
     if should_redirect_public_docs():
         return _redirect_to_public_docs()
 
-    audience = get_docs_audience()
-    return render_template_with_fallback('docs/index.html', audience=audience)
+    return render_template_with_fallback('docs/index.html')
 
 
 @docs_bp.route('/timeline')
@@ -629,8 +618,6 @@ def view_doc(doc_path):
         elif getattr(getattr(g, 'canonical_context', None), 'actor_role', None) == 'sysadmin':
             user_role = 'sysadmin'
 
-        audience = get_docs_audience()
-        
         return render_template_with_fallback(
             'docs/view.html',
             content=html_content,
@@ -643,7 +630,6 @@ def view_doc(doc_path):
             related=related_articles,
             user_role=user_role,
             doc_path=doc_path,
-            audience=audience,
         )
 
     except HTTPException:
@@ -673,10 +659,8 @@ def search():
         return _redirect_to_public_docs('search')
 
     query = request.args.get('q', '').strip()
-    audience = get_docs_audience()
-
     if not query:
-        return render_template_with_fallback('docs/search.html', query='', results=[], audience=audience)
+        return render_template_with_fallback('docs/search.html', query='', results=[])
 
     results = []
     query_lower = query.lower()
@@ -695,7 +679,6 @@ def search():
 
                 rel_path = doc_file.relative_to(DOCS_ROOT)
 
-                # Enforce audience context directory filtering
                 top_dir_raw = rel_path.parts[0] if rel_path.parts else ''
                 top_dir = top_dir_raw.lower()
                 
@@ -822,5 +805,4 @@ def search():
         'docs/search.html',
         query=query,
         results=results,
-        audience=audience
     )
