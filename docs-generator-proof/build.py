@@ -181,7 +181,7 @@ def stage_theme():
     (SITE / 'layouts/_partials/cth-hero.html').write_text(str(hero(
         'Developer documentation', 'See how and why Classroom Token Hub was built this way.')))
     (SITE / 'layouts/_partials/cth-catalog-hero.html').write_text(str(hero(
-        'All documents', 'Explore the underlying rules, architecture, and operating procedures that powers Classroom Token Hub.')))
+        'All documents', 'Explore the underlying rules, architecture, and operating procedures that power Classroom Token Hub.')))
 
 
 def prepare():
