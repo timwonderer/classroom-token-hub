@@ -562,7 +562,7 @@ body.landing-page {
 
 .landing-footer-grid {
     display: grid;
-    grid-template-columns:0.5fr 0.5fr 0.5fr 1.5fr;
+    grid-template-columns: 0.5fr 0.5fr 1.5fr;
     gap: 1rem;
     align-items: start;
 }
@@ -598,6 +598,10 @@ body.landing-page {
     font-size: 0.8rem;
     color: var(--secondary);
 
+}
+
+.landing-footer-meta p a {
+    color: inherit;
 }
 
 .landing-footer-meta p + p {
