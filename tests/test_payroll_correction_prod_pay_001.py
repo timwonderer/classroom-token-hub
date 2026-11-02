@@ -39,6 +39,7 @@ from app.services.payroll.settings import (
     pay_rate_per_second,
     payroll_setting_history,
 )
+from tests.helpers import temporal
 from tests.helpers.canonical_classroom import ProvisionedClassroom, ProvisionedStudent, login_student, login_teacher
 from tests.helpers.class_domain import enable_class_feature
 
@@ -78,6 +79,13 @@ def predecessor_source(tmp_path_factory):
                        stdout=stream, check=True)
     subprocess.run(["tar", "-xf", str(archive), "-C", str(source)], check=True)
     return source
+
+
+@pytest.fixture(autouse=True)
+def incident_still_open():
+    """These tests cover the review while it was open; the incident closed for good on its expiry."""
+    with temporal.pinned_clock(temporal.shifted(PROD_PAY_001.expires_at, hours=-1)):
+        yield
 
 
 @pytest.fixture

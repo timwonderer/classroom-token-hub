@@ -103,7 +103,6 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/admin/announcements", teacher_session),
         ("/admin/announcements/create", teacher_session),
         ("/admin/create-class", teacher_session),
-        ("/admin/payroll/correction", teacher_session),
         # Group C -- feature-disabled fallback, reached with zero extra setup
         ("/admin/store", teacher_session),
         # Group E -- student, no extra setup
