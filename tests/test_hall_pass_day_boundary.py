@@ -320,14 +320,16 @@ def test_closing_a_hanging_pass_touches_only_its_own_class(app, client, setup):
         _start_work(other, other_student)
     _out_on_a_pass_on_day_1(client, classroom, student)
 
-    with temporal.pinned_clock(temporal.class_wall_time(classroom.class_id, DAY_1, 23)):
-        close_due_hanging_hall_pass(
-            ctx=_ctx(other, other_student), seat_id=other_student.seat.id,
-            as_of_utc=temporal.class_wall_time(other.class_id, DAY_2, 1),
-        )
+    rows_before = len(_timeline(classroom, student))
+    with temporal.pinned_clock(temporal.class_wall_time(classroom.class_id, DAY_2, 1)):
+        with pytest.raises(ValueError, match="canonical class"):
+            close_due_hanging_hall_pass(
+                ctx=_ctx(other, other_student), seat_id=student.seat.id,
+                as_of_utc=temporal.class_wall_time(classroom.class_id, DAY_2, 1),
+            )
 
     assert [r.status for r in _timeline(other, other_student)] == ["active"]
-    assert _timeline(classroom, student)[-1].reason_code == "hall_pass"
+    assert len(_timeline(classroom, student)) == rows_before
 
 
 @pytest.mark.parametrize("actor", ["student", "teacher"])

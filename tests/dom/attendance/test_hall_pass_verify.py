@@ -19,6 +19,7 @@ from app.utils.canonical_temporal_resolver import (
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
 )
+from tests.helpers import temporal
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
 
@@ -143,7 +144,7 @@ def _mark_left(classroom, log, *, student_index: int = 0, at_time=None):
     record_attendance_session(
         ctx=_student_ctx(classroom, student_index),
         status="active",
-        reference_time_utc=(at_time - timedelta(minutes=1)) if at_time else None,
+        reference_time_utc=temporal.shifted(at_time, minutes=-1) if at_time else None,
         idempotency_key=f"start-before-left:{log.id}",
     )
     return record_attendance_session(
