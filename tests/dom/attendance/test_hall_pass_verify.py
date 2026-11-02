@@ -139,6 +139,13 @@ def _issue_hall_pass(
 
 
 def _mark_left(classroom, log, *, student_index: int = 0, at_time=None):
+    # Leaving needs a session to leave.
+    record_attendance_session(
+        ctx=_student_ctx(classroom, student_index),
+        status="active",
+        reference_time_utc=(at_time - timedelta(minutes=1)) if at_time else None,
+        idempotency_key=f"start-before-left:{log.id}",
+    )
     return record_attendance_session(
         ctx=_student_ctx(classroom, student_index),
         target_seat_id=classroom.students[student_index].seat.id,

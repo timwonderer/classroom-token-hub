@@ -13,12 +13,28 @@ from app.models import (
     PayrollEvent,
     Seat,
 )
-from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
+from app.services.hall_pass_request_queue import list_open_hall_pass_requests
+from app.services.hall_pass_status_service import (
+    HALL_PASS_STATUS_RETURNED,
+    before_current_class_day,
+    hall_pass_revoked,
+    resolve_hall_pass_lifecycle_status,
+)
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
 )
+
+
+def is_live_session(ctx, row, *, reference_time_utc=None) -> bool:
+    """Whether ``row`` is an open session: no active state passes the day boundary,
+    so a prior day's ``active`` row is over whether or not the sweep has closed it."""
+    return (
+        row is not None
+        and row.status == "active"
+        and not before_current_class_day(ctx, row.timestamp, reference_time_utc=reference_time_utc)
+    )
 
 
 def _canonical_seat_rows(seat_id, class_id):
@@ -190,8 +206,10 @@ def _pair_active_intervals(rows, *, end_boundary, start_boundary=None):
             if start_boundary and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=interval_end, reference=start_boundary).is_later:
                 active_start = None
                 continue
+            # A session belongs wholly to the day it opened on, as it does for payroll.
             if start_boundary and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_start, reference=start_boundary).is_earlier:
-                interval_start = start_boundary
+                active_start = None
+                continue
             if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=interval_end, reference=end_boundary).is_later:
                 interval_end = end_boundary
             if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_end, reference=interval_start).is_earlier:
@@ -200,17 +218,16 @@ def _pair_active_intervals(rows, *, end_boundary, start_boundary=None):
     if active_start is not None:
         interval_start = active_start
         interval_end = end_boundary
-        if start_boundary and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_start, reference=start_boundary).is_earlier:
-            interval_start = start_boundary
-        if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_end, reference=interval_start).is_earlier:
+        opened_earlier = start_boundary and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_start, reference=start_boundary).is_earlier
+        if not opened_earlier and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval_end, reference=interval_start).is_earlier:
             intervals.append((interval_start, interval_end))
     return intervals
 
 
-def _derive_hall_pass_state(seat_id: int, class_id: str):
+def _derive_hall_pass_state(seat_id: int, class_id: str, *, ctx):
     """Return the latest non-returned hall-pass display state for a seat/class."""
     pending_requests = [
-        request for request in list_pending_hall_pass_requests_for_class(class_id)
+        request for request in list_open_hall_pass_requests(ctx)
         if request.requested_by_seat_id == seat_id
     ]
     if pending_requests:
@@ -228,34 +245,19 @@ def _derive_hall_pass_state(seat_id: int, class_id: str):
     if latest_pass is None:
         return None
 
-    rows = AttendanceSession.query.filter_by(
-        target_seat_id=seat_id,
-        class_id=class_id,
-        hall_pass_id=latest_pass.hall_pass_id,
-    ).order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
-    left_row = next(
-        (
-            row for row in rows
-            if row.status == "inactive"
-            and row.reason_code == AttendanceReasonCode.HALL_PASS.value
-        ),
-        None,
+    lifecycle = resolve_hall_pass_lifecycle_status(
+        class_id=class_id, seat_id=seat_id, hall_pass_id=latest_pass.hall_pass_id,
     )
-    return_row = next(
-        (
-            row for row in rows
-            if left_row is not None
-            and row.status == "active"
-            and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=row.timestamp, reference=left_row.timestamp).is_earlier
-        ),
-        None,
-    )
-    if return_row is not None:
+    if lifecycle.status == HALL_PASS_STATUS_RETURNED:
         return None
-    status = "left" if left_row is not None else "approved"
+    # A pass ends with the day it left on, whether or not the sweep has run yet.
+    if lifecycle.left_row is not None and before_current_class_day(ctx, lifecycle.left_row.timestamp):
+        return None
+    if hall_pass_revoked(ctx, latest_pass, lifecycle):
+        return None
     return {
         "id": latest_pass.id,
-        "status": status,
+        "status": lifecycle.status,
         "reason": latest_pass.destination,
     }
 
@@ -685,13 +687,14 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx, reference_time_utc=None
         return True
     # The prior day's exact end is today's start. Its persisted closing event
     # belongs to the originating pair, not today's terminal state (§XV.7).
+    # So does the hanging-pass closure, the only pair a system event opens.
     # Exclude only proven prior-day pairs; orphan/current-day closures still deny.
     prior_day_closings = {
         interval.closing_event_id
         for interval in list_attendance_intervals(
             seat_id, class_id, ctx=ctx, as_of_utc=day_start_utc
         )
-        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval.opened_at, reference=day_start_utc).is_earlier
+        if interval.opening_mechanism == "system" or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=interval.opened_at, reference=day_start_utc).is_earlier
     }
     return any(row.id not in prior_day_closings for row in rows)
 
@@ -719,7 +722,7 @@ def get_class_attendance_status(student, *, class_id: str, ctx=None):
 
     rows = _canonical_seat_rows(seat.id, class_id)
     latest = rows[-1] if rows else None
-    is_active = bool(latest and latest.status == "active")
+    is_active = is_live_session(ctx, latest)
 
     done = is_done_for_day(seat.id, class_id, ctx=ctx)
     duration = calculate_unpaid_attendance_seconds(seat.id, class_id, ctx=ctx)
@@ -735,5 +738,5 @@ def get_class_attendance_status(student, *, class_id: str, ctx=None):
         "duration": duration,
         "duration_today": duration_today,
         "projected_pay": None,
-        "hall_pass": _derive_hall_pass_state(seat.id, class_id),
+        "hall_pass": _derive_hall_pass_state(seat.id, class_id, ctx=ctx),
     }

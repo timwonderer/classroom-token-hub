@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.46 | 2026-10-28 | 3.45 | Normative |
+| SOP-DOC-001 | 3.47 | 2026-11-01 | 3.46 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.47 (2026-11-01):**
+- Register DOM-STORE-001 v5.8 and FEAT-PROD-002 v1.2: a hall-pass request still open at the end of its class-local day closes like a rejection and consumes nothing, and an approved pass never left on reads Revoked once its day has ended, derived and never stored (owner ruling 2026-11-01).
 
 **Version 3.46 (2026-10-28):**
 - Register DOM-CORE-002 v1.19, DOM-POL-001 v2.10, DOM-POL-001A v2.6, FEAT-POL-001 v2.3, FEAT-CLASS-003 v0.4, SPEC-CLASS-001 v1.1 and SPEC-STORE-001 v1.7: configuration export includes rent-linked store products without their rent-product links; a product not directly purchasable imports HIDDEN with its terms unchanged (owner ruling 2026-10-28).
