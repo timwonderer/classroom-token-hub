@@ -2,10 +2,12 @@
 
 A hall pass moves through exactly three states after approval: ``approved``
 (issued, not yet departed), ``left`` (out of the room), ``returned``
-(completed). Two surfaces need to answer "which state is this pass in right
-now" -- the public verification page and the teacher's Hall Pass Management
-page -- and until this module existed they answered it with two independent
-implementations.
+(completed). A fourth reading, ``revoked``, is a pass approved and never left on
+once the day it was issued on has ended: derived, never stored, and the pass stays
+used. It is unrelated to a REVOKED entitlement event, which removes an unused pass. Every surface that asks "which state is this pass in right now"
+-- the public verification page, the teacher's Hall Pass Management page, the
+student dashboard, the queue limits and the hall-pass routes -- reads it here.
+Until this module existed they answered it with independent implementations.
 
 That mattered because they had drifted. The verification page reconstructed
 the state from the full attendance sequence for the specific pass (a
@@ -19,9 +21,9 @@ with a "Left Class" button that would send an already-returned student back
 out if clicked.
 
 DOM-POL-001 and DOM-PROD-001 do not name this three-state model explicitly, so
-this module is the FIRST place it is written down; both routes now defer to
-it, so it cannot drift between them a second time the way findings 34 and 44
-did between other route pairs this same night.
+this module is the FIRST place it is written down; all of them defer to it,
+so it cannot drift between them a second time the way findings 34 and 44 did
+between other route pairs this same night.
 """
 
 from __future__ import annotations
@@ -29,11 +31,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.models import AttendanceReasonCode, AttendanceSession
-from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
+    canonical_temporal_resolver,
+)
 
 HALL_PASS_STATUS_APPROVED = "approved"
 HALL_PASS_STATUS_LEFT = "left"
 HALL_PASS_STATUS_RETURNED = "returned"
+HALL_PASS_STATUS_REVOKED = "revoked"
 
 
 @dataclass(frozen=True)
@@ -41,6 +48,22 @@ class HallPassLifecycleStatus:
     status: str  # one of the HALL_PASS_STATUS_* constants
     left_row: AttendanceSession | None
     return_row: AttendanceSession | None
+
+
+def before_current_class_day(ctx, instant, *, reference_time_utc=None) -> bool:
+    """Whether ``instant`` falls before the class's current day."""
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=instant,
+        reference=canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+            primitive="evaluation_day_boundaries", reference_time_utc=reference_time_utc,
+        ).boundary_start_utc,
+    ).is_earlier
+
+
+def hall_pass_revoked(ctx, log, lifecycle) -> bool:
+    """Approved and eligible for leaving, then invalidated by the end of its day."""
+    return lifecycle.status == HALL_PASS_STATUS_APPROVED and before_current_class_day(ctx, log.timestamp)
 
 
 def resolve_hall_pass_lifecycle_status(

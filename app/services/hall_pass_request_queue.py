@@ -3,7 +3,8 @@
 DOM-STORE-001 §IX names "a hall-pass request remains pending until the
 authoritative FEAT resolves it" as a pending action, and §VII.B makes those
 rows persisted, with no generic TTL, deleted only by lawful resolution or with
-the governing class boundary. Owner ruling 2026-10-01.
+the governing class boundary. Owner ruling 2026-10-01. The class-local day
+boundary resolves one like a denial (owner ruling 2026-11-01).
 
 Until 2026-10-01 the queue was a module-level dict, so each gunicorn worker had
 its own copy. With two workers a request enqueued by one was invisible to the
@@ -37,6 +38,7 @@ from datetime import datetime
 
 from app.extensions import db
 from app.models import PendingAction
+from app.services.hall_pass_status_service import before_current_class_day
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 KIND = "hall_pass_request"
@@ -96,6 +98,19 @@ def get_pending_hall_pass_request(request_id: str, *, class_id: str) -> PendingH
     return _to_request(row) if row is not None else None
 
 
+def list_class_ids_with_pending_hall_pass_requests() -> list[str]:
+    rows = (
+        db.session.query(PendingAction.class_id)
+        .filter(
+            PendingAction.authoritative_feat == AUTHORITATIVE_FEAT,
+            PendingAction.payload["kind"].as_string() == KIND,
+        )
+        .distinct()
+        .all()
+    )
+    return [row[0] for row in rows]
+
+
 def list_pending_hall_pass_requests_for_class(class_id: str) -> list[PendingHallPassRequest]:
     rows = (
         _hall_pass_rows(class_id)
@@ -103,6 +118,14 @@ def list_pending_hall_pass_requests_for_class(class_id: str) -> list[PendingHall
         .all()
     )
     return [_to_request(row) for row in rows]
+
+
+def list_open_hall_pass_requests(ctx) -> list[PendingHallPassRequest]:
+    """The class's requests still open: one from an earlier day closed with that day."""
+    return [
+        request for request in list_pending_hall_pass_requests_for_class(ctx.class_id)
+        if not before_current_class_day(ctx, request.requested_at_utc)
+    ]
 
 
 # ---------------------------------------------------------------------------

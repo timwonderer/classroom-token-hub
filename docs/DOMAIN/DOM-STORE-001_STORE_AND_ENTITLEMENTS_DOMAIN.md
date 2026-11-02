@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.7 | 2026-10-14 | 5.6 | Constitutional |
+| DOM-STORE-001 | 5.8 | 2026-11-01 | 5.7 | Constitutional |
 
 > [!IMPORTANT]
+> **v5.8 (2026-11-01), hall-pass requests close with their day (owner ruling 2026-11-01).** §VII.B and §IX: a pending hall-pass request still open at the end of the class-local day it was submitted on is resolved by `FEAT-PROD-002` like a denial: the row is deleted, nothing is consumed, and its pass is available again. This supersedes "it has no TTL" for hall-pass requests only; other pending actions are unchanged.
+>
 > **v5.7 (2026-10-14), insurance continuation (owner ruling 2026-10-14).** §VIII.E.1 adds *Continuation after a policy edit* and *Withdrawn offering*. When the teacher supersedes the version an entitlement was granted under, the entitlement still ends at its coverage boundary, and a new entitlement under the successor version begins there; the old entitlement's terms never change (`DOM-POL-001` §VII). When the offering is withdrawn with no successor on sale, renewal stops and coverage ends at the boundary. Previously the code renewed a superseded or withdrawn version indefinitely, and nothing in this document said otherwise.
 >
 > **v5.6 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: the header table said Normative while §III (below) already, correctly, says "Tier 1 — Constitutional." The header now matches the body. No substantive rule in this document changed.
@@ -232,7 +234,7 @@ Rules:
 - `authoritative_feat` SHALL identify the one lawful FEAT path for resolution.
 - `payload` SHALL be the canonical typed request envelope produced and validated by the submitting FEAT, not an arbitrary dump of unrelated state.
 - `submitted_at` is authoritative and SHALL be preserved.
-- No generic TTL may delete pending actions.
+- No generic TTL may delete pending actions. The class-local day boundary is a resolution of a hall-pass request (§IX), not a generic TTL.
 - A pending action is not canonical entitlement history.
 - `payload` MAY carry a domain-specific request (for example an unresolved insurance-claim request) while the work is in transit. Claim-specific structured data SHALL NOT live permanently in `payload`; it belongs in claim-owned relational state (§VII.C).
 - A successful resolution SHALL atomically write the canonical durable record(s) the action produces (entitlement event(s), or claim state under §VII.C) and delete the pending action.
@@ -485,8 +487,8 @@ Pending actions SHALL be deleted only as part of successful lawful resolution, l
 - it is submitted under `FEAT-STOR-002`, which writes the typed payload `{kind: "hall_pass_request", requested_by_seat_id, destination}`, names the hall-pass entitlement available at submission as `entitlement_id`, and sets `authoritative_feat = FEAT-PROD-002`;
 - its `submitted_at` is the request time in class canonical time and is authoritative;
 - a seat holds at most one pending hall-pass request in a class: a student's new request cancels their earlier one, in the same transaction that submits the new one;
-- it is resolved only by `FEAT-PROD-002`: approval writes the `hall_pass_logs` record and consumes the pass in the same transaction that deletes the row; rejection deletes the row; the student's own cancellation deletes the row;
-- it has no TTL; it survives process restarts and deploys, and ceases otherwise only with its seat or class.
+- it is resolved only by `FEAT-PROD-002`: approval writes the `hall_pass_logs` record and consumes the pass in the same transaction that deletes the row; rejection deletes the row; the student's own cancellation deletes the row; the end of the class-local day it was submitted on deletes the row, the same as a rejection;
+- it survives process restarts and deploys, and ceases otherwise only with its seat or class.
 
 Pending actions SHALL NOT be interpreted as entitlement consumption, approval, rejection, or revocation.
 

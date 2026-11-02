@@ -11,7 +11,7 @@ one (a placeholder id otherwise, for tests of a request whose pass is gone).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from app.feats.base import FEATContext
 from app.services.entitlement_service import get_available_hall_pass_grant
@@ -19,8 +19,7 @@ from app.services.hall_pass_request_queue import (
     PendingHallPassRequest,
     enqueue_hall_pass_request,
 )
-
-DEFAULT_REQUESTED_AT = datetime(2026, 9, 21, 4, 0, tzinfo=timezone.utc)
+from tests.helpers import temporal
 
 
 def seed_pending_hall_pass_request(
@@ -29,14 +28,14 @@ def seed_pending_hall_pass_request(
     seat_id: int,
     request_id: str | None = None,
     destination: str = "Bathroom",
-    requested_at_utc: datetime = DEFAULT_REQUESTED_AT,
+    requested_at_utc: datetime | None = None,
 ) -> PendingHallPassRequest:
     request = PendingHallPassRequest(
         request_id=request_id or str(uuid.uuid4()),
         class_id=class_id,
         requested_by_seat_id=seat_id,
         destination=destination,
-        requested_at_utc=requested_at_utc,
+        requested_at_utc=requested_at_utc or temporal.now(),
     )
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"seed-hall-pass-request:{request.request_id}"):
         grant = get_available_hall_pass_grant(seat_id, class_id)

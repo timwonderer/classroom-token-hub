@@ -239,7 +239,7 @@ from app.feats.transaction_void_feat import (
 from app.services.ledger_correction_service import REVERSAL_RECORD_TYPES
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
-from app.services.attendance_service import calculate_unpaid_attendance_seconds
+from app.services.attendance_service import calculate_unpaid_attendance_seconds, is_live_session
 from app.services.payroll.pricing import estimate_payable_amount
 from app.services.unpaid_work_notice_view_model import build_unpaid_work_notice_view
 from app.services.payroll.schedule import (
@@ -253,7 +253,7 @@ from app.services.payroll.settings import (
     pending_payroll_settings,
     save_payroll_setting,
 )
-from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
+from app.services.hall_pass_request_queue import list_open_hall_pass_requests
 from app.services import access_policy_service, obligations_service
 from app.services.entitlement_service import get_hall_pass_balance, grant_hall_passes, remove_hall_passes
 from app.services import operational_event_service
@@ -2331,7 +2331,7 @@ def dashboard():
         redemption_query_service.get_pending_redemption_count(active_class_id)
         + redemption_query_service.get_pending_acknowledgement_count(active_class_id)
     )
-    pending_hall_pass_requests = list_pending_hall_pass_requests_for_class(ctx.class_id)
+    pending_hall_pass_requests = list_open_hall_pass_requests(ctx)
     pending_hall_passes_count = len(pending_hall_pass_requests)
     pending_insurance_claims = (
         InsuranceClaim.query
@@ -6359,7 +6359,7 @@ def hall_pass():
         )
 
     pending_requests = []
-    for pending_request in list_pending_hall_pass_requests_for_class(selected_class_id):
+    for pending_request in list_open_hall_pass_requests(ctx):
         seat = db.session.get(Seat, pending_request.requested_by_seat_id)
         if not seat or seat.class_id != selected_class_id:
             continue
@@ -8338,7 +8338,7 @@ def tap_out_students():
             latest_by_seat_id = _latest_attendance_events_for_class(class_id)
             seat_ids = [
                 seat.id for seat in student_seats
-                if latest_by_seat_id.get(seat.id) and latest_by_seat_id[seat.id].status == "active"
+                if is_live_session(ctx, latest_by_seat_id.get(seat.id))
             ]
         else:
             seat_ids = [int(seat_id) for seat_id in seat_ids]
@@ -8353,7 +8353,7 @@ def tap_out_students():
                 continue
 
             latest_event = latest_by_seat_id.get(seat_id)
-            if not latest_event or latest_event.status != "active":
+            if not is_live_session(ctx, latest_event):
                 profile = IdentityProfile.query.filter_by(seat_id=seat_id).first()
                 name = f"{profile.first_name} {profile.last_name}" if profile else "Unnamed student"
                 already_inactive.append(name)
@@ -8435,7 +8435,7 @@ def tap_in_students():
                 continue
 
             latest_event = latest_by_seat_id.get(seat_id)
-            if latest_event and latest_event.status == "active":
+            if is_live_session(ctx, latest_event):
                 profile = IdentityProfile.query.filter_by(seat_id=seat_id).first()
                 name = f"{profile.first_name} {profile.last_name}" if profile else "Unnamed student"
                 already_active.append(name)
