@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Updated:** 2026-10-29 UTC
-**Current Released Version:** 2.4.1 (`44b869e`), deployed 2026-10-29 UTC. v2.0.0 launched 2026-09-26
+**Current Released Version:** 2.4.2 (`6e42f43`), deployed 2026-11-03 UTC. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -123,6 +123,10 @@ on a custom database URL.
   with only the rent link itself staying behind (#1687, owner ruling 2026-10-28); production releases are now
   gated on the droplet rather than in GitHub (`infra/release-gate/`). No migration. See the `[2.4.1]` section
   of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-29_44b869e.md`.
+- **v2.4.2** (`6e42f43`, deployed 2026-11-03 02:38 UTC): a hall pass still out at the end of its day now ends
+  with that day, an approved pass never left on reads Revoked, and prior-day hall-pass requests close like a
+  denial (#1693, owner rulings 2026-11-01); the in-app help site loses its unreachable developer view (#1692).
+  No migration. See the `[2.4.2]` section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-11-03_6e42f43.md`.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and

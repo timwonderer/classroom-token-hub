@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ## [2.4.2] - 2026-11-03 — Hall passes end with their day
 
+Released as `6e42f43` on 2026-11-03 at 02:38 UTC by release run [41567363872](https://github.com/timwonderer/classroom-token-hub/actions/runs/41567363872). No migration. Record: [DEPLOY_2026-11-03_6e42f43.md](docs/ops/audits/DEPLOY_2026-11-03_6e42f43.md).
+
 ### Changed
 
 - <!-- notes: fixed --> **Public site refreshed for v2.4.1.** The footer on every page of classroomtokenhub.com (and the developer docs, which mirror it) drops from three link columns to two: Changelog, Contributing and Project Repository move to a new *Contribute* card on the developer documentation landing page, and the license link moves into the copyright line. `timeline.html` gains entries for v2.1.1 through v2.4.1. `learnmore.html` adds Copy Configuration and accessible-dialog cards and drops claims that went stale (configurable fees and penalties, insurance against fines). `privacy.html`, `terms.html` and `district.html` now name Bitwarden Passwordless.dev as the passkey provider (the pages said CTH stores the public key; it stores only the credential id, device name and timestamps), list where Cloudflare Turnstile runs instead of "when configured", describe configuration-file exports and temporary student-setup storage, and stop saying a support ticket does not identify its author.
