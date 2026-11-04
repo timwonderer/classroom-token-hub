@@ -6128,6 +6128,9 @@ def process_claim(claim_id):
     if form.validate_on_submit():
         decision = (form.status.data or "").strip().lower()
         date_adjustments = None
+        if productivity is not None and decision == "approved" and not productivity.dates:
+            flash("This claim has no date evidence to approve. Reject it with a reason instead.", "danger")
+            return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
         if productivity is not None and decision == "approved":
             # Lost time is decided per day. A day set to fewer hours than claimed
             # needs a reason; every day at 0 hours is a rejection, and those

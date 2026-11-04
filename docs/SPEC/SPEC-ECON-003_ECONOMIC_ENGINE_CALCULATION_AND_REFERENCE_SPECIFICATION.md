@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-003    |  2.3    |     2026-10-07 |        2.2 |       Normative |
+| SPEC-ECON-003    |  2.4    |     2026-11-03 |        2.3 |       Normative |
 
 ---
 
@@ -259,7 +259,7 @@ Weekly coverage has a `coverage_week_equivalent` of exactly `1`.
 Period-normalized values then derive from the actual duration, e.g.:
 
 ```text
-period_allowance      = ceil(weekly_allowance × coverage_week_equivalent)   # § 4.4.8
+weekly_filing_allowance = ceil(weekly_allowance)             # § 4.4.8
 maximum_policy_payout = period_premium × payout_multiple      # where applicable
 ```
 
@@ -291,7 +291,7 @@ monetary model mirrors `PRODUCTIVITY`: reimbursement is a percentage of the cove
 transaction loss, the period ceiling is `period_premium × payout_multiple`, and premiums are
 selected from the mode band per § 4.4.8.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
+Canonical preset values (weekly filing limits; payout economics per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -443,7 +443,7 @@ capacity could actually pay, CTH MUST NOT silently rewrite the configuration; it
 surface both the calculated dollar policy ceiling and the applicable weekly `CWI` reference
 clearly.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
+Canonical preset values (weekly filing limits; payout economics per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range | Mechanical bound |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -458,8 +458,8 @@ Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
 by the remaining period payout capacity (`actual_payout` above), and submission is bounded by
 the configured daily payroll limit and remaining claim allowance per `FEAT-STOR-003`. The
 weekly `1 CWI` and `expected_weekly_hours` figures are advisory economic-coherence guidance,
-not mechanical caps. These preset values are settled; only the monthly allowance rounding
-convention was flagged for confirmation and is fixed in § 4.4.8.
+not mechanical caps. These preset values are settled; the weekly filing allowance rule
+is defined in § 4.4.8, independent of billing cadence.
 
 #### 4.4.5 `NON_MONETARY` Insurance
 
@@ -493,7 +493,7 @@ The teacher remains free to set the premium outside that recommendation.
 - monetary payout ceiling;
 - actuarial / risk calculation.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
+Canonical preset values (weekly filing limits; payout economics per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -511,7 +511,7 @@ value the external benefit. The `Single` column uses the mode-band midpoint (equ
 
 As of v1.2 the insurance economic model is numerically complete. The canonical preset tables
 for all three products (§ 4.4.3, § 4.4.4, § 4.4.5), the deterministic premium-selection rule,
-and the monthly allowance rounding convention (§ 4.4.8) are **settled**.
+and the weekly filing allowance rule (§ 4.4.8) are **settled**.
 
 No insurance numerical value remains intentionally TBD. Any future change to these values is
 a normative amendment to this specification, not an implementation choice. Implementations
@@ -555,7 +555,7 @@ authored, so the recommendation uses a fixed normalization of **30** class-local
 days: `coverage_week_equivalent = 30 / 7` for a `MONTHLY` recommendation. This constant
 applies to authoring recommendations only. It never defines a billing period (periods come
 from anchored recurrence, `SPEC-TIME-001` § IX.12), and it never replaces the actual
-covered-day count used for claim allowances and payout-period scaling.
+covered-day count used for coverage-period economic normalization. Filing allowances remain weekly.
 
 For monetary products (`TRANSACTION`, `PRODUCTIVITY`):
 
@@ -563,18 +563,7 @@ For monetary products (`TRANSACTION`, `PRODUCTIVITY`):
 maximum_policy_payout = period_premium × payout_multiple
 ```
 
-**Allowance rounding (settled).** Integer per-period allowances (claims per week-equivalent,
-claimable days per week-equivalent) scale to the coverage interval by rounding **up**:
-
-```text
-period_allowance = ceil(weekly_allowance × coverage_week_equivalent)
-```
-
-`ceil` is chosen deliberately: it keeps monthly allowances at least proportional to the
-weekly value, and — because every individual approval is still bounded by the remaining
-period payout capacity (§ 4.4.4) — a slightly generous **claim count** cannot inflate total
-economic exposure. Rounding governs how many separate claims may be filed, never how much
-may be paid.
+**Weekly filing allowance (owner ruling 2026-11-03).** The configured transaction-claim or productivity-date limit is enforced at submission within the class-local Monday–Sunday filing week. It is `ceil(weekly_allowance)` regardless of billing cadence; monthly coverage never pools several weeks of filing slots. Rejected filings retain usage, and resubmitting a released date consumes another slot. Payout capacity remains coverage-period based. See DOM-STORE-001 §VIII.E.1 and FEAT-STOR-003 §XII.
 
 ---
 

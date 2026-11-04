@@ -223,6 +223,8 @@ def test_already_claimed_transaction_is_excluded_from_the_dropdown(app, client):
         claimed_txn_id = _make_claimable_txn(student.seat)
         still_eligible_txn_id = _make_claimable_txn(student.seat)
         login_student(client, student)
+        teacher_context = _teacher_ctx(classroom)
+        class_id, seat_id = classroom.class_id, student.seat.id
 
     client.post(f"/student/insurance/claim/{policy_uuid}",
                 data={"transaction_id": str(claimed_txn_id)})
@@ -233,6 +235,15 @@ def test_already_claimed_transaction_is_excluded_from_the_dropdown(app, client):
     assert f'value="{claimed_txn_id}"' not in page, (
         "an already-claimed transaction is still offered in the dropdown"
     )
+    from app.feats.insurance_claim_feat import resolve_insurance_claim
+    with app.app_context():
+        claim = InsuranceClaim.query.filter_by(class_id=class_id, target_seat_id=seat_id).one()
+        rejected = resolve_insurance_claim(canonical_context=teacher_context, claim_id=claim.claim_id,
+                                          approved=False, override_reason="Please correct the claim")
+        assert rejected.success, rejected.error_message
+    page = client.get(f"/student/insurance/claim/{policy_uuid}").get_data(as_text=True)
+    assert f'value="{claimed_txn_id}"' in page
+
 
 
 def test_file_claim_fails_closed_without_coverage(app, client):

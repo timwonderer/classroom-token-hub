@@ -8,6 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- <!-- notes: fixed --> **Insurance filing limits now apply each week, regardless of billing frequency.** Pending and approved claims reserve their transaction or loss date; rejection releases that target while retaining the filing slot. Duplicate submissions cannot leave incomplete claims. Teachers can reject existing incomplete claims with a claim-level reason without deleting their history.
+
+
 ### Security
 
 - <!-- notes: security-reliability --> **Pin the application TLS certificate bundle to certifi 2026.10.19.** Existing environments could retain an older transitive certifi installation after the eMudhra CA incident. The explicit pin makes the regular release installation replace that bundle with the corrected trust store.

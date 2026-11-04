@@ -13,6 +13,7 @@
 a1b2c3d4e5f6  # a1b2c3d4e5f6_repoint_obligation_assessment_policy_version_.py: downgrade() raises
 a6d9c2e4f1b7  # a6d9c2e4f1b7_add_canonical_identity_foundation.py: downgrade() raises
 a7e3c9d1f5b2  # a7e3c9d1f5b2_payroll_settings_effective_dated_authority.py: downgrade() calls _restore_payroll_event(), which raises
+a91c3d7e5f20  # insurance rejected-date release: downgrade refuses when re-filed date history exists
 ae6b7c8d9e0f  # ae6b7c8d9e0f_phase_2d_add_database_immutability_triggers.py: downgrade() raises
 b2c3d4e5f8a  # b2c3d4e5f8a_align_prod_domain_schema_contract.py: downgrade() raises
 b3c4d5e6f7a8  # b3c4d5e6f7a8_manual_credit_without_payroll_policy.py: downgrade() raises

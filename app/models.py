@@ -2160,13 +2160,9 @@ class InsuranceClaimProductivityDate(db.Model):
     teacher's adjudicated hours, an optional per-date adjustment note, and the
     immutable recognized economic result.
 
-    The ``UNIQUE(entitlement_id, claim_date)`` constraint is the structural
-    enforcement of the settled invariant (FEAT-STOR-003 §V.B): within one
-    entitlement a class-local date may participate in at most one PRODUCTIVITY
-    claim lifecycle, regardless of SUBMITTED / APPROVED / REJECTED. Rejection does
-    NOT free the date — the row remains, so a same-date re-file collides with the
-    constraint. ``UNIQUE(claim_id, claim_date)`` forbids a date appearing twice
-    within a single case.
+    Pending and approved claims reserve a date under the GRANTED entitlement
+    row lock. Rejection releases it while retaining immutable date evidence.
+    ``UNIQUE(claim_id, claim_date)`` forbids repeats within a single case.
 
     No mutable counters live here. Weekly claimed hours, weekly/period recognized
     payout consumption, and date-allowance-used are all re-derived by reading this
@@ -2217,7 +2213,6 @@ class InsuranceClaimProductivityDate(db.Model):
     )
 
     __table_args__ = (
-        db.UniqueConstraint('entitlement_id', 'claim_date', name='uq_icpd_entitlement_date'),
         db.UniqueConstraint('claim_id', 'claim_date', name='uq_icpd_claim_date'),
         db.Index('ix_icpd_claim_id', 'claim_id'),
         db.Index('ix_icpd_entitlement_id', 'entitlement_id'),

@@ -448,3 +448,35 @@ def test_migration_revision_chain_links_to_head():
     assert down_revision == "d4e5f6a7b8c9"
     assert callable(upgrade)
     assert callable(downgrade)
+
+
+def test_productivity_dates_lock_grant_for_direct_domain_call(app):
+    from sqlalchemy import select
+    from sqlalchemy.exc import OperationalError
+
+    classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+    with app.app_context():
+        entitlement_id = _seed_granted_insurance(classroom, student.seat.id)
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"lock-claim:{uuid4().hex}"):
+            claim = claims.create_claim(
+                class_id=classroom.class_id,
+                entitlement_id=entitlement_id,
+                target_seat_id=student.seat.id,
+                actor_seat_id=student.seat.id,
+                correlation_id=f"lock:{uuid4().hex}",
+                claim_basis={},
+            )
+        db.session.commit()
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"lock-dates:{uuid4().hex}"):
+            claims.add_productivity_claim_dates(claim=claim, dates=[])
+            with db.engine.connect() as contender:
+                with pytest.raises(OperationalError) as error:
+                    contender.execute(
+                        select(EntitlementEvent.event_id).where(
+                            EntitlementEvent.class_id == classroom.class_id,
+                            EntitlementEvent.entitlement_id == entitlement_id,
+                            EntitlementEvent.event_type == "GRANTED",
+                        ).with_for_update(nowait=True)
+                    )
+                assert error.value.orig.pgcode == "55P03"  # PostgreSQL lock_not_available

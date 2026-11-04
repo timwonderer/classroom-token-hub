@@ -14,7 +14,7 @@ FEAT-STOR-007, FEAT-STOR-003 §IV/§XII):
   late), keeps pre-termination debt, and a late payment resurrects nothing;
 - stop-renewal during the preview: unpaid → withdrawn, coverage ends at the
   current period's end; any payment → the period is committed and runs out;
-- claims: eligibility fixed at filing; allowance per coverage period;
+- claims: eligibility fixed at filing; filing allowance per class-local week;
 - monthly anchored roll-forward boundaries from a purchase on the 31st.
 
 The tests drive a controlled clock: the resolver's ``datetime`` is patched (as
@@ -554,7 +554,7 @@ def test_claim_filed_during_valid_coverage_stays_adjudicable_after_lapse(world):
     assert decided.reimbursement_amount == Decimal("8.00")
 
 
-def test_claim_allowance_is_per_coverage_period(world):
+def test_claim_allowance_resets_monday_not_at_sunday_coverage_renewal(world):
     w = world()  # claims_per_week_equivalent = 1
     w.fund(PURCHASE - timedelta(hours=1), PREMIUM * 4)  # premiums + the losses
     w.buy()
@@ -563,9 +563,12 @@ def test_claim_allowance_is_per_coverage_period(world):
     second = w.file_claim(local(1, 13, 10), w.loss(local(1, 13, 9)))
     assert (second.success, second.error_code) == (False, "CLAIM_LIMIT_EXCEEDED")
 
-    w.renew(PREVIEW_2)  # period 2 autopaid
-    next_period = w.file_claim(local(1, 18, 10), w.loss(local(1, 18, 9)))
-    assert next_period.success, next_period.error_message
+    w.renew(PREVIEW_2)  # period 2 autopaid, but it is still the same filing week
+    sunday_loss = w.loss(local(1, 17, 23, 58))
+    sunday = w.file_claim(local(1, 17, 23, 59), sunday_loss)
+    assert (sunday.success, sunday.error_code) == (False, "CLAIM_LIMIT_EXCEEDED")
+    monday = w.file_claim(local(1, 18), sunday_loss)
+    assert monday.success, monday.error_message
 
 
 def test_no_claim_after_stop_renewal_ends_coverage(world):

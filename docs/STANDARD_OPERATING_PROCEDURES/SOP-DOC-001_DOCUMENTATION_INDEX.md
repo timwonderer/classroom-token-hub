@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.47 | 2026-11-01 | 3.46 | Normative |
+| SOP-DOC-001 | 3.48 | 2026-11-03 | 3.47 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.48 (2026-11-03):**
+- Register DOM-STORE-001 v5.9, FEAT-STOR-003 v1.6, and SPEC-ECON-003 v2.4: weekly filing limits, rejection releases target reservations but retains allowance usage, atomic submission, and claim-level rejection of incomplete claims.
 
 **Version 3.47 (2026-11-01):**
 - Register DOM-STORE-001 v5.8 and FEAT-PROD-002 v1.2: a hall-pass request still open at the end of its class-local day closes like a rejection and consumes nothing, and an approved pass never left on reads Revoked once its day has ended, derived and never stored (owner ruling 2026-11-01).
