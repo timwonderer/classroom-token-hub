@@ -51,6 +51,7 @@ from app.feats.insurance_claim_feat import (
     build_productivity_review_context,
     _resolve_hourly_pay_rate,
 )
+from tests.helpers import temporal
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.classroom_initializer import initialize
 from tests.helpers.insurance_domain import establish_paid_premium_lineage
@@ -2312,29 +2313,34 @@ class TestLossesDuringTheWaitingPeriod:
 @pytest.mark.parametrize("insurance_type", ["TRANSACTION", "PRODUCTIVITY"])
 def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(app, insurance_type):
     """Two weekly slots cannot become nine monthly slots or be restored by rejection."""
-    classroom = initialize("chemistry_p1", app)
+    with temporal.pinned_clock(datetime(2026, 10, 1, tzinfo=timezone.utc)):
+        classroom = initialize("chemistry_p1", app)
     student = classroom.students[0]
-    with app.app_context():
+    with app.app_context(), temporal.pinned_clock(
+        temporal.class_wall_time(classroom.class_id, date(2026, 10, 30), 12)
+    ) as now:
         ctx = CanonicalContext(user_id=student.user.id, class_id=classroom.class_id,
                                seat_id=student.seat.id, actor_role="student")
         teacher = CanonicalContext(user_id=classroom.teacher_user.id, class_id=classroom.class_id,
                                    seat_id=classroom.teacher_seat.id, actor_role="teacher")
         entitlement_id = str(uuid4())
-        now = datetime.now(timezone.utc)
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"weekly:{uuid4().hex}"):
             if insurance_type == "PRODUCTIVITY":
                 _add_productivity_granted_event(
                     classroom, student, entitlement_id, None,
-                    granted_at=now - timedelta(days=10), charge_frequency="MONTHLY",
+                    granted_at=temporal.calendar_days_later(now, -10, class_id=classroom.class_id), charge_frequency="MONTHLY",
                     claimable_dates_per_week_equivalent="2",
                 )
-                subject = {"claimed_dates": [{"date": (now - timedelta(days=2)).date().isoformat(),
+                loss_date = temporal.class_date_of(
+                    temporal.calendar_days_later(now, -2, class_id=classroom.class_id),
+                    classroom.class_id,
+                )
+                subject = {"claimed_dates": [{"date": loss_date.isoformat(),
                                               "hours": "1", "explanation": "Missed work"}]}
             else:
                 _add_granted_event(classroom, student, entitlement_id,
                                    charge_frequency="MONTHLY", claims_per_week_equivalent="2")
                 subject = {"transaction_id": _seed_source_loss(classroom, student, idem="weekly").id}
-        now = datetime.now(timezone.utc)
         for index in range(2):
             key = f"weekly-filing:{index}"
             filed = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
@@ -2354,7 +2360,7 @@ def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(ap
         view = describe_claim_contract(InsuranceClaim.query.filter_by(claim_id=filed.claim_id).one(), canonical_context=ctx)
         assert view.weekly_allowance == view.weekly_consumed == 2
         next_week = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
-                                           claim_subject=subject, reference_time_utc=now + timedelta(days=7))
+                                           claim_subject=subject, reference_time_utc=temporal.calendar_days_later(now, 7, class_id=classroom.class_id))
         assert next_week.success, next_week.error_message
 
 
@@ -2362,23 +2368,27 @@ def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(ap
 def test_simultaneous_productivity_filings_serialize_target_and_weekly_slot(app, same_date):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
-    classroom = initialize("chemistry_p1", app)
+    with temporal.pinned_clock(datetime(2026, 10, 1, tzinfo=timezone.utc)):
+        classroom = initialize("chemistry_p1", app)
     student = classroom.students[0]
     with app.app_context():
         ctx = CanonicalContext(user_id=student.user.id, class_id=classroom.class_id,
                                seat_id=student.seat.id, actor_role="student")
         entitlement_id = str(uuid4())
-        now = datetime.now(timezone.utc)
-        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"parallel:{uuid4().hex}"):
+        now = temporal.class_wall_time(classroom.class_id, date(2026, 10, 30), 12)
+        with temporal.pinned_clock(now), FEATContext("FEAT-TEST-SETUP", idempotency_key=f"parallel:{uuid4().hex}"):
             _add_productivity_granted_event(
-                classroom, student, entitlement_id, None, granted_at=now - timedelta(days=10),
+                classroom, student, entitlement_id, None, granted_at=temporal.calendar_days_later(now, -10, class_id=classroom.class_id),
                 claimable_dates_per_week_equivalent="5" if same_date else "1",
             )
         db.session.commit()
     barrier = Barrier(2)
     def file_claim(index):
         with app.app_context():
-            loss_date = (now - timedelta(days=2 if same_date else index + 2)).date()
+            loss_date = temporal.class_date_of(
+                temporal.calendar_days_later(now, -2 if same_date else -index - 2, class_id=ctx.class_id),
+                ctx.class_id,
+            )
             barrier.wait(timeout=10)
             result = submit_insurance_claim(
                 canonical_context=ctx, entitlement_id=entitlement_id,
@@ -2386,7 +2396,7 @@ def test_simultaneous_productivity_filings_serialize_target_and_weekly_slot(app,
             )
             db.session.remove()
             return result
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with temporal.pinned_clock(now), ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(file_claim, [0, 1]))
     assert sum(result.success for result in results) == 1, results
     expected = "PRODUCTIVITY_DATE_NOT_ELIGIBLE" if same_date else "CLAIM_ALLOWANCE_EXHAUSTED"

@@ -126,7 +126,7 @@ Before submission, the FEAT SHALL establish:
 2. the entitlement belongs to the target seat and class;
 3. the entitlement references a configured insurance capability;
 4. the entitlement is usable at the filing time (`DOM-STORE-001` §VIII.E.1): no `EXPIRED` or `REVOKED` event has taken effect, and Obligations reports the required premiums of its lineage satisfied at that time;
-5. the coverage period containing the filing time is identified; it scopes the allowance and payout capacity for this claim (§XII);
+5. the coverage period containing the filing time is identified; it scopes the payout capacity for this claim (§XII);
 6. configured filing allowance remains available in the class-local filing week.
 
 Teacher cancellation of the insurance offering SHALL NOT invalidate an already-active entitlement.

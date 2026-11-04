@@ -317,9 +317,14 @@ def add_productivity_claim_dates(
     explanation are never rewritten).
 
     Raises :class:`ProductivityDateConflict` if a date is already used by a
-    *different* active claim under the same entitlement. The submission FEAT
-    holds the GRANTED row lock before checking allowance and writing evidence.
+    *different* active claim under the same entitlement. The GRANTED row is
+    locked here to serialize date reservations, including direct domain callers.
     """
+    db.session.query(EntitlementEvent).filter(
+        EntitlementEvent.entitlement_id == claim.entitlement_id,
+        EntitlementEvent.class_id == claim.class_id,
+        EntitlementEvent.event_type == "GRANTED",
+    ).with_for_update().one()
     created: list[InsuranceClaimProductivityDate] = []
     for claim_date, student_claimed_hours, student_explanation in dates:
         if not isinstance(claim_date, date):
