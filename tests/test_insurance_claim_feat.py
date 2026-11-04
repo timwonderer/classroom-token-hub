@@ -2414,8 +2414,14 @@ def test_simultaneous_productivity_filings_serialize_target_and_weekly_slot(app,
         assert InsuranceClaimProductivityDate.query.filter_by(class_id=ctx.class_id, entitlement_id=entitlement_id).count() == 1
 
 
-@pytest.mark.parametrize("persisted_count", [0, 1])
-def test_incomplete_productivity_claim_refuses_replay_and_approval(app, persisted_count):
+@pytest.mark.parametrize("operation", ["replay", "approval", "rejection"])
+@pytest.mark.parametrize("persisted_count, submitted_hours, stored_explanation", [
+    (0, "1", "Missed work"),
+    (1, "1", "Missed work"),
+    (2, "1.005", "Missed work"),
+    (2, "1", "Changed evidence"),
+])
+def test_incomplete_productivity_evidence(app, operation, persisted_count, submitted_hours, stored_explanation):
     with temporal.pinned_clock(datetime(2026, 10, 1, tzinfo=timezone.utc)):
         classroom = initialize("chemistry_p1", app)
     student = classroom.students[0]
@@ -2431,7 +2437,7 @@ def test_incomplete_productivity_claim_refuses_replay_and_approval(app, persiste
             temporal.calendar_days_later(now, offset, class_id=classroom.class_id), classroom.class_id
         ) for offset in (-3, -2)]
         subject = {"claimed_dates": [
-            {"date": day.isoformat(), "hours": "1", "explanation": "Missed work"} for day in dates
+            {"date": day.isoformat(), "hours": submitted_hours, "explanation": "Missed work"} for day in dates
         ]}
         key = f"partial:{uuid4().hex}"
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=key):
@@ -2445,20 +2451,25 @@ def test_incomplete_productivity_claim_refuses_replay_and_approval(app, persiste
                 correlation_id=key, claim_basis=subject,
             )
             insurance_claim_service.add_productivity_claim_dates(
-                claim=claim, dates=[(day, "1", "Missed work") for day in dates[:persisted_count]],
+                claim=claim, dates=[(day, "1", stored_explanation) for day in dates[:persisted_count]],
             )
-        replay = submit_insurance_claim(
-            canonical_context=ctx, entitlement_id=entitlement_id,
-            claim_subject=subject, correlation_id=key,
-        )
-        assert replay.success is False
-        assert replay.error_code == "INVALID_CLAIM_BASIS"
-        approved = resolve_insurance_claim(
-            canonical_context=teacher, claim_id=claim.claim_id, approved=True,
-        )
-        assert approved.success is False
-        assert approved.error_code == "INVALID_CLAIM_BASIS"
-        assert claim.status == "SUBMITTED"
+        if operation == "replay":
+            result = submit_insurance_claim(
+                canonical_context=ctx, entitlement_id=entitlement_id,
+                claim_subject=subject, correlation_id=key,
+            )
+        else:
+            result = resolve_insurance_claim(
+                canonical_context=teacher, claim_id=claim.claim_id,
+                approved=operation == "approval", override_reason="Incomplete historical evidence",
+            )
+        if operation == "rejection":
+            assert result.success, result.error_message
+            assert claim.status == "REJECTED"
+        else:
+            assert result.success is False
+            assert result.error_code == "INVALID_CLAIM_BASIS"
+            assert claim.status == "SUBMITTED"
         assert claim.payroll_event_id is None
         assert claim.ledger_transaction_id is None
         rows = insurance_claim_service.list_productivity_dates_for_claim(
@@ -2466,8 +2477,31 @@ def test_incomplete_productivity_claim_refuses_replay_and_approval(app, persiste
         )
         assert len(rows) == persisted_count
         assert all(row.recognized_payout is None for row in rows)
-        rejected = resolve_insurance_claim(
-            canonical_context=teacher, claim_id=claim.claim_id, approved=False,
-            override_reason="Incomplete historical evidence",
+
+
+@pytest.mark.parametrize("hours, accepted", [
+    ("1.005", False), ("1.000", True), ("NaN", False), ("Infinity", False), ("10000", False),
+])
+def test_productivity_hours_preserve_stored_precision(app, hours, accepted):
+    from app.feats.insurance_claim_feat import _parse_productivity_dates
+
+    with temporal.pinned_clock(datetime(2026, 10, 1, tzinfo=timezone.utc)):
+        classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+    with app.app_context():
+        ctx = CanonicalContext(user_id=student.user.id, class_id=classroom.class_id,
+                               seat_id=student.seat.id, actor_role="student")
+        now = temporal.class_wall_time(classroom.class_id, date(2026, 10, 30), 12)
+        parsed, error = _parse_productivity_dates(
+            {"claimed_dates": [{"date": "2026-10-29", "hours": hours, "explanation": " Missed work "}]},
+            canonical_context=ctx,
+            coverage_start_utc=temporal.calendar_days_later(now, -10, class_id=classroom.class_id),
+            submitted_at=now,
         )
-        assert rejected.success, rejected.error_message
+        if accepted:
+            assert error is None
+            assert parsed[0].student_claimed_hours == Decimal("1")
+            assert parsed[0].student_explanation == "Missed work"
+        else:
+            assert parsed == []
+            assert error.error_code == "INVALID_CLAIM_BASIS"

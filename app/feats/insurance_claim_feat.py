@@ -717,11 +717,18 @@ def _parse_productivity_dates(
                 error_code="INVALID_CLAIM_BASIS",
                 error_message=f"Invalid hours for date {claim_date.isoformat()}",
             )
-        if hours <= Decimal("0"):
+        if not hours.is_finite() or hours <= Decimal("0"):
             return [], InsuranceClaimSubmissionResult(
                 success=False,
                 error_code="INVALID_CLAIM_BASIS",
                 error_message=f"Hours for date {claim_date.isoformat()} must be positive",
+            )
+
+        if hours > Decimal("9999.99") or hours != hours.quantize(Decimal("0.01")):
+            return [], InsuranceClaimSubmissionResult(
+                success=False,
+                error_code="INVALID_CLAIM_BASIS",
+                error_message=f"Hours for date {claim_date.isoformat()} must fit four integer and two decimal places",
             )
 
         raw_explanation = entry.get("explanation")
@@ -1499,15 +1506,25 @@ def build_productivity_review_context(
 
 
 def _productivity_dates_complete(claim, rows) -> bool:
-    """Persisted dates must cover the immutable submitted evidence before payment."""
+    """Persisted evidence must match the immutable submission before payment."""
     submitted = (claim.claim_basis or {}).get("claimed_dates")
     if not isinstance(submitted, list) or not submitted:
         return False
+    expected = {}
     try:
-        dates = {date.fromisoformat(str(entry["date"])) for entry in submitted}
-    except (KeyError, TypeError, ValueError):
+        for entry in submitted:
+            day = date.fromisoformat(str(entry["date"]))
+            hours = Decimal(str(entry["hours"]))
+            explanation = entry["explanation"]
+            if not hours.is_finite() or hours <= 0 or not isinstance(explanation, str) or not explanation.strip():
+                return False
+            expected[day] = (hours, explanation.strip())
+    except (InvalidOperation, KeyError, TypeError, ValueError):
         return False
-    return len(rows) == len(submitted) == len(dates) and dates == {row.claim_date for row in rows}
+    return len(rows) == len(submitted) == len(expected) and all(
+        expected.get(row.claim_date) == (row.student_claimed_hours, row.student_explanation)
+        for row in rows
+    )
 
 
 def _approve_productivity_claim(
