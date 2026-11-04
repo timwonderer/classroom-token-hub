@@ -45,6 +45,23 @@ Students can use **Start Work** before the class has any payroll settings. Their
 > [!NOTE]
 > Rate and schedule changes affect future runs only. Payments already made are never recalculated.
 
+## Why it works this way
+
+**What you might expect:** students apply for classroom jobs, or earn money for good behaviour and finished assignments.
+
+**What Classroom Token Hub does instead:** pay comes from time worked, recorded by students' **Start Work** and **Done** taps, at a rate you set for the whole class. There are no per-student rates and no behaviour points.
+
+**Why:** money here is a wage for time, not a reward. The app deliberately has no behaviour scores, effort ratings or participation grades, and no per-student pay exceptions; configuration is kept within limits so the economy stays coherent enough to learn from.
+
+### If this doesn't fit your class
+
+- [ClassBank](https://www.classbank.com/) builds pay around classroom jobs and salaries, with automatic paychecks, bonuses and fines.
+- [My Classroom Economy](https://myclassroomeconomy.org/en/digital), a free program from Vanguard for grades 3–8, pays students for classroom jobs and gives bonuses for positive choices. It also offers a [printable version](https://myclassroomeconomy.org/en/overview).
+- [Schoolhouse Moolah](https://apps.apple.com/app/id6749143193) is a free iPad app for grades K–5 with jobs, bonuses, fines and a class store.
+- [Banqer](https://www.banqer.co/nz/primary/how-it-works) has students apply for salaried classroom jobs. It is built for New Zealand schools.
+
+*Checked against each product's own website on 29 October 2026. Classroom Token Hub is not affiliated with any of them. Check their current features and pricing yourself. [More on this](../design-choices.md).*
+
 ## Related guides
 - [Payroll Advanced Mode](payroll-advanced-mode.md)
 - [Run Payroll](payroll-run.md)

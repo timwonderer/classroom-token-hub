@@ -11,6 +11,7 @@ This page is a shortcut list. Use diagnostics for fast troubleshooting and featu
 
 ## Start here
 - [Teacher Help and Support Guides](diagnostics/teacher.md)
+- [Is Classroom Token Hub Right for You?](features/teacher/design-choices.md)
 
 ## Common questions
 - [I cannot log in or reset my account](diagnostics/teacher/login.md)

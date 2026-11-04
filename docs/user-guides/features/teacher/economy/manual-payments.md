@@ -49,7 +49,7 @@ The **Apply Payment** button has a dropdown arrow with two extra choices:
 ## Important notes
 
 > [!NOTE]
-> **Payroll credits only.** There is no manual fine or deduction here. Anything that takes money from a student — rent, fees, penalties — is a bill. See the [Bills guides](../bills/index.md).
+> **Payroll credits only.** There is no manual fine or deduction here. Today, money leaves a student's account through bills such as rent, insurance premiums and late fees. See the [Bills guides](../bills/index.md). A way to fine a student directly is not available yet; it is planned.
 
 > [!NOTE]
 > Manual payments always go to **checking**. If a student should end up with the money in savings, they can transfer it themselves.
