@@ -458,8 +458,8 @@ Canonical preset values (weekly filing limits; payout economics per § 4.4.2):
 by the remaining period payout capacity (`actual_payout` above), and submission is bounded by
 the configured daily payroll limit and remaining claim allowance per `FEAT-STOR-003`. The
 weekly `1 CWI` and `expected_weekly_hours` figures are advisory economic-coherence guidance,
-not mechanical caps. These preset values are settled; only the monthly allowance rounding
-convention was flagged for confirmation and is fixed in § 4.4.8.
+not mechanical caps. These preset values are settled; the weekly filing allowance rule
+is defined in § 4.4.8, independent of billing cadence.
 
 #### 4.4.5 `NON_MONETARY` Insurance
 
@@ -511,7 +511,7 @@ value the external benefit. The `Single` column uses the mode-band midpoint (equ
 
 As of v1.2 the insurance economic model is numerically complete. The canonical preset tables
 for all three products (§ 4.4.3, § 4.4.4, § 4.4.5), the deterministic premium-selection rule,
-and the monthly allowance rounding convention (§ 4.4.8) are **settled**.
+and the weekly filing allowance rule (§ 4.4.8) are **settled**.
 
 No insurance numerical value remains intentionally TBD. Any future change to these values is
 a normative amendment to this specification, not an implementation choice. Implementations
