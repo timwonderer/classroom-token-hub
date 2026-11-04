@@ -1209,6 +1209,15 @@ def _submit_insurance_claim_impl(
                         success=False, error_code="IDEMPOTENCY_CONFLICT",
                         error_message="Submission key already belongs to different claim evidence",
                     )
+                if policy_terms.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
+                    rows = insurance_claim_service.list_productivity_dates_for_claim(
+                        prior.claim_id, class_id=canonical_context.class_id
+                    )
+                    if not _productivity_dates_complete(prior, rows):
+                        return InsuranceClaimSubmissionResult(
+                            success=False, error_code="INVALID_CLAIM_BASIS",
+                            error_message="PRODUCTIVITY claim has incomplete date evidence; ask the teacher to reject it",
+                        )
                 return InsuranceClaimSubmissionResult(
                     success=True, claim_id=prior.claim_id,
                     correlation_id=prior.correlation_id, entitlement_id=entitlement_id,
@@ -1489,6 +1498,18 @@ def build_productivity_review_context(
     )
 
 
+def _productivity_dates_complete(claim, rows) -> bool:
+    """Persisted dates must cover the immutable submitted evidence before payment."""
+    submitted = (claim.claim_basis or {}).get("claimed_dates")
+    if not isinstance(submitted, list) or not submitted:
+        return False
+    try:
+        dates = {date.fromisoformat(str(entry["date"])) for entry in submitted}
+    except (KeyError, TypeError, ValueError):
+        return False
+    return len(rows) == len(submitted) == len(dates) and dates == {row.claim_date for row in rows}
+
+
 def _approve_productivity_claim(
     *,
     canonical_context: CanonicalContext,
@@ -1523,11 +1544,11 @@ def _approve_productivity_claim(
     rows = insurance_claim_service.list_productivity_dates_for_claim(
         claim.claim_id, class_id=class_id
     )
-    if not rows:
+    if not _productivity_dates_complete(claim, rows):
         return InsuranceClaimResolutionResult(
             success=False,
             error_code="INVALID_CLAIM_BASIS",
-            error_message="PRODUCTIVITY claim has no asserted date rows",
+            error_message="PRODUCTIVITY claim has incomplete date evidence; reject it with a claim-level reason",
         )
 
     hourly_rate = _resolve_hourly_pay_rate(class_id)

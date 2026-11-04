@@ -2412,3 +2412,62 @@ def test_simultaneous_productivity_filings_serialize_target_and_weekly_slot(app,
     with app.app_context():
         assert InsuranceClaim.query.filter_by(class_id=ctx.class_id, entitlement_id=entitlement_id).count() == 1
         assert InsuranceClaimProductivityDate.query.filter_by(class_id=ctx.class_id, entitlement_id=entitlement_id).count() == 1
+
+
+@pytest.mark.parametrize("persisted_count", [0, 1])
+def test_incomplete_productivity_claim_refuses_replay_and_approval(app, persisted_count):
+    with temporal.pinned_clock(datetime(2026, 10, 1, tzinfo=timezone.utc)):
+        classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+    with app.app_context(), temporal.pinned_clock(
+        temporal.class_wall_time(classroom.class_id, date(2026, 10, 30), 12)
+    ) as now:
+        ctx = CanonicalContext(user_id=student.user.id, class_id=classroom.class_id,
+                               seat_id=student.seat.id, actor_role="student")
+        teacher = CanonicalContext(user_id=classroom.teacher_user.id, class_id=classroom.class_id,
+                                   seat_id=classroom.teacher_seat.id, actor_role="teacher")
+        entitlement_id = str(uuid4())
+        dates = [temporal.class_date_of(
+            temporal.calendar_days_later(now, offset, class_id=classroom.class_id), classroom.class_id
+        ) for offset in (-3, -2)]
+        subject = {"claimed_dates": [
+            {"date": day.isoformat(), "hours": "1", "explanation": "Missed work"} for day in dates
+        ]}
+        key = f"partial:{uuid4().hex}"
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=key):
+            _add_productivity_granted_event(
+                classroom, student, entitlement_id, None,
+                granted_at=temporal.calendar_days_later(now, -10, class_id=classroom.class_id),
+            )
+            claim = insurance_claim_service.create_claim(
+                class_id=classroom.class_id, entitlement_id=entitlement_id,
+                target_seat_id=student.seat.id, actor_seat_id=student.seat.id,
+                correlation_id=key, claim_basis=subject,
+            )
+            insurance_claim_service.add_productivity_claim_dates(
+                claim=claim, dates=[(day, "1", "Missed work") for day in dates[:persisted_count]],
+            )
+        replay = submit_insurance_claim(
+            canonical_context=ctx, entitlement_id=entitlement_id,
+            claim_subject=subject, correlation_id=key,
+        )
+        assert replay.success is False
+        assert replay.error_code == "INVALID_CLAIM_BASIS"
+        approved = resolve_insurance_claim(
+            canonical_context=teacher, claim_id=claim.claim_id, approved=True,
+        )
+        assert approved.success is False
+        assert approved.error_code == "INVALID_CLAIM_BASIS"
+        assert claim.status == "SUBMITTED"
+        assert claim.payroll_event_id is None
+        assert claim.ledger_transaction_id is None
+        rows = insurance_claim_service.list_productivity_dates_for_claim(
+            claim.claim_id, class_id=classroom.class_id,
+        )
+        assert len(rows) == persisted_count
+        assert all(row.recognized_payout is None for row in rows)
+        rejected = resolve_insurance_claim(
+            canonical_context=teacher, claim_id=claim.claim_id, approved=False,
+            override_reason="Incomplete historical evidence",
+        )
+        assert rejected.success, rejected.error_message
