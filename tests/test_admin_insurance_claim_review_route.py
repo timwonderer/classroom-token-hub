@@ -368,3 +368,30 @@ def test_a_missing_hours_value_is_refused_not_approved_as_claimed(app, client):
 
     assert b"Enter the hours to approve" in resp.data
     assert _claim_status(app, claim_id) == "SUBMITTED"
+
+
+def test_incomplete_productivity_claim_can_be_rejected_without_date_rows(app, client):
+    """A failed historical duplicate remains resolvable without inventing evidence."""
+    from app.services import insurance_claim_service
+    ids, original_id, _ = _lost_time_claim(app, client)
+    with app.app_context():
+        original = insurance_claim_service.get_claim(original_id, class_id=ids["class_id"])
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"incomplete:{uuid4().hex}"):
+            incomplete = insurance_claim_service.create_claim(
+                class_id=original.class_id, entitlement_id=original.entitlement_id,
+                target_seat_id=original.target_seat_id, actor_seat_id=original.actor_seat_id,
+                correlation_id=f"incomplete:{uuid4().hex}", claim_basis=original.claim_basis,
+            )
+            claim_id = incomplete.claim_id
+    html = client.get(f"/admin/insurance/claim/{claim_id}").get_data(as_text=True)
+    assert 'name="rejection_reason"' in html
+    assert 'value="rejected"' in html
+    response = client.post(f"/admin/insurance/claim/{claim_id}", data={"status": "rejected", "rejection_reason": "Duplicate of an existing claim"}, follow_redirects=True)
+    assert b"Claim rejected." in response.data
+    with app.app_context():
+        claim = insurance_claim_service.get_claim(claim_id, class_id=ids["class_id"])
+        assert claim.status == "REJECTED"
+        assert claim.decision_note == "Duplicate of an existing claim"
+        assert claim.ledger_transaction_id is None and claim.payroll_event_id is None
+        assert not insurance_claim_service.list_productivity_dates_for_claim(claim_id, class_id=ids["class_id"])
+        assert insurance_claim_service.get_claim(original_id, class_id=ids["class_id"]).status == "SUBMITTED"

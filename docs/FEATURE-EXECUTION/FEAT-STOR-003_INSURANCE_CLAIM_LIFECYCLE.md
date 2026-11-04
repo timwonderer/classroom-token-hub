@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-003 | 1.5 | 2026-10-14 | 1.4 | Normative |
+| FEAT-STOR-003 | 1.6 | 2026-11-03 | 1.5 | Normative |
+
+> **1.6 revision note.** Owner ruling 2026-11-03: filing limits are weekly, irrespective of billing cadence; rejected claims release their transaction/date but keep their filing slots. Submission is atomic, and incomplete claims remain rejectable with a claim-level reason. This supersedes the coverage-period allowance in earlier revisions.
 
 > **1.5 revision note.** Continuation (`DOM-STORE-001` v5.7 §VIII.E.1). An entitlement
 > granted by continuation after a policy edit continues coverage the student already held,
@@ -125,7 +127,7 @@ Before submission, the FEAT SHALL establish:
 3. the entitlement references a configured insurance capability;
 4. the entitlement is usable at the filing time (`DOM-STORE-001` §VIII.E.1): no `EXPIRED` or `REVOKED` event has taken effect, and Obligations reports the required premiums of its lineage satisfied at that time;
 5. the coverage period containing the filing time is identified; it scopes the allowance and payout capacity for this claim (§XII);
-6. configured claim allowance remains available in that period.
+6. configured filing allowance remains available in the class-local filing week.
 
 Teacher cancellation of the insurance offering SHALL NOT invalidate an already-active entitlement.
 
@@ -329,12 +331,7 @@ Upon rejection:
 
 Rejection does not revoke, consume, or expire the insurance entitlement.
 
-Rejected claims **do** consume the period **claim-count allowance** (see §XII, the
-two-resource rule): every submitted claim lifecycle — `SUBMITTED`, `APPROVED`, or
-`REJECTED` — draws one slot against the period allowance. A rejected claim creates
-no monetary effect, so it does **not** consume period
-**payout capacity**. Both quantities are derived from canonical claim history; the
-claim table SHALL NOT maintain a mutable remaining-count field.
+Rejected claims retain their weekly filing allowance usage (§XII) but consume no payout capacity. Rejection releases the transaction/date reservation, without deleting submitted evidence. A teacher may reject a claim with missing date rows using a claim-level reason; date evidence and payout capacity are not prerequisites for rejection.
 
 ## XI. Coverage Cancellation and Expiration
 
@@ -355,29 +352,18 @@ Insurance claim activity never creates the terminal entitlement event.
 
 ## XII. The Two-Resource Rule (Claim Allowance and Payout Capacity)
 
-A monetary insurance entitlement meters two **independent** resources over each
-coverage period. Both are computed from the **frozen purchased contract** and
-canonical claim history — never from live policy edits or a mutable counter.
+A monetary insurance entitlement meters two independent resources from its immutable policy and claim history.
 
-**The period.** A claim belongs to the coverage period containing its filing time
-(`DOM-STORE-001` §VIII.E.1). Both resources are counted per period and reset at each
-coverage boundary. A claim filed in one period and decided in a later one draws on
-the period in which it was filed. `week_equivalent` below is that period's length.
+**Resource 1 — weekly filing allowance.** The class-local calendar week is Monday midnight through the following Monday midnight, resolved through the canonical temporal helper. Billing frequency never scales or resets this allowance.
 
-**Resource 1 — period claim-count allowance.** The maximum number of claim
-lifecycles that may be *filed* in the period:
+- TRANSACTION: `ceil(frozen.claims_per_week_equivalent)` claim filings per week.
+- PRODUCTIVITY: `ceil(frozen.claimable_dates_per_week_equivalent)` submitted date entries per week. A multi-date claim uses one slot for each date.
 
-```
-period_claim_allowance = ceil(frozen.claims_per_week_equivalent × week_equivalent)
-```
+The filing timestamp selects the week, not the loss date or decision time. SUBMITTED, APPROVED, and REJECTED filings all count. Re-filing a date after rejection consumes another slot; a same-correlation replay consumes none. Immutable submitted date assertions also count for historical incomplete claims without relational date rows.
 
-where `week_equivalent` scales the weekly figure to the coverage period's length
-(a weekly cycle is `1`; a monthly cycle is `covered_days / 7`, measured in
-class-local calendar days). **Every** submitted claim lifecycle draws exactly one
-slot — `SUBMITTED`, `APPROVED`, and `REJECTED` alike. Filing a claim and having it
-rejected still spends an allowance slot; the allowance meters *access to
-adjudication*, not payouts. A same-`correlation_id` replay is the same lifecycle,
-not an additional draw.
+Target reservation is separate: within an entitlement a transaction/date may back only one SUBMITTED or APPROVED claim. REJECTED releases the target only. Checks and claim/evidence writes serialize under the GRANTED row lock. A submission failure rolls back all its writes, including a parent claim created before an evidence conflict.
+
+**The payout period.** Payout capacity belongs to the coverage period containing filing; a decision in a later period still draws against the original filing period.
 
 **Resource 2 — period payout capacity.** The maximum monetary value the policy
 will disburse in the period:
@@ -399,7 +385,7 @@ cannot be used to launder additional payout headroom, and a student cannot exhau
 their payout value without also having spent adjudication slots.
 
 The system SHALL NOT persist `claims_remaining`, a mutable claim balance, or a
-mutable insurance-use counter. Both resources are always re-derived from immutable
+mutable insurance-use counter. Both resources are always re-derived from canonical
 claim history under a row-level lock on the `GRANTED` entitlement event so
 concurrent submissions cannot both take the last slot.
 

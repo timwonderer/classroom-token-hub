@@ -64,6 +64,7 @@ def _make_transaction_policy(
     premium: str = "100.00",
     payout_multiple: str = "1",
     claims_per_week_equivalent: str = "5",
+    charge_frequency: str = "WEEKLY",
     claim_window_days: int = 7,
 ) -> str:
     """Create a real immutable TRANSACTION insurance_policies row; return its policy_uuid.
@@ -79,7 +80,7 @@ def _make_transaction_policy(
         definition={
             "insurance_type": "TRANSACTION",
             "premium": premium,
-            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
+            "charge_frequency": charge_frequency, "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
             "reimbursement_percentage": str(reimbursement_percentage),
             "payout_multiple": payout_multiple,
             "claims_per_week_equivalent": claims_per_week_equivalent,
@@ -775,6 +776,7 @@ def _make_productivity_policy(
     premium: str = "100.00",
     payout_multiple: str = "1",
     claimable_dates_per_week_equivalent: str = "5",
+    charge_frequency: str = "WEEKLY",
     waiting_period_days: int | None = None,
 ) -> str:
     """Create a real immutable PRODUCTIVITY insurance_policies row; return its policy_uuid.
@@ -789,7 +791,7 @@ def _make_productivity_policy(
         definition={
             "insurance_type": "PRODUCTIVITY",
             "premium": premium,
-            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
+            "charge_frequency": charge_frequency, "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
             "reimbursement_percentage": str(reimbursement_percentage),
             "payout_multiple": payout_multiple,
             "claimable_dates_per_week_equivalent": claimable_dates_per_week_equivalent,
@@ -1076,7 +1078,7 @@ class TestProductivityClaimLifecycle:
             assert result.error_code == "CLAIM_ALLOWANCE_EXHAUSTED"
 
     def test_cross_claim_date_reuse_rejected(self, app):
-        """A date settled under one claim cannot be re-asserted by another (rejection does not free it)."""
+        """A pending date cannot be re-asserted and failed filing leaves no parent claim."""
         classroom = initialize("chemistry_p1", app)
         student = classroom.students[0]
 
@@ -1106,6 +1108,8 @@ class TestProductivityClaimLifecycle:
             )
             assert second.success is False
             assert second.error_code == "PRODUCTIVITY_DATE_NOT_ELIGIBLE"
+            assert InsuranceClaim.query.filter_by(class_id=classroom.class_id, entitlement_id=entitlement_id).count() == 1
+
 
     def test_approval_persists_recognized_payout_and_credits(self, app):
         """Approval adjudicates each date, persists recognized_payout, posts ONE credit."""
@@ -2145,8 +2149,8 @@ class TestClaimContractProjection:
             assert contract.policy.premium == Decimal("100.00")
             assert contract.claim_window_days == 5
             assert contract.allowance_unit == "claim"
-            assert contract.period_allowance == 3
-            assert contract.period_consumed == 1
+            assert contract.weekly_allowance == 3
+            assert contract.weekly_consumed == 1
             # premium × payout_multiple, with nothing approved yet.
             assert contract.maximum_policy_payout == Decimal("200.00")
             assert contract.remaining_period_cap == Decimal("200.00")
@@ -2303,3 +2307,90 @@ class TestLossesDuringTheWaitingPeriod:
             result = self._submit(classroom, student, entitlement_id, (granted_at + timedelta(days=5)).date())
             assert result.success, result.error_message
 
+
+
+@pytest.mark.parametrize("insurance_type", ["TRANSACTION", "PRODUCTIVITY"])
+def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(app, insurance_type):
+    """Two weekly slots cannot become nine monthly slots or be restored by rejection."""
+    classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+    with app.app_context():
+        ctx = CanonicalContext(user_id=student.user.id, class_id=classroom.class_id,
+                               seat_id=student.seat.id, actor_role="student")
+        teacher = CanonicalContext(user_id=classroom.teacher_user.id, class_id=classroom.class_id,
+                                   seat_id=classroom.teacher_seat.id, actor_role="teacher")
+        entitlement_id = str(uuid4())
+        now = datetime.now(timezone.utc)
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"weekly:{uuid4().hex}"):
+            if insurance_type == "PRODUCTIVITY":
+                _add_productivity_granted_event(
+                    classroom, student, entitlement_id, None,
+                    granted_at=now - timedelta(days=10), charge_frequency="MONTHLY",
+                    claimable_dates_per_week_equivalent="2",
+                )
+                subject = {"claimed_dates": [{"date": (now - timedelta(days=2)).date().isoformat(),
+                                              "hours": "1", "explanation": "Missed work"}]}
+            else:
+                _add_granted_event(classroom, student, entitlement_id,
+                                   charge_frequency="MONTHLY", claims_per_week_equivalent="2")
+                subject = {"transaction_id": _seed_source_loss(classroom, student, idem="weekly").id}
+        now = datetime.now(timezone.utc)
+        for index in range(2):
+            key = f"weekly-filing:{index}"
+            filed = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
+                                           claim_subject=subject, correlation_id=key, reference_time_utc=now)
+            assert filed.success, filed.error_message
+            replay = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
+                                            claim_subject=subject, correlation_id=key, reference_time_utc=now)
+            assert replay.success and replay.claim_id == filed.claim_id
+            rejected = resolve_insurance_claim(canonical_context=teacher, claim_id=filed.claim_id,
+                                              approved=False, override_reason="Please correct the claim")
+            assert rejected.success, rejected.error_message
+        denied = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
+                                        claim_subject=subject, reference_time_utc=now)
+        assert not denied.success
+        assert denied.error_code in {"CLAIM_LIMIT_EXCEEDED", "CLAIM_ALLOWANCE_EXHAUSTED"}
+        assert InsuranceClaim.query.filter_by(class_id=classroom.class_id, entitlement_id=entitlement_id).count() == 2
+        view = describe_claim_contract(InsuranceClaim.query.filter_by(claim_id=filed.claim_id).one(), canonical_context=ctx)
+        assert view.weekly_allowance == view.weekly_consumed == 2
+        next_week = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
+                                           claim_subject=subject, reference_time_utc=now + timedelta(days=7))
+        assert next_week.success, next_week.error_message
+
+
+@pytest.mark.parametrize("same_date", [True, False])
+def test_simultaneous_productivity_filings_serialize_target_and_weekly_slot(app, same_date):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+    with app.app_context():
+        ctx = CanonicalContext(user_id=student.user.id, class_id=classroom.class_id,
+                               seat_id=student.seat.id, actor_role="student")
+        entitlement_id = str(uuid4())
+        now = datetime.now(timezone.utc)
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"parallel:{uuid4().hex}"):
+            _add_productivity_granted_event(
+                classroom, student, entitlement_id, None, granted_at=now - timedelta(days=10),
+                claimable_dates_per_week_equivalent="5" if same_date else "1",
+            )
+        db.session.commit()
+    barrier = Barrier(2)
+    def file_claim(index):
+        with app.app_context():
+            loss_date = (now - timedelta(days=2 if same_date else index + 2)).date()
+            barrier.wait(timeout=10)
+            result = submit_insurance_claim(
+                canonical_context=ctx, entitlement_id=entitlement_id,
+                claim_subject={"claimed_dates": [{"date": loss_date.isoformat(), "hours": "1", "explanation": "Missed work"}]},
+            )
+            db.session.remove()
+            return result
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(file_claim, [0, 1]))
+    assert sum(result.success for result in results) == 1, results
+    expected = "PRODUCTIVITY_DATE_NOT_ELIGIBLE" if same_date else "CLAIM_ALLOWANCE_EXHAUSTED"
+    assert next(result.error_code for result in results if not result.success) == expected
+    with app.app_context():
+        assert InsuranceClaim.query.filter_by(class_id=ctx.class_id, entitlement_id=entitlement_id).count() == 1
+        assert InsuranceClaimProductivityDate.query.filter_by(class_id=ctx.class_id, entitlement_id=entitlement_id).count() == 1

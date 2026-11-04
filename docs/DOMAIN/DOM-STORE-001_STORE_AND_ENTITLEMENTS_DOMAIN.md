@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.8 | 2026-11-01 | 5.7 | Constitutional |
+| DOM-STORE-001 | 5.9 | 2026-11-03 | 5.8 | Constitutional |
 
 > [!IMPORTANT]
+> **v5.9 (2026-11-03), insurance filing (owner ruling).** Weekly filing limits apply independently of billing cadence. Rejection releases the claimed target, but never restores the filing allowance. Failed submissions leave no partial claim.
+>
 > **v5.8 (2026-11-01), hall-pass requests close with their day (owner ruling 2026-11-01).** §VII.B and §IX: a pending hall-pass request still open at the end of the class-local day it was submitted on is resolved by `FEAT-PROD-002` like a denial: the row is deleted, nothing is consumed, and its pass is available again. This supersedes "it has no TTL" for hall-pass requests only; other pending actions are unchanged.
 >
 > **v5.7 (2026-10-14), insurance continuation (owner ruling 2026-10-14).** §VIII.E.1 adds *Continuation after a policy edit* and *Withdrawn offering*. When the teacher supersedes the version an entitlement was granted under, the entitlement still ends at its coverage boundary, and a new entitlement under the successor version begins there; the old entitlement's terms never change (`DOM-POL-001` §VII). When the offering is withdrawn with no successor on sale, renewal stops and coverage ends at the boundary. Previously the code renewed a superseded or withdrawn version indefinitely, and nothing in this document said otherwise.
@@ -276,7 +278,7 @@ Key fields: `id`, `claim_id`, `entitlement_id`, `class_id`, `claim_date`, `stude
 
 Rules:
 
-- a date may be claimed at most once per claim and at most once per entitlement;
+- a date may appear at most once per claim; within an entitlement only one SUBMITTED or APPROVED claim may reserve it at a time. REJECTED claims retain their evidence but release the date;
 - the student's submitted hours and explanation are immutable; the teacher's adjudication is recorded alongside them, not over them;
 - this evidence is relational claim state, never an opaque list in the claim basis or a pending-action payload.
 
@@ -386,7 +388,9 @@ The student does not purchase the new entitlement; it continues coverage they al
 
 **Debt survives termination.** Termination, whether by nonpayment or by stopping renewal, does not erase, forgive, reverse, or void a premium for any period that began before the termination instant (`DOM-OBL-001` §IX.14). The only premiums that do not survive are unpaid advance premiums for periods beginning at or after it, which are withdrawn because they never became owed (`DOM-OBL-001` §V.8). Satisfying one after termination settles that obligation only and does not resurrect the entitlement. Coverage after termination requires a new purchase, which creates a new entitlement and a new premium lineage; the only exception is a continuation after a policy edit, above.
 
-**Claim periods.** Claim allowance and payout capacity are scoped to one coverage period of the entitlement and reset with each period. A claim draws on the period containing its filing time (`FEAT-STOR-003` §XII).
+**Claim periods.** Filing allowance is scoped to the class-local Monday–Sunday week containing submission, independent of premium billing cadence. Transaction claims use one slot per filing; productivity claims use one slot per submitted date. Every filing counts, including rejected claims and repeated dates filed again after rejection. Submitted date assertions on the claim basis remain evidence of filing even if an incomplete historical claim has no relational date rows. Payout capacity remains scoped to the coverage period containing filing (`FEAT-STOR-003` §XII).
+
+Within an entitlement, a transaction or productivity date is reserved by SUBMITTED and APPROVED claims. Rejection releases only that reservation. Submission serializes checks and writes under the GRANTED entitlement row lock and atomically persists the claim and all required evidence; a failed submission leaves neither. Teachers may reject an incomplete historical claim with a claim-level reason, without fabricating evidence or deleting history.
 
 Resolution of a pending action, the lifecycle of a claim, and termination of an entitlement are independent lifecycle events. Completing one does not complete another.
 

@@ -14,7 +14,7 @@ Lifecycle authority lives on ``InsuranceClaim``, never on an ``EntitlementEvent`
 filing or deciding a claim does NOT write a ``CONSUMED`` event. The insurance
 entitlement stays ``GRANTED`` until its real coverage boundary, so multiple claims
 may be filed under one active policy. Terminal claim decisions are immutable, and
-at most one claim lifecycle may back a given source transaction.
+only pending and approved claims reserve their source transaction.
 
 Claim eligibility and economics come from the **immutable insurance policy**
 (``insurance_policies``), resolved via the GRANTED entitlement's ``policy_uuid``
@@ -124,15 +124,14 @@ class _CoverageTerms:
 
     The period is one bill cycle of the entitlement's premium lineage,
     ``[cycle_boundary_at, next_assessment_at)`` (DOM-STORE-001 §VIII.E.1).
-    Claim allowance and payout capacity are scoped to it and reset at each
-    coverage boundary; a claim draws on the period containing its filing time
+    Payout capacity resets at each coverage boundary; filing allowance is weekly.
+    A claim draws on the payout period containing its filing time
     (FEAT-STOR-003 §XII). Terms come from the immutable policy version the
     entitlement carries — the current InsurancePolicy is never re-read.
     """
 
     period: insurance_coverage.CoveragePeriod
-    coverage_week_equivalent: Decimal
-    period_claim_allowance: int
+    weekly_claim_allowance: int
     maximum_policy_payout: Decimal
 
 
@@ -193,41 +192,6 @@ def _filing_deadline_end_utc(
     return boundaries.boundary_end_utc
 
 
-def _coverage_week_equivalent(
-    *,
-    policy_terms,
-    period: "insurance_coverage.CoveragePeriod",
-    canonical_context: CanonicalContext,
-) -> Decimal:
-    """Scale the weekly cadence to the coverage period's length.
-
-    A weekly cycle is exactly ``1`` week-equivalent; a monthly cycle is
-    ``covered_days / 7``, the class-local calendar days between the period's
-    own boundaries (anchored roll-forward recurrence, never a clamped month).
-    Shared by every product type (TRANSACTION claim-count, PRODUCTIVITY
-    date-count) so the period scaling stays identical across the policy_terms
-    subsets.
-    """
-    freq = (policy_terms.charge_frequency or "WEEKLY").strip().upper()
-    if freq == "MONTHLY":
-        start_date = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=canonical_context,
-            primitive="current_evaluation_day",
-            reference_time_utc=period.start_utc,
-        ).evaluation_date
-        end_date = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=canonical_context,
-            primitive="current_evaluation_day",
-            reference_time_utc=period.end_utc,
-        ).evaluation_date
-        covered_days = (end_date - start_date).days
-        return Decimal(covered_days) / Decimal("7")
-    # Weekly coverage (and any fail-safe) is exactly one week-equivalent.
-    return Decimal("1")
-
-
 def _maximum_policy_payout(policy_terms) -> Decimal:
     """Period payout ceiling: policy_terms premium × policy_terms payout multiple.
 
@@ -246,23 +210,29 @@ def _derive_coverage_terms(
     canonical_context: CanonicalContext,
 ) -> _CoverageTerms:
     """Reconstruct one coverage period's economics from the frozen policy terms."""
-    week_equiv = _coverage_week_equivalent(
-        policy_terms=policy_terms,
-        period=period,
-        canonical_context=canonical_context,
-    )
 
     maximum_policy_payout = _maximum_policy_payout(policy_terms)
 
     claims_per_week = policy_terms.claims_per_week_equivalent or Decimal("0")
-    period_claim_allowance = int(math.ceil(claims_per_week * week_equiv))
+    weekly_claim_allowance = int(math.ceil(claims_per_week))
 
     return _CoverageTerms(
         period=period,
-        coverage_week_equivalent=week_equiv,
-        period_claim_allowance=period_claim_allowance,
+        weekly_claim_allowance=weekly_claim_allowance,
         maximum_policy_payout=maximum_policy_payout,
     )
+
+
+def _filing_week_bounds(context, submitted_at):
+    week = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=context,
+        primitive="evaluation_period_boundaries",
+        period="week",
+        reference_time_utc=submitted_at,
+    )
+    return {"submitted_from": week.boundary_start_utc,
+            "submitted_before": week.boundary_end_utc}
 
 
 def _period_bounds(period: "insurance_coverage.CoveragePeriod") -> dict:
@@ -356,8 +326,8 @@ class ClaimContractView:
     coverage_start_utc: datetime
     coverage_effective_date: date
     allowance_unit: str
-    period_allowance: Optional[int]
-    period_consumed: Optional[int]
+    weekly_allowance: Optional[int]
+    weekly_consumed: Optional[int]
     claim_window_days: Optional[int]
     maximum_policy_payout: Optional[Decimal]
     remaining_period_cap: Optional[Decimal]
@@ -366,11 +336,10 @@ class ClaimContractView:
     # ``None`` for product types with no filing window (PRODUCTIVITY,
     # NON_MONETARY) or when the source transaction cannot be resolved.
     filed_within_window: Optional[bool]
-    # The coverage period the claim draws on: [start, end). The allowance and
-    # payout capacity above are counted within it and reset at its end.
+    # The payout period the claim draws on: [start, end); filing allowance is weekly.
     period_start_utc: Optional[datetime] = None
     period_end_utc: Optional[datetime] = None
-    # The policy's weekly rate the period allowance is scaled from.
+    # The policy's configured weekly filing limit.
     allowance_per_week: Optional[Decimal] = None
 
 
@@ -393,24 +362,19 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
         canonical_context, coverage_start_utc, waiting_period_days(policy, grant)
     )
     period = _period_for_claim(claim)
-    week_equiv = _coverage_week_equivalent(
-        policy_terms=policy,
-        period=period,
-        canonical_context=canonical_context,
-    )
     maximum_payout = _maximum_policy_payout(policy)
 
     filed_within_window: Optional[bool] = None
     if policy.insurance_type == _TRANSACTION_INSURANCE_TYPE:
         allowance_unit = "claim"
         per_week = policy.claims_per_week_equivalent or Decimal("0")
-        period_allowance = int(math.ceil(per_week * week_equiv))
-        period_consumed = len(
+        weekly_allowance = int(math.ceil(per_week))
+        weekly_consumed = len(
             insurance_claim_service.list_claims_for_entitlement(
                 class_id=class_id,
                 entitlement_id=claim.entitlement_id,
                 target_seat_id=seat_id,
-                **_period_bounds(period),
+                **_filing_week_bounds(canonical_context, claim.submitted_at),
             )
         )
         claim_window_days = policy.claim_window_days
@@ -437,16 +401,10 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
     elif policy.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
         allowance_unit = "date"
         per_week = policy.claimable_dates_per_week_equivalent or Decimal("0")
-        period_allowance = int(math.ceil(per_week * week_equiv))
-        period_consumed = len(
-            {
-                row.claim_date
-                for row in insurance_claim_service.list_productivity_dates_for_entitlement(
-                    class_id=class_id,
-                    entitlement_id=claim.entitlement_id,
-                    **_period_bounds(period),
-                )
-            }
+        weekly_allowance = int(math.ceil(per_week))
+        weekly_consumed = insurance_claim_service.count_productivity_date_filings(
+            class_id=class_id, entitlement_id=claim.entitlement_id,
+            **_filing_week_bounds(canonical_context, claim.submitted_at),
         )
         claim_window_days = None
         remaining = maximum_payout - insurance_claim_service.sum_recognized_payout_for_entitlement(
@@ -460,8 +418,8 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
             coverage_start_utc=coverage_start_utc,
             coverage_effective_date=effective_date,
             allowance_unit="claim",
-            period_allowance=None,
-            period_consumed=None,
+            weekly_allowance=None,
+            weekly_consumed=None,
             claim_window_days=None,
             maximum_policy_payout=None,
             remaining_period_cap=None,
@@ -476,8 +434,8 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
         coverage_start_utc=coverage_start_utc,
         coverage_effective_date=effective_date,
         allowance_unit=allowance_unit,
-        period_allowance=period_allowance,
-        period_consumed=period_consumed,
+        weekly_allowance=weekly_allowance,
+        weekly_consumed=weekly_consumed,
         claim_window_days=claim_window_days,
         maximum_policy_payout=maximum_payout,
         remaining_period_cap=_quantize_currency(max(remaining, Decimal("0.00"))),
@@ -541,6 +499,7 @@ def _enforce_transaction_submission(
     claim_subject: dict,
     replay_key: str,
     period: "insurance_coverage.CoveragePeriod",
+    submitted_at: datetime,
 ) -> Optional["InsuranceClaimSubmissionResult"]:
     """Gate a TRANSACTION claim at submission.
 
@@ -601,7 +560,7 @@ def _enforce_transaction_submission(
         )
 
     # (c) Claim-allowance — count EVERY claim lifecycle (SUBMITTED+APPROVED+REJECTED)
-    #     under this coverage period. Serialize concurrent submissions on the
+    #     in the filing week. Serialize concurrent submissions on the
     #     GRANTED row so two cannot both take the last slot.
     db.session.query(EntitlementEvent).filter(
         EntitlementEvent.event_id == granted_event.event_id
@@ -611,17 +570,17 @@ def _enforce_transaction_submission(
         class_id=class_id,
         entitlement_id=entitlement_id,
         target_seat_id=seat_id,
-        **_period_bounds(period),
+        **_filing_week_bounds(canonical_context, submitted_at),
     )
     # A same-correlation replay is the same lifecycle, not an additional draw.
     consumed = sum(1 for claim in existing if claim.correlation_id != replay_key)
-    if consumed >= coverage_terms.period_claim_allowance:
+    if consumed >= coverage_terms.weekly_claim_allowance:
         return InsuranceClaimSubmissionResult(
             success=False,
             error_code="CLAIM_LIMIT_EXCEEDED",
             error_message=(
                 f"Claim allowance exhausted "
-                f"({consumed}/{coverage_terms.period_claim_allowance} for this period)"
+                f"({consumed}/{coverage_terms.weekly_claim_allowance} for this week)"
             ),
         )
 
@@ -795,33 +754,13 @@ def _enforce_productivity_submission(
     granted_event: EntitlementEvent,
     parsed_dates: list["_ProductivityClaimedDate"],
     period: "insurance_coverage.CoveragePeriod",
+    submitted_at: datetime,
 ) -> tuple[Optional["InsuranceClaimSubmissionResult"], dict]:
-    """Gate a PRODUCTIVITY claim's asserted dates against the two-resource rule.
+    """Enforce weekly date filings and coverage-period payout capacity.
 
-    Resource 1 (date-count allowance): the number of *distinct class-local dates*
-    that may be claimed in the period is
-    ``ceil(policy_terms.claimable_dates_per_week_equivalent × week_equivalent)``. The
-    metered unit for PRODUCTIVITY is the DATE, not the claim case. Already-claimed
-    distinct dates (any status, from immutable child-row history) plus the new
-    dates must not exceed the allowance.
-
-    Resource 2 (period payout capacity): ``premium × payout_multiple`` minus the Σ
-    of persisted ``recognized_payout``; zero remaining fails the submission.
-
-    ``expected_weekly_hours`` is **not** an authorization limit — it is economic
-    normalization plus advisory guidance. This gate therefore never rejects a claim
-    for exceeding it; instead it computes an *advisory* weekly-guidance flag set
-    (derived, non-authoritative) that is surfaced to the student at submission and
-    the teacher at review. The daily limit (when configured) remains a real hard
-    boundary.
-
-    Concurrent submissions serialize on the GRANTED row so two cannot both take the
-    last date slot; the ``UNIQUE(entitlement_id, claim_date)`` constraint is the
-    structural backstop.
-
-    Returns ``(failure_or_None, advisory_flags)``. ``advisory_flags`` is always a
-    dict (possibly with an empty warning list); it is only meaningful when the
-    failure is ``None``.
+    All statuses count toward the filing week. Re-filing after rejection spends
+    another slot. The caller holds the GRANTED row lock through persistence.
+    Weekly-hours guidance remains advisory, while daily hours are a hard bound.
     """
     class_id = canonical_context.class_id
     entitlement_id = granted_event.entitlement_id
@@ -844,39 +783,18 @@ def _enforce_productivity_submission(
             {},
         )
 
-    week_equiv = _coverage_week_equivalent(
-        policy_terms=policy_terms,
-        period=period,
-        canonical_context=canonical_context,
+    date_allowance = int(math.ceil(policy_terms.claimable_dates_per_week_equivalent or Decimal("0")))
+    consumed = insurance_claim_service.count_productivity_date_filings(
+        class_id=class_id, entitlement_id=entitlement_id,
+        **_filing_week_bounds(canonical_context, submitted_at),
     )
-    dates_per_week = policy_terms.claimable_dates_per_week_equivalent or Decimal("0")
-    date_allowance = int(math.ceil(dates_per_week * week_equiv))
-
-    # Serialize concurrent date draws on the GRANTED entitlement row.
-    db.session.query(EntitlementEvent).filter(
-        EntitlementEvent.event_id == granted_event.event_id
-    ).with_for_update().first()
-
-    # The allowance is per coverage period: only dates of claims filed in the
-    # period containing this filing count against it (FEAT-STOR-003 §XII).
-    existing_rows = insurance_claim_service.list_productivity_dates_for_entitlement(
-        class_id=class_id, entitlement_id=entitlement_id, **_period_bounds(period)
-    )
-    existing_dates = {row.claim_date for row in existing_rows}
-    new_dates = {d.claim_date for d in parsed_dates}
-    # A same-date replay is not an additional draw; only genuinely new dates count.
-    prospective = len(existing_dates | new_dates)
+    prospective = consumed + len(parsed_dates)
     if prospective > date_allowance:
         return (
             InsuranceClaimSubmissionResult(
-                success=False,
-                error_code="CLAIM_ALLOWANCE_EXHAUSTED",
-                error_message=(
-                    f"Date allowance exhausted "
-                    f"({prospective}/{date_allowance} distinct dates for this period)"
-                ),
-            ),
-            {},
+                success=False, error_code="CLAIM_ALLOWANCE_EXHAUSTED",
+                error_message=f"Date allowance exhausted ({prospective}/{date_allowance} for this week)",
+            ), {},
         )
 
     remaining = _maximum_policy_payout(policy_terms) - (
@@ -1189,6 +1107,7 @@ def _submit_insurance_claim_impl(
                 EntitlementEvent.event_type == "GRANTED",
                 EntitlementEvent.target_seat_id == canonical_context.seat_id,
             )
+            .with_for_update()
             .first()
         )
 
@@ -1282,19 +1201,28 @@ def _submit_insurance_claim_impl(
 
         replay_key = correlation_id or idempotency_key or f"corr_{uuid.uuid4().hex}"
 
-        # 5. One transaction may back at most one claim lifecycle. A replay under the
-        #    SAME correlation is not a duplicate (create_claim returns the prior claim).
+        prior_claims = insurance_claim_service.list_claims_for_entitlement(
+            class_id=canonical_context.class_id, entitlement_id=entitlement_id,
+            target_seat_id=canonical_context.seat_id,
+        )
+        for prior in prior_claims:
+            if prior.correlation_id == replay_key:
+                if prior.claim_basis != claim_subject:
+                    return InsuranceClaimSubmissionResult(
+                        success=False, error_code="IDEMPOTENCY_CONFLICT",
+                        error_message="Submission key already belongs to different claim evidence",
+                    )
+                return InsuranceClaimSubmissionResult(
+                    success=True, claim_id=prior.claim_id,
+                    correlation_id=prior.correlation_id, entitlement_id=entitlement_id,
+                    submitted_at=prior.submitted_at,
+                )
+
+        # Pending and approved claims reserve the transaction.
         subject_transaction_id = claim_subject.get("transaction_id")
         if subject_transaction_id is not None:
-            existing_claims = insurance_claim_service.list_claims_for_entitlement(
-                class_id=canonical_context.class_id,
-                entitlement_id=entitlement_id,
-                target_seat_id=canonical_context.seat_id,
-            )
-            for prior in existing_claims:
-                if prior.correlation_id == replay_key:
-                    continue  # idempotent replay; handled by create_claim below
-                if (prior.claim_basis or {}).get("transaction_id") == subject_transaction_id:
+            for prior in prior_claims:
+                if prior.status != insurance_claim_service.REJECTED and (prior.claim_basis or {}).get("transaction_id") == subject_transaction_id:
                     return InsuranceClaimSubmissionResult(
                         success=False,
                         error_code="DUPLICATE_CLAIM_SUBJECT",
@@ -1333,13 +1261,14 @@ def _submit_insurance_claim_impl(
                 claim_subject=claim_subject,
                 replay_key=replay_key,
                 period=period,
+                submitted_at=now,
             )
             if enforcement is not None:
                 return enforcement
         elif policy_terms.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
             # PRODUCTIVITY: the claim asserts one or more class-local loss-dates.
             # Parse/validate the dates, then gate them against the two-resource rule
-            # (date-count allowance + period payout capacity). No filing window.
+            # (weekly date filings + period payout capacity). No filing window.
             parsed_productivity_dates, parse_failure = _parse_productivity_dates(
                 claim_subject,
                 canonical_context=canonical_context,
@@ -1354,6 +1283,7 @@ def _submit_insurance_claim_impl(
                 granted_event=granted_event,
                 parsed_dates=parsed_productivity_dates,
                 period=period,
+                submitted_at=now,
             )
             if enforcement is not None:
                 return enforcement
@@ -1362,49 +1292,29 @@ def _submit_insurance_claim_impl(
             # persisted as eligibility truth.
             eligibility_flags.update(advisory_flags)
 
-        # 7. Create (or idempotently return) the SUBMITTED claim. The entitlement is
-        #    NOT consumed — it stays GRANTED so further claims may be filed.
         try:
-            claim = insurance_claim_service.create_claim(
-                class_id=canonical_context.class_id,
-                entitlement_id=entitlement_id,
-                target_seat_id=canonical_context.seat_id,
-                actor_seat_id=canonical_context.seat_id,
-                correlation_id=replay_key,
-                claim_basis=claim_subject,
-                submitted_at=now,
-            )
+            with db.session.begin_nested():
+                claim = insurance_claim_service.create_claim(
+                    class_id=canonical_context.class_id,
+                    entitlement_id=entitlement_id,
+                    target_seat_id=canonical_context.seat_id,
+                    actor_seat_id=canonical_context.seat_id,
+                    correlation_id=replay_key,
+                    claim_basis=claim_subject,
+                    submitted_at=now,
+                )
+                if policy_terms.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
+                    insurance_claim_service.add_productivity_claim_dates(
+                        claim=claim,
+                        dates=[(d.claim_date, d.student_claimed_hours, d.student_explanation)
+                               for d in parsed_productivity_dates],
+                    )
         except insurance_claim_service.ClaimIdempotencyConflict as e:
-            return InsuranceClaimSubmissionResult(
-                success=False,
-                error_code="IDEMPOTENCY_CONFLICT",
-                error_message=str(e),
-            )
+            return InsuranceClaimSubmissionResult(success=False, error_code="IDEMPOTENCY_CONFLICT", error_message=str(e))
         except insurance_claim_service.ClaimEntitlementInvalid as e:
-            return InsuranceClaimSubmissionResult(
-                success=False,
-                error_code="ENTITLEMENT_INVALID",
-                error_message=str(e),
-            )
-
-        # 7b. Attach normalized PRODUCTIVITY date rows (immutable submitted hours).
-        #     Idempotent on replay; the UNIQUE(entitlement_id, claim_date) invariant
-        #     is the structural backstop against a concurrent duplicate date.
-        if policy_terms.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
-            try:
-                insurance_claim_service.add_productivity_claim_dates(
-                    claim=claim,
-                    dates=[
-                        (d.claim_date, d.student_claimed_hours, d.student_explanation)
-                        for d in parsed_productivity_dates
-                    ],
-                )
-            except insurance_claim_service.ProductivityDateConflict as e:
-                return InsuranceClaimSubmissionResult(
-                    success=False,
-                    error_code="PRODUCTIVITY_DATE_NOT_ELIGIBLE",
-                    error_message=str(e),
-                )
+            return InsuranceClaimSubmissionResult(success=False, error_code="ENTITLEMENT_INVALID", error_message=str(e))
+        except insurance_claim_service.ProductivityDateConflict as e:
+            return InsuranceClaimSubmissionResult(success=False, error_code="PRODUCTIVITY_DATE_NOT_ELIGIBLE", error_message=str(e))
 
         return InsuranceClaimSubmissionResult(
             success=True,

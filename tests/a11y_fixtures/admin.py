@@ -114,7 +114,7 @@ def _policy(**overrides):
 def _contract(**overrides):
     values = dict(
         coverage_effective_date=date(2030, 1, 3), coverage_start_utc=_NOW - timedelta(days=15),
-        claim_window_days=14, period_allowance=4, period_consumed=1, allowance_unit="claim",
+        claim_window_days=14, weekly_allowance=4, weekly_consumed=1, allowance_unit="claim",
         allowance_per_week=2, maximum_policy_payout=Decimal("20.00"), remaining_period_cap=Decimal("16.00"),
         filed_within_window=True, period_start_utc=_NOW - timedelta(days=10), period_end_utc=_NOW + timedelta(days=4),
     )
