@@ -95,6 +95,31 @@ This is a fallback, not an error. Choose a class from the dropdown — each is l
 > [!NOTE]
 > Your display name is set per class. Changing it in one class does not change it in another.
 
+## Why it works this way
+
+### No Google, Clever or Microsoft sign-in
+
+**What you might expect:** students sign in with their school account, and you can reset a forgotten password from the roster.
+
+**What Classroom Token Hub does instead:** students claim a seat with your join code and their name, then sign in with a username the app builds and a passphrase they choose. Nobody keeps a readable copy of the username, including you. When a student is locked out, you give them a reset code and they choose new credentials themselves.
+
+**Why:** the app collects as little about a student as it can: a first and last name that you type, stored encrypted, and nothing else. A school sign-in would bring email addresses and district IDs with it. It would also make one district login the key to every class that trusts it, so a single compromised account or misconfiguration could reach every classroom at once. Today a compromised account reaches one class. Many teachers also run Classroom Token Hub without any school IT involvement, and school sign-in would rule that out.
+
+### One teacher per class, and no school-wide economy
+
+**What you might expect:** a co-teacher or aide manages the class with you, or the whole school shares one currency and one store.
+
+**What Classroom Token Hub does instead:** every class has exactly one teacher, and every class period is a sealed economy. Money, students, settings and history never cross from one class to another, even between two periods you teach yourself.
+
+**Why:** keeping each class sealed is the safety property the app defends hardest. Every read and write of student data is limited to one class, and it is tested that way, because an earlier version once let data cross between two periods of the same teacher.
+
+### If this doesn't fit your class
+
+- [ClassBank](https://www.classbank.com/) lets students sign in with Google or with a username you create. You can [set a new password](https://help.classbank.com/en/articles/6499311-my-student-forgot-their-password) from the roster. [Co-teachers](https://help.classbank.com/en/articles/6708200-add-co-teachers) need the paid Pro or School plan, and both teachers must be at the same school. Its [Schoolwide plan](https://www.classbank.com/pricing) adds one student account across classes, a schoolwide store, and SIS rostering with single sign-on.
+- [LiveSchool](https://www.whyliveschool.com/pricing) is a schoolwide points system with a rewards store. It includes single sign-on and rostering on every plan and is priced per staff member. It tracks behaviour points rather than running a banking simulation.
+
+*Checked against each product's own website on 29 October 2026. Classroom Token Hub is not affiliated with any of them. Check their current features and pricing yourself. [More on this](../design-choices.md).*
+
 ## Related guides
 
 - [Student Management Overview](students-overview.md)

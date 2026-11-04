@@ -17,6 +17,10 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: security-reliability --> **Pin the application TLS certificate bundle to certifi 2026.10.19.** Existing environments could retain an older transitive certifi installation after the eMudhra CA incident. The explicit pin makes the regular release installation replace that bundle with the corrected trust store.
 
+### Added
+
+- <!-- notes: internal --> **The teacher help guides say which design choices might not suit a class, why we made them, and what to try instead.** A new page, *Is Classroom Token Hub Right for You?* (`docs/user-guides/features/teacher/design-choices.md`), is linked from the Teacher Manual and the Teacher Feature Guides index. Five guides gain a *Why it works this way* section: Class Setup (no school-account sign-in; one teacher per class and no school-wide economy), Transactions (void only, no delete or set-balance), Payroll Settings (wage for time worked, not jobs or behaviour pay), Students Overview (no leaderboards, XP or streaks), and Insurance Enrollment (no teacher cancellation or refunds). The reasons come from `PRN-PHL-001` and `PRN-SNP-001`. Manual Payments now says plainly that fines are not available yet and are planned: teacher fines were lost in the v2 migration (the saved-fine catalog in `7139b0742`, the deduction option in `db7079c7d`, which left them to Obligations), not dropped by design, and `SPEC-ECON-003` still provides for teacher penalties. Each section links products that work differently (ClassBank, My Classroom Economy, Banqer, Schoolhouse Moolah, ClassDojo, LiveSchool, PBIS Rewards), checked against each vendor's own site on 2026-10-29, with a no-affiliation note. Transactions also stops suggesting "a fine" as a way to reissue a voided amount, since none exists yet.
+
 ## [2.4.2] - 2026-11-03 — Hall passes end with their day
 
 Released as `6e42f43` on 2026-11-03 at 02:38 UTC by release run [41567363872](https://github.com/timwonderer/classroom-token-hub/actions/runs/41567363872). No migration. Record: [DEPLOY_2026-11-03_6e42f43.md](docs/ops/audits/DEPLOY_2026-11-03_6e42f43.md).
