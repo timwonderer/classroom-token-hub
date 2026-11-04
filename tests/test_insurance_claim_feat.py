@@ -2310,8 +2310,11 @@ class TestLossesDuringTheWaitingPeriod:
 
 
 
-@pytest.mark.parametrize("insurance_type", ["TRANSACTION", "PRODUCTIVITY"])
-def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(app, insurance_type):
+@pytest.mark.parametrize(
+    "insurance_type, denied_code",
+    [("TRANSACTION", "CLAIM_LIMIT_EXCEEDED"), ("PRODUCTIVITY", "CLAIM_ALLOWANCE_EXHAUSTED")],
+)
+def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(app, insurance_type, denied_code):
     """Two weekly slots cannot become nine monthly slots or be restored by rejection."""
     with temporal.pinned_clock(datetime(2026, 10, 1, tzinfo=timezone.utc)):
         classroom = initialize("chemistry_p1", app)
@@ -2329,14 +2332,14 @@ def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(ap
                 _add_productivity_granted_event(
                     classroom, student, entitlement_id, None,
                     granted_at=temporal.calendar_days_later(now, -10, class_id=classroom.class_id), charge_frequency="MONTHLY",
-                    claimable_dates_per_week_equivalent="2",
+                    claimable_dates_per_week_equivalent="2", expected_weekly_hours="1",
                 )
                 loss_date = temporal.class_date_of(
                     temporal.calendar_days_later(now, -2, class_id=classroom.class_id),
                     classroom.class_id,
                 )
                 subject = {"claimed_dates": [{"date": loss_date.isoformat(),
-                                              "hours": "1", "explanation": "Missed work"}]}
+                                              "hours": "2", "explanation": "Missed work"}]}
             else:
                 _add_granted_event(classroom, student, entitlement_id,
                                    charge_frequency="MONTHLY", claims_per_week_equivalent="2")
@@ -2346,6 +2349,11 @@ def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(ap
             filed = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
                                            claim_subject=subject, correlation_id=key, reference_time_utc=now)
             assert filed.success, filed.error_message
+            if insurance_type == "PRODUCTIVITY":
+                assert filed.eligibility_flags["weekly_guidance_exceeded"] is True
+                warnings = filed.eligibility_flags["weekly_guidance_warnings"]
+                assert len(warnings) == 1
+                assert warnings[0]["projected_hours"] == "2.00"
             replay = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
                                             claim_subject=subject, correlation_id=key, reference_time_utc=now)
             assert replay.success and replay.claim_id == filed.claim_id
@@ -2355,7 +2363,7 @@ def test_monthly_policy_enforces_weekly_filings_and_rejection_releases_target(ap
         denied = submit_insurance_claim(canonical_context=ctx, entitlement_id=entitlement_id,
                                         claim_subject=subject, reference_time_utc=now)
         assert not denied.success
-        assert denied.error_code in {"CLAIM_LIMIT_EXCEEDED", "CLAIM_ALLOWANCE_EXHAUSTED"}
+        assert denied.error_code == denied_code
         assert InsuranceClaim.query.filter_by(class_id=classroom.class_id, entitlement_id=entitlement_id).count() == 2
         view = describe_claim_contract(InsuranceClaim.query.filter_by(claim_id=filed.claim_id).one(), canonical_context=ctx)
         assert view.weekly_allowance == view.weekly_consumed == 2

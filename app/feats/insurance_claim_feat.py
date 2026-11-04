@@ -857,8 +857,8 @@ def _projected_weekly_hours_for_status(row) -> Decimal:
 
     SUBMITTED counts the student-claimed hours; APPROVED counts the teacher-approved
     hours (defaulting to student-claimed when no explicit adjustment was recorded);
-    REJECTED contributes nothing to the weekly-hours projection (it still consumes
-    its date, but frees weekly-hours capacity).
+    REJECTED contributes nothing to the weekly-hours projection: it releases the
+    date reservation, but still consumes its filing slot.
     """
     if row.status == insurance_claim_service.SUBMITTED:
         return row.student_claimed_hours or Decimal("0")
@@ -950,7 +950,6 @@ def _compute_productivity_weekly_advisory(
     existing = insurance_claim_service.list_productivity_dates_with_status_for_entitlement(
         class_id=class_id, entitlement_id=entitlement_id
     )
-    existing_dates = {row.claim_date for row in existing}
 
     claimed_by_week: dict[date, Decimal] = {}
     for row in existing:
@@ -960,8 +959,6 @@ def _compute_productivity_weekly_advisory(
             + _projected_weekly_hours_for_status(row)
         )
     for claimed in parsed_dates:
-        if claimed.claim_date in existing_dates:
-            continue  # replay of an already-persisted date; already counted above
         wk = _week_start(canonical_context, claimed.claim_date)
         claimed_by_week[wk] = (
             claimed_by_week.get(wk, Decimal("0")) + claimed.student_claimed_hours
