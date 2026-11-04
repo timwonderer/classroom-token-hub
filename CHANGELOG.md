@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+
+- <!-- notes: security-reliability --> **Pin the application TLS certificate bundle to certifi 2026.10.19.** Existing environments could retain an older transitive certifi installation after the eMudhra CA incident. The explicit pin makes the regular release installation replace that bundle with the corrected trust store.
+
 ## [2.4.2] - 2026-11-03 — Hall passes end with their day
 
 Released as `6e42f43` on 2026-11-03 at 02:38 UTC by release run [41567363872](https://github.com/timwonderer/classroom-token-hub/actions/runs/41567363872). No migration. Record: [DEPLOY_2026-11-03_6e42f43.md](docs/ops/audits/DEPLOY_2026-11-03_6e42f43.md).
