@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ITR-001      | 1.9     | 2026-10-18     | 1.8        | Constitutional  |
+| DOM-ITR-001      | 1.10    | 2026-11-04     | 1.9        | Constitutional  |
 
 > [!IMPORTANT]
+> **v1.10 (2026-11-04).** Corrects the overdraft / NSF ownership entries (§II, §XIII.c), which still called the NSF fee an immediate obligation: since `DOM-OBL-001` 3.3 (owner ruling 2026-10-07) no NSF fee is charged and the fee was never an obligation. Records that a teacher-applied fine is a Ledger penalty (`FEAT-LED-006`). No Interpretation invariant changes.
+>
 > **v1.9 (2026-10-18), owner ruling.** INV-ITR-015 inverted: Interpretation now classifies Ledger event origin by `mechanism` and a closed, schema-validated `Transaction.type` (`DOM-LED-001` INV-LED-017), not by `feat_code`. The prior rule's own rationale — `type` was unconstrained free text with inconsistent casing, "ruled untrustworthy for semantics" — is resolved by that constraint, not dropped; `feat_code` is retained as provenance metadata but is no longer part of this classification. No change to any other invariant in this document.
 
 > [!IMPORTANT]
@@ -62,7 +64,7 @@ The Interpretation Domain is authorized to answer questions of participation, ec
 - **Economic calculation and reference values** → `SPEC-ECON-003` under CLASS authority (CWI derivation, per-mode bands, doubling-time, compound growth, economic coherence rules).
 - **Store product definitions or purchase truth** → STORE.
 - **Recovery / reset eligibility, triggering, execution, or gating** → not currently owned by any documented domain. Interpretation MAY produce observations that inform such a decision but MUST NOT itself specify or gate it.
-- **Overdraft / NSF assessment ownership** — RESOLVED (SPEC-ECON-003 §4.6.1.1): LEDGER executes (posts the fee) and stays domain-blind; OBLIGATIONS owns the fine, recorded by the originating business FEAT as an immediate obligation. Interpretation consumes the OBLIGATIONS fact per INV-ITR-016 (see §XIII.c).
+- **Overdraft / NSF assessment ownership** — RESOLVED (`DOM-OBL-001` v3.3 §II.C): no NSF fee is charged, and the fee was never an obligation; it is a LEDGER fee. Teacher fines are Ledger penalties (`FEAT-LED-006`). Interpretation consumes these facts per INV-ITR-016 (see §XIII.c).
 
 ---
 
@@ -357,5 +359,5 @@ Items in this section are not Interpretation-owned and cannot be resolved by ame
 
 | Element | Status |
 |---|---|
-| Overdraft / NSF fee assessment ownership | **RESOLVED (SPEC-ECON-003 §4.6.1.1).** LEDGER executes the money movement (posts the fee debit) and stays domain-blind (`DOM-LED-001` §II); OBLIGATIONS owns the fine as Economic Context — the NSF fee is an immediate obligation (`DOM-OBL-001` §II.C), recorded by the originating business FEAT's cross-domain orchestration, not by the Ledger primitive. An `AssessmentEvent` (NSF_FEE ASSESSMENT + PAYMENT settled by the fee debit) is now produced, so obligation-outcome observations can include overdraft / NSF. Scope: charged only for a failed purchase or obligation — never for transfers (lateral) or penalties (admin adjustments). Interpretation consumes the OBLIGATIONS fact per INV-ITR-016 and still does not itself decide ownership. |
+| Overdraft / NSF fee assessment ownership | **RESOLVED (owner ruling 2026-10-07; `DOM-OBL-001` v3.3 §II.C; `SPEC-ECON-003` §4.5.1.1).** CTH charges no NSF or overdraft fee. An NSF fee was never an obligation: it is a Ledger fee, a side effect of a negative balance, owned by LEDGER, and a historical one may be reversed like any other fee. `NSF_FEE` rows written to `assessment_events` before `DOM-OBL-001` 3.3 are history, not obligation facts. A teacher-applied fine is likewise not an obligation: it is a Ledger `penalty` (`FEAT-LED-006`). Interpretation consumes these facts per INV-ITR-016 and does not itself decide ownership. |
 | ~~Current runtime `suggested_action` alert content~~ | **RESOLVED (slice 8.4d) — by deletion.** The prescriptive alert content, its `generate_alerts` producer, and the V1 analytics engine and dashboard builder that carried it are removed from runtime. The teacher Interpretation page now renders DOM-ITR observations plus non-prescriptive guiding questions only; it prescribes no teacher action. |
