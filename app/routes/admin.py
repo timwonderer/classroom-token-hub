@@ -8689,9 +8689,12 @@ def bulk_adjust_hall_pass_entitlements():
             'remove': f'removed {value}'
         }
 
-        message = f"Successfully adjusted hall-pass entitlements for {len(updated)} student(s) ({action_text[update_type]})"
-        if errors:
-            message += f". {len(errors)} error(s) occurred: {errors[0]}"
+        if updated:
+            message = f"Adjusted hall-pass entitlements for {len(updated)} student(s) ({action_text[update_type]})"
+            if errors:
+                message += f". {len(errors)} student(s) could not be adjusted."
+        else:
+            message = "No hall-pass entitlements were adjusted."
 
         return jsonify({
             "status": "success" if updated else "error",

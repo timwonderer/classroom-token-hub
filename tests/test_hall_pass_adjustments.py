@@ -237,3 +237,24 @@ def test_adjustment_quantity_limit_is_per_request(client, app, surface):
     assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 101
     _post(client, student, surface, "cap-remove", "remove", 100)
     assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 1
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_bulk_result_summary_does_not_repeat_errors(client, app, partial):
+    """Report no-op/partial outcomes and return individual failures only once."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    first, second = classroom.students[:2]
+    if partial:
+        _post(client, first, "bulk", "summary-seed")
+    response = client.post('/admin/students/bulk-adjust-hall-pass-entitlements', json={
+        "student_ids": [first.seat_id, second.seat_id], "update_type": "remove",
+        "value": 1, "request_id": "summary-remove",
+    })
+    data = response.get_json()
+    assert data["status"] == ("success" if partial else "error")
+    assert len(data["errors"]) == (1 if partial else 2)
+    assert all(error not in data["message"] for error in data["errors"])
+    if partial:
+        assert "1 student(s) could not be adjusted" in data["message"]
+    else:
+        assert data["message"] == "No hall-pass entitlements were adjusted."

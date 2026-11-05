@@ -2,12 +2,19 @@
 from pathlib import Path
 import subprocess
 
+import pytest
 
-def test_bulk_retry_retains_payload_and_id():
+
+@pytest.mark.parametrize("scenario", [
+    "lost-response", "csrf", "redirect", "server-error", "unreadable",
+    "partial-refresh", "partial-stay", "add-limit", "remove-limit",
+])
+def test_bulk_adjustment_ui(scenario):
     template = (Path(__file__).resolve().parents[1] / 'templates' / 'admin_students.html').read_text()
     source = template[template.index('  let pendingHallPassAdjustment'):template.index('  function deletePendingStudent')]
     script = r'''
 const assert = require('node:assert/strict');
+const scenario = process.argv[1];
 let prompts = 0, ids = 0, reloads = 0;
 let selection = 12;
 const requests = [];
@@ -29,7 +36,7 @@ window.AppCore.confirm = async (message) => {
 const fetch = async (url, options) => {
   requests.push(JSON.parse(options.body));
   if (rejection) return rejection;
-  if (requests.length === 1) {
+  if (scenario === 'lost-response' && requests.length === 1) {
     await new Promise(resolve => {release = resolve});
     throw new Error('server committed; response lost');
   }
@@ -37,6 +44,7 @@ const fetch = async (url, options) => {
 };
 ''' + source + r'''
 (async () => {
+  if (scenario === 'lost-response') {
   const first = bulkUpdateHallPass();
   await new Promise(resolve => setImmediate(resolve));
   await bulkUpdateHallPass();
@@ -52,28 +60,28 @@ const fetch = async (url, options) => {
   assert.notEqual(requests[2].request_id, requests[1].request_id);
   assert.deepEqual(requests[2].student_ids, [99]);
   assert.equal(prompts, 2);
-  for (const response of [
-    {status: 400, json: async () => {throw new Error('HTML CSRF rejection');}},
-    {status: 200, redirected: true, json: async () => {throw new Error('HTML login');}},
-  ]) {
-    rejection = response;
+  return;
+  }
+  const responses = {
+    csrf: {status: 400, json: async () => {throw new Error('HTML CSRF rejection');}},
+    redirect: {status: 200, redirected: true, json: async () => {throw new Error('HTML login');}},
+    'server-error': {status: 500, json: async () => ({status: 'error'})},
+    unreadable: {status: 200, json: async () => {throw new Error('unreadable response');}},
+  };
+  if (responses[scenario]) {
+    rejection = responses[scenario];
     await bulkUpdateHallPass();
-    const rejectedKey = requests.at(-1).request_id;
+    const originalPayload = requests.at(-1);
     rejection = null;
     await bulkUpdateHallPass();
-    assert.notEqual(requests.at(-1).request_id, rejectedKey, 'definite rejection must clear pending state');
+    if (['csrf', 'redirect'].includes(scenario)) {
+      assert.notEqual(requests.at(-1).request_id, originalPayload.request_id);
+    } else {
+      assert.deepEqual(requests.at(-1), originalPayload);
+    }
+    return;
   }
-  for (const response of [
-    {status: 500, json: async () => ({status: 'error'})},
-    {status: 200, json: async () => {throw new Error('unreadable response');}},
-  ]) {
-    rejection = response;
-    await bulkUpdateHallPass();
-    const uncertainPayload = requests.at(-1);
-    rejection = null;
-    await bulkUpdateHallPass();
-    assert.deepEqual(requests.at(-1), uncertainPayload, 'uncertain responses must retain pending state');
-  }
+  if (scenario.startsWith('partial-')) {
   rejection = {status: 200, json: async () => ({
     status: 'success', message: 'One updated, two failed',
     errors: ['Student A: no passes', 'Student B: no passes'],
@@ -83,17 +91,19 @@ const fetch = async (url, options) => {
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(reloads, beforePartial, 'partial result must stay readable before refreshing');
   assert.ok(messages.at(-1).includes('Student B: no passes'));
-  dismissResult(true);
+  const refresh = scenario === 'partial-refresh';
+  dismissResult(refresh);
   await partial;
-  assert.equal(reloads, beforePartial + 1);
+  assert.equal(reloads, beforePartial + Number(refresh));
+  return;
+  }
   const beforeInvalid = requests.length;
-  for (const input of ['+101', '-101']) {
+  const input = scenario === 'add-limit' ? '+101' : '-101';
     window.AppCore.prompt = async () => input;
     await bulkUpdateHallPass();
     assert.equal(requests.length, beforeInvalid);
     assert.ok(messages.at(-1).includes('1 to 100'));
-  }
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
-    result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+    result = subprocess.run(['node', '-e', script, scenario], capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr
