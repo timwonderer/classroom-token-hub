@@ -85,3 +85,18 @@ def test_DOM_LED_001__downgrade_keeps_penalty_admitted_while_a_penalty_row_exist
     assert connection.execute(
         sa.text("SELECT count(*) FROM ledger_transaction WHERE type = 'penalty'")
     ).scalar() == 2
+
+
+def test_DOM_LED_001__downgrade_locks_the_table_before_counting_penalty_rows(old_schema):
+    """A fine committing between the count and the NOT VALID re-creation would be stranded."""
+    connection, migration = old_schema
+    migration.upgrade()
+    statements = []
+    sa.event.listen(connection, "before_cursor_execute",
+                    lambda conn, cursor, statement, *args: statements.append(statement))
+
+    migration.downgrade()
+
+    lock = next(i for i, s in enumerate(statements) if s.startswith("LOCK TABLE ledger_transaction"))
+    count = next(i for i, s in enumerate(statements) if "count(*)" in s)
+    assert lock < count

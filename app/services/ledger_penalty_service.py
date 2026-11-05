@@ -24,8 +24,22 @@ def penalty_description(reason: str) -> str:
     return f"Fine: {reason.strip()}"[:255]
 
 
-def penalty_idempotency_key(submission_token: str, seat_id: int) -> str:
-    return f"penalty:{submission_token}:{seat_id}"
+def penalty_batch_identity(seat_ids, amount, reason) -> str:
+    """The whole submission a token was minted for: every seat, the amount and the text."""
+    material = "|".join([
+        ",".join(str(s) for s in sorted(set(seat_ids))),
+        str(_quantize_currency(Decimal(amount))),
+        penalty_description(reason),
+    ])
+    return hashlib.sha256(material.encode()).hexdigest()[:16]
+
+
+def penalty_token_prefix(submission_token: str) -> str:
+    return f"penalty:{submission_token}:"
+
+
+def penalty_idempotency_key(submission_token: str, batch_identity: str, seat_id: int) -> str:
+    return f"{penalty_token_prefix(submission_token)}{batch_identity}:{seat_id}"
 
 
 def resolve_penalty_plans(*, class_id, seat_ids, amount, reason, actor_seat_id, banking_directive):
@@ -55,13 +69,14 @@ def resolve_penalty_plans(*, class_id, seat_ids, amount, reason, actor_seat_id, 
 
 
 def penalty_preview_digest(resolved_plans) -> str:
-    """Identity of what the teacher confirmed: each seat's balances and funding."""
+    """Identity of what the teacher confirmed: the text students see, and each seat's balances and funding."""
     material = "|".join(
         ":".join(
             str(v)
             for v in (
                 r.intended_plan.seat_id,
                 r.intended_plan.debit_amount,
+                repr(r.intended_plan.description),
                 r.checking_before,
                 r.savings_before,
                 r.recovery_transfer_amount,

@@ -62,13 +62,6 @@ What happens to the student's money:
 
 To undo a fine, open the student's page and reverse the fine transaction. The fine and its reversal both stay in the student's history.
 
-### Saving the payment as a template
-
-The **Apply Payment** button has a dropdown arrow with two extra choices:
-
-- **Save Template & Apply** — applies the credit and saves the description and amount for reuse.
-- **Save Template Only** — saves without paying anyone.
-
 ## Important notes
 
 > [!NOTE]
@@ -93,7 +86,6 @@ The **Apply Payment** button has a dropdown arrow with two extra choices:
 | "…have not claimed their account and can't be fined." | One or more selected students have not set up their account. Nothing was applied. Clear those students and review again. |
 | "This fine was already applied; it was not applied again." | You selected **Apply fine** more than once for the same review. The fine was applied once. |
 | No recommended range is shown | Your class has no wage index yet. Set the payroll pay rate and expected weekly hours. |
-| Saved templates do not appear anywhere | Template saving is not finished yet. The confirmation message appears, but there is no picker to load a saved template back into the form. Re-enter the description and amount by hand. |
 
 ## Related guides
 

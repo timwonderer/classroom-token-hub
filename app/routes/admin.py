@@ -7919,13 +7919,12 @@ def payroll_manual_payment():
     if form.validate_on_submit():
         try:
             student_ids = request.form.getlist('student_ids')
-            save_action = 'apply_only'
             payment_type = request.form.get('payment_type', 'deposit')
 
             description = form.description.data
             amount = Decimal(str(form.amount.data))
 
-            if save_action in ['apply_only', 'save_and_apply'] and not student_ids:
+            if not student_ids:
                 flash('Please select at least one student to apply the payment.', 'warning')
                 return redirect(url_for('admin.payroll'))
 
@@ -8063,8 +8062,6 @@ def payroll_manual_payment():
                 )
             else:
                 message = f'Manual credit of ${amount:.2f} applied to {applied_count} student(s)!'
-                if save_action == 'save_and_apply':
-                    message = f'Template saved and manual credit applied to {applied_count} student(s)!'
                 flash(message, 'success')
 
         except HTTPException:

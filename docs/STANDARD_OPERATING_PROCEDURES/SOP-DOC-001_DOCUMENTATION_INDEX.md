@@ -282,7 +282,7 @@ Their surviving content lives at:
 ## VIII. Change Notes
 
 **Version 3.49 (2026-11-04):**
-- Register FEAT-LED-006 v1.0 (Apply Teacher Penalty), DOM-LED-001 v2.19, DOM-PROD-001 v1.15, DOM-OBL-001 v3.4, DOM-CORE-001 v1.3, DOM-CORE-002 v1.20 and DOM-POL-001 v2.11: a teacher-applied fine is a Ledger `penalty`, not an obligation, with no fine catalog (owner ruling 2026-11-04, issue #1701).
+- Register FEAT-LED-006 v1.0 (Apply Teacher Penalty), DOM-LED-001 v2.19, DOM-PROD-001 v1.15, DOM-OBL-001 v3.4, DOM-CORE-001 v1.3, DOM-CORE-002 v1.20, DOM-POL-001 v2.11 and DOM-ITR-001 v1.10: a teacher-applied fine is a Ledger `penalty`, not an obligation; there is no fine or reward catalog; the NSF fee was never an obligation (owner ruling 2026-11-04, issue #1701).
 
 **Version 3.48 (2026-11-03):**
 - Register DOM-STORE-001 v5.9, FEAT-STOR-003 v1.6, and SPEC-ECON-003 v2.4: weekly filing limits, rejection releases target reservations but retains allowance usage, atomic submission, and claim-level rejection of incomplete claims.

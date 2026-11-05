@@ -286,3 +286,34 @@ def test_FEAT_LED_006__a_reversal_restores_money_and_keeps_both_entries(client, 
         (reversal,) = Transaction.query.filter_by(original_transaction_id=penalty_id).all()
         assert reversal.amount == Decimal("4.00")
         assert get_available_balances(student.seat_id, classroom.class_id)[0] == Decimal("10.00")
+
+
+def test_FEAT_LED_006__a_used_token_cannot_fine_a_subset_or_another_student(client, app):
+    """A review token belongs to the one batch it was minted for (FEAT-LED-006 §VIII.4)."""
+    classroom = _classroom(client, app)
+    a, b, c = (s.seat.public_id for s in classroom.students[:3])
+    fields = _confirm_fields(_review(client, [a, b]).get_data(as_text=True))
+    assert _apply(client, [a, b], fields).status_code == 302
+
+    for selection in ([a], [c]):
+        fresh = _confirm_fields(_review(client, selection).get_data(as_text=True))
+        reused = {"submission_token": fields["submission_token"], "preview_digest": fresh["preview_digest"]}
+        assert _apply(client, selection, reused).status_code == 302
+
+    with app.app_context():
+        assert sorted(r.seat_id for r in _penalties(classroom.class_id)) == sorted(
+            s.seat_id for s in classroom.students[:2]
+        )
+
+
+def test_FEAT_LED_006__a_changed_reason_after_review_applies_nothing(client, app):
+    """The digest binds the text students will see, not only the money."""
+    classroom = _classroom(client, app)
+    student = classroom.students[0]
+    fields = _confirm_fields(_review(client, [student.seat.public_id]).get_data(as_text=True))
+
+    response = _apply(client, [student.seat.public_id], fields, reason="Something else entirely")
+
+    assert response.status_code == 200
+    with app.app_context():
+        assert _penalties(classroom.class_id) == []

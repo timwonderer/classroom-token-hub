@@ -4,7 +4,7 @@ category: features
 subcategory: teacher-economy
 roles: [teacher]
 description: Read the History tab on Economy > Payroll — payment types, reversals, and where the date-filtered Detailed Payroll History page lives.
-keywords: [payroll history, history tab, reversal, payroll event, reward, detailed payroll history, date filter]
+keywords: [payroll history, history tab, reversal, payroll event, manual credit, detailed payroll history, date filter]
 related:
   - user-guides/features/teacher/economy/payroll-run
   - user-guides/features/teacher/economy/payroll-settings
@@ -30,7 +30,7 @@ One row per event, newest first, with five columns: **Date**, **Type**, **Studen
 | Type | What it is |
 | --- | --- |
 | **Payroll** | A scheduled payroll run |
-| **Reward** | Money you granted outside payroll |
+| **Manual credit** | A one-time payment you made from **Manual Payments** |
 
 **Amount** is green for money in, red for money out. Student names link to that student's detail page, so a row is a starting point rather than a dead end.
 

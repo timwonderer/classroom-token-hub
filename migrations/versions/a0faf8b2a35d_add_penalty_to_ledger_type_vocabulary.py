@@ -112,6 +112,9 @@ def downgrade():
         print(f"⚠️  {CHECK} already excludes {ADDED}, skipping...")
         return
 
+    # Held until the migration transaction ends, so no fine can commit between
+    # the count and the narrower NOT VALID constraint, which would not reject it.
+    op.execute(sa.text(f"LOCK TABLE {TABLE} IN ACCESS EXCLUSIVE MODE"))
     remaining = op.get_bind().execute(
         sa.text(f"SELECT count(*) FROM {TABLE} WHERE type = :added"), {"added": ADDED}
     ).scalar()

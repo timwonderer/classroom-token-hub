@@ -7,17 +7,19 @@ transaction or none does: a fine is never applied to part of a selection.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 
 from app.feats.base import get_active_feat_name, requires_feat_context
-from app.models import LedgerCommandReservation, Transaction, _quantize_currency
+from app.models import ClassEconomy, LedgerCommandReservation, Transaction
 from app.services.class_configuration_query_service import get_banking_directive
 from app.services.ledger_penalty_service import (
     PENALTY_TYPE,
-    penalty_description,
+    penalty_batch_identity,
     penalty_idempotency_key,
     penalty_preview_digest,
+    penalty_token_prefix,
     resolve_penalty_plans,
 )
 from app.services.ledger_recovery_service import lock_ledger_seats
@@ -66,14 +68,31 @@ def execute_teacher_penalty(
             "can't be fined. Nothing was applied; remove them and review again."
         )
 
-    keys = {seat.id: penalty_idempotency_key(idempotency_key, seat.id) for seat in seats}
+    if not re.fullmatch(r"[0-9a-f]{32}", idempotency_key or ""):
+        raise PenaltyRefused("The fine could not be applied. Review it again.")
+    # Serializes submissions that share a token, so the check below sees any
+    # that committed first (DOM-LED-001 lock order: seats, then ClassEconomy).
+    ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
+    batch = penalty_batch_identity([s.id for s in seats], amount, reason)
+    keys = {seat.id: penalty_idempotency_key(idempotency_key, batch, seat.id) for seat in seats}
     existing = LedgerCommandReservation.query.filter(
         LedgerCommandReservation.class_id == class_id,
         LedgerCommandReservation.feat_code == get_active_feat_name(),
-        LedgerCommandReservation.idempotency_key.in_(keys.values()),
+        LedgerCommandReservation.idempotency_key.startswith(penalty_token_prefix(idempotency_key)),
     ).all()
     if existing:
-        return PenaltyResult(_replayed_rows(existing, keys, amount, reason), replayed=True)
+        # A token belongs to the one batch it was reviewed for: the same batch
+        # replays; any other selection, amount or reason is refused.
+        if {r.idempotency_key for r in existing} != set(keys.values()):
+            raise PenaltyRefused(
+                "This review was already used for a different fine, so nothing more was "
+                "applied. Review the fine again to apply it."
+            )
+        rows = (
+            Transaction.query.filter_by(command_reservation_id=r.id, type=PENALTY_TYPE).one()
+            for r in existing
+        )
+        return PenaltyResult(tuple(sorted(rows, key=lambda row: row.seat_id)), replayed=True)
 
     resolved = resolve_penalty_plans(
         class_id=class_id,
@@ -94,18 +113,3 @@ def execute_teacher_penalty(
     )
     return PenaltyResult(rows, replayed=False)
 
-
-def _replayed_rows(reservations, keys, amount, reason):
-    """A resubmitted token returns what it posted, or refuses if it now means something else."""
-    if len(reservations) != len(keys):
-        raise PenaltyRefused("This fine was already applied to a different selection of students.")
-    rows = tuple(
-        Transaction.query.filter_by(command_reservation_id=r.id, type=PENALTY_TYPE).one()
-        for r in reservations
-    )
-    if any(
-        row.amount != -_quantize_currency(Decimal(amount)) or row.description != penalty_description(reason)
-        for row in rows
-    ):
-        raise PenaltyRefused("This fine was already applied with a different amount or reason.")
-    return tuple(sorted(rows, key=lambda row: row.seat_id))

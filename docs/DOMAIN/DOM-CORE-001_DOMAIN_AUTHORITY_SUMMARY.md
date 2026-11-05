@@ -135,7 +135,7 @@ All domains listed below are bound by the following structural rules:
   - Definition rows (`rent_settings`, `store_items`, insurance definitions, etc.): Immutable-after-insert version records.
   - Availability state per row: `IN_USE`, `HIDDEN`, `RETIRED`.
   - **Key Transitions**: none originated here. New definitions are inserted by the domain that initiates the change (Class Config UI submission, insurance authoring flow, etc.); Policies exposes the complete FEAT-POL action set—`Insert`, `Disable`, `Retire`, and dependency-safe `Delete`—as repository operations (see `DOM-POL-001` §§VI, VIII).
-- **Primary Schema** (per `DOM-POL-001` §X boundary attribution): `rent_settings` (consumed by DOM-OBL-001), `payroll_settings` / `payroll_rewards` (consumed by DOM-PROD-001), `hall_pass_settings` (consumed by DOM-PROD-001), `store_items` / `store_item_visibility` (consumed by DOM-STORE-001), insurance policy definitions (consumed by Insurance flow). `banking_settings` is **not** in this repository — savings APY, overdraft fees, and interest formulas are inherently Class Config → `economic-engine` concerns per DOM-CLASS-001 / DOM-CLASS-002.
+- **Primary Schema** (per `DOM-POL-001` §X boundary attribution): `rent_settings` (consumed by DOM-OBL-001), `payroll_settings` (consumed by DOM-PROD-001), `hall_pass_settings` (consumed by DOM-PROD-001), `store_items` / `store_item_visibility` (consumed by DOM-STORE-001), insurance policy definitions (consumed by Insurance flow). `banking_settings` is **not** in this repository — savings APY, overdraft fees, and interest formulas are inherently Class Config → `economic-engine` concerns per DOM-CLASS-001 / DOM-CLASS-002.
 - **Boundary**: rent enablement → Class Configuration; rent settings → Policies; rent bill cycles and assessments → Obligations. See `DOM-POL-001` §X for the full boundary table.
 
 ---
@@ -146,7 +146,7 @@ All domains listed below are bound by the following structural rules:
 | :--- | :--- | :--- | :--- | :--- |
 | 1 | **Bind User** | Identity | System | Validates Global User and restores context via `last_active_seat_id`. |
 | 2 | **Tap In** | Attendance | Identity | Validates Seat context ownership. |
-| 3 | **Apply Fine** | Payroll FEAT | Ledger | Creates `PENDING` Debit. |
+| 3 | **Apply Fine** | Ledger FEAT (`FEAT-LED-006`) | Ledger | Creates a `penalty` debit; Ledger derives its pending/posted state. |
 | 4 | **Assess Rent** | Obligations | Class Config | Reads Rent Rate. |
 | 5 | **File Issue** | Support | Identity | Snapshots `seat_id` and Captures Correlation Pack. |
 | 6 | **Buy Item** | Store | Ledger | Requests balance query and submits transaction intent. |

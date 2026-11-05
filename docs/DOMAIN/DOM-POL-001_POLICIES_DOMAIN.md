@@ -226,7 +226,7 @@ The intended boundary is:
 - rent settings -> Policies
 - rent-granted items -> Store and Entitlements
 - payroll enablement -> Class Configuration
-- payroll settings (wage rate, frequency, reward catalog) -> Policies
+- payroll settings (wage rate, frequency) -> Policies
 - payroll events -> Productivity & Payroll (`DOM-PROD-001`)
 - hall-pass enablement -> Class Configuration
 - hall-pass settings (allowed destinations, limits) -> Policies
@@ -284,7 +284,7 @@ path rather than invent membership. This is a forward-only cutover, not a dual w
 
 ## XI. Amendment
 
-Version 2.11 (2026-11-04) removes the fine catalog from the payroll policy family. Policies holds no fine definitions: a teacher enters each fine's amount and reason (owner ruling 2026-11-04, issue #1701; `FEAT-LED-006`).
+Version 2.11 (2026-11-04) removes the reward and fine catalogs from the payroll policy family. Policies holds no reward or fine definitions: a teacher enters each credit's or fine's amount and reason (owner ruling 2026-11-04, issue #1701; `FEAT-LED-006`).
 
 Version 2.8 (2026-10-03) supersedes v2.6–2.7 independently signed original-setting visibility requirements for the immutable retained configuration reconstruction contract. Scope, original rates, policy immutability and actual integrity denial remain binding.
 
