@@ -20,6 +20,12 @@ const announceStudentManagement = (message) => messages.push(message);
 const location = {reload: () => reloads++};
 let release;
 let rejection = null;
+let dismissResult;
+window.AppCore.confirm = async (message) => {
+  assert.ok(message.includes('Student A: no passes'));
+  assert.ok(message.includes('Student B: no passes'));
+  return new Promise(resolve => {dismissResult = resolve});
+};
 const fetch = async (url, options) => {
   requests.push(JSON.parse(options.body));
   if (rejection) return rejection;
@@ -68,6 +74,18 @@ const fetch = async (url, options) => {
     await bulkUpdateHallPass();
     assert.deepEqual(requests.at(-1), uncertainPayload, 'uncertain responses must retain pending state');
   }
+  rejection = {status: 200, json: async () => ({
+    status: 'success', message: 'One updated, two failed',
+    errors: ['Student A: no passes', 'Student B: no passes'],
+  })};
+  const beforePartial = reloads;
+  const partial = bulkUpdateHallPass();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reloads, beforePartial, 'partial result must stay readable before refreshing');
+  assert.ok(messages.at(-1).includes('Student B: no passes'));
+  dismissResult(true);
+  await partial;
+  assert.equal(reloads, beforePartial + 1);
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
     result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)

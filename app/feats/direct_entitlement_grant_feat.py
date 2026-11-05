@@ -27,7 +27,7 @@ import hashlib
 
 from app.extensions import db
 from app.feats.base import FEATContext, requires_feat_context
-from app.models import ClassEconomy, Seat, EntitlementEvent
+from app.models import Seat, EntitlementEvent
 from app.services.context_resolver import CanonicalContext
 from app.services.store_policy_resolver import (
     StorePolicyResolver,
@@ -54,7 +54,8 @@ def execute_hall_pass_adjustment(
 ) -> int:
     """Apply one replay-safe teacher adjustment without a catalog product."""
     from app.services.entitlement_service import (
-        get_hall_pass_balance, grant_hall_passes, lock_hall_pass_holder, remove_hall_passes,
+        can_adjust_hall_passes, get_hall_pass_balance, grant_hall_passes,
+        lock_hall_pass_holder, remove_hall_passes,
     )
 
     if operation not in {"add", "remove"}:
@@ -64,11 +65,7 @@ def execute_hall_pass_adjustment(
     if not isinstance(idempotency_key, str) or not idempotency_key.strip():
         raise ValueError("An adjustment request identifier is required")
     ctx = canonical_context
-    if ctx.actor_role != "teacher" or not ClassEconomy.query.filter_by(
-        class_id=ctx.class_id, teacher_user_id=ctx.user_id,
-    ).first() or not Seat.query.filter_by(
-        id=ctx.seat_id, class_id=ctx.class_id, user_id=ctx.user_id, role="teacher",
-    ).first():
+    if not can_adjust_hall_passes(ctx):
         raise ValueError("Teacher authority is required")
 
     # Hall-pass use carries this lineage into a VARCHAR(100) log field.

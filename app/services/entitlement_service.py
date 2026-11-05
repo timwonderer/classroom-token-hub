@@ -9,7 +9,7 @@ from __future__ import annotations
 import secrets
 
 from app.extensions import db
-from app.models import EntitlementEvent, Seat, StoreProduct
+from app.models import ClassEconomy, EntitlementEvent, Seat, StoreProduct
 from app.feats.base import generate_correlation_id
 from app.services.entitlement_read_service import (
     ended_entitlement_ids,
@@ -22,6 +22,19 @@ from app.utils.canonical_temporal_resolver import (
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
 )
+
+
+def can_adjust_hall_passes(ctx) -> bool:
+    """Evaluate class-owner teacher authority without mutation (INV-ARC-003)."""
+    return bool(
+        ctx.actor_role == "teacher"
+        and ClassEconomy.query.filter_by(
+            class_id=ctx.class_id, teacher_user_id=ctx.user_id,
+        ).first()
+        and Seat.query.filter_by(
+            id=ctx.seat_id, class_id=ctx.class_id, user_id=ctx.user_id, role="teacher",
+        ).first()
+    )
 
 
 def get_hall_pass_balance(seat_id: int, class_id: str) -> int:

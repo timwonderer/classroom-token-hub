@@ -1206,11 +1206,14 @@
         throw new Error('Adjustment result is uncertain');
       }
       pendingHallPassAdjustment = null;
+      const errors = Array.isArray(data.errors) ? data.errors : [];
+      const resultMessage = [data.message, ...errors].join('\n');
+      announceStudentManagement(resultMessage, errors.length || data.status === 'error' ? 'danger' : 'success');
       if (data.status === 'success') {
-        announceStudentManagement(data.message, 'success');
-        location.reload();
-      } else {
-        announceStudentManagement('Error: ' + data.message, 'danger');
+        if (!errors.length || await window.AppCore.confirm(resultMessage, {
+          title: 'Some hall-pass adjustments failed',
+          confirmLabel: 'Refresh roster', cancelLabel: 'Keep result open',
+        })) location.reload();
       }
     } catch (error) {
       console.error('Error:', error);
