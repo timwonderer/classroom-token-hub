@@ -74,7 +74,7 @@ from app.services.context_resolver import CanonicalContext
 from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminClassSetupForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     AdminClaimProcessForm, PayrollSettingsForm,
-    ManualPaymentForm
+    ManualPaymentForm, TeacherFineForm
 )
 # Import utility functions
 from app.utils.helpers import safe_redirect_target, generate_anonymous_code, loggable_token, render_template_with_fallback as render_template
@@ -7543,6 +7543,9 @@ def payroll():
     settings_form.block.choices = []
 
     manual_payment_form = ManualPaymentForm()
+    fine_form = TeacherFineForm()
+    from app.services.economic_engine import resolve_overdraft_fine
+    fine_band = resolve_overdraft_fine(class_id=selected_class_id)
     # Quick stats
     avg_payout = total_payroll_estimate / len(students) if students else 0
     display_total_payroll_estimate = f"${Decimal(str(total_payroll_estimate)):.2f}"
@@ -7659,6 +7662,8 @@ def payroll():
         payroll_config=payroll_config,
         # Manual Payment tab
         manual_payment_form=manual_payment_form,
+        fine_form=fine_form,
+        fine_band=fine_band,
         all_students=student_payroll_views,
         # History tab
         payroll_history=payroll_history,
@@ -7925,7 +7930,7 @@ def payroll_manual_payment():
                 return redirect(url_for('admin.payroll'))
 
             if payment_type != 'deposit':
-                flash('Manual deductions belong to Obligations and are no longer handled by Payroll.', 'error')
+                flash('Manual payments only add money. Use Fine Students to take money from a student.', 'error')
                 return redirect(url_for('admin.payroll'))
 
             if amount <= Decimal("0"):
@@ -8075,6 +8080,131 @@ def payroll_manual_payment():
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
+    return redirect(url_for('admin.payroll'))
+
+
+def _fine_selection(form):
+    """Class-scoped seats for the submitted students, or None when any is not in this class.
+
+    A selected student who can't be resolved refuses the whole fine; it is never
+    dropped silently from the selection.
+    """
+    class_id = _require_payroll_feature_scope_from_request()['class_id']
+    public_ids = list(dict.fromkeys(request.form.getlist('student_ids')))
+    seats = [_resolve_student_detail_seat(str(pid)) for pid in public_ids]
+    if not public_ids or any(seat is None or seat.class_id != class_id for seat in seats):
+        return class_id, None
+    return class_id, seats
+
+
+def _fine_review(form, class_id, seats, *, notice=None):
+    """Render the confirmation: requested fine, CWI band and each student's resolved outcome."""
+    from app.services.class_configuration_query_service import get_banking_directive
+    from app.services.economic_engine import resolve_overdraft_fine
+    from app.services.ledger_penalty_service import penalty_preview_digest, resolve_penalty_plans
+
+    resolved = resolve_penalty_plans(
+        class_id=class_id, seat_ids=[s.id for s in seats], amount=form.amount.data,
+        reason=form.reason.data, actor_seat_id=g.canonical_context.seat_id,
+        banking_directive=get_banking_directive(class_id),
+    )
+    def money(value):
+        return f"-${abs(value):.2f}" if value < 0 else f"${value:.2f}"
+
+    seats_by_id = {s.id: s for s in seats}
+    band = resolve_overdraft_fine(class_id=class_id)
+    amount = resolved[0].intended_plan.debit_amount
+    has_band = band.flat_fee_lower is not None
+    rows = []
+    for r in resolved:
+        seat = seats_by_id[r.intended_plan.seat_id]
+        profile = seat.identity_profile
+        rows.append({
+            'public_id': seat.public_id,
+            'name': profile.full_name if profile else 'Student',
+            'checking_before': money(r.checking_before),
+            'savings_before': money(r.savings_before),
+            'protection_transfer': money(r.recovery_transfer_amount) if r.recovery_transfer_amount else None,
+            'checking_after': money(r.checking_after),
+            'savings_after': money(r.savings_after),
+            'goes_negative': r.checking_after < 0,
+        })
+    return render_template(
+        'admin_fine_confirm.html',
+        form=form,
+        amount=money(amount),
+        reason=form.reason.data.strip(),
+        band_low=money(band.flat_fee_lower) if has_band else None,
+        band_high=money(band.flat_fee_upper) if has_band else None,
+        out_of_band=has_band and not (band.flat_fee_lower <= amount <= band.flat_fee_upper),
+        notice=notice,
+        rows=rows,
+        preview_digest=penalty_preview_digest(resolved),
+        # Minted per review: a double-submitted confirmation replays this token,
+        # while a second, deliberate fine with the same amount and reason gets its own.
+        submission_token=uuid.uuid4().hex,
+        current_page="payroll",
+    )
+
+
+@admin_bp.route('/payroll/fine/review', methods=['POST'])
+@admin_required
+def payroll_fine_review():
+    """Show what a fine will do before anything posts. Writes nothing."""
+    form = TeacherFineForm()
+    if not form.validate_on_submit():
+        flash('Enter a reason and an amount of at least $0.01 for the fine.', 'error')
+        return redirect(url_for('admin.payroll'))
+    class_id, seats = _fine_selection(form)
+    if seats is None:
+        flash('Select students from your current class to fine. Reload the page if your '
+              'active class changed in another tab.', 'warning')
+        return redirect(url_for('admin.payroll'))
+    return _fine_review(form, class_id, seats)
+
+
+@admin_bp.route('/payroll/fine', methods=['POST'])
+@admin_required
+def payroll_fine():
+    """Apply a reviewed fine to every selected student, or to none (FEAT-LED-006)."""
+    from app.feats.base import generate_correlation_id
+    from app.feats.penalty_feat import (
+        PenaltyPreviewChanged, PenaltyRefused, execute_teacher_penalty,
+    )
+
+    form = TeacherFineForm()
+    token = (request.form.get('submission_token') or '').strip()
+    if not form.validate_on_submit() or not token:
+        flash('The fine could not be applied. Review it again.', 'error')
+        return redirect(url_for('admin.payroll'))
+    class_id, seats = _fine_selection(form)
+    if seats is None:
+        flash('No fine was applied. The selected students are not in your current class.', 'warning')
+        return redirect(url_for('admin.payroll'))
+    try:
+        result = execute_teacher_penalty(
+            class_id=class_id,
+            seat_ids=[s.id for s in seats],
+            amount=form.amount.data,
+            reason=form.reason.data,
+            actor_seat_id=g.canonical_context.seat_id,
+            expected_preview_digest=request.form.get('preview_digest', ''),
+            correlation_id=generate_correlation_id(),
+            idempotency_key=token,
+        )
+    except PenaltyPreviewChanged:
+        return _fine_review(
+            form, class_id, seats,
+            notice='A balance changed since you reviewed this fine, so nothing was applied. '
+                   'Check the updated outcome below and confirm again.',
+        )
+    except PenaltyRefused as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('admin.payroll'))
+    if result.replayed:
+        flash('This fine was already applied; it was not applied again.', 'info')
+    else:
+        flash(f'Fine of ${form.amount.data:.2f} applied to {len(result.transactions)} student(s).', 'success')
     return redirect(url_for('admin.payroll'))
 
 

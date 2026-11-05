@@ -103,6 +103,40 @@ register("admin_payroll_correction.html", "nothing-to-correct", lambda: {
 }, path="/admin/payroll/correction", actor="teacher")
 
 
+# ---- admin_fine_confirm.html -------------------------------------------------
+
+def _fine_confirm(*, out_of_band, notice=None, band=True):
+    from app.forms import TeacherFineForm
+
+    form = TeacherFineForm(data={"reason": "Talking during the test", "amount": Decimal("20.00")})
+    return {
+        **admin_layout(current_page="payroll"),
+        "form": form, "amount": "$20.00", "reason": "Talking during the test",
+        "band_low": "$5.00" if band else None, "band_high": "$12.00" if band else None,
+        "out_of_band": out_of_band, "notice": notice,
+        "rows": [
+            {"public_id": "pub-11", "name": "Sam Student", "checking_before": "$30.00",
+             "savings_before": "$0.00", "protection_transfer": None, "checking_after": "$10.00",
+             "savings_after": "$0.00", "goes_negative": False},
+            {"public_id": "pub-12", "name": "Riley Learner", "checking_before": "$5.00",
+             "savings_before": "$40.00", "protection_transfer": "$15.00", "checking_after": "$0.00",
+             "savings_after": "$25.00", "goes_negative": False},
+            {"public_id": "pub-13", "name": "Jordan Pupil", "checking_before": "$2.00",
+             "savings_before": "$3.00", "protection_transfer": None, "checking_after": "-$18.00",
+             "savings_after": "$3.00", "goes_negative": True},
+        ],
+        "preview_digest": "0" * 64, "submission_token": "f" * 32,
+    }
+
+
+register("admin_fine_confirm.html", "out-of-band", lambda: _fine_confirm(out_of_band=True),
+         path="/admin/payroll/fine/review", actor="teacher")
+register("admin_fine_confirm.html", "balances-changed-no-band", lambda: _fine_confirm(
+    out_of_band=False, band=False,
+    notice="A balance changed since you reviewed this fine, so nothing was applied.",
+), path="/admin/payroll/fine", actor="teacher")
+
+
 # ---- admin_process_claim.html -----------------------------------------------
 
 def _policy(**overrides):

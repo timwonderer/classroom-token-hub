@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.48 | 2026-11-03 | 3.47 | Normative |
+| SOP-DOC-001 | 3.49 | 2026-11-04 | 3.48 | Normative |
 
 ---
 
@@ -118,6 +118,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
 - [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
+- [FEAT-LED-006 — Apply Teacher Penalty](../FEATURE-EXECUTION/FEAT-LED-006_APPLY_TEACHER_PENALTY.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
 - [FEAT-OBL-003 — Satisfy Obligation](../FEATURE-EXECUTION/FEAT-OBL-003_SATISFY_OBLIGATION.md)
 - [FEAT-OBL-004 — Insurance Policy Purchase / Enrollment](../FEATURE-EXECUTION/FEAT-OBL-004_INSURANCE_POLICY_PURCHASE.md)
@@ -279,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.49 (2026-11-04):**
+- Register FEAT-LED-006 v1.0 (Apply Teacher Penalty), DOM-LED-001 v2.19, DOM-PROD-001 v1.15, DOM-OBL-001 v3.4, DOM-CORE-001 v1.3, DOM-CORE-002 v1.20 and DOM-POL-001 v2.11: a teacher-applied fine is a Ledger `penalty`, not an obligation, with no fine catalog (owner ruling 2026-11-04, issue #1701).
 
 **Version 3.48 (2026-11-03):**
 - Register DOM-STORE-001 v5.9, FEAT-STOR-003 v1.6, and SPEC-ECON-003 v2.4: weekly filing limits, rejection releases target reservations but retains allowance usage, atomic submission, and claim-level rejection of incomplete claims.

@@ -31,7 +31,7 @@ from tests.helpers.ledger import (
     record_ledger_fixture,
 )
 
-# Mirrors models.py Transaction.__table_args__ / migration e3b7c1d9a2f4 exactly.
+# Mirrors models.py Transaction.__table_args__ / migration a0faf8b2a35d exactly.
 _ALLOWED_TYPES = (
     "interest", "Interest",
     "reversal", "REVERSAL",
@@ -46,6 +46,7 @@ _ALLOWED_TYPES = (
     "payroll",
     "payroll_correction",
     "manual_payment",
+    "penalty",
     "issue_reversal",
     "issue_compensation",
     "rent_payment",

@@ -75,7 +75,7 @@
 {% endcall %}
 
 {% call help.topic('pay-manual', 'payments', 'Manual Payments') %}
-<p class="mb-0">Use the Manual tab to issue one-time payments or adjustments.</p>
+<p class="mb-0">Use the Manual Payments tab to pay students a one-time amount, or to fine them. A fine shows students its reason, and you review each student's resulting balance before it is applied.</p>
 {% endcall %}
 
 {% call help.topic('pay-history', 'history', 'Payroll History') %}
@@ -680,6 +680,7 @@
                   <tr class="student-row" data-class-id="{{ student.class_id }}" data-student-id="{{ student.public_id }}">
                     <td>
                       <input class="form-check-input student-checkbox" type="checkbox" aria-label="Select {{ student.full_name }}" value="{{ student.public_id }}"
+                        name="student_ids" form="fineForm"
                         data-class-id="{{ student.class_id }}">
                     </td>
                     <td>
@@ -709,7 +710,7 @@
 
       <!-- RIGHT COLUMN: Manual Payment Fields -->
       <div class="col-lg-6 mb-4">
-        <div class="card shadow h-100">
+        <div class="card shadow">
           <div class="card-header bg-success text-white">
             <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">payments</span>Payment Details</h5>
           </div>
@@ -723,7 +724,7 @@
                 {{ manual_payment_form.description(class="form-control form-control-lg", id="manualDescription", placeholder="Manual credit note") }}
               </div>
 
-              <!-- Payroll owns positive compensation only. Manual debits/fines belong to Obligations. -->
+              <!-- A credit is a PROD manual credit; a fine is a Ledger penalty (FEAT-LED-006), below. -->
               <div class="mb-3">
                 {% call cards.alert_card('success', 'Manual credit', icon='add_circle', body_class='mb-0') %}
                   <p class="mb-0">Payroll issues positive compensation only; this payment is deposited to checking.</p>
@@ -751,6 +752,39 @@
                     Apply Payment
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="card shadow mt-4">
+          <div class="card-header bg-danger text-white">
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">gavel</span>Fine Students</h5>
+          </div>
+          <div class="card-body">
+            <form id="fineForm" method="POST" action="{{ url_for('admin.payroll_fine_review') }}">
+              {{ fine_form.csrf_token }}
+              <p class="small text-muted">Takes the amount from each selected student's checking. You review the result before anything is applied.</p>
+              <div class="mb-3">
+                {{ fine_form.reason.label(class="form-label fw-bold", for="fineReason") }}
+                {{ fine_form.reason(class="form-control", id="fineReason", placeholder="Students see this reason", maxlength="200", required=True) }}
+              </div>
+              <div class="mb-3">
+                {{ fine_form.amount.label(class="form-label fw-bold", for="fineAmount") }}
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  {{ fine_form.amount(class="form-control", id="fineAmount", placeholder="0.00", step="0.01", min="0.01", required=True, **{"aria-describedby": "fineBandHelp"}) }}
+                </div>
+                <div id="fineBandHelp" class="form-text">
+                  {% if fine_band.flat_fee_lower is not none %}
+                    Recommended for this class: ${{ fine_band.flat_fee_lower }} to ${{ fine_band.flat_fee_upper }}.
+                  {% else %}
+                    A recommended range appears once the payroll pay rate and expected weekly hours are set.
+                  {% endif %}
+                </div>
+              </div>
+              <div class="d-flex justify-content-end">
+                <button type="submit" class="btn btn-outline-danger">Review fine</button>
               </div>
             </form>
           </div>
@@ -837,7 +871,7 @@
       const selectedOption = this.options[this.selectedIndex];
       if (selectedOption.value) {
         if (selectedOption.dataset.type && selectedOption.dataset.type !== 'deposit') {
-          showToast('Manual deductions belong to Obligations and cannot be applied from Payroll.', 'error');
+          showToast('Use Fine Students to take money from a student.', 'error');
           this.value = '';
           return;
         }
@@ -1213,74 +1247,6 @@
         }
       })
       .catch(err => showToast('Error deleting reward', 'error'));
-  }
-
-  // Edit Fine
-  function editFine(id, name, description, amount, isActive) {
-    document.getElementById('editFineId').value = id;
-    document.getElementById('editFineName').value = name;
-    document.getElementById('editFineDescription').value = description;
-    document.getElementById('editFineAmount').value = amount;
-    document.getElementById('editFineActive').checked = isActive;
-
-    const modal = new bootstrap.Modal(document.getElementById('editFineModal'));
-    modal.show();
-  }
-
-  // Save Fine
-  async function saveFine() {
-    const id = document.getElementById('editFineId').value;
-    const name = document.getElementById('editFineName').value;
-    const description = document.getElementById('editFineDescription').value;
-    const amount = document.getElementById('editFineAmount').value;
-    const isActive = document.getElementById('editFineActive').checked;
-
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-    try {
-      const resp = await fetch(`/admin/payroll/fines/${id}/edit`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': csrfToken,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ name, description, amount, is_active: isActive })
-      });
-
-      const data = await resp.json();
-      if (data.success) {
-        showToast('Fine updated successfully', 'success');
-        setTimeout(() => location.reload(), 1000);
-      } else {
-        showToast(data.message || 'Failed to update fine', 'error');
-      }
-    } catch (err) {
-      showToast('Error updating fine', 'error');
-    }
-  }
-
-  // Delete Fine
-  async function deleteFine(fineId) {
-    if (!(await window.AppCore.confirm('Are you sure you want to delete this fine?', { title: 'Delete fine', confirmLabel: 'Delete', danger: true }))) return;
-
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    fetch(`/admin/payroll/fines/${fineId}/delete`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': csrfToken,
-        'Content-Type': 'application/json'
-      }
-    })
-      .then(resp => resp.json())
-      .then(data => {
-        if (data.success) {
-          showToast('Fine deleted successfully', 'success');
-          setTimeout(() => location.reload(), 1000);
-        } else {
-          showToast(data.message || 'Failed to delete fine', 'error');
-        }
-      })
-      .catch(err => showToast('Error deleting fine', 'error'));
   }
 
   // Helper to gather form data for manual payment

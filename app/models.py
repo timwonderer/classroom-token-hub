@@ -602,8 +602,9 @@ class Transaction(db.Model):
         # the separate write-time casing validator (FEAT-LED-005 §IX) retires
         # them; this constraint only closes the vocabulary, it does not enforce
         # canonical spelling on new rows. Migration a4d7e9c2f1b6 adds this NOT
-        # VALID and e3b7c1d9a2f4 re-creates it without bug_reward, so it is
-        # documentation here, not itself re-applied by Alembic.
+        # VALID, e3b7c1d9a2f4 re-creates it without bug_reward and a0faf8b2a35d
+        # adds penalty, so it is documentation here, not itself re-applied by
+        # Alembic.
         db.CheckConstraint(
             "type IS NULL OR type IN ("
             "'interest', 'Interest', "
@@ -619,6 +620,7 @@ class Transaction(db.Model):
             "'payroll', "
             "'payroll_correction', "
             "'manual_payment', "
+            "'penalty', "
             "'issue_reversal', "
             "'issue_compensation', "
             "'rent_payment', "
