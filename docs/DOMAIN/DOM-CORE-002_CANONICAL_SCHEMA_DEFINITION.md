@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002 | 1.19 | 2026-10-28 | 1.18 | Constitutional |
+| DOM-CORE-002 | 1.20 | 2026-11-04 | 1.19 | Constitutional |
 
 ---
 
@@ -181,7 +181,7 @@ authority in v2 and must not be treated as canonical schema surfaces.
 - `economic_engine` — class-level economic configuration and projection state; append-only versions, each with the `effective_at` from which it governs (`DOM-CLASS-003` §VII; 1.12)
 - `feature_settings` — per-class economy policy configuration that applies when a feature is enabled; enablement itself stays in `class_features` (DOM-CLASS-001 §VI; DOM-POL-001A §IV; registered in 1.10)
 
-Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `hall_pass_settings`, `store_products`, `store_item_visibility`, and `insurance_policies` — are **not** Class Configuration authority. They are stored in the Policies repository (`DOM-POL-001`) as immutable, append-only version rows. Policies does not originate mutations; the domain that initiates a change (Class Config UI submissions, insurance authoring, store curation, etc.) submits a new definition and Policies records it under a new `policy_uuid`. The consuming operational domain — `DOM-OBL-001` for rent, `DOM-PROD-001` for payroll and hall-pass, `DOM-STORE-001` for store/entitlements, the Insurance operational flow for insurance — reads the current `policy_uuid` and owns only the operational facts that result (bill cycles, payroll events, hall-pass logs, entitlement events, etc.). See `DOM-POL-001` §V and §X.
+Policy definition tables — `rent_settings`, `payroll_settings`, `hall_pass_settings`, `store_products`, `store_item_visibility`, and `insurance_policies` — are **not** Class Configuration authority. They are stored in the Policies repository (`DOM-POL-001`) as immutable, append-only version rows. Policies does not originate mutations; the domain that initiates a change (Class Config UI submissions, insurance authoring, store curation, etc.) submits a new definition and Policies records it under a new `policy_uuid`. The consuming operational domain — `DOM-OBL-001` for rent, `DOM-PROD-001` for payroll and hall-pass, `DOM-STORE-001` for store/entitlements, the Insurance operational flow for insurance — reads the current `policy_uuid` and owns only the operational facts that result (bill cycles, payroll events, hall-pass logs, entitlement events, etc.). See `DOM-POL-001` §V and §X.
 
 `banking_settings` (savings APY, overdraft fees, interest calculation, disbursement schedule) is **not** a policy repository concern. Its content is inherently Class Configuration → `economic_engine` business, governed by `DOM-CLASS-001` (schema ownership) and `DOM-CLASS-002` (economy governance: interest formulas, overdraft behavior). Class-level economic evolution is versioned by the `economic_engine` rows themselves (`DOM-CLASS-003` §V), not through the Policies repository.
 
@@ -337,7 +337,7 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 **Tables (per `DOM-POL-001` §X boundary attribution):**
 
 - `rent_settings` — rent policy definitions (rate, cycle length, effective boundaries) as append-only version rows; consumed by `DOM-OBL-001`
-- `payroll_settings`, `payroll_rewards`, `payroll_fines` — payroll policy definitions (wage rate, frequency, reward/fine catalog); `payroll_settings.pay_rate` stores the normalized per-minute rate as `NUMERIC(18,8)` so conversions from teacher-entered hourly or daily rates retain sub-cent precision; consumed by `DOM-PROD-001`. `payroll_settings` is append-only and effective-dated, keyed by `policy_uuid`, with exactly the columns in `DOM-POL-001A` §V.F (operator ruling 2026-09-30; 1.11). Its `rounding_mode` column is retired historical data, not a supported setting
+- `payroll_settings` — payroll policy definitions (wage rate, frequency); `payroll_settings.pay_rate` stores the normalized per-minute rate as `NUMERIC(18,8)` so conversions from teacher-entered hourly or daily rates retain sub-cent precision; consumed by `DOM-PROD-001`. `payroll_settings` is append-only and effective-dated, keyed by `policy_uuid`, with exactly the columns in `DOM-POL-001A` §V.F (operator ruling 2026-09-30; 1.11). Its `rounding_mode` column is retired historical data, not a supported setting
 - `hall_pass_settings` — hall-pass policy definitions (allowed destinations, limits); consumed by `DOM-PROD-001` at grant time
 - `store_products`, `store_item_visibility` — purchasable / rent-linked entitlement offering definitions and per-class visibility; consumed by `DOM-STORE-001`. `store_products` is the single versioned product table that replaced `store_items` and the earlier `store_products` (migration `b7c41e9a2f30`); renamed here in 1.10
 - `insurance_policies` — immutable insurance definition rows (`DOM-POL-001` §X "insurance definitions -> Policies"; `DOM-POL-001A` §D); consumed by the insurance entitlement lifecycle (`DOM-STORE-001`); named here in 1.10
@@ -446,6 +446,8 @@ and display `name`. Class deletion cascades groups. Policies reference it throug
 class-scoped composite foreign key. This is group identity, not policy versioning.
 
 ## VIII. Amendment
+
+Version 1.20 (2026-11-04) removes `payroll_fines` and `payroll_rewards` from the canonical table set. Neither table exists (both were dropped in the v2 migration); there is no fine or reward catalog (owner ruling 2026-11-04, issue #1701). A one-time teacher credit is a PROD `manual_credit` event. A teacher-applied fine is a `ledger_transaction` row of type `penalty` (`DOM-LED-001` v2.19, `FEAT-LED-006`).
 
 Version 1.17 (2026-10-09) registers the hall-pass consumption record and its unique partial index (migration `35a9a0d3ab93`). Source authority is `FEAT-PROD-002` §III and `DOM-STORE-001` §VIII.E.6, with the owner's ruling that the hall-pass log is the only legal consumption reference.
 

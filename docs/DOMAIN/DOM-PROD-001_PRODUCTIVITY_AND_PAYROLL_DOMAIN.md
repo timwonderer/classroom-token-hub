@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.14 | 2026-10-03 | 1.13 | Constitutional |
+| DOM-PROD-001 | 1.15 | 2026-11-04 | 1.14 | Constitutional |
 
 ---
 
@@ -483,7 +483,8 @@ Fields: `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`,
 - **Ledger coordination**: The coordinating FEAT composes Ledger domain commands governed by `FEAT-LED-000` and `FEAT-LED-001` inside its own transaction; it never executes another FEAT. PROD neither calls Ledger nor reconstructs balances or compensation totals.
 - **Policies coordination (payroll)**: Wage rate, frequency, and other payroll policy inputs are stored in the Policies repository (`DOM-POL-001`) as immutable, effective-dated `payroll_settings` rows (`DOM-POL-001` §VI.2). Class Configuration decides whether the `payroll` capability is enabled in the class (`class_features`); Policies stores the class-customized definition; `DOM-PROD-001` reads `payroll_settings` — and nothing else — through one resolver, which answers "which setting was in force at instant *t*", and records the `policy_uuid` that priced each `payroll_event`.
 - **Policies coordination (hall pass)**: `hall_pass_settings` is stored in the Policies repository (`DOM-POL-001`) as immutable version rows. Class Configuration decides whether the `hall_pass` capability is enabled; Policies stores the definition (allowed destinations, limits); `FEAT-PROD-002` reads the current hall-pass `policy_uuid` before granting a pass because those settings constrain whether a PROD hall-pass event may be written.
-- **Obligations coordination**: Hall-pass entitlement quotas remain owned by Obligations, and fine/debit manual deductions belong there rather than in `DOM-PROD`.
+- **Obligations coordination**: Hall-pass entitlement quotas remain owned by Obligations.
+- **Teacher fines**: a teacher-applied fine is a Ledger penalty (`DOM-LED-001` INV-LED-017, `FEAT-LED-006`), not a PROD event and not an obligation. `DOM-PROD` records manual credits only; it holds no reward or fine catalog.
 - **Store coordination**: Store-owned entitlements and redemption state remain separate from productivity and payroll history.
 - **Reversal coordination**: Reversal of a payroll-originated monetary fact must consult this domain's authoritative business record before the reversal may proceed.
 
@@ -685,6 +686,8 @@ PROD incorporates SPEC-PROD-001 §VI.2 and SPEC-PROD-002 §VI.2 for the complete
 PROD-PAY-001 uses explicit original corrected-event IDs and per-window worked/replay-paid subsegments. Manual top-ups are non-boundary original positive credits; unrelated manual credits are not attributed work. Same-domain source identities and opaque Ledger locators remain non-FK references. Missing/ambiguous graph edges, duplicate or overlapping selected contributions, source-budget exhaustion or changed evidence deny the entire paid action. No raw scan or original summary changes. Ledger alone owns exact historical money, allocation and complete prior recovery. FEAT obtains Policies/Operations/Ledger conclusions through their interfaces; no DOM-to-DOM dependencies or calls are introduced. Existing target/class destruction removes the business facts; no derived graph archive survives.
 
 ## XVI. Amendment
+
+**Version 1.15 (2026-11-04)** supersedes the statement that fine/debit manual deductions belong to Obligations (owner ruling 2026-11-04, issue #1701): a teacher-applied fine is a Ledger penalty under `FEAT-LED-006`. No PROD persistence, event type or writer changes.
 
 **Version 1.14 (2026-10-03)** supersedes v1.11–1.13 diagnostic-only/historical snapshot-visibility and blanket old-lineage denials for the explicit immutable-source reconstruction in §XIII.9 and §XV.9–10. Authorizes its owning-domain contribution to current correction FEATs; preserves actual integrity denial, modern strict proof, original history and new-write lineage.
 

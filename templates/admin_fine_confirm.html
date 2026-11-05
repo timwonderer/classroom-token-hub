@@ -1,0 +1,103 @@
+{% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
+{% set page_title = "Confirm Fine" %}
+{% set current_page = "payroll" %}
+{% block title %}Confirm Fine - Classroom Token Hub{% endblock %}
+{% block page_icon %}gavel{% endblock %}
+{% block contextual_help_body %}
+{{ help.panel_lead("Check what this fine will do to each student before you apply it. Nothing has been taken yet.") }}
+
+{% call help.topic('fine-range', 'tune', 'The recommended range') %}
+<p class="mb-0">The range comes from your class wage index and economy mode. It is a guide: you can apply a fine outside it after the warning.</p>
+{% endcall %}
+
+{% call help.topic('fine-savings', 'savings', 'Money moved from savings') %}
+<p class="mb-0">With overdraft protection on, savings covers the fine only when it can cover the whole amount checking is short. Otherwise savings is untouched and checking goes below zero. A fine never adds a fee.</p>
+{% endcall %}
+
+{% call help.topic('fine-undo', 'undo', 'Undoing a fine') %}
+<p class="mb-0">Reverse the fine from the student's page. The fine and its reversal both stay in their history.</p>
+{% endcall %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-xl-9">
+    {% if notice %}
+      {% call cards.alert_card('warning', 'Balances changed', icon='sync_problem', body_class='mb-3', role='alert') %}
+        <p class="mb-0">{{ notice }}</p>
+      {% endcall %}
+    {% endif %}
+
+    <div class="card shadow mb-3">
+      <div class="card-header bg-danger text-white">
+        <h2 class="h5 mb-0 text-white">Fine {{ rows|length }} student(s) {{ amount }} each</h2>
+      </div>
+      <div class="card-body">
+        <p class="mb-1">Students will see this in their transaction history:</p>
+        <p class="fw-bold">Fine: {{ reason }}</p>
+
+        {% if band_low %}
+          <p class="mb-0">Recommended fine for this class: <strong>{{ band_low }} to {{ band_high }}</strong> (based on the class wage index).</p>
+          {% if out_of_band %}
+            {% call cards.alert_card('warning', 'Outside the recommended range', icon='warning', body_class='mt-3 mb-0') %}
+              <p class="mb-0">{{ amount }} is outside the recommended range. You can still apply it.</p>
+            {% endcall %}
+          {% endif %}
+        {% else %}
+          <p class="mb-0 text-muted">No recommended range is available until payroll pay rate and expected weekly hours are set.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow mb-3">
+      <div class="card-header">
+        <h2 class="h5 mb-0">What happens to each student</h2>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <caption class="visually-hidden">Balances before and after the fine</caption>
+            <thead>
+              <tr>
+                <th scope="col">Student</th>
+                <th scope="col" class="text-end">Checking now</th>
+                <th scope="col" class="text-end">Savings now</th>
+                <th scope="col" class="text-end">Moved from savings</th>
+                <th scope="col" class="text-end">Checking after</th>
+                <th scope="col" class="text-end">Savings after</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              <tr>
+                <th scope="row">{{ row.name }}</th>
+                <td class="text-end">{{ row.checking_before }}</td>
+                <td class="text-end">{{ row.savings_before }}</td>
+                <td class="text-end">{{ row.protection_transfer or '—' }}</td>
+                <td class="text-end{% if row.goes_negative %} text-danger fw-bold{% endif %}">{{ row.checking_after }}{% if row.goes_negative %}<span class="visually-hidden"> (below zero)</span>{% endif %}</td>
+                <td class="text-end">{{ row.savings_after }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="small text-muted mb-0">With overdraft protection on, savings covers the fine only when it can cover the whole shortfall. Otherwise checking goes below zero. A fine never adds a fee.</p>
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('admin.payroll_fine') }}" class="d-flex gap-2 justify-content-end">
+      {{ form.csrf_token }}
+      <input type="hidden" name="reason" value="{{ reason }}">
+      <input type="hidden" name="amount" value="{{ form.amount.data }}">
+      <input type="hidden" name="submission_token" value="{{ submission_token }}">
+      <input type="hidden" name="preview_digest" value="{{ preview_digest }}">
+      {% for row in rows %}
+      <input type="hidden" name="student_ids" value="{{ row.public_id }}">
+      {% endfor %}
+      <a href="{{ url_for('admin.payroll') }}" class="btn btn-outline-secondary">Cancel</a>
+      <button type="submit" class="btn btn-danger">Apply fine</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

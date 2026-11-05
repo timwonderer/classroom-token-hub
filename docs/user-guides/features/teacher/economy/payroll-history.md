@@ -4,7 +4,7 @@ category: features
 subcategory: teacher-economy
 roles: [teacher]
 description: Read the History tab on Economy > Payroll — payment types, reversals, and where the date-filtered Detailed Payroll History page lives.
-keywords: [payroll history, history tab, reversal, payroll event, reward, fine, detailed payroll history, date filter]
+keywords: [payroll history, history tab, reversal, payroll event, manual credit, detailed payroll history, date filter]
 related:
   - user-guides/features/teacher/economy/payroll-run
   - user-guides/features/teacher/economy/payroll-settings
@@ -17,7 +17,7 @@ related:
 
 **Economy > Payroll** has four tabs — **Overview**, **History**, **Settings**, and **Manual Payments**. This guide covers **History**: the record of every payroll event in the active class.
 
-"Payroll event" is broader than payday. Rewards and fines land here too, which makes this tab the single place to answer "where did that money come from."
+"Payroll event" is broader than payday: manual credits land here too. Fines do not. A fine is a bank transaction, not a payroll event, so it appears in the student's transaction history instead (see [Manual Payments](manual-payments.md)).
 
 ## Step-by-step instructions
 
@@ -30,8 +30,7 @@ One row per event, newest first, with five columns: **Date**, **Type**, **Studen
 | Type | What it is |
 | --- | --- |
 | **Payroll** | A scheduled payroll run |
-| **Reward** | Money you granted outside payroll |
-| **Fine** | Money you deducted |
+| **Manual credit** | A one-time payment you made from **Manual Payments** |
 
 **Amount** is green for money in, red for money out. Student names link to that student's detail page, so a row is a starting point rather than a dead end.
 
@@ -56,7 +55,7 @@ Reach it at `/admin/payroll-history` (see the warning below).
 > **History is per-class.** The tab shows the class currently selected in the sidebar and nothing else. A payment you remember making may simply belong to another period.
 
 > [!NOTE]
-> **Rewards and fines sit alongside payroll runs.** If a total looks wrong for a pay period, read the **Type** column before assuming the run miscalculated — a fine on the same day changes the number a student sees without changing what payroll paid.
+> **A student's balance includes more than payroll.** If a total looks wrong for a pay period, check the student's transaction history before assuming the run miscalculated — a fine on the same day changes the number a student sees without changing what payroll paid.
 
 > [!TIP]
 > After every run, spot-check two or three students here against what the **Overview** tab predicted. It is a ten-second check that catches a bad pay rate before students do.
