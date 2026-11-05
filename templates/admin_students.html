@@ -1153,76 +1153,66 @@
       });
   }
 
+  let pendingHallPassAdjustment = null;
+  let hallPassAdjustmentInFlight = false;
+
   async function bulkUpdateHallPass() {
-    const table = currentClassStudentTable();
-    const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes)
-      .map(cb => parseInt(cb.dataset.seatId, 10))
-      .filter(Number.isInteger);
-
-    if (studentIds.length === 0) {
-      announceStudentManagement('Select at least one student.', 'warning');
-      return;
-    }
-
-    const count = studentIds.length;
-    const action = await window.AppCore.prompt([
-      `Adjust hall-pass entitlements for ${count} student(s).`,
-      'Enter +N to add hall passes (for example, +3).',
-      'Enter -N to remove unused teacher-granted passes (for example, -2).',
-    ], {
-      title: 'Adjust hall passes', label: 'Change', placeholder: '+3 or -2',
-      confirmLabel: 'Apply', requiredMessage: 'Enter a change such as +3 or -2.',
-    });
-
-    if (!action) return;
-
-    const trimmedAction = action.trim();
-    let updateType, value;
-
-    if (trimmedAction.startsWith('+')) {
-      updateType = 'add';
-      value = parseInt(trimmedAction.substring(1));
-    } else if (trimmedAction.startsWith('-')) {
-      updateType = 'remove';
-      value = parseInt(trimmedAction.substring(1));
-    } else {
-      announceStudentManagement('Enter +N to add passes or -N to remove passes. Setting a balance directly is not supported.', 'warning');
-      return;
-    }
-
-    if (isNaN(value) || value <= 0) {
-      announceStudentManagement('Invalid input. Enter a positive number.', 'warning');
-      return;
-    }
-
-    // Send bulk update request
-    fetch('/admin/students/bulk-adjust-hall-pass-entitlements', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({
-        student_ids: studentIds,
-        update_type: updateType,
-        value: value,
-        request_id: crypto.randomUUID()
-      })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          announceStudentManagement(data.message, 'success');
-          location.reload();
-        } else {
-          announceStudentManagement('Error: ' + data.message, 'danger');
+    if (hallPassAdjustmentInFlight) return;
+    hallPassAdjustmentInFlight = true;
+    try {
+      if (!pendingHallPassAdjustment) {
+        const table = currentClassStudentTable();
+        const studentIds = Array.from(table.querySelectorAll('.student-checkbox:checked'))
+          .map(cb => parseInt(cb.dataset.seatId, 10)).filter(Number.isInteger);
+        if (!studentIds.length) {
+          announceStudentManagement('Select at least one student.', 'warning');
+          return;
         }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        announceStudentManagement('Network error occurred while adjusting hall-pass entitlements. Please try again.', 'danger');
+        const action = await window.AppCore.prompt([
+          `Adjust hall passes for ${studentIds.length} student(s).`,
+          'Enter +N to add hall passes (for example, +3).',
+          'Enter -N to remove unused teacher-granted passes (for example, -2).',
+        ], {
+          title: 'Adjust hall passes', label: 'Change', placeholder: '+3 or -2',
+          confirmLabel: 'Apply', requiredMessage: 'Enter a change such as +3 or -2.',
+        });
+        if (!action) return;
+        const change = action.trim();
+        const value = Number(change.slice(1));
+        if (!/^[+-]\d+$/.test(change) || !Number.isSafeInteger(value) || value <= 0) {
+          announceStudentManagement('Enter +N to add passes or -N to remove passes, using a positive whole number.', 'warning');
+          return;
+        }
+        pendingHallPassAdjustment = {
+          student_ids: studentIds, update_type: change[0] === '+' ? 'add' : 'remove',
+          value, request_id: crypto.randomUUID()
+        };
+      }
+      const response = await fetch('/admin/students/bulk-adjust-hall-pass-entitlements', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        },
+        body: JSON.stringify(pendingHallPassAdjustment)
       });
+      const data = await response.json();
+      if (response.status >= 500 || !['success', 'error'].includes(data.status)) {
+        throw new Error('Adjustment result is uncertain');
+      }
+      pendingHallPassAdjustment = null;
+      if (data.status === 'success') {
+        announceStudentManagement(data.message, 'success');
+        location.reload();
+      } else {
+        announceStudentManagement('Error: ' + data.message, 'danger');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      announceStudentManagement('The adjustment could not be confirmed. Use Adjust hall passes again to retry the same adjustment; keep this page open.', 'danger');
+    } finally {
+      hallPassAdjustmentInFlight = false;
+    }
   }
 
   function deletePendingStudent(seatId, studentName) {

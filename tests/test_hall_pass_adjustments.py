@@ -129,3 +129,24 @@ def test_detail_form_supplies_a_new_request_id(client, app):
         assert form.find('input', {'name': 'csrf_token'})
         tokens.append(form.find('input', {'name': 'request_id'})['value'])
     assert tokens[0] and tokens[0] != tokens[1]
+
+
+@pytest.mark.parametrize("surface", ["bulk", "detail"])
+def test_long_request_id_grant_can_be_used(client, app, surface):
+    from app.feats.prod import record_hall_pass_log
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    response = _post(client, student, surface, "x" * 128)
+    assert response.status_code == (200 if surface == "bulk" else 302)
+    grant = EntitlementEvent.query.filter_by(
+        class_id=classroom.class_id, target_seat_id=student.seat_id, event_type="GRANTED",
+    ).one()
+    assert len(grant.correlation_id) <= 100
+    result = record_hall_pass_log(
+        ctx=CanonicalContext(user_id=classroom.teacher_user_id, class_id=classroom.class_id,
+                             seat_id=classroom.teacher_seat_id, actor_role="teacher"),
+        requested_by_seat_id=student.seat_id, approved_by_seat_id=classroom.teacher_seat_id,
+        destination="Bathroom", reason="teacher_approved", idempotency_key="hall-pass:use-long-key",
+    )
+    assert result.hall_pass_log.correlation_id == grant.correlation_id
+    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 0

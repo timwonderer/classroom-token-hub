@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 import uuid
+import hashlib
 
 from app.extensions import db
 from app.feats.base import FEATContext, requires_feat_context
@@ -70,7 +71,8 @@ def execute_hall_pass_adjustment(
     ).first():
         raise ValueError("Teacher authority is required")
 
-    correlation_id = f"corr_{idempotency_key}"
+    # Hall-pass use carries this lineage into a VARCHAR(100) log field.
+    correlation_id = f"corr_{hashlib.sha256(idempotency_key.encode()).hexdigest()}"
     feat = "FEAT-STOR-004" if operation == "add" else "FEAT-STOR-002"
     with FEATContext(feat, correlation_id=correlation_id, idempotency_key=idempotency_key):
         target = lock_hall_pass_holder(target_seat_id, ctx.class_id)
