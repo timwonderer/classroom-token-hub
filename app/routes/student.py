@@ -2538,12 +2538,10 @@ def shop():
 
     entitlements = []
     product_by_key = _resolve_entitlement_products(class_id)
-    for entry in get_entitlement_history(seat_id=seat.id, class_id=class_id):
-        # Insurance entitlements are governed by InsurancePolicy, not by the
-        # store catalog. Skip them so an insurance grant is never rendered as a
-        # store item.
-        if entry["entitlement_type"] == "INSURANCE":
-            continue
+    for entry in get_entitlement_history(
+        seat_id=seat.id, class_id=class_id,
+        exclude_entitlement_types=("INSURANCE", "HALL_PASS"),
+    ):
         item = _product_for_entitlement(product_by_key, entry)
         if item is None:
             continue

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.49 | 2026-11-04 | 3.48 | Normative |
+| SOP-DOC-001 | 3.50 | 2026-11-04 | 3.49 | Normative |
 
 ---
 
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.50 (2026-11-04):**
+- Register DOM-STORE-001 v5.10, FEAT-STOR-004 v1.1, and FEAT-STOR-002 v2.5: independent teacher hall-pass adjustments limited to 100 passes per student per request, request replay protection, direct-grant-only removal, and purchased hall passes shown as available count and transaction rather than My Items.
 
 **Version 3.49 (2026-11-04):**
 - Register FEAT-LED-006 v1.0 (Apply Teacher Penalty), DOM-LED-001 v2.19, DOM-PROD-001 v1.15, DOM-OBL-001 v3.4, DOM-CORE-001 v1.3, DOM-CORE-002 v1.20, DOM-POL-001 v2.11 and DOM-ITR-001 v1.10: a teacher-applied fine is a Ledger `penalty`, not an obligation; there is no fine or reward catalog; the NSF fee was never an obligation (owner ruling 2026-11-04, issue #1701).

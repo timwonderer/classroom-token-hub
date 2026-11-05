@@ -35,7 +35,7 @@ def test_bulk_hall_pass_adjustment_logs_seat_and_class_not_name(client, app, cap
     with caplog.at_level(logging.INFO):
         response = client.post(
             "/admin/students/bulk-adjust-hall-pass-entitlements",
-            json={"student_ids": [student.seat_id], "update_type": "add", "value": 2},
+            json={"student_ids": [student.seat_id], "update_type": "add", "value": 2, "request_id": "pii-check"},
         )
 
     assert response.status_code == 200, response.get_data(as_text=True)

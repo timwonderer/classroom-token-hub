@@ -197,6 +197,7 @@ def get_entitlement_history(
     class_id: str,
     product_id: Optional[str] = None,
     limit: int = 100,
+    exclude_entitlement_types: tuple[str, ...] = (),
 ) -> list[dict]:
     """
     Return all EntitlementEvent rows for a seat (audit trail).
@@ -213,6 +214,7 @@ def get_entitlement_history(
         class_id: Class scope
         product_id: Optional product filter (if provided, only returns events for this product)
         limit: Max rows to return (default 100)
+        exclude_entitlement_types: Types excluded before applying the history limit
 
     Returns:
         List of event dicts (newest first), each containing:
@@ -230,6 +232,9 @@ def get_entitlement_history(
 
     if product_id is not None:
         query = query.filter(EntitlementEvent.product_id == product_id)
+
+    if exclude_entitlement_types:
+        query = query.filter(EntitlementEvent.entitlement_type.notin_(exclude_entitlement_types))
 
     query = query.order_by(EntitlementEvent.timestamp.desc()).limit(limit)
 
