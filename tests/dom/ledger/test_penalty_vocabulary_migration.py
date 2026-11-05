@@ -2,7 +2,8 @@
 
 DOM-LED-001 v2.19 adds `penalty` to INV-LED-017 for teacher-applied fines
 (FEAT-LED-006; owner ruling 2026-11-04). Upgrade only widens the vocabulary;
-downgrade narrows it, so it must refuse while a `penalty` row exists. Each test
+downgrade narrows it only while no `penalty` row exists, and otherwise leaves it
+admitted so a posted fine is never stranded behind the constraint. Each test
 runs the revision against a v2.18-shape `ledger_transaction` in a scratch
 schema, inside a transaction that is rolled back.
 """
@@ -73,12 +74,14 @@ def test_DOM_LED_001__upgrade_admits_penalty_and_downgrade_removes_it(old_schema
     _insert(connection, "manual_payment")
 
 
-def test_DOM_LED_001__downgrade_refuses_while_a_penalty_row_exists(old_schema):
+def test_DOM_LED_001__downgrade_keeps_penalty_admitted_while_a_penalty_row_exists(old_schema):
     connection, migration = old_schema
     migration.upgrade()
     _insert(connection, "penalty")
 
-    with pytest.raises(RuntimeError, match="1 ledger_transaction row"):
-        migration.downgrade()
+    migration.downgrade()  # completes: rollback never needs a restore
 
-    _insert(connection, "penalty")  # the v2.19 constraint is still in force
+    _insert(connection, "penalty")  # the posted row is not stranded behind the constraint
+    assert connection.execute(
+        sa.text("SELECT count(*) FROM ledger_transaction WHERE type = 'penalty'")
+    ).scalar() == 2

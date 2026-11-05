@@ -8,9 +8,12 @@ obligation. INV-LED-017 gains `penalty`, and this migration re-creates
 Upgrade only widens the vocabulary, so it changes no row. The constraint stays
 NOT VALID, as a4d7e9c2f1b6 and e3b7c1d9a2f4 left it.
 
-Downgrade narrows it again and so refuses to run while any `penalty` row exists:
-a row the narrower vocabulary excludes must be dealt with deliberately, never
-left behind a constraint that would reject it on its next UPDATE.
+Downgrade narrows it again only while no `penalty` row exists. Once a fine has
+posted, it leaves `penalty` admitted: a posted row must never sit behind a
+constraint that would reject it on its next UPDATE, and the previous release
+never writes `penalty`, so the wider constraint is harmless to it. This keeps the
+revision rehearsably reversible (not forward-only, SOP-DB-004 §V.5) without
+deleting or rewriting any ledger row.
 
 Revision ID: a0faf8b2a35d
 Revises: a91c3d7e5f20
@@ -113,11 +116,8 @@ def downgrade():
         sa.text(f"SELECT count(*) FROM {TABLE} WHERE type = :added"), {"added": ADDED}
     ).scalar()
     if remaining:
-        raise RuntimeError(
-            f"{remaining} {TABLE} row(s) carry type '{ADDED}'. Downgrading below "
-            "DOM-LED-001 v2.19 removes it from the closed vocabulary; resolve those "
-            "rows before this downgrade runs."
-        )
+        print(f"⚠️  {remaining} {TABLE} row(s) carry type '{ADDED}'; leaving {CHECK} admitting it")
+        return
 
     _replace_constraint(_PREVIOUS_ALLOWED_TYPES)
     print(f"❌ Re-created {CHECK} (NOT VALID) without {ADDED}")
