@@ -177,10 +177,10 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.12: §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
-- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.0: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.13: initial-host and rehearsal scope; §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
+- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.1: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
 - [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.0: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row.
-- [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
+- [SOP-DEP-002 — Production Release Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
 - [SOP-DEV-001 — Refactor Best Practices](DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md)

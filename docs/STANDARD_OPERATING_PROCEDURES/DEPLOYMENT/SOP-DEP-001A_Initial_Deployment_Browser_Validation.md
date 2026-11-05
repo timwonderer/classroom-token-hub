@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001A     | 1.0     | 2026-10-22     | SOP-DEP-001 §XI (2.9) | Normative |
+| SOP-DEP-001A     | 1.1     | 2026-11-04     | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -24,7 +24,7 @@ version 2.10 applied the full list to every release (owner ruling, 2026-10-22).
 ## III. Authority Level
 
 Normative (SOP Tier). Subordinate to INV-CORE-000. Used with `SOP-DEP-001` (the live-test runbook) and
-`SOP-DEP-002` (production transition).
+`SOP-DEP-002` (production releases).
 
 ## IV. Dependencies
 
@@ -106,4 +106,5 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-11-04 | Update the SOP-DEP-002 description to production releases; initial-deployment validation requirements are unchanged. |
 | 1.0 | 2026-10-22 | Extracted from `SOP-DEP-001` §XI (2.9) as the initial-deployment template: every item evidenced before the gate opens. Results may be recorded during or after the checks from contemporaneous evidence. Owner rulings, 2026-10-22. |
