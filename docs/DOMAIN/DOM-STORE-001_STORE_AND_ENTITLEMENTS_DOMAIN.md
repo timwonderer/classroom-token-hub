@@ -471,6 +471,9 @@ Unused direct grants may be removed by the teacher through FEAT-STOR-002.
 This adjustment does not revoke purchased passes or rent perks, and does not
 remove a pass with a pending request. Each intentional adjustment has its own
 request replay key; replaying the same adjustment creates no additional events.
+Each teacher adjustment MUST add or remove 1–100 passes per student, inclusive
+(owner ruling 2026-11-04). Reject larger requests before mutation. This request
+limit does not cap the available balance or change purchase policy.
 
 
 Hall-pass entitlements SHALL:

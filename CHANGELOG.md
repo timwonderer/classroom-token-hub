@@ -10,7 +10,7 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
-- <!-- notes: fixed --> **Hall-pass adjustments work from the roster and student detail.** New grants are no longer mistaken for earlier requests, student-detail adjustments no longer error, and uncertain roster retries preserve the same request. Removal protects purchased passes and rent perks. Purchased passes increase the available count without appearing in My Items. Adjustment instructions use plain language and retain labeled controls and accessible status announcements.
+- <!-- notes: fixed --> **Hall-pass adjustments work from the roster and student detail.** New grants are no longer mistaken for earlier requests, student-detail adjustments no longer error, and uncertain roster retries preserve the same request. Each adjustment is limited to 100 passes per student. Removal protects purchased passes and rent perks. Purchased passes increase the available count without appearing in My Items. Adjustment instructions use plain language and retain labeled controls and accessible status announcements.
 
 - <!-- notes: fixed --> **Insurance filing limits now apply each week, regardless of billing frequency.** Pending and approved claims reserve their transaction or loss date; rejection releases that target while retaining the filing slot. Duplicate submissions cannot leave incomplete claims. Teachers can reject existing incomplete claims with a claim-level reason without deleting their history.
 

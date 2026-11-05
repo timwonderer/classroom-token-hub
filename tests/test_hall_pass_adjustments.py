@@ -214,3 +214,26 @@ def test_hall_pass_history_does_not_hide_older_my_items(client, app):
         response = client.get('/student/shop')
     assert response.status_code == 200
     assert rendered and len(rendered[0]['entitlements']) == 1
+
+
+@pytest.mark.parametrize("surface", ["bulk", "detail"])
+def test_adjustment_quantity_limit_is_per_request(client, app, surface):
+    """Accept 100, reject 101 for both actions, and allow a balance above 100."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    _post(client, student, surface, "cap-seed", quantity=100)
+    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 100
+    for operation in ("add", "remove"):
+        response = _post(client, student, surface, f"cap-reject-{operation}", operation, 101)
+        if surface == "bulk":
+            assert response.get_json()["status"] == "error"
+            assert "between 1 and 100" in response.get_json()["errors"][0]
+        else:
+            with client.session_transaction() as session:
+                assert any(category == "error" and "between 1 and 100" in message
+                           for category, message in session["_flashes"])
+        assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 100
+    _post(client, student, surface, "cap-next-request", quantity=1)
+    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 101
+    _post(client, student, surface, "cap-remove", "remove", 100)
+    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 1

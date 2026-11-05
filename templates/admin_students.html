@@ -1170,7 +1170,7 @@
         }
         const action = await window.AppCore.prompt([
           `Adjust hall passes for ${studentIds.length} student(s).`,
-          'Enter +N to add hall passes (for example, +3).',
+          'Enter +N to add hall passes (for example, +3). Maximum 100 per student.',
           'Enter -N to remove unused teacher-granted passes (for example, -2).',
         ], {
           title: 'Adjust hall passes', label: 'Change', placeholder: '+3 or -2',
@@ -1179,8 +1179,8 @@
         if (!action) return;
         const change = action.trim();
         const value = Number(change.slice(1));
-        if (!/^[+-]\d+$/.test(change) || !Number.isSafeInteger(value) || value <= 0) {
-          announceStudentManagement('Enter +N to add passes or -N to remove passes, using a positive whole number.', 'warning');
+        if (!/^[+-]\d+$/.test(change) || !Number.isSafeInteger(value) || value <= 0 || value > 100) {
+          announceStudentManagement('Enter +N to add passes or -N to remove passes, using a whole number from 1 to 100.', 'warning');
           return;
         }
         pendingHallPassAdjustment = {

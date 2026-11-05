@@ -60,8 +60,8 @@ def execute_hall_pass_adjustment(
 
     if operation not in {"add", "remove"}:
         raise ValueError("Unsupported hall-pass adjustment operation")
-    if type(quantity) is not int or quantity <= 0:
-        raise ValueError("Hall-pass quantity must be a positive integer")
+    if type(quantity) is not int or not 1 <= quantity <= 100:
+        raise ValueError("Hall-pass quantity must be between 1 and 100 per adjustment")
     if not isinstance(idempotency_key, str) or not idempotency_key.strip():
         raise ValueError("An adjustment request identifier is required")
     ctx = canonical_context

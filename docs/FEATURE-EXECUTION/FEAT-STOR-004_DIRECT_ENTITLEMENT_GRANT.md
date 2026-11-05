@@ -132,7 +132,8 @@ The FEAT SHALL NOT persist a direct-grant balance counter.
 Independent teacher hall-pass grants require no Store product or policy UUID
 (DOM-STORE-001 §VIII.E.6, owner ruling 2026-11-04). Validate the current teacher's
 authority and a claimed student seat in the canonical class; serialize on the
-target seat before checking replay and appending grants. Product-backed grants
+target seat before checking replay and appending grants. Reject quantities outside
+1–100 per student per adjustment before mutation (DOM-STORE-001 §VIII.E.6). Product-backed grants
 continue to validate their product policy. Removing unused direct grants belongs
 to FEAT-STOR-002, not this FEAT.
 

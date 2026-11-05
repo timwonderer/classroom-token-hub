@@ -86,6 +86,13 @@ const fetch = async (url, options) => {
   dismissResult(true);
   await partial;
   assert.equal(reloads, beforePartial + 1);
+  const beforeInvalid = requests.length;
+  for (const input of ['+101', '-101']) {
+    window.AppCore.prompt = async () => input;
+    await bulkUpdateHallPass();
+    assert.equal(requests.length, beforeInvalid);
+    assert.ok(messages.at(-1).includes('1 to 100'));
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
     result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)

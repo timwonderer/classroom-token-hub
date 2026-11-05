@@ -165,6 +165,8 @@ if too few are removable. Purchased passes and rent perks are not candidates.
 Each revocation names the teacher actor and the adjustment correlation; the
 original entitlement ID preserves grant lineage. Serialize on the target seat,
 and make the complete requested quantity replay-safe before writing any events.
+Reject teacher adjustment quantities outside 1–100 per student before mutation
+(DOM-STORE-001 §VIII.E.6); this is not a holding-balance limit.
 
 ### B. Ordinary purchase
 
