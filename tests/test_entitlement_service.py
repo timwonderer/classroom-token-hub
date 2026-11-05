@@ -145,20 +145,19 @@ def test_remove_reuses_entitlement_id(app, classroom):
         assert get_hall_pass_balance(seat.id, seat.class_id) == 1
 
 
-def test_remove_preserves_acquisition_type(app, classroom):
-    """REVOKED event should carry the original grant's acquisition_type."""
+@pytest.mark.parametrize("acquisition_type", ["PERK", "PURCHASE"])
+def test_remove_refuses_non_direct_grants(app, classroom, acquisition_type):
     with app.app_context():
         seat = _seat(app, classroom)
-        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="remove-perk-setup"):
-            grant_hall_passes(seat, 1, acquisition_type="PERK")
-
-        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="remove-perk-exec"):
-            remove_hall_passes(seat, 1)
-
-        revoked = EntitlementEvent.query.filter_by(
-            target_seat_id=seat.id, event_type="REVOKED",
-        ).first()
-        assert revoked.acquisition_type == "PERK"
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="remove:setup"):
+            grant_hall_passes(seat, 1, acquisition_type=acquisition_type)
+        with pytest.raises(ValueError, match="teacher-granted"):
+            with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="remove:exec"):
+                remove_hall_passes(seat, 1)
+        assert get_hall_pass_balance(seat.id, seat.class_id) == 1
+        assert EntitlementEvent.query.filter_by(
+            class_id=seat.class_id, target_seat_id=seat.id, event_type="REVOKED",
+        ).count() == 0
 
 
 # ---------------------------------------------------------------------------

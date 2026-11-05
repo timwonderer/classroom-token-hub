@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.9 | 2026-11-03 | 5.8 | Constitutional |
+| DOM-STORE-001 | 5.10 | 2026-11-04 | 5.9 | Constitutional |
 
 > [!IMPORTANT]
 > **v5.9 (2026-11-03), insurance filing (owner ruling).** Weekly filing limits apply independently of billing cadence. Rejection releases the claimed target, but never restores the filing allowance. Failed submissions leave no partial claim.
@@ -94,7 +94,7 @@ This domain owns the following permanent truths:
 1. A specific entitlement was granted.
 2. The entitlement belongs to a specific `target_seat_id` within a specific `class_id`.
 3. A specific `actor_seat_id` caused or authorized the entitlement event.
-4. The entitlement refers to a specific configured product definition from the Policies domain.
+4. Product-backed entitlements refer to a specific configured product definition from the Policies domain; independent teacher hall-pass grants follow §VIII.E.6.
 5. The grant or subsequent event has a specific provenance.
 6. The entitlement event may participate in a specific correlated cross-domain operation.
 7. A Store-and-Entitlements-owned entitlement was consumed, expired, or lawfully revoked.
@@ -206,7 +206,7 @@ Rules:
 - `event_id` identifies one immutable row only.
 - `correlation_id` is cross-domain lineage.
 - `entitlement_id` is internal Store/Entitlements lifecycle lineage.
-- `product_id` SHALL refer to a Policy-owned product definition lawful for the same class boundary.
+- `product_id` SHALL refer to a Policy-owned product definition lawful for the same class boundary, except independent teacher hall-pass grants (§VIII.E.6), which have no product.
 - `payload` SHALL contain only the type-specific authoritative facts necessary to interpret the event.
 - `payload` SHALL NOT duplicate monetary truth, policy rules, or derived balances.
 - `entitlement_events` SHALL NOT contain quantity, remaining balance, mutable redemption status, or display metadata.
@@ -458,12 +458,27 @@ Collective-goal entitlements SHALL:
 
 Hall-pass entitlements are granted here, but their authoritative exercise may be recorded by another domain.
 
+**Teacher adjustments and purchase presentation (owner ruling 2026-11-04).**
+Hall passes share one derived available count. A teacher may grant passes directly
+without a Store product or `policy_uuid`; these grants have `product_id = NULL`,
+`acquisition_type = GRANT`, and the authorizing teacher seat. No catalog policy
+behavior needs to be preserved for these independent grants. Purchased passes
+retain their purchase/product lineage for accounting and reversal, but do not
+appear in the student's My Items list or require Store redemption. Purchase
+immediately increases the available count and records its Ledger transaction;
+actual hall-pass use remains the separate authoritative consumption event.
+Unused direct grants may be removed by the teacher through FEAT-STOR-002.
+This adjustment does not revoke purchased passes or rent perks, and does not
+remove a pass with a pending request. Each intentional adjustment has its own
+request replay key; replaying the same adjustment creates no additional events.
+
+
 Hall-pass entitlements SHALL:
 
 - grant `GRANTED`;
 - support pending action if the exercise requires approval;
 - record `EXPIRED` when a perk-based pass reaches the end of the governing rent period without exercise;
-- permit `REVOKED` only for direct-grant hall passes when the governing policy allows revocation;
+- permit teacher-adjustment `REVOKED` only for unused direct-grant hall passes; purchased-pass reversal remains a coordinated Ledger operation;
 - not create a duplicate Store-and-Entitlements `CONSUMED` row when another domain is the authoritative consumer.
 
 ## IX. Pending Action Semantics

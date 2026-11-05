@@ -1,5 +1,5 @@
 """
-FEAT-STOR-004: Direct Entitlement Grant (v1.0)
+FEAT-STOR-004: Direct Entitlement Grant
 
 Orchestrates teacher-directed entitlement grants:
 - Validates teacher authority for class
@@ -11,7 +11,8 @@ Orchestrates teacher-directed entitlement grants:
 No Ledger coordination needed; grants are zero-cost from teacher authority.
 
 Architecture:
-- Accepts an exact policy_uuid (no inference from product_id)
+- Product-backed grants accept an exact policy_uuid (no inference from product_id)
+- Independent teacher hall-pass adjustments require no catalog policy
 - Resolves the immutable policy by UUID via StorePolicyResolver
 - Validates policy per SPEC-STORE-001
 - Creates entitlements with product_id and policy_uuid references
@@ -24,8 +25,8 @@ from typing import Optional
 import uuid
 
 from app.extensions import db
-from app.feats.base import requires_feat_context
-from app.models import Seat, EntitlementEvent
+from app.feats.base import FEATContext, requires_feat_context
+from app.models import ClassEconomy, Seat, EntitlementEvent
 from app.services.context_resolver import CanonicalContext
 from app.services.store_policy_resolver import (
     StorePolicyResolver,
@@ -42,41 +43,59 @@ class DirectGrantError(Exception):
     pass
 
 
-@requires_feat_context("FEAT-STOR-004")
 def execute_hall_pass_adjustment(
     *,
     canonical_context: CanonicalContext,
     target_seat_id: int,
     quantity: int,
     operation: str,
-    correlation_id: str,
     idempotency_key: str,
 ) -> int:
-    """Append a teacher-directed hall-pass grant or revocation event."""
-    target = db.session.get(Seat, target_seat_id)
-    if not target or target.class_id != canonical_context.class_id:
-        raise ValueError("Target seat is outside the canonical class scope")
+    """Apply one replay-safe teacher adjustment without a catalog product."""
+    from app.services.entitlement_service import (
+        get_hall_pass_balance, grant_hall_passes, lock_hall_pass_holder, remove_hall_passes,
+    )
+
     if operation not in {"add", "remove"}:
         raise ValueError("Unsupported hall-pass adjustment operation")
-    from app.services.entitlement_service import get_hall_pass_balance, grant_hall_passes, remove_hall_passes
-    if operation == "add":
+    if type(quantity) is not int or quantity <= 0:
+        raise ValueError("Hall-pass quantity must be a positive integer")
+    if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+        raise ValueError("An adjustment request identifier is required")
+    ctx = canonical_context
+    if ctx.actor_role != "teacher" or not ClassEconomy.query.filter_by(
+        class_id=ctx.class_id, teacher_user_id=ctx.user_id,
+    ).first() or not Seat.query.filter_by(
+        id=ctx.seat_id, class_id=ctx.class_id, user_id=ctx.user_id, role="teacher",
+    ).first():
+        raise ValueError("Teacher authority is required")
+
+    correlation_id = f"corr_{idempotency_key}"
+    feat = "FEAT-STOR-004" if operation == "add" else "FEAT-STOR-002"
+    with FEATContext(feat, correlation_id=correlation_id, idempotency_key=idempotency_key):
+        target = lock_hall_pass_holder(target_seat_id, ctx.class_id)
+        if target.role != "student" or target.claimed_at is None or target.user_id is None:
+            raise ValueError("A claimed student seat is required")
         existing = EntitlementEvent.query.filter_by(
-            class_id=canonical_context.class_id,
-            target_seat_id=target_seat_id,
-            entitlement_type="HALL_PASS",
-            correlation_id=idempotency_key,
-        ).first()
+            class_id=ctx.class_id, target_seat_id=target.id,
+            entitlement_type="HALL_PASS", correlation_id=correlation_id,
+        ).all()
+        expected_event = "GRANTED" if operation == "add" else "REVOKED"
         if existing:
-            return get_hall_pass_balance(target.id, target.class_id)
-    if operation == "add":
-        return grant_hall_passes(
-            target,
-            quantity,
-            actor_seat_id=canonical_context.seat_id,
-            correlation_id=idempotency_key,
-            acquisition_type="GRANT",
+            if len(existing) != quantity or any(
+                event.event_type != expected_event or event.actor_seat_id != ctx.seat_id
+                for event in existing
+            ):
+                raise ValueError("This adjustment request was already used with different inputs")
+            return get_hall_pass_balance(target.id, ctx.class_id)
+        if operation == "add":
+            return grant_hall_passes(
+                target, quantity, actor_seat_id=ctx.seat_id,
+                correlation_id=correlation_id, acquisition_type="GRANT",
+            )
+        return remove_hall_passes(
+            target, quantity, actor_seat_id=ctx.seat_id, correlation_id=correlation_id,
         )
-    return remove_hall_passes(target, quantity)
 
 
 @dataclass

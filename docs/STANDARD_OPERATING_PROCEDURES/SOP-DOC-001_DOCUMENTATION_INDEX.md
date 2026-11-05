@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.48 | 2026-11-03 | 3.47 | Normative |
+| SOP-DOC-001 | 3.49 | 2026-11-04 | 3.48 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.49 (2026-11-04):**
+- Register DOM-STORE-001 v5.10, FEAT-STOR-004 v1.1, and FEAT-STOR-002 v2.5: independent teacher hall-pass adjustments, request replay protection, direct-grant-only removal, and purchased hall passes shown as available count and transaction rather than My Items.
 
 **Version 3.48 (2026-11-03):**
 - Register DOM-STORE-001 v5.9, FEAT-STOR-003 v1.6, and SPEC-ECON-003 v2.4: weekly filing limits, rejection releases target reservations but retains allowance usage, atomic submission, and claim-level rejection of incomplete claims.

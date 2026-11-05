@@ -1168,8 +1168,8 @@
     const count = studentIds.length;
     const action = await window.AppCore.prompt([
       `Adjust hall-pass entitlements for ${count} student(s).`,
-      'Enter +N to add new hall-pass grant events (for example, +3).',
-      'Enter -N to remove passes by reversing unconsumed grant correlations (for example, -2).',
+      'Enter +N to add hall passes (for example, +3).',
+      'Enter -N to remove unused teacher-granted passes (for example, -2).',
     ], {
       title: 'Adjust hall passes', label: 'Change', placeholder: '+3 or -2',
       confirmLabel: 'Apply', requiredMessage: 'Enter a change such as +3 or -2.',
@@ -1206,7 +1206,8 @@
       body: JSON.stringify({
         student_ids: studentIds,
         update_type: updateType,
-        value: value
+        value: value,
+        request_id: crypto.randomUUID()
       })
     })
       .then(response => response.json())
