@@ -4,7 +4,7 @@ import subprocess
 
 
 def test_bulk_retry_retains_payload_and_id():
-    template = Path('templates/admin_students.html').read_text()
+    template = (Path(__file__).resolve().parents[1] / 'templates' / 'admin_students.html').read_text()
     source = template[template.index('  let pendingHallPassAdjustment'):template.index('  function deletePendingStudent')]
     script = r'''
 const assert = require('node:assert/strict');
@@ -19,8 +19,10 @@ const window = { AppCore: {prompt: async () => { prompts++; return '+2'; }} };
 const announceStudentManagement = (message) => messages.push(message);
 const location = {reload: () => reloads++};
 let release;
+let rejection = null;
 const fetch = async (url, options) => {
   requests.push(JSON.parse(options.body));
+  if (rejection) return rejection;
   if (requests.length === 1) {
     await new Promise(resolve => {release = resolve});
     throw new Error('server committed; response lost');
@@ -44,7 +46,29 @@ const fetch = async (url, options) => {
   assert.notEqual(requests[2].request_id, requests[1].request_id);
   assert.deepEqual(requests[2].student_ids, [99]);
   assert.equal(prompts, 2);
+  for (const response of [
+    {status: 400, json: async () => {throw new Error('HTML CSRF rejection');}},
+    {status: 200, redirected: true, json: async () => {throw new Error('HTML login');}},
+  ]) {
+    rejection = response;
+    await bulkUpdateHallPass();
+    const rejectedKey = requests.at(-1).request_id;
+    rejection = null;
+    await bulkUpdateHallPass();
+    assert.notEqual(requests.at(-1).request_id, rejectedKey, 'definite rejection must clear pending state');
+  }
+  for (const response of [
+    {status: 500, json: async () => ({status: 'error'})},
+    {status: 200, json: async () => {throw new Error('unreadable response');}},
+  ]) {
+    rejection = response;
+    await bulkUpdateHallPass();
+    const uncertainPayload = requests.at(-1);
+    rejection = null;
+    await bulkUpdateHallPass();
+    assert.deepEqual(requests.at(-1), uncertainPayload, 'uncertain responses must retain pending state');
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
-    result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+    result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr

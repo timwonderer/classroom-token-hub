@@ -3421,6 +3421,7 @@ def student_detail_public(actor_public_id):
         .filter(
             EntitlementEvent.target_seat_id == seat_id,
             EntitlementEvent.event_type == "GRANTED",
+            EntitlementEvent.product_id.isnot(None),
         )
     )
     if class_id:
@@ -8543,7 +8544,8 @@ def bulk_adjust_hall_pass_entitlements():
                     idempotency_key=f"hall-pass-adjust:{student.class_id}:{student.id}:{request_id}",
                 )
             except ValueError as exc:
-                errors.append(str(exc))
+                label = student.identity_profile.full_name if student.identity_profile else "Unnamed student"
+                errors.append(f"{label}: {exc}")
                 continue
 
             updated.append(student.identity_profile.full_name if student.identity_profile else "Unnamed student")

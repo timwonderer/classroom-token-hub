@@ -1196,8 +1196,13 @@
         },
         body: JSON.stringify(pendingHallPassAdjustment)
       });
-      const data = await response.json();
-      if (response.status >= 500 || !['success', 'error'].includes(data.status)) {
+      const data = await response.json().catch(() => null);
+      if (response.redirected || (!data && response.status >= 400 && response.status < 500)) {
+        pendingHallPassAdjustment = null;
+        announceStudentManagement('The request was rejected. Reload the page and try again.', 'danger');
+        return;
+      }
+      if (response.status >= 500 || !data || !['success', 'error'].includes(data.status)) {
         throw new Error('Adjustment result is uncertain');
       }
       pendingHallPassAdjustment = null;

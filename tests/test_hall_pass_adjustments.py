@@ -74,6 +74,7 @@ def test_changed_replay_payload_is_rejected(client, app, surface, action, quanti
     if surface == "bulk":
         assert response.get_json()["status"] == "error"
         assert "different inputs" in response.get_json()["errors"][0]
+        assert response.get_json()["errors"][0].startswith(student.seat.identity_profile.full_name + ": ")
     else:
         with client.session_transaction() as session:
             assert any(category == "error" and "different inputs" in message for category, message in session["_flashes"])
@@ -152,14 +153,21 @@ def test_detail_form_supplies_a_new_request_id(client, app):
     assert roster.status_code == 200
     links = BeautifulSoup(roster.data, 'html.parser').find_all('a', href=True)
     detail_url = next(link['href'] for link in links if f'/admin/students/{student.seat.public_id}?' in link['href'])
+    _post(client, student, "detail", "detail-purchase-view")
+    rendered = []
+    def capture(sender, template, context, **extra):
+        if template.name == 'student_detail.html':
+            rendered.append(context)
     tokens = []
     for _ in range(2):
-        response = client.get(detail_url)
+        with template_rendered.connected_to(capture, app):
+            response = client.get(detail_url)
         assert response.status_code == 200
         form = BeautifulSoup(response.data, 'html.parser').find('form', action=f'/admin/student/{student.seat.public_id}/adjust-hall-pass-entitlements')
         assert form.find('input', {'name': 'csrf_token'})
         tokens.append(form.find('input', {'name': 'request_id'})['value'])
     assert tokens[0] and tokens[0] != tokens[1]
+    assert rendered and rendered[0]["entitlements"] == []
 
 
 @pytest.mark.parametrize("surface", ["bulk", "detail"])
