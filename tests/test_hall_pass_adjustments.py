@@ -29,25 +29,55 @@ def _post(client, student, surface, key, action="add", quantity=1):
 
 
 @pytest.mark.parametrize("surface", ["bulk", "detail"])
-def test_distinct_adjustments_and_replays(client, app, surface):
+@pytest.mark.parametrize("operation", ["add", "remove"])
+def test_replayed_adjustment_is_a_noop(client, app, surface, operation):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     student = classroom.students[0]
-    for key in ("first", "first", "second"):
+    if operation == "remove":
+        _post(client, student, surface, "seed", quantity=2)
+    for _ in range(2):
+        response = _post(client, student, surface, "replay", operation, 1)
+        assert response.status_code == (200 if surface == "bulk" else 302)
+    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 1
+
+
+@pytest.mark.parametrize("surface", ["bulk", "detail"])
+def test_new_request_key_creates_new_grant(client, app, surface):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    for key in ("first", "second"):
         response = _post(client, student, surface, key, quantity=2)
         assert response.status_code == (200 if surface == "bulk" else 302)
     assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 4
-    for _ in range(2):
-        response = _post(client, student, surface, "remove", "remove", 1)
-        assert response.status_code == (200 if surface == "bulk" else 302)
-    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 3
+
+
+@pytest.mark.parametrize("surface", ["bulk", "detail"])
+def test_adjustment_events_name_teacher_without_product(client, app, surface):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    _post(client, student, surface, "grant", quantity=2)
+    _post(client, student, surface, "remove", "remove", 1)
     events = EntitlementEvent.query.filter_by(class_id=classroom.class_id, target_seat_id=student.seat_id).all()
-    assert len(events) == 5
+    assert len(events) == 3
     assert all(event.actor_seat_id == classroom.teacher_seat_id for event in events)
     assert all(event.product_id is None for event in events)
-    # Reusing a key for a different payload must not create an adjustment.
-    _post(client, student, surface, "first", quantity=3)
-    _post(client, student, surface, "first", action="remove", quantity=2)
-    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 3
+
+
+@pytest.mark.parametrize("surface", ["bulk", "detail"])
+@pytest.mark.parametrize("action,quantity", [("add", 3), ("remove", 2)])
+def test_changed_replay_payload_is_rejected(client, app, surface, action, quantity):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    _post(client, student, surface, "first", quantity=2)
+    response = _post(client, student, surface, "first", action, quantity)
+    assert response.status_code == (200 if surface == "bulk" else 302)
+    if surface == "bulk":
+        assert response.get_json()["status"] == "error"
+        assert "different inputs" in response.get_json()["errors"][0]
+    else:
+        with client.session_transaction() as session:
+            assert any(category == "error" and "different inputs" in message for category, message in session["_flashes"])
+    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 2
 
 
 @pytest.mark.parametrize("surface", ["bulk", "detail"])
@@ -102,14 +132,15 @@ def test_purchase_increases_count_and_transaction_but_not_my_items(client, app):
     assert rendered[0]['items'], "hall passes must remain purchasable"
 
 
-def test_bulk_rejects_invalid_inputs_before_any_adjustment(client, app):
+@pytest.mark.parametrize("case", ["boolean", "fraction", "negative", "invalid-seat", "missing-key"])
+def test_bulk_rejects_invalid_inputs_before_any_adjustment(client, app, case):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     student = classroom.students[0]
     valid = {"student_ids": [student.seat_id], "update_type": "add", "value": 1, "request_id": "validation"}
-    for change in ({"value": True}, {"value": 1.5}, {"value": -1},
-                   {"student_ids": [student.seat_id, "invalid"]}, {"request_id": ""}):
-        response = client.post('/admin/students/bulk-adjust-hall-pass-entitlements', json=valid | change)
-        assert response.status_code == 400
+    changes = {"boolean": {"value": True}, "fraction": {"value": 1.5}, "negative": {"value": -1},
+               "invalid-seat": {"student_ids": [student.seat_id, "invalid"]}, "missing-key": {"request_id": ""}}
+    response = client.post('/admin/students/bulk-adjust-hall-pass-entitlements', json=valid | changes[case])
+    assert response.status_code == 400
     assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 0
 
 
@@ -150,3 +181,28 @@ def test_long_request_id_grant_can_be_used(client, app, surface):
     )
     assert result.hall_pass_log.correlation_id == grant.correlation_id
     assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 0
+
+
+def test_hall_pass_history_does_not_hide_older_my_items(client, app):
+    from app.services.entitlement_service import grant_hall_passes
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
+    enable_class_feature(class_id=classroom.class_id, feature="store")
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="history:product"):
+        product = publish_store_product(class_id=classroom.class_id, entitlement_type="DELAYED_USE",
+                                        name="Homework Pass", price="0.00", created_by_seat_id=classroom.teacher_seat_id)
+    result = execute_store_purchase(
+        canonical_context=CanonicalContext(user_id=student.user_id, class_id=classroom.class_id,
+                                           seat_id=student.seat_id, actor_role="student"),
+        policy_uuid=product.policy_uuid, quantity=1,
+    )
+    assert result.success, result.error_code
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="history:passes"):
+        grant_hall_passes(student.seat, 101, actor_seat_id=classroom.teacher_seat_id)
+    rendered = []
+    def capture(sender, template, context, **extra):
+        if template.name == 'student_shop.html':
+            rendered.append(context)
+    with template_rendered.connected_to(capture, app):
+        response = client.get('/student/shop')
+    assert response.status_code == 200
+    assert rendered and len(rendered[0]['entitlements']) == 1

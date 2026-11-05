@@ -151,10 +151,28 @@ def test_remove_refuses_non_direct_grants(app, classroom, acquisition_type):
         seat = _seat(app, classroom)
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="remove:setup"):
             grant_hall_passes(seat, 1, acquisition_type=acquisition_type)
-        with pytest.raises(ValueError, match="teacher-granted"):
-            with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="remove:exec"):
-                remove_hall_passes(seat, 1)
+        with pytest.raises(ValueError, match="teacher-granted"), FEATContext(
+            "FEAT-TEST-ENTITLEMENT", idempotency_key="remove:exec",
+        ):
+            remove_hall_passes(seat, 1)
         assert get_hall_pass_balance(seat.id, seat.class_id) == 1
+        assert EntitlementEvent.query.filter_by(
+            class_id=seat.class_id, target_seat_id=seat.id, event_type="REVOKED",
+        ).count() == 0
+
+
+def test_removal_refuses_an_already_used_direct_grant(app, classroom):
+    with app.app_context():
+        seat = _seat(app, classroom)
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="used-removal:grant"):
+            grant_hall_passes(seat, 1)
+        _use_hall_pass(classroom, seat, "used-removal")
+        before = get_hall_pass_balance(seat.id, seat.class_id)
+        with pytest.raises(ValueError, match="teacher-granted"), FEATContext(
+            "FEAT-TEST-ENTITLEMENT", idempotency_key="used-removal:remove",
+        ):
+            remove_hall_passes(seat, 1)
+        assert get_hall_pass_balance(seat.id, seat.class_id) == before
         assert EntitlementEvent.query.filter_by(
             class_id=seat.class_id, target_seat_id=seat.id, event_type="REVOKED",
         ).count() == 0
