@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.19 | 2026-10-29 | 1.18 | Normative |
+| SOP-DEP-002 | 1.20 | 2026-11-04 | 1.19 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -119,7 +119,7 @@ advisory and are recorded as such, never as the independent verifier.
    in the section belongs to a PR in that range (`git merge-base --is-ancestor <merge> vPREV` is false). Subsections
    appear only from this list, in this order, each once: Added, Changed, Deprecated, Removed, Fixed, Security,
    Investigated, no code change. Each entry also names its release-notes section in an invisible tag after its
-   bullet, `- <!-- notes: fixed|security-reliability|accessibility|internal[, highlight] --> **Headline** ...`
+   bullet, `- <!-- notes: new|fixed|security-reliability|accessibility|internal[, highlight] --> **Headline** ...`
    (step 13). Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
 2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
@@ -208,7 +208,7 @@ advisory and are recorded as such, never as the independent verifier.
     gh release create vX.Y.Z --verify-tag --title "$(python3 scripts/release_notes.py X.Y.Z --title)" --notes-file /tmp/notes.md
     ```
 
-    The notes are grouped for readers: Highlights (entries tagged `highlight`), then Fixed, Security & Reliability,
+    The notes are grouped for readers: Highlights (entries tagged `highlight`), then New, Fixed, Security & Reliability,
     Accessibility and Internal Changes, each listing one headline per entry with the full entries collapsed, and
     the deployment record and release run linked at the end (owner, 2026-10-22). The script refuses a section out
     of shape (heading, `Released as` line, subsection names and order), an entry without a known notes tag, and a
@@ -325,6 +325,8 @@ Record:
 ## XIII. Amendment
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.20 (2026-11-04):** §VII.A steps 1 and 13: a `new` release-notes tag and a *New* section, shown after Highlights and before Fixed, for something users can now do that they could not before (a feature, a guide page). Until now a new feature had to be tagged `fixed`, which misdescribed it, or `internal`, which hid it from teachers. Owner direction, 2026-11-04.
 
 **Version 1.19 (2026-10-29):** v1.18 restricted `release-v2.yml` to its own dedicated key
 (`RELEASE_DEPLOY_KEY`) but left `DO_DEPLOY_KEY` itself unrestricted — and `DO_DEPLOY_KEY` is a

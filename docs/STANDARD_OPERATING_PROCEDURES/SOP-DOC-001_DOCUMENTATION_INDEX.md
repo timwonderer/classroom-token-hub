@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.50 | 2026-11-04 | 3.49 | Normative |
+| SOP-DOC-001 | 3.51 | 2026-11-04 | 3.50 | Normative |
 
 ---
 
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.51 (2026-11-04):**
+- Register SOP-DEP-002 v1.20: a `new` release-notes tag; release notes gain a *New* section between Highlights and Fixed.
 
 **Version 3.50 (2026-11-04):**
 - Register DOM-STORE-001 v5.10, FEAT-STOR-004 v1.1, and FEAT-STOR-002 v2.5: independent teacher hall-pass adjustments limited to 100 passes per student per request, request replay protection, direct-grant-only removal, and purchased hall passes shown as available count and transaction rather than My Items.
