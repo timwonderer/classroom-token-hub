@@ -4,6 +4,21 @@
 {% set current_page = "payroll" %}
 {% block title %}Confirm Fine - Classroom Token Hub{% endblock %}
 {% block page_icon %}gavel{% endblock %}
+{% block contextual_help_body %}
+{{ help.panel_lead("Check what this fine will do to each student before you apply it. Nothing has been taken yet.") }}
+
+{% call help.topic('fine-range', 'tune', 'The recommended range') %}
+<p class="mb-0">The range comes from your class wage index and economy mode. It is a guide: you can apply a fine outside it after the warning.</p>
+{% endcall %}
+
+{% call help.topic('fine-savings', 'savings', 'Money moved from savings') %}
+<p class="mb-0">With overdraft protection on, savings covers the fine only when it can cover the whole amount checking is short. Otherwise savings is untouched and checking goes below zero. A fine never adds a fee.</p>
+{% endcall %}
+
+{% call help.topic('fine-undo', 'undo', 'Undoing a fine') %}
+<p class="mb-0">Reverse the fine from the student's page. The fine and its reversal both stay in their history.</p>
+{% endcall %}
+{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
