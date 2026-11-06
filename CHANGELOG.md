@@ -12,7 +12,13 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: internal --> **Class Setup explains why a class has one teacher** (owner ruling 2026-11-04). The *Why it works this way* section gave a reason for sealing each class but none for having a single teacher. It now says the teacher is the class's sole authority, and names what a second teacher would bring: no fair way to settle a disagreement, no authority to stop a teacher who undermines the economy, and a teacher who leaves the school keeping control over students they no longer teach.
 
+### Changed
+
+- <!-- notes: internal --> **Release records no longer list each class's balances or name classes by internal id.** `SOP-DEP-002` v1.20: the step 8 balance baseline is one summary row (totals, mismatched rows, and a fingerprint of the per-class table that step 10 compares), and a record that must point at one class names it by `class_public_id` (`DOM-OPS-001` §7). Records already published are unchanged. `SOP-DOC-001` v3.51.
+
 ## [2.4.3] - 2026-11-05 — Teachers can fine students
+
+Released as `135dc67` on 2026-11-05 at 07:28 UTC by release run [41987369519](https://github.com/timwonderer/classroom-token-hub/actions/runs/41987369519). Migration `a0faf8b2a35d`. Record: [DEPLOY_2026-11-05_135dc67.md](docs/ops/audits/DEPLOY_2026-11-05_135dc67.md). Also applies `a91c3d7e5f20`.
 
 ### Added
 
