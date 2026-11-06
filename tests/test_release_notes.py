@@ -58,6 +58,10 @@ TAGGED = f"""## [9.9.9] - 2026-10-22 — A title
 
 Released as `abc1234` on 2026-10-22 at 04:38 UTC by release run [123]({RUN}). Migration `a1b2c3d4`. Record: [DEPLOY_2026-10-22_abc1234.md](docs/ops/audits/DEPLOY_2026-10-22_abc1234.md). Includes `def5678`.
 
+### Added
+
+- <!-- notes: new --> **Teachers can fine students** (#1706).
+
 ### Changed
 
 - <!-- notes: internal --> **Dependencies.** gunicorn 26.2.0 (#1380), mentioned for context only.
@@ -83,7 +87,7 @@ def _rendered(text=TAGGED):
 def test_render_orders_the_owner_sections_with_highlights_first():
     notes = _rendered()
     headings = [line for line in notes.splitlines() if line.startswith("## ")]
-    assert headings == ["## Highlights", "## Fixed", "## Security & Reliability", "## Accessibility", "## Internal Changes"]
+    assert headings == ["## Highlights", "## New", "## Fixed", "## Security & Reliability", "## Accessibility", "## Internal Changes"]
 
 
 def test_render_lists_one_headline_per_entry_and_collapses_the_full_text():
