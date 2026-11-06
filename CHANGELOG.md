@@ -11,6 +11,7 @@ and this project follows semantic versioning principles.
 ### Added
 
 - <!-- notes: internal --> **Release notes gain a New section** (`SOP-DEP-002` 1.21). A CHANGELOG entry for something users could not do before is now tagged `new` and shown under *New*, after Highlights and before Fixed. A new feature previously had to be tagged `fixed` or `internal`. Teacher fines and the design-choices guide pages are retagged `new`.
+- <!-- notes: internal --> **Class Setup explains why a class has one teacher** (owner ruling 2026-11-04). The *Why it works this way* section gave a reason for sealing each class but none for having a single teacher. It now says the teacher is the class's sole authority, and names what a second teacher would bring: no fair way to settle a disagreement, no authority to stop a teacher who undermines the economy, and a teacher who leaves the school keeping control over students they no longer teach.
 
 ### Changed
 

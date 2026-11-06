@@ -111,7 +111,9 @@ This is a fallback, not an error. Choose a class from the dropdown — each is l
 
 **What Classroom Token Hub does instead:** every class has exactly one teacher, and every class period is a sealed economy. Money, students, settings and history never cross from one class to another, even between two periods you teach yourself.
 
-**Why:** keeping each class sealed is the safety property the app defends hardest. Every read and write of student data is limited to one class, and it is tested that way, because an earlier version once let data cross between two periods of the same teacher.
+**Why:** every action in a class is tied to a person and that person's role in that class, and the teacher is the class's sole authority. You set the rules, approve requests and make corrections, and students can see who did what. A second teacher would split that authority, and two people deciding for the same class could end up treating students unequally. If the two disagree, there's no fair way to decide whose decision stands. If one of them deliberately undermines the class economy, the other has no authority to stop it. And if one of them leaves the school but won't give up access, they keep control over students they no longer teach.
+
+Keeping each class sealed is the safety property the app defends hardest. Every read and write of student data is limited to one class, and it is tested that way, because an earlier version once let data cross between two periods of the same teacher.
 
 ### If this doesn't fit your class
 
