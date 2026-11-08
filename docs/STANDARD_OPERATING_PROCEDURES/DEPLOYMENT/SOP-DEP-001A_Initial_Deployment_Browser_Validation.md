@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001A     | 1.0     | 2026-10-22     | SOP-DEP-001 §XI (2.9) | Normative |
+| SOP-DEP-001A     | 1.2     | 2026-11-08     | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -24,12 +24,13 @@ version 2.10 applied the full list to every release (owner ruling, 2026-10-22).
 ## III. Authority Level
 
 Normative (SOP Tier). Subordinate to INV-CORE-000. Used with `SOP-DEP-001` (the live-test runbook) and
-`SOP-DEP-002` (production transition).
+`SOP-DEP-002` (production releases).
 
 ## IV. Dependencies
 
 - `SOP-DEP-001`: §XI.A (how to exercise the adversarial items), §XIII (roles and the solo-operator exception),
   §XV (record storage).
+- `SOP-DEP-001B`: §V.A (validation responsibility), which applies here unchanged.
 - `SOP-DEP-002`: the release procedure this validation sits inside.
 - `INV-ARC-011`, `INV-ARC-019`: class isolation and identity, which items 8 to 12 exercise.
 - `INV-ARC-020`: accessibility, item 17.
@@ -43,6 +44,10 @@ Normative (SOP Tier). Subordinate to INV-CORE-000. Used with `SOP-DEP-001` (the 
    that item outstanding and why.
 4. Adversarial items (those asserting something *cannot* happen) are exercised as `SOP-DEP-001` §XI.A describes,
    including its rule that no deliberate cross-scope attempt is made on a host serving live classes.
+5. Validation is a development and operations responsibility, as `SOP-DEP-001B` §V.A defines it. The operator runs
+   every item with test classes and test accounts created for the check. Teachers and students take no part, and
+   on a host serving live classes (a release the owner designates as a full validation) no live class is used for
+   an item and live classroom activity is never orchestrated to satisfy the gate.
 
 ## VI. Checklist
 
@@ -106,4 +111,6 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-11-08 | §V.5: validation is a development and operations responsibility (`SOP-DEP-001B` §V.A); the operator runs every item in test classes with test accounts; teachers and students take no part, and on a host serving live classes no live class is used and live classroom activity is never orchestrated. Owner ruling, 2026-11-08. |
+| 1.1 | 2026-11-04 | Update the SOP-DEP-002 description to production releases; initial-deployment validation requirements are unchanged. |
 | 1.0 | 2026-10-22 | Extracted from `SOP-DEP-001` §XI (2.9) as the initial-deployment template: every item evidenced before the gate opens. Results may be recorded during or after the checks from contemporaneous evidence. Owner rulings, 2026-10-22. |

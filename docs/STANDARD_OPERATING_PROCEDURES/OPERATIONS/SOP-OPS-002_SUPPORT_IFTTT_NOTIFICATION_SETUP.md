@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-OPS-002 | 1.0 | 2026-10-04 | Unnumbered Support IFTTT setup guide | Normative |
+| SOP-OPS-002 | 1.1 | 2026-11-04 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -27,7 +27,7 @@ The OPERATIONS placement assigns the setup procedure to operators. Support retai
 - [DOM-SUP-001 — Support Domain](../../DOMAIN/DOM-SUP-001_SUPPORT_DOMAIN.md), §XI
 - [FEAT-SUP-001 — Issue Submission and Escalation](../../FEATURE-EXECUTION/FEAT-SUP-001_ISSUE_SUBMISSION_AND_ESCALATION.md), v1.1
 - [SOP-DOC-000 — Documentation Standard](../SOP-DOC-000_DOCUMENTATION_STANDARD.md)
-- [SOP-DEP-002 — Production Transition Runbook](../DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
+- [SOP-DEP-002 — Production Release Runbook](../DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ## V. IFTTT Applet and Application Configuration
 

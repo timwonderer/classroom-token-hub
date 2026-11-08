@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.55 | 2026-11-08 | 3.54 | Normative |
+| SOP-DOC-001 | 3.57 | 2026-11-08 | 3.56 | Normative |
 
 ---
 
@@ -177,10 +177,10 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.12: §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
-- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.0: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.13: initial-host and rehearsal scope; §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
+- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.2: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens; validation is development and operations alone (§V.5).
 - [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.2: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, never teachers, students or live classes; the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
-- [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
+- [SOP-DEP-002 — Production Release Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
 - [SOP-DEV-001 — Refactor Best Practices](DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md)
@@ -280,6 +280,16 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.57 (2026-11-08):**
+- Register SOP-DEP-001A v1.2: validation is a development and operations responsibility as SOP-DEP-001B §V.A defines; teachers and students take no part, and on a host serving live classes no live class is used and live classroom activity is never orchestrated.
+
+**Version 3.56 (2026-11-08):**
+- Register SOP-DEP-002 v1.22 as the Production Release Runbook following the completed v2 launch; retain its source path and existing release safeguards.
+- Register SOP-DEP-001 v2.13: distinguish initial-host/rehearsal setup from recurring production releases and remove the stale holding-page host assumption.
+- Register SOP-DEP-001A v1.1, SOP-DB-004 v1.3, SOP-OPS-002 v1.1 and SOP-CORE-000 v1.4: update descriptions of the production release procedure without changing their operational requirements.
+- Register SPEC-SEC-001 v1.6: identify the lookup encoding cutover as historical; the pre-launch absence of data is not permission to replace live credential data.
+- Register INV-ARC-018 v1.6: §VII.2 governs what the application stores, not what a user types into a persisted free-text field; the platform attaches no PII to generated text and stays ignorant of what users enter.
 
 **Version 3.55 (2026-11-08):**
 - Register SOP-DEP-001B v1.2: the required check follows what the release changed in a feature, a browser check for what a browser observes and server-side evidence of the changed behaviour for server-only changes; classroom activity in its own course may satisfy a server-side check; a check that waits on a time boundary after the release window is *pending*, not a deviation; a release's checks are sub-issues of one parent Backlog issue, linked from the release record.

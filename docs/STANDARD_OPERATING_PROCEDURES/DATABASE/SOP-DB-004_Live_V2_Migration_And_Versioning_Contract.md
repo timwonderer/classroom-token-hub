@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-004 | 1.2 | 2026-10-06 | 1.1 | Normative |
+| SOP-DB-004 | 1.3 | 2026-11-04 | 1.2 | Normative |
 
 > [!NOTE]
 > §VII and §VIII record the owner ruling of 2026-10-06 on compatibility: physical schema coexistence
@@ -26,7 +26,7 @@ carries them. It applies prospectively only (§V.3).
 
 It does not replace `SOP-DB-001` (how a migration file is written and tested), `SOP-DB-003` (the
 PR-blocking Schema Change Gate), `SOP-DEP-001` (live-test rehearsal) or `SOP-DEP-002` (production
-transition). It adds the classification, history, evidence and versioning rules those documents do
+releases). It adds the classification, history, evidence and versioning rules those documents do
 not state, and where it is stricter it says so (§XII).
 
 ## III. Authority Level

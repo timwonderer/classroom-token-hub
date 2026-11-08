@@ -1,19 +1,21 @@
-# v2 Production Transition Runbook
+# Production Release Runbook
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.21 | 2026-11-06 | 1.20 | Normative |
+| SOP-DEP-002 | 1.22 | 2026-11-08 | 1.21 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
 
 ## I. Purpose
 
-Provide the explicit operator workflow for moving the current v2 branch from live-test candidate to production transition.
+Define the operator workflow for recurring production releases: preparation, protected deployment, verification, rollback decisions, and release evidence.
 
 ## II. Scope
 
-Production transition work for `main` after successful live testing, including Cloudflare Access gating, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
+Tagged releases and untagged hotfixes from the approved `main` lineage, with or without database migrations. The v2 production launch completed with v2.0.0 on 2026-09-26; this runbook governs subsequent releases, not an unfinished v1-to-v2 transition.
+
+For a first deployment onto a new host or a fresh-database rehearsal, use `SOP-DEP-001` and `SOP-DEP-001A`. Recurring releases use the ordered procedure in §VII.A and the release-scoped browser validation in `SOP-DEP-001B`.
 
 ## III. Authority Level
 
@@ -44,7 +46,7 @@ solo-operator exception (`SOP-DEP-001` §XIII); it is not independent review. Ea
 When a second maintainer joins, add them as required reviewers on the `production` environment and remove this
 subsection.
 
-## VI. Pre-Production Checklist
+## VI. Pre-Release Checklist
 
 1. Enable Cloudflare Access gating if the deployment requires a protected window.
 2. Verify current production backup or snapshot and test restore instructions.
@@ -232,7 +234,7 @@ advisory and are recorded as such, never as the independent verifier.
 
 Untagged hotfixes follow steps 3-12 and record any step they skip; they have no tag, so no step 13.
 
-## VIII. Post-Migration Verification
+## VIII. Post-Release Verification
 
 Verify on the host:
 
@@ -268,12 +270,12 @@ operator and rollback approver select rollback or fix-forward.
 Every failure record MUST include the requested SHA, approved lineage ref,
 migration result, service state, health result, and operator decision.
 
-## X. Transition Record Template
+## X. Release Record Template
 
-Use this template for the production transition record:
+Use this worksheet alongside the release-record requirements in §VII.A step 12. Record browser results using the applicable §VIII validation template:
 
 ```text
-Production Transition Record
+Production Release Record
 Date:
 Branch:
 Commit SHA:
@@ -329,9 +331,9 @@ Record:
 - reopen time
 - rollback decision
 
-## XII. Deferral Boundary
+## XII. Scope Boundary
 
-- This runbook is limited to launch-critical transition steps and operator records.
+- This runbook governs production release execution and operator records.
 - Broader operational taxonomy changes and route-family cleanup are outside this runbook and are tracked as issues on the [CTH Backlog](https://github.com/users/timwonderer/projects/6) project.
 - Version 1.5 deferred them until after two documents. One, `SPECS/V2_ADMIN_ROUTE_REFACTOR.md`, was never written. The other, `MAP-CLASS-002` (archived 2026-09-28), described the `class_id`-first model that INV-ARC-019 and DOM-IDEN-001 now govern. Version 1.6 changes no procedure in this runbook.
 
@@ -340,6 +342,8 @@ Record:
 ## XIII. Amendment
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.22 (2026-11-08):** Reframe the title, purpose, scope and record worksheet around recurring production releases following the completed v2 launch. Distinguish initial-host validation from release validation. The existing source path remains unchanged so published links and historical release citations continue to resolve. No release safeguards or SQL procedures change.
 
 **Version 1.21 (2026-11-06):** §VII.A steps 1 and 13: a `new` release-notes tag and a *New* section, shown after Highlights and before Fixed, for something users can now do that they could not before (a feature, a guide page). Until now a new feature had to be tagged `fixed`, which misdescribed it, or `internal`, which hid it from teachers. Owner direction, 2026-11-04.
 
