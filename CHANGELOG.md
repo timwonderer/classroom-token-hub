@@ -17,6 +17,8 @@ and this project follows semantic versioning principles.
 
 ## [2.4.4] - 2026-11-08 — Payroll runs again, and store items expire
 
+Released as `f530954` on 2026-11-08 at 07:40 UTC by release run [42459697671](https://github.com/timwonderer/classroom-token-hub/actions/runs/42459697671). No migration. Record: [DEPLOY_2026-11-08_f530954.md](docs/ops/audits/DEPLOY_2026-11-08_f530954.md).
+
 ### Added
 
 - <!-- notes: internal --> **Release notes gain a New section** (`SOP-DEP-002` 1.21). A CHANGELOG entry for something users could not do before is now tagged `new` and shown under *New*, after Highlights and before Fixed. A new feature previously had to be tagged `fixed` or `internal`. Teacher fines and the design-choices guide pages are retagged `new`.
