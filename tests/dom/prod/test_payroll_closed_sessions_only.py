@@ -247,6 +247,33 @@ def test_DOM_PROD_001__unproven_historical_partial_membership_blocks_new_settlem
     assert _paid(cid, seat_id) == _pay_for(cid, 30)
 
 
+def test_DOM_PROD_001__sub_second_sessions_do_not_block_the_next_run(app):
+    """Production incident, 2026-11-02 to 11-07: payroll refused three classes.
+
+    Since SPEC-TIME-001 1.3 a share's ``seconds`` sums the exact durations and
+    truncates once, while each interval's ``credited_seconds`` truncates alone.
+    Two 600.6-second sessions froze ``seconds=1201`` over members of 600 + 600,
+    and the next run read that frozen evidence as unprovable.
+    """
+    classroom = initialize("chemistry_p1", app)
+    cid = classroom.class_id
+    seat_id = classroom.students[0].seat.id
+    _attendance(
+        classroom, seat_id,
+        ("active", _at(0)), ("inactive", datetime(2026, 8, 26, 17, 10, 0, 600000, tzinfo=timezone.utc)),
+        ("active", _at(20)), ("inactive", datetime(2026, 8, 26, 17, 30, 0, 600000, tzinfo=timezone.utc)),
+    )
+    _run(cid, _at(40))
+    [share] = _payroll_events(cid, seat_id)[0].summary_json["pricing"]
+    assert (share["seconds"], [i["credited_seconds"] for i in share["intervals"]]) == (1201, [600, 600])
+
+    _attendance(classroom, seat_id, ("active", _at(50)), ("inactive", _at(60)))
+    second = _run(cid, _at(70))
+
+    assert second.settled_seat_ids == [seat_id]
+    assert len(_payroll_events(cid, seat_id)) == 2
+
+
 def test_DOM_PROD_001__run_payroll_route_explains_a_refused_run(client):
     app = client.application
     classroom = initialize_as_teacher("chemistry_p1", client, app)
