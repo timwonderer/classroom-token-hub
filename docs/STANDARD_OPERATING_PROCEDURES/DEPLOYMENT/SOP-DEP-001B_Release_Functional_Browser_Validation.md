@@ -91,6 +91,10 @@ in plain words.
    script or stylesheet, server-side evidence for a shared service, model, table or constraint. A feature in scope
    only as a *known problem* (§V.3) is checked where the problem shows: a browser check for a problem a browser
    observes, server-side evidence for one that shows only on the server, both where it shows in both.
+   Its expected outcome is the behaviour its report describes: the check confirms whether the reported problem
+   still occurs, no worse and no wider than reported, and the result records which. It is *failed* only if the
+   feature now behaves worse than its report describes; a release that fixes the problem changes the feature,
+   and §VI.1 or §VI.5 applies instead.
 7. A check may also name the release-suite tests that cover the feature, with their result on the recorded suite run
    (`INV-ARC-017` §V.5). Suite evidence never makes a required browser or server-side check evidenced.
 
