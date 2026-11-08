@@ -74,7 +74,7 @@ def test_changed_replay_payload_is_rejected(client, app, surface, action, quanti
     if surface == "bulk":
         assert response.get_json()["status"] == "error"
         assert "different inputs" in response.get_json()["errors"][0]
-        assert response.get_json()["errors"][0].startswith(student.seat.identity_profile.full_name + ": ")
+        assert response.get_json()["errors"][0].startswith(student.seat.public_id + ": ")
     else:
         with client.session_transaction() as session:
             assert any(category == "error" and "different inputs" in message for category, message in session["_flashes"])
@@ -102,6 +102,30 @@ def test_student_actor_cannot_call_adjustment(app):
         execute_hall_pass_adjustment(canonical_context=ctx, target_seat_id=student.seat_id,
                                     quantity=1, operation="add",
                                     idempotency_key="hall-pass:actor-check")
+    assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 0
+
+
+@pytest.mark.parametrize("surface,error_type", [("bulk", ValueError), ("detail", ValueError), ("bulk", RuntimeError)])
+def test_adjustment_hides_unexpected_exception_text(client, app, monkeypatch, surface, error_type, caplog):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    secret = "private-db-password /srv/private/config.sql"
+
+    def fail(**kwargs):
+        raise error_type(secret)
+
+    monkeypatch.setattr("app.routes.admin.execute_hall_pass_adjustment", fail)
+    response = _post(client, student, surface, "private-error")
+    if surface == "bulk":
+        assert response.status_code == (500 if error_type is RuntimeError else 200)
+        messages = response.get_json().get("errors", [response.get_json()["message"]])
+        assert response.get_json()["status"] == "error"
+    else:
+        with client.session_transaction() as session:
+            messages = [message for category, message in session["_flashes"] if category == "error"]
+    assert messages and all("hall passes" in message and "contact support" in message for message in messages)
+    assert secret not in str(messages) + caplog.text
+    assert student.seat.identity_profile.full_name not in str(messages)
     assert get_hall_pass_balance(student.seat_id, classroom.class_id) == 0
 
 
