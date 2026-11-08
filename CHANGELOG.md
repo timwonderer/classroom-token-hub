@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- <!-- notes: internal --> **Release validation is a development and operations job, never a teacher's or a student's** (#1719; `SOP-DEP-001B` v1.1, owner ruling 2026-11-08). The operator runs every release check with test classes and test accounts. Teachers and students take no part, and live classroom activity is never arranged to satisfy a release gate, even when the operator also teaches. Each row of a release record now names its evidence type (browser, server-side or suite) apart from its result: server-side evidence establishes server behaviour only, never what a page rendered or what its script did, and *not exercised* means a required check the operator could have run and did not. `SOP-DOC-001` v3.54.
+
 ## [2.4.4] - 2026-11-08 — Payroll runs again, and store items expire
 
 Released as `f530954` on 2026-11-08 at 07:40 UTC by release run [42459697671](https://github.com/timwonderer/classroom-token-hub/actions/runs/42459697671). No migration. Record: [DEPLOY_2026-11-08_f530954.md](docs/ops/audits/DEPLOY_2026-11-08_f530954.md).
