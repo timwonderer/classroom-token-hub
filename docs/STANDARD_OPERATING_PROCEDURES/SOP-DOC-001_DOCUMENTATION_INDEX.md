@@ -282,7 +282,7 @@ Their surviving content lives at:
 ## VIII. Change Notes
 
 **Version 3.55 (2026-11-08):**
-- Register SOP-DEP-001B v1.2: the required check follows what the release changed in a feature, a browser check for what a browser observes and server-side evidence of the changed behaviour for server-only changes; classroom activity in its own course may satisfy a server-side check; a check that waits on a time boundary after the release window is *pending*, not a deviation; each check is its own Backlog issue, linked from the release record.
+- Register SOP-DEP-001B v1.2: the required check follows what the release changed in a feature, a browser check for what a browser observes and server-side evidence of the changed behaviour for server-only changes; classroom activity in its own course may satisfy a server-side check; a check that waits on a time boundary after the release window is *pending*, not a deviation; a release's checks are sub-issues of one parent Backlog issue, linked from the release record.
 
 **Version 3.54 (2026-11-08):**
 - Register SOP-DEP-001B v1.1: release validation is a development and operations responsibility; teachers and students take no part and live classroom activity is never orchestrated to satisfy a gate; server-side evidence establishes server behaviour only; *not exercised* is kept for a required check the operator could have run and did not.

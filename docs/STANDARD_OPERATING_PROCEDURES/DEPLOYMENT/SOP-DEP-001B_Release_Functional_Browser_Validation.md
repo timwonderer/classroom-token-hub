@@ -106,36 +106,39 @@ one result:
 - *Pending*: the required check depends on a time boundary that falls after the release window (a class-local day,
   a bill or pay cycle, an item's expiry, a scheduled run), so it could not be run inside it. The check names the
   boundary, when it falls, and how the operator will observe it (a test class, or server-side evidence §V.A.4
-  allows). Its issue stays open until it is observed (§VIII). Waiting on time is neither a deviation nor *not
+  allows). Its sub-issue stays open until it is observed (§VIII). Waiting on time is neither a deviation nor *not
   exercised*.
 - *Not exercised*: a required check the operator could have run and did not. A check this template does not
   require, including any action by a teacher or student, is never recorded as *not exercised*.
 
 - A *failed* feature keeps the gate closed until it is fixed forward, rolled back, or the owner records why it opens
   anyway.
-- *In part*, *blocked* and *not exercised* are known risks. Each one's issue says what covers it instead (a named
+- *In part*, *blocked* and *not exercised* are known risks. Each one's sub-issue says what covers it instead (a named
   test, a later check) and stays open until the check is run. Whether they are written before or after the gate opens does not matter:
   the operator knows what was exercised when deciding, and the order of recording changes neither the decision nor
   the outcome (owner ruling, 2026-10-22).
 
 ## VIII. Recording
 
-Each in-scope feature's check is one issue on the CTH Backlog (`SOP-DEP-002` §VII.A step 12), opened before the
-release record merges and naming the release. The issue carries the check: what the release changed, the evidence
+A release's browser validation is one parent issue on the CTH Backlog (`SOP-DEP-002` §VII.A step 12), naming the
+release, with each in-scope feature's check as one of its sub-issues. All are opened before the release record
+merges, so the release's checks are never split across unrelated issues. A sub-issue carries the check: what the release changed, the evidence
 type, the result, the operator, the time (UTC), and the evidence or defect. A check already *evidenced* or *failed*
-when the record is written is recorded on its issue, and the issue is closed at once. Any other check's issue stays
-open until the check is run, and is then closed with its result.
+when the record is written is recorded on its sub-issue, and the sub-issue is closed at once. Any other check's
+sub-issue stays open until the check is run, and is then closed with its result. The parent closes when every
+sub-issue has.
 
 Results may be recorded as the checks run or afterward, from contemporaneous evidence: the request log, the
 database, the operator's notes or the session transcript. A result may not assert what its evidence does not show,
 and names what ran (route, action, status, build), not a verdict. *Operator* names who ran the check, a development
 and operations role (§V.A). Live-class activity cited under §V.A.4 is labelled as such, with no operator.
 
-The release record under `docs/ops/audits/` lists every in-scope feature and links its issue. It records the result
-each check had when the record was written and is not amended as issues close. The table is complete before the
+The release record under `docs/ops/audits/` links the parent issue, and lists every in-scope feature with its
+sub-issue. It records the result
+each check had when the record was written and is not amended as sub-issues close. The table is complete before the
 record merges:
 
-| Feature | Why in scope | Result at release | Issue |
+| Feature | Why in scope | Result at release | Sub-issue |
 |---|---|---|---|
 | | Direct / Connected / Known problem, naming the change | | |
 
@@ -149,6 +152,6 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
-| 1.2 | 2026-11-08 | The required check follows what the release changed, not what the feature has: a browser check where the release changes what a browser observes (§VI.1); server-side evidence of the changed behaviour itself, from the release build, where it changes the feature only on the server (§VI.5); both where it changes both. Server-side evidence must show the changed path and its result, not only that a request arrived. §V.A.4: classroom activity in its own course may satisfy a server-side check for what it shows; an operator who teaches while watching tables or logs is still teaching. §VII: a *pending* result for a check that waits on a time boundary after the release window; §VIII: each in-scope feature's check is its own CTH Backlog issue carrying evidence type, result, operator and evidence; a check evidenced or failed at release is closed at once, any other stays open until run; the release record lists each feature with its result at release and its issue, and is not amended as issues close. Owner ruling, 2026-11-08 (v2.4.4 payroll). |
+| 1.2 | 2026-11-08 | The required check follows what the release changed, not what the feature has: a browser check where the release changes what a browser observes (§VI.1); server-side evidence of the changed behaviour itself, from the release build, where it changes the feature only on the server (§VI.5); both where it changes both. Server-side evidence must show the changed path and its result, not only that a request arrived. §V.A.4: classroom activity in its own course may satisfy a server-side check for what it shows; an operator who teaches while watching tables or logs is still teaching. §VII: a *pending* result for a check that waits on a time boundary after the release window; §VIII: a release's browser validation is one parent CTH Backlog issue with each in-scope feature's check as a sub-issue carrying evidence type, result, operator and evidence; a check evidenced or failed at release is closed at once, any other stays open until run; the release record links the parent, lists each feature with its result at release and its sub-issue, and is not amended as sub-issues close. Owner ruling, 2026-11-08 (v2.4.4 payroll). |
 | 1.1 | 2026-11-08 | §V.A: release validation is a development and operations responsibility; teachers and students take no part, and live classroom activity is never orchestrated to satisfy a gate. §VI: a browser check for each in-scope feature with a browser surface; server-side evidence establishes server behaviour only, checks a feature with no browser surface, and never stands in for a browser check; suite tests may be named but never make a check evidenced. §VII: a row separates responsibility, evidence type and result; the result definitions are this template's own; *not exercised* is kept for a required check the operator could have run and did not. §VIII: an *Evidence type* column; *Owner* becomes *Operator*. Owner ruling, 2026-11-08 (v2.4.4). |
 | 1.0 | 2026-10-22 | Extracted from `SOP-DEP-001` §XI (2.9) as the release template: scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; results recorded during or after the checks; known risks recorded without an ordering rule. Owner rulings, 2026-10-22. |
