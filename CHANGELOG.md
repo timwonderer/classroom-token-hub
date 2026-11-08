@@ -8,6 +8,8 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [2.4.4] - 2026-11-08 — Payroll runs again, and store items expire
+
 ### Added
 
 - <!-- notes: internal --> **Release notes gain a New section** (`SOP-DEP-002` 1.21). A CHANGELOG entry for something users could not do before is now tagged `new` and shown under *New*, after Highlights and before Fixed. A new feature previously had to be tagged `fixed` or `internal`. Teacher fines and the design-choices guide pages are retagged `new`.
