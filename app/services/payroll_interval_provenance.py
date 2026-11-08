@@ -1,7 +1,9 @@
 """Pure PROD original membership proof (DOM-PROD-001, SPEC-PROD-001 §VI)."""
+from datetime import datetime
+
 from app.models import PayrollEvent
 from app.services.attendance_service import list_attendance_intervals
-from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, TemporalResolutionError, canonical_temporal_resolver
 
 
 def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
@@ -33,7 +35,10 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
         try:
             for share in shares:
                 sources = share["intervals"]
-                if sum(i["credited_seconds"] for i in sources) != share["seconds"]:
+                # SPEC-TIME-001 1.3: the share truncates once over exact durations.
+                if sum(i["credited_seconds"] for i in sources) != share["seconds"] and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=[
+                        (datetime.fromisoformat(i["opening_timestamp"]), datetime.fromisoformat(i["closing_timestamp"]))
+                        for i in sources]).elapsed_seconds != share["seconds"]:
                     valid = False
                 for source in sources:
                     key = (source["opening_event_id"], source["closing_event_id"])
@@ -41,7 +46,7 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
                     if interval is None or source != interval.as_evidence() or key in mentioned:
                         valid = False
                     mentioned.append(key)
-        except (KeyError, TypeError, ValueError, AttributeError):
+        except (KeyError, TypeError, ValueError, AttributeError, TemporalResolutionError):
             valid = False
         if not shares or not mentioned:
             valid = False

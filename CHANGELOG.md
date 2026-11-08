@@ -17,6 +17,10 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: internal --> **Release records no longer list each class's balances or name classes by internal id.** `SOP-DEP-002` v1.20: the step 8 balance baseline is one summary row (totals, mismatched rows, and a fingerprint of the per-class table that step 10 compares), and a record that must point at one class names it by `class_public_id` (`DOM-OPS-001` §7). Records already published are unchanged. `SOP-DOC-001` v3.51.
 
+### Fixed
+
+- <!-- notes: fixed, highlight --> **Payroll runs again for every class.** Since v2.4.0, a payroll record covering several work sessions could store a total a second or two longer than its sessions added up to, because the total is rounded once while each session is rounded on its own (`SPEC-TIME-001` 1.3). The next run read that record as unprovable and refused the whole class, so three classes received no pay from November 2–3 until this fix, both on schedule and when a teacher ran payroll, and a fourth would have stopped at its next run. Payroll now accepts the once-rounded total (`SPEC-PROD-001` 1.5), and the next run pays all the work students did in the meantime. No payroll record or amount was changed. `SOP-DOC-001` v3.53.
+
 ## [2.4.3] - 2026-11-05 — Teachers can fine students
 
 Released as `135dc67` on 2026-11-05 at 07:28 UTC by release run [41987369519](https://github.com/timwonderer/classroom-token-hub/actions/runs/41987369519). Migration `a0faf8b2a35d`. Record: [DEPLOY_2026-11-05_135dc67.md](docs/ops/audits/DEPLOY_2026-11-05_135dc67.md). Also applies `a91c3d7e5f20`.

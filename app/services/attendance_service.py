@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import event
 
@@ -23,6 +24,7 @@ from app.services.hall_pass_status_service import (
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
+    TemporalResolutionError,
     canonical_temporal_resolver,
 )
 
@@ -513,14 +515,20 @@ def calculate_seat_payroll_intervals(
                 raise ValueError("Missing frozen pricing shares.")
             for share in shares:
                 sources = share["intervals"]
-                if not isinstance(sources, list) or not sources or sum(i["credited_seconds"] for i in sources) != share["seconds"]:
+                if not isinstance(sources, list) or not sources:
+                    raise ValueError("Invalid frozen membership.")
+                # SPEC-TIME-001 1.3: the share sums exact durations and truncates once,
+                # so it may exceed its separately truncated members by under a second each.
+                if sum(i["credited_seconds"] for i in sources) != share["seconds"] and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=[
+                        (datetime.fromisoformat(i["opening_timestamp"]), datetime.fromisoformat(i["closing_timestamp"]))
+                        for i in sources]).elapsed_seconds != share["seconds"]:
                     raise ValueError("Invalid frozen membership.")
                 for source in sources:
                     key = (source["opening_event_id"], source["closing_event_id"])
                     if key in settled_pairs or pair_evidence.get(key) != source:
                         raise ValueError("Unprovable frozen source pair.")
                     settled_pairs.add(key)
-        except (KeyError, TypeError, ValueError, AttributeError):
+        except (KeyError, TypeError, ValueError, AttributeError, TemporalResolutionError):
             invalid_evidence = True
     paid_through = max((e.recorded_at for e in historical), default=None)
     if invalid_evidence:
