@@ -137,7 +137,7 @@ def login():
     return render_template("system_admin_login.html", form=form)
 
 
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def _complete_sysadmin_login(form):
     """The validated sysadmin login submission."""
     # Ingress gate: the widget already renders here (the global
@@ -263,7 +263,7 @@ def passkey_register_start():
 
 @sysadmin_bp.route('/passkey/register/finish', methods=['POST'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_register_finish():
     """
@@ -346,7 +346,7 @@ def passkey_auth_start():
 
 
 @sysadmin_bp.route('/passkey/auth/finish', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("20 per minute")
 def passkey_auth_finish():
     """
@@ -402,7 +402,7 @@ def passkey_auth_finish():
 
 @sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['DELETE'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_delete(credential_id):
     """Delete a passkey."""
@@ -777,7 +777,7 @@ def view_issue(issue_ref):
 
 @sysadmin_bp.route('/issues/<issue_ref>/update', methods=['POST'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def update_issue(issue_ref):
     """Move a teacher's direct report through its lifecycle.
 
@@ -1114,7 +1114,7 @@ def start_review_escalated_issue(issue_ref):
 
 @sysadmin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def resolve_escalated_issue(issue_ref):
     """Mark the technical fix complete and return the ticket to the teacher for final review."""
     issue_id = _resolve_issue_id_from_ref(issue_ref)
@@ -1124,7 +1124,7 @@ def resolve_escalated_issue(issue_ref):
         Issue.id == issue_id,
         escalated_clause(),
         Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
-    ).first_or_404()
+    ).populate_existing().with_for_update().first_or_404()
 
     resolution_note = request.form.get('resolution_note', '').strip()
     sysadmin_user_id = g.canonical_context.user_id

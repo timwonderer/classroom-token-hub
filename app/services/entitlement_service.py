@@ -12,7 +12,9 @@ from app.extensions import db
 from app.models import ClassEconomy, EntitlementEvent, Seat, StoreProduct
 from app.feats.base import generate_correlation_id
 from app.services.entitlement_read_service import (
+    _STORE_EXPIRING_TYPES,
     ended_entitlement_ids,
+    entitlement_past_expiry,
     entitlements_with_pending_action,
     get_entitlement_balance,
     get_entitlement_lineage_terminal_event,
@@ -54,6 +56,9 @@ def lock_hall_pass_holder(seat_id: int, class_id: str) -> Seat:
     approval and a revocation from both ending the same pass. Every such writer
     takes this lock on the holder's seat row first and only then reads whether
     the pass is spent. It is the same row the attendance writers lock.
+
+    Store expiry and redemption requests take it too, for every item type, so
+    a request and the expiry sweep cannot both land on one item.
     """
     seat = Seat.query.filter_by(id=seat_id, class_id=class_id).with_for_update().first()
     if seat is None:
@@ -456,7 +461,8 @@ def _available_hall_pass_grant(seat_id: int, class_id: str) -> EntitlementEvent 
     # 2026-10-09): only that request's approval or rejection resolves it.
     unavailable = ended_entitlement_ids(class_id, ids) | entitlements_with_pending_action(class_id, ids)
     for grant in grants:
-        if grant.entitlement_id not in unavailable:
+        # Expired between sweeps still counts as expired (FEAT-STOR-002 §VIII).
+        if grant.entitlement_id not in unavailable and not entitlement_past_expiry(grant):
             return grant
     return None
 
@@ -558,10 +564,12 @@ def expire_entitlement(
     Idempotent: an already-EXPIRED lineage returns its existing event. A conflicting
     terminal disposition (e.g. REVOKED) fails closed.
     """
-    if entitlement_type == "HALL_PASS":
+    # A request sent before the boundary stays with the teacher (DOM-STORE-001
+    # §IX); the lock makes that check and a concurrent request mutually exclusive.
+    if entitlement_type in _STORE_EXPIRING_TYPES:
         lock_hall_pass_holder(target_seat_id, class_id)
         if entitlements_with_pending_action(class_id, [entitlement_id]):
-            raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
+            raise ValueError(f"Entitlement {entitlement_id} has a request waiting and cannot be ended")
     existing = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if existing is not None:
         if existing.event_type == "EXPIRED":

@@ -24,12 +24,17 @@ Used by:
 from __future__ import annotations
 
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Optional
 
 import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import EntitlementEvent, HallPassLog
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION,
+    canonical_temporal_resolver,
+)
 
 
 def get_seat_ids_with_purchase_grants(
@@ -83,14 +88,14 @@ def get_entitlement_balance(
     - seat_id must be valid in class
     - class_id must exist
     - entitlement_type must be one of: HALL_PASS, INSURANCE, PRIVILEGE, IMMEDIATE_USE, DELAYED_USE, COLLECTIVE_GOAL
-    - If reference_time_utc provided, used for expiration window checks (TODO)
+    - reference_time_utc, when given, is the instant expiry is judged at
 
     Args:
         seat_id: Target seat
         class_id: Class scope
         entitlement_type: Entitlement type (see preconditions)
         product_id: Optional product filter
-        reference_time_utc: Optional timestamp for expiration checks (not yet used)
+        reference_time_utc: Time to judge expiry at (default: now)
 
     Returns:
         Available count as integer (may be negative if overclaimed)
@@ -143,6 +148,20 @@ def get_entitlement_balance(
         )
         terminal_count += logged_only
 
+    # Past its expiry an item is gone before the hourly sweep records it
+    # (FEAT-STOR-002 §VIII), unless a request sent in time is still waiting.
+    if entitlement_type in _STORE_EXPIRING_TYPES:
+        open_grants = granted.with_entities(EntitlementEvent).filter(
+            EntitlementEvent.acquisition_type != "PERK",
+        ).all()
+        ids = [grant.entitlement_id for grant in open_grants]
+        if ids:
+            closed = ended_entitlement_ids(class_id, ids) | entitlements_with_pending_action(class_id, ids)
+            terminal_count += sum(
+                1 for grant in open_grants
+                if grant.entitlement_id not in closed and entitlement_past_expiry(grant, reference_time_utc)
+            )
+
     return granted_count - terminal_count
 
 
@@ -157,20 +176,17 @@ def is_entitlement_exercisable(
     Preconditions:
     - entitlement_id must exist with event_type='GRANTED'
     - class_id must be valid
-    - If reference_time_utc provided, used for expiration checks (TODO: not yet implemented)
+    - reference_time_utc, when given, is the instant expiry is judged at
 
     Args:
         entitlement_id: The entitlement lineage ID
         class_id: Class scope
-        reference_time_utc: Time to check expiration against (not yet used)
+        reference_time_utc: Time to check expiration against (default: now)
 
     Returns:
-        True if entitlement has no terminal event (can still be used)
+        True if the lineage has not ended and is not past its expiry
 
     Purity: Pure (read-only query)
-
-    Note: Expiration window checks not yet implemented. Currently only checks
-          for terminal events (CONSUMED, EXPIRED, REVOKED).
     """
     # Check if any terminal event exists for this entitlement
     terminal_event = (
@@ -186,10 +202,12 @@ def is_entitlement_exercisable(
     if terminal_event or hall_pass_use_log(entitlement_id, class_id):
         return False
 
-    # TODO: Check if expired per policy window
-    # (requires reading policy configuration)
-
-    return True
+    grant = (
+        EntitlementEvent.query
+        .filter_by(entitlement_id=entitlement_id, class_id=class_id, event_type="GRANTED")
+        .first()
+    )
+    return not entitlement_past_expiry(grant, reference_time_utc)
 
 
 def get_entitlement_history(
@@ -809,6 +827,68 @@ def latest_entitlement_grant(entitlement_id: str):
     )
 
 
+# Types whose Store expiry is the purchased version's ``auto_expiry_days``
+# (SPEC-STORE-001 §IV). Immediate use has none; insurance and collective goals
+# end on their own boundaries.
+_STORE_EXPIRING_TYPES = frozenset({"DELAYED_USE", "HALL_PASS", "PRIVILEGE"})
+
+
+def entitlement_expires_at(grant) -> Optional[datetime]:
+    """The instant a granted entitlement stops being exercisable, or None.
+
+    Counted in class-local calendar days from the grant, against the exact
+    version frozen on it, so a later edit never moves an existing holding
+    (FEAT-STOR-002 §VIII). A rent perk ends at its rent boundary instead
+    (SPEC-STORE-001 §IV), and a grant without a frozen version has no provable
+    boundary.
+    """
+    if (
+        grant is None
+        or grant.acquisition_type == "PERK"
+        or grant.entitlement_type not in _STORE_EXPIRING_TYPES
+    ):
+        return None
+    policy_uuid = (grant.payload or {}).get("policy_uuid")
+    if not policy_uuid:
+        return None
+    from app.services.store_service import get_product_version
+
+    version = get_product_version(grant.class_id, policy_uuid)
+    if version is None or not version.auto_expiry_days:
+        return None
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=grant.class_id),
+        primitive="shift_calendar_days",
+        timestamp=grant.timestamp,
+        days=version.auto_expiry_days,
+    ).shifted_timestamp_utc
+
+
+def entitlement_past_expiry(
+    grant, reference_time_utc: Optional[datetime] = None, *, expires_at: Optional[datetime] = None,
+) -> bool:
+    """True once ``entitlement_expires_at`` has been reached (pass it if already known)."""
+    if expires_at is None:
+        expires_at = entitlement_expires_at(grant)
+    if expires_at is None:
+        return False
+    context = SimpleNamespace(class_id=grant.class_id)
+    now = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=context,
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
+    return not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=context,
+        primitive="later_than",
+        candidate=expires_at,
+        reference=now,
+    ).is_later
+
+
 def entitlement_terminal_event(entitlement_id: str):
     """Return the most recent terminal event for an entitlement lineage."""
     return (
@@ -888,6 +968,11 @@ def derive_display_status(entitlement_id: str) -> str:
     grant = latest_entitlement_grant(entitlement_id)
     if grant and hall_pass_use_log(entitlement_id, grant.class_id):
         return "consumed"
+    # Past its boundary it is expired whether or not the expiry sweep has
+    # written EXPIRED yet. A request already waiting stays governed by its
+    # submission (DOM-STORE-001 §IX), so "processing" is decided first.
+    if grant and entitlement_past_expiry(grant):
+        return "expired"
     if grant:
         return "purchased"
     return "unknown"

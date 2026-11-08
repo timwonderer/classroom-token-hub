@@ -264,8 +264,8 @@
             {% endfor %}
         </div>
         {% else %}
-        {% call cards.alert_card('info', 'No purchased items', icon='inventory_2', heading_tag='h2') %}
-            <p class="mb-0">You haven't purchased any items yet. Browse the store to get started!</p>
+        {% call cards.alert_card('info', 'No items to use', icon='inventory_2', heading_tag='h2') %}
+            <p class="mb-0">You have no items to use right now. Browse the store to get started!</p>
         {% endcall %}
         {% endif %}
     </div>
@@ -420,6 +420,18 @@
     }
 
     let currentItemData = {};
+    // Names one purchase command (FEAT-STOR-001 §IX). The same item and quantity
+    // keep their id until the server answers, across a double-click, a retry after
+    // a lost response, or closing and reopening the dialog, so the server replays
+    // instead of charging twice. A different purchase or an answer starts a new one.
+    let unansweredPurchase = null;
+    function purchaseRequestIdFor(policyUuid, quantity) {
+        const intent = `${policyUuid}:${quantity}`;
+        if (!unansweredPurchase || unansweredPurchase.intent !== intent) {
+            unansweredPurchase = { intent, id: crypto.randomUUID() };
+        }
+        return unansweredPurchase.id;
+    }
 
     // Buy Item Modal Logic
     const buyItemModal = document.getElementById('buyItemModal');
@@ -640,10 +652,15 @@
             body: JSON.stringify({
                 policy_uuid: policyUuid,
                 passphrase: passphrase,
-                quantity: quantity
+                quantity: quantity,
+                client_purchase_id: purchaseRequestIdFor(policyUuid, quantity)
             })
         })
-        .then(response => response.json())
+        .then(response => response.json().then(data => {
+            // A 5xx may have committed; keep the id so a retry replays it.
+            if (response.status < 500) unansweredPurchase = null;
+            return data;
+        }))
         .then(data => {
             if (data.status === 'success') {
                 const modal = bootstrap.Modal.getInstance(buyItemModal);

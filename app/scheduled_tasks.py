@@ -13,7 +13,7 @@ from app.services.tlcp import class_log_ref, seat_log_ref
 # from app.utils.insurance_billing import get_insurance_billing_snapshot
 
 
-@requires_feat_context("FEAT-PROD-001")
+@requires_feat_context("FEAT-PROD-001", key_per_call=True)
 def enforce_daily_limits_job():
     """
     Scheduled job that checks active seats and records an inactive PROD event
@@ -167,7 +167,7 @@ def enforce_daily_limits_job():
         logger.error(f"Daily-limit enforcement job failed: {e}", exc_info=True)
 
 
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def database_maintenance_job():
     """
     Scheduled job that performs nightly database maintenance tasks.
@@ -237,7 +237,11 @@ def run_rent_reconciliation_job():
             if not is_feature_enabled(class_id, "rent"):
                 skipped += 1
                 continue
-            result = execute_reconcile_rent(class_id)
+            # Each sweep is its own command; DOM-OBL-001 §V.7 succession conflict,
+            # not this key, stops two sweeps from deriving the same cycle twice.
+            result = execute_reconcile_rent(
+                class_id, idempotency_key=f"rent-reconcile:{class_id}:{secrets.token_hex(12)}"
+            )
             reconciled += 1
             if result.cycles_created or result.perks_expired:
                 logger.info(
@@ -772,6 +776,111 @@ def run_savings_interest_job():
 SCHEDULED_JOB_MAX_INSTANCES = 1
 
 
+def run_store_item_expiry_job():
+    """Record EXPIRED for Store items whose ``auto_expiry_days`` boundary passed.
+
+    FEAT-STOR-002 §VIII: expiry is lawful once canonical time proves the
+    product's finite validity boundary was reached and the lineage has not
+    ended. The boundary is ``entitlement_expires_at`` (grant + the frozen
+    version's days, class-local); the event is stamped with it, not with the
+    moment this sweep ran. A lineage with a redemption request waiting is left
+    alone: that request is governed by when it was submitted (DOM-STORE-001
+    §IX), and if it is returned unused a later sweep expires it. Each expiry is
+    its own FEAT-STOR-002 transaction, keyed by lineage, so a failure is
+    isolated and a re-run is a no-op.
+    """
+    from app.extensions import db
+    from app.feats.base import FEATContext
+    from app.models import EntitlementEvent, StoreProduct
+    from app.services import entitlement_service
+    from app.services.entitlement_read_service import (
+        _STORE_EXPIRING_TYPES,
+        entitlement_expires_at,
+        entitlement_past_expiry,
+        entitlements_with_pending_action,
+        used_hall_pass_ids,
+    )
+    from app.services.identity_service import resolve_teacher_seat_for_class
+    from sqlalchemy.orm import aliased
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting scheduled store item expiry job")
+
+    ended = aliased(EntitlementEvent)
+    try:
+        # Only versions with an expiry can expire anything, in any state: a
+        # holding keeps the terms of the version it was granted under, retired
+        # by a later edit or not (FEAT-STOR-002 §VIII).
+        expiring_versions = (
+            db.session.query(StoreProduct.policy_uuid)
+            .filter(StoreProduct.auto_expiry_days > 0)
+            .scalar_subquery()
+        )
+        grants = (
+            EntitlementEvent.query
+            .filter(
+                EntitlementEvent.event_type == "GRANTED",
+                EntitlementEvent.payload["policy_uuid"].as_string().in_(expiring_versions),
+                EntitlementEvent.entitlement_type.in_(_STORE_EXPIRING_TYPES),
+                EntitlementEvent.acquisition_type != "PERK",
+                ~db.session.query(ended.event_id).filter(
+                    ended.entitlement_id == EntitlementEvent.entitlement_id,
+                    ended.class_id == EntitlementEvent.class_id,
+                    ended.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
+                ).exists(),
+            )
+            .order_by(EntitlementEvent.class_id.asc(), EntitlementEvent.timestamp.asc())
+            .all()
+        )
+        due = []
+        for grant in grants:
+            expires_at = entitlement_expires_at(grant)
+            if entitlement_past_expiry(grant, expires_at=expires_at):
+                due.append((grant, expires_at))
+    except Exception:
+        db.session.rollback()
+        logger.exception("Store item expiry job could not enumerate holdings")
+        return
+
+    expired = skipped = failed = 0
+    for grant, expires_at in due:
+        try:
+            ids = [grant.entitlement_id]
+            if (
+                entitlements_with_pending_action(grant.class_id, ids)
+                or used_hall_pass_ids(grant.class_id, ids)
+            ):
+                skipped += 1
+                continue
+            idempotency_key = f"store-expiry:{grant.entitlement_id}"
+            with FEATContext("FEAT-STOR-002", idempotency_key=idempotency_key):
+                entitlement_service.expire_entitlement(
+                    entitlement_id=grant.entitlement_id,
+                    class_id=grant.class_id,
+                    target_seat_id=grant.target_seat_id,
+                    actor_seat_id=resolve_teacher_seat_for_class(grant.class_id).id,
+                    product_id=grant.product_id,
+                    entitlement_type=grant.entitlement_type,
+                    acquisition_type=grant.acquisition_type,
+                    correlation_id=f"corr_{idempotency_key}",
+                    payload={
+                        "source": "run_store_item_expiry_job",
+                        "policy_uuid": (grant.payload or {}).get("policy_uuid"),
+                    },
+                    effective_at=expires_at,
+                )
+            expired += 1
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception("Store item expiry failed for entitlement %s", grant.entitlement_id)
+
+    logger.info(
+        "Store item expiry job completed. Expired %s, skipped %s, failed %s",
+        expired, skipped, failed,
+    )
+
+
 class ScheduledJobSpec(NamedTuple):
     """One scheduled job's registration, declared apart from the scheduler.
 
@@ -877,6 +986,13 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         func=enforce_daily_limits_job,
         trigger='cron',
         trigger_kwargs={'minute': 12},
+    ),
+    ScheduledJobSpec(
+        id='store_item_expiry',
+        name='Expire Store items past their expiry',
+        func=run_store_item_expiry_job,
+        trigger='cron',
+        trigger_kwargs={'minute': 3},
     ),
     ScheduledJobSpec(
         id='database_maintenance',
