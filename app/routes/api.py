@@ -465,8 +465,12 @@ def use_item():
             action_payload=action_payload,
             idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
         )
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
+    except ValueError:
+        # Refused under the holder lock: expired, used, or already requested.
+        return jsonify({
+            "status": "error",
+            "message": "This item can't be used right now. It may have expired or already have a request waiting.",
+        }), 400
     return jsonify({"status": "success", "message": f"You have requested to use {store_item.name}. Awaiting admin approval."})
 
 
