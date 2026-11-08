@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.12    | 2026-10-26     | 2.11 | Normative |
+| SOP-DEP-001      | 2.13    | 2026-11-04     | 2.12 | Normative |
 
 ## I. Purpose
 
@@ -17,10 +17,12 @@ policy. A successful boot, or a passing subset of routes, is not certification.
 ## II. Scope
 
 Test deployments of the repository `main` branch onto the deployment host, from
-release gate through go/no-go decision. Production transition after a successful
-live test is governed by SOP-DEP-002.
+release gate through go/no-go decision. Recurring production releases are governed
+by SOP-DEP-002. The v2 launch completed on 2026-09-26; this runbook remains applicable
+to initial-host deployments and controlled rehearsals. Its fresh-database steps
+are not instructions to recreate an existing production database.
 
-Version 2.0 is a rewrite. Version 1.2 described the pre-v2 identity model
+Version 2.0 of this runbook was a rewrite. Version 1.2 described the pre-v2 identity model
 (`ClassMembership`, `TeacherBlock`), a fixed 664-test baseline, a `join_code`
 form of the student switch-class route, a `/health/deep` endpoint, and record
 storage under `docs/LOGS/` — each of which is now false or prohibited. It was
@@ -54,8 +56,9 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 - Host access: the approved Tailscale/SSH path to the deployment host.
 - Service: `classroom-economy` systemd unit, fronted by Nginx, with PostgreSQL
   on the host.
-- The v1 application, its service units, and its database are already removed;
-  PostgreSQL and the Nginx holding page remain.
+- The original v1 removal and Nginx holding page were pre-launch host state.
+  For an existing host, establish its current service, deployed revision and database
+  from the release record and fresh read-only checks; do not assume an empty host.
 - Local dev and test databases are never deployment targets. The test database
   is addressed only by `TEST_DATABASE_URL` and its name contains `test`.
 
@@ -218,7 +221,7 @@ never print or commit values.
   import confirmations (SPEC-CLASS-001), independent of all other keys. If it is
   missing or blank, every export and import is refused. Rotation invalidates every outstanding
   configuration file and confirmation.
-- `DATABASE_URL` — the new v2 database only.
+- `DATABASE_URL` — the explicitly verified database for this deployment target.
 - `FLASK_ENV=production`, and `FLASK_APP` where CLI operations require it.
 - `PASSWORDLESS_API_KEY` / `PASSWORDLESS_API_PUBLIC` — deployment pair.
 - `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY` — pair registered for the
@@ -486,6 +489,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.13 | 2026-11-04 | Clarify initial-host/rehearsal scope after the completed v2 launch, replace the stale holding-page assumption with target verification, and point recurring releases to SOP-DEP-002. |
 | 2.12 | 2026-10-26 | §VI secrets: add `CONFIGURATION_EXPORT_KEY`, required by class configuration export/import (SPEC-CLASS-001). If it is missing or blank, the page loads but every transfer is refused, which the browser check before release found. |
 | 2.11 | 2026-10-23 | §VI Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23. |
 | 2.10 | 2026-10-22 | §XI's checklist is extracted into two templates with separate mechanisms: `SOP-DEP-001A` (initial deployment: every item evidenced before the gate opens) and `SOP-DEP-001B` (release: scope from the diff, covering directly changed, connected and known-problem features; out-of-scope features need no row). Both allow results recorded after the checks from contemporaneous evidence. §XI.A stays here. §XIII, §XV and §XVI cite the templates; §XIII drops the before-go/no-go ordering for known risks. Owner rulings, 2026-10-22 (v2.3.0). |
