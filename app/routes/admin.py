@@ -3781,6 +3781,20 @@ def student_detail_public(actor_public_id):
                          rent_view=rent_view)
 
 
+def _hall_pass_adjustment_error_message(error):
+    """Return only reviewed validation messages across HTTP (INV-ARC-005)."""
+    messages = (
+        "Hall-pass quantity must be between 1 and 100 per adjustment",
+        "This adjustment request was already used with different inputs",
+        "Not enough unused teacher-granted hall passes. Purchased passes, rent perks, "
+        "and passes with a request waiting cannot be removed here.",
+    )
+    for message in messages:
+        if str(error) == message:
+            return message
+    return "Unable to adjust hall passes. Please try again or contact support."
+
+
 @admin_bp.route('/student/<seat_public_id>/adjust-hall-pass-entitlements', methods=['POST'])
 @admin_required
 def adjust_hall_pass_entitlements(seat_public_id):
@@ -3823,7 +3837,7 @@ def adjust_hall_pass_entitlements(seat_public_id):
             idempotency_key=f"hall-pass-adjust:{canonical_context.class_id}:{target_seat.id}:{request_id}",
         )
     except ValueError as exc:
-        flash(str(exc), "error")
+        flash(_hall_pass_adjustment_error_message(exc), "error")
     else:
         verb = "Added" if action == "add" else "Removed"
         flash(f"{verb} {quantity} hall pass(es) for {student_name}.", "success")
@@ -8657,11 +8671,11 @@ def bulk_adjust_hall_pass_entitlements():
             )
 
             if not student:
-                errors.append(f"Student {seat_id} not found")
+                errors.append("Student not found")
                 continue
 
             if not verify_teacher_owns_class(student.class_id, g.canonical_context.user_id):
-                errors.append(f"Student {seat_id} not found")
+                errors.append("Student not found")
                 continue
 
             try:
@@ -8671,8 +8685,7 @@ def bulk_adjust_hall_pass_entitlements():
                     idempotency_key=f"hall-pass-adjust:{student.class_id}:{student.id}:{request_id}",
                 )
             except ValueError as exc:
-                label = student.identity_profile.full_name if student.identity_profile else "Unnamed student"
-                errors.append(f"{label}: {exc}")
+                errors.append(f"{student.public_id}: {_hall_pass_adjustment_error_message(exc)}")
                 continue
 
             updated.append(student.identity_profile.full_name if student.identity_profile else "Unnamed student")
@@ -8705,7 +8718,7 @@ def bulk_adjust_hall_pass_entitlements():
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Bulk hall pass update failed: {e}")
+        current_app.logger.error("Bulk hall pass update failed (%s)", type(e).__name__)
         return jsonify({
             "status": "error",
             "message": "Failed to update hall passes. Please try again or contact support."
