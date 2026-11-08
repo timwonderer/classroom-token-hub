@@ -44,7 +44,12 @@ def test_share_seconds_truncated_once_across_members_still_allocates():
     result = allocate_payroll_cents([{"seconds": 1201, "pay_rate_per_minute": "0.05", "intervals": members}],
         original_credit="1.00", allocation_version=1)
     assert sum(result.values()) == 100
-    with pytest.raises(AllocationIntegrityError):  # a total the members cannot reproduce
+
+
+def test_share_seconds_the_members_cannot_reproduce_are_denied():
+    members = [dict(source(1, 2, 600, "2026-10-01T12:10:00.600000+00:00"), opening_timestamp="2026-10-01T12:00:00+00:00"),
+        dict(source(3, 4, 600, "2026-10-01T12:30:00.600000+00:00"), opening_timestamp="2026-10-01T12:20:00+00:00")]
+    with pytest.raises(AllocationIntegrityError, match="Membership does not sum"):
         allocate_payroll_cents([{"seconds": 1202, "pay_rate_per_minute": "0.05", "intervals": members}],
             original_credit="1.00", allocation_version=1)
 
@@ -53,7 +58,7 @@ def test_nonzero_share_over_sub_second_members_is_denied():
     """Two 0.6 s members truncate to 0 + 0 under a 1-second, $1.00 share: no weight to split by."""
     members = [dict(source(1, 2, 0, "2026-10-01T12:00:00.600000+00:00"), opening_timestamp="2026-10-01T12:00:00+00:00"),
         dict(source(3, 4, 0, "2026-10-01T12:01:00.600000+00:00"), opening_timestamp="2026-10-01T12:01:00+00:00")]
-    with pytest.raises(AllocationIntegrityError):
+    with pytest.raises(AllocationIntegrityError, match="Nonzero share has no credited membership"):
         allocate_payroll_cents([{"seconds": 1, "pay_rate_per_minute": "60", "intervals": members}],
             original_credit="1.00", allocation_version=1)
 

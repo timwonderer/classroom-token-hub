@@ -8,7 +8,7 @@ from datetime import datetime
 from app.extensions import db
 from app.models import PayrollEvent
 from app.services.attendance_service import list_attendance_interval_evidence, elapsed_attendance_seconds
-from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, TemporalResolutionError, canonical_temporal_resolver
 
 
 class HistoricalAssessmentDenied(ValueError):
@@ -153,7 +153,7 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
         cutoff = max((e.recorded_at for e in prior), default=None)
         legacy = [e.recorded_at for e in prior if not isinstance(e.summary_json,dict) or e.summary_json.get('settlement_rule') != 'closed_sessions']
         candidates = []
-        groups = {}
+        groups, segments = {}, {}
         reasons = ['SOURCE_CREATION_VISIBILITY_UNAVAILABLE', 'ORIGINAL_WRITER_ATTRIBUTION_UNAVAILABLE']
         for interval in intervals:
             if (interval.closing_event_id is None
@@ -181,6 +181,7 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                     reasons.append('SETTING_NOT_VISIBLE_AT_PAYMENT')
                 key = (setting.policy_locator, setting.rate_per_minute)
                 groups[key] = groups.get(key, 0) + seconds
+                segments.setdefault(key, []).append((start, interval.closed_at))
         shares = summary.get('pricing')
         pricing, consistency = [], 'UNAVAILABLE'
         pricing_status = 'UNAVAILABLE'
@@ -194,7 +195,10 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                     pricing.append(HistoricalShare(share['policy_uuid'], share['seconds'], share['pay_rate_per_minute']))
                 # Decimal equality is monetary territory: strings are retained unchanged,
                 # policy+seconds match is a PROD business consistency conclusion only.
-                consistency = 'MATCH' if sorted((p.policy_locator,p.credited_seconds) for p in pricing) == sorted((p,s) for (p,_),s in groups.items()) else 'MISMATCH'
+                # A share sums its members (before SPEC-TIME-001 1.3) or truncates once over them (since).
+                recorded = sorted((p.policy_locator,p.credited_seconds) for p in pricing)
+                consistency = 'MATCH' if recorded in (sorted((p,s) for (p,_),s in groups.items()),
+                    sorted((p,elapsed_attendance_seconds(ctx, segments[(p,r)])) for (p,r) in groups)) else 'MISMATCH'
                 if 'MISSING_OR_AMBIGUOUS_SETTING' in reasons or 'SETTING_NOT_VISIBLE_AT_PAYMENT' in reasons:
                     consistency = 'UNAVAILABLE'
                 pricing_status = 'RECORDED_INPUTS_ONLY'
@@ -227,7 +231,7 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                             or any(canonical.get((s['opening_event_id'],s['closing_event_id'])) != s for s in sources)
                             or {(s['opening_event_id'],s['closing_event_id']) for s in sources} != {(c[0],c[1]) for c in candidates}):
                         consistency = 'MISMATCH'; reasons.append('RECORDED_MEMBERSHIP_MISMATCH')
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, TemporalResolutionError):
                 pricing = []; consistency = 'UNAVAILABLE'; reasons.append('MALFORMED_PRICING')
         elif rule is CLOSED_RULE and groups and not any(r in {'MISSING_OR_AMBIGUOUS_SETTING','SETTING_NOT_VISIBLE_AT_PAYMENT'} for r in reasons):
             pricing = [HistoricalShare(p,s,r) for (p,r),s in groups.items()]

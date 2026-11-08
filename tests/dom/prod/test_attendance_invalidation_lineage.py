@@ -16,7 +16,7 @@ from app.utils.audit_verifier import PROTECTED_FIELDS_BY_TABLE, verified_creatio
 from tests.helpers.classroom_initializer import initialize
 
 
-def _sources(app, count=1):
+def _sources(app, count=1, close_after=timedelta(minutes=2)):
     classroom = initialize('chemistry_p1', app)
     ctx = CanonicalContext(classroom.teacher_user.id, classroom.class_id, classroom.teacher_seat.id, 'teacher')
     target = classroom.students[0].seat.id
@@ -28,7 +28,7 @@ def _sources(app, count=1):
             idempotency_key=f'guard-open:{index}', reference_time_utc=instant).session
         closing = record_attendance_session(ctx=ctx, target_seat_id=target, status='inactive', mechanism='system',
             reason_code=AttendanceReasonCode.DONE_FOR_DAY, idempotency_key=f'guard-close:{index}',
-            reference_time_utc=instant + timedelta(minutes=2)).session
+            reference_time_utc=instant + close_after).session
         pairs.append((opening.id, closing.id))
     return classroom, ctx, target, pairs
 
