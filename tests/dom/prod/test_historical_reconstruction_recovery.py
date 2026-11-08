@@ -172,18 +172,22 @@ def _create(app, tmp_path, *, scenario, rate=None):
         )
         correction = r"""
 import json,os
+from dataclasses import replace
+from datetime import datetime,timezone
 from flask_migrate import upgrade
 from app import app,db
 from app.feats.base import FEATContext
 from app.feats.prod import record_payroll_event
-from app.services.payroll.corrections import plan_class_corrections
+from app.services.payroll.corrections import PROD_PAY_001,plan_class_corrections
 from app.services.context_resolver import CanonicalContext
 from app.services.ledger_settlement_service import settle_balances
 with app.app_context():
     upgrade()
     result=json.loads(os.environ['HISTORICAL_FIXTURE'])
     ctx=CanonicalContext(result['user_id'],result['class_id'],result['actor'],'teacher')
-    postings=plan_class_corrections(ctx=ctx,seat_ids={result['target']})
+    # This writer ran while the incident was open. expires_at only gates the plan; the posting keeps the real incident id.
+    open_incident=replace(PROD_PAY_001,expires_at=datetime(9999,1,1,tzinfo=timezone.utc))
+    postings=plan_class_corrections(ctx=ctx,seat_ids={result['target']},incident=open_incident)
     assert len(postings)==1
     for posting in postings:
         record_payroll_event(ctx=ctx,target_seat_id=posting.seat_id,payroll_event_type='manual_credit',

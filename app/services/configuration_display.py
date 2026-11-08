@@ -120,7 +120,8 @@ def preview_sections(groups):
     sections = []
     for family, values in groups.items():
         if family == "store":
-            blocks = [{"heading": item["name"], "rows": rows(item, family)} for item in values]
+            blocks = [{"heading": item["name"], "rows": rows(item, family) + ([] if item.get("direct_purchase_allowed", True) else
+                [{"label": "Arrives", "value": "Hidden until you link it to rent or give it a price"}])} for item in values]
         elif family == "insurance":
             blocks = [{"heading": " — ".join(filter(None, [group["name"], policy["title"] or "Insurance policy"])),
                 "rows": rows(policy, family)} for group in values for policy in group["policies"]]

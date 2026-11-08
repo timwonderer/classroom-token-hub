@@ -2,9 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.7 | 2026-10-14 | 5.6 | Constitutional |
+| DOM-STORE-001 | 5.10 | 2026-11-04 | 5.9 | Constitutional |
 
 > [!IMPORTANT]
+> **v5.9 (2026-11-03), insurance filing (owner ruling).** Weekly filing limits apply independently of billing cadence. Rejection releases the claimed target, but never restores the filing allowance. Failed submissions leave no partial claim.
+>
+> **v5.8 (2026-11-01), hall-pass requests close with their day (owner ruling 2026-11-01).** §VII.B and §IX: a pending hall-pass request still open at the end of the class-local day it was submitted on is resolved by `FEAT-PROD-002` like a denial: the row is deleted, nothing is consumed, and its pass is available again. This supersedes "it has no TTL" for hall-pass requests only; other pending actions are unchanged.
+>
 > **v5.7 (2026-10-14), insurance continuation (owner ruling 2026-10-14).** §VIII.E.1 adds *Continuation after a policy edit* and *Withdrawn offering*. When the teacher supersedes the version an entitlement was granted under, the entitlement still ends at its coverage boundary, and a new entitlement under the successor version begins there; the old entitlement's terms never change (`DOM-POL-001` §VII). When the offering is withdrawn with no successor on sale, renewal stops and coverage ends at the boundary. Previously the code renewed a superseded or withdrawn version indefinitely, and nothing in this document said otherwise.
 >
 > **v5.6 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: the header table said Normative while §III (below) already, correctly, says "Tier 1 — Constitutional." The header now matches the body. No substantive rule in this document changed.
@@ -90,7 +94,7 @@ This domain owns the following permanent truths:
 1. A specific entitlement was granted.
 2. The entitlement belongs to a specific `target_seat_id` within a specific `class_id`.
 3. A specific `actor_seat_id` caused or authorized the entitlement event.
-4. The entitlement refers to a specific configured product definition from the Policies domain.
+4. Product-backed entitlements refer to a specific configured product definition from the Policies domain; independent teacher hall-pass grants follow §VIII.E.6.
 5. The grant or subsequent event has a specific provenance.
 6. The entitlement event may participate in a specific correlated cross-domain operation.
 7. A Store-and-Entitlements-owned entitlement was consumed, expired, or lawfully revoked.
@@ -202,7 +206,7 @@ Rules:
 - `event_id` identifies one immutable row only.
 - `correlation_id` is cross-domain lineage.
 - `entitlement_id` is internal Store/Entitlements lifecycle lineage.
-- `product_id` SHALL refer to a Policy-owned product definition lawful for the same class boundary.
+- `product_id` SHALL refer to a Policy-owned product definition lawful for the same class boundary, except independent teacher hall-pass grants (§VIII.E.6), which have no product.
 - `payload` SHALL contain only the type-specific authoritative facts necessary to interpret the event.
 - `payload` SHALL NOT duplicate monetary truth, policy rules, or derived balances.
 - `entitlement_events` SHALL NOT contain quantity, remaining balance, mutable redemption status, or display metadata.
@@ -232,7 +236,7 @@ Rules:
 - `authoritative_feat` SHALL identify the one lawful FEAT path for resolution.
 - `payload` SHALL be the canonical typed request envelope produced and validated by the submitting FEAT, not an arbitrary dump of unrelated state.
 - `submitted_at` is authoritative and SHALL be preserved.
-- No generic TTL may delete pending actions.
+- No generic TTL may delete pending actions. The class-local day boundary is a resolution of a hall-pass request (§IX), not a generic TTL.
 - A pending action is not canonical entitlement history.
 - `payload` MAY carry a domain-specific request (for example an unresolved insurance-claim request) while the work is in transit. Claim-specific structured data SHALL NOT live permanently in `payload`; it belongs in claim-owned relational state (§VII.C).
 - A successful resolution SHALL atomically write the canonical durable record(s) the action produces (entitlement event(s), or claim state under §VII.C) and delete the pending action.
@@ -274,7 +278,7 @@ Key fields: `id`, `claim_id`, `entitlement_id`, `class_id`, `claim_date`, `stude
 
 Rules:
 
-- a date may be claimed at most once per claim and at most once per entitlement;
+- a date may appear at most once per claim; within an entitlement only one SUBMITTED or APPROVED claim may reserve it at a time. REJECTED claims retain their evidence but release the date;
 - the student's submitted hours and explanation are immutable; the teacher's adjudication is recorded alongside them, not over them;
 - this evidence is relational claim state, never an opaque list in the claim basis or a pending-action payload.
 
@@ -384,7 +388,9 @@ The student does not purchase the new entitlement; it continues coverage they al
 
 **Debt survives termination.** Termination, whether by nonpayment or by stopping renewal, does not erase, forgive, reverse, or void a premium for any period that began before the termination instant (`DOM-OBL-001` §IX.14). The only premiums that do not survive are unpaid advance premiums for periods beginning at or after it, which are withdrawn because they never became owed (`DOM-OBL-001` §V.8). Satisfying one after termination settles that obligation only and does not resurrect the entitlement. Coverage after termination requires a new purchase, which creates a new entitlement and a new premium lineage; the only exception is a continuation after a policy edit, above.
 
-**Claim periods.** Claim allowance and payout capacity are scoped to one coverage period of the entitlement and reset with each period. A claim draws on the period containing its filing time (`FEAT-STOR-003` §XII).
+**Claim periods.** Filing allowance is scoped to the class-local Monday–Sunday week containing submission, independent of premium billing cadence. Transaction claims use one slot per filing; productivity claims use one slot per submitted date. Every filing counts, including rejected claims and repeated dates filed again after rejection. Submitted date assertions on the claim basis remain evidence of filing even if an incomplete historical claim has no relational date rows. Payout capacity remains scoped to the coverage period containing filing (`FEAT-STOR-003` §XII).
+
+Within an entitlement, a transaction or productivity date is reserved by SUBMITTED and APPROVED claims. Rejection releases only that reservation. Submission serializes checks and writes under the GRANTED entitlement row lock and atomically persists the claim and all required evidence; a failed submission leaves neither. Teachers may reject an incomplete historical claim with a claim-level reason, without fabricating evidence or deleting history.
 
 Resolution of a pending action, the lifecycle of a claim, and termination of an entitlement are independent lifecycle events. Completing one does not complete another.
 
@@ -452,12 +458,30 @@ Collective-goal entitlements SHALL:
 
 Hall-pass entitlements are granted here, but their authoritative exercise may be recorded by another domain.
 
+**Teacher adjustments and purchase presentation (owner ruling 2026-11-04).**
+Hall passes share one derived available count. A teacher may grant passes directly
+without a Store product or `policy_uuid`; these grants have `product_id = NULL`,
+`acquisition_type = GRANT`, and the authorizing teacher seat. No catalog policy
+behavior needs to be preserved for these independent grants. Purchased passes
+retain their purchase/product lineage for accounting and reversal, but do not
+appear in the student's My Items list or require Store redemption. Purchase
+immediately increases the available count and records its Ledger transaction;
+actual hall-pass use remains the separate authoritative consumption event.
+Unused direct grants may be removed by the teacher through FEAT-STOR-002.
+This adjustment does not revoke purchased passes or rent perks, and does not
+remove a pass with a pending request. Each intentional adjustment has its own
+request replay key; replaying the same adjustment creates no additional events.
+Each teacher adjustment MUST add or remove 1–100 passes per student, inclusive
+(owner ruling 2026-11-04). Reject larger requests before mutation. This request
+limit does not cap the available balance or change purchase policy.
+
+
 Hall-pass entitlements SHALL:
 
 - grant `GRANTED`;
 - support pending action if the exercise requires approval;
 - record `EXPIRED` when a perk-based pass reaches the end of the governing rent period without exercise;
-- permit `REVOKED` only for direct-grant hall passes when the governing policy allows revocation;
+- permit teacher-adjustment `REVOKED` only for unused direct-grant hall passes; purchased-pass reversal remains a coordinated Ledger operation;
 - not create a duplicate Store-and-Entitlements `CONSUMED` row when another domain is the authoritative consumer.
 
 ## IX. Pending Action Semantics
@@ -485,8 +509,8 @@ Pending actions SHALL be deleted only as part of successful lawful resolution, l
 - it is submitted under `FEAT-STOR-002`, which writes the typed payload `{kind: "hall_pass_request", requested_by_seat_id, destination}`, names the hall-pass entitlement available at submission as `entitlement_id`, and sets `authoritative_feat = FEAT-PROD-002`;
 - its `submitted_at` is the request time in class canonical time and is authoritative;
 - a seat holds at most one pending hall-pass request in a class: a student's new request cancels their earlier one, in the same transaction that submits the new one;
-- it is resolved only by `FEAT-PROD-002`: approval writes the `hall_pass_logs` record and consumes the pass in the same transaction that deletes the row; rejection deletes the row; the student's own cancellation deletes the row;
-- it has no TTL; it survives process restarts and deploys, and ceases otherwise only with its seat or class.
+- it is resolved only by `FEAT-PROD-002`: approval writes the `hall_pass_logs` record and consumes the pass in the same transaction that deletes the row; rejection deletes the row; the student's own cancellation deletes the row; the end of the class-local day it was submitted on deletes the row, the same as a rejection;
+- it survives process restarts and deploys, and ceases otherwise only with its seat or class.
 
 Pending actions SHALL NOT be interpreted as entitlement consumption, approval, rejection, or revocation.
 

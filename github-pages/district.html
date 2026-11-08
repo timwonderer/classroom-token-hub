@@ -33,7 +33,7 @@
                 </div>
                 <div class="landing-welcome">
                     <h1>For District Partners</h1>
-                    <small>Last updated: October 16, 2026</small>
+                    <small>Last updated: October 29, 2026</small>
                     <a href="index.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
                         <span>Return to Home</span>
@@ -118,12 +118,12 @@
 
                     <section class="public-section" id="authentication">
                         <h2>6. Authentication and Security Controls</h2>
-                        <ul><li><strong>Teachers:</strong> username plus a time-based one-time password (TOTP) from an authenticator, or an enrolled passkey. The application does not use teacher email/password login.</li><li><strong>Students:</strong> username and passphrase for sign-in. The PIN is used for attendance, transfers between checking and savings, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</li><li><strong>Stored credentials:</strong> PINs and passphrases use salted scrypt hashes. Authenticator secrets are encrypted. Passkey registration stores a public key and credential metadata.</li><li><strong>Recovery:</strong> a teacher can issue a student an eight-character code that expires after ten minutes. The recovery form asks for that code, then directs the student to create new credentials. Teacher recovery requires at least three students with claimed accounts in every class the teacher owns, and one valid student confirmation per class. CTH randomly selects two students in each class and keeps their identities hidden from the teacher; recipients stay fixed for the five-day attempt, and each code lasts 30 minutes. See the <a href="./privacy.html#recovery">account recovery details</a>.</li><li><strong>Sessions:</strong> signed, HTTP-only, SameSite=Lax cookies; the Secure flag is enabled in production configuration. Student sessions have a ten-minute limit from login; teacher sessions expire after ten minutes of inactivity.</li><li><strong>Request protection:</strong> the application includes CSRF protection and rate limits. Selected forms use Cloudflare Turnstile when configured.</li></ul>
+                        <ul><li><strong>Teachers:</strong> username plus a time-based one-time password (TOTP) from an authenticator, or an enrolled passkey. The application does not use teacher email/password login.</li><li><strong>Students:</strong> username and passphrase for sign-in. The PIN is used for attendance, transfers between checking and savings, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</li><li><strong>Stored credentials:</strong> PINs and passphrases use salted scrypt hashes. Authenticator secrets are encrypted. Passkeys are provided by Bitwarden Passwordless.dev, which holds the public key and the teacher’s username; CTH stores the credential identifier and device name.</li><li><strong>Recovery:</strong> a teacher can issue a student an eight-character code that expires after ten minutes. The recovery form asks for that code, then directs the student to create new credentials. Teacher recovery requires at least three students with claimed accounts in every class the teacher owns, and one valid student confirmation per class. CTH randomly selects two students in each class and keeps their identities hidden from the teacher; recipients stay fixed for the five-day attempt, and each code lasts 30 minutes. See the <a href="./privacy.html#recovery">account recovery details</a>.</li><li><strong>Sessions:</strong> signed, HTTP-only, SameSite=Lax cookies; the Secure flag is enabled in production configuration. Student sessions have a ten-minute limit from login; teacher sessions expire after ten minutes of inactivity.</li><li><strong>Request protection:</strong> the application includes CSRF protection and rate limits. Sign-in, sign-up, claiming, recovery, and hall-pass verification forms use Cloudflare Turnstile.</li></ul>
                     </section>
 
                     <section class="public-section" id="admin-access">
                         <h2>7. Application Access and Support Review</h2>
-                        <p>Teachers can see classroom rosters and activity, manage student participation, and download class roster or student exports. Students see their own display name and classroom information made available to them.</p>
+                        <p>Teachers can see classroom rosters and activity, manage student participation, and download class roster or student exports and class configuration files, which contain settings and the text teachers typed into them, but no roster records, balances, or activity, and stop working after five days or when the teacher exports a newer one. Students see their own display name and classroom information made available to them.</p>
                         <p>Support staff can review submitted teacher reports and escalated student issues. Reports include technical diagnostics such as the page URL, route and request correlation information, IP address, and browser details. Teachers choose separately whether to include balances, the reported transaction, recent transactions, student report text, and the class label. These options are not selected by default. The submitted snapshot is fixed: support does not refresh it from live classroom records. Every ticket belongs to a class participation record, including a teacher’s own ticket, and deletion of that record removes the associated ticket. Free-text submissions contain what the author types; omit unnecessary personal details.</p>
                         <h3>Shared hall-pass verification</h3>
                         <p>A person with a teacher’s verification link can select one of that teacher’s classes and submit a student’s first and last name. Because the class and the name are both supplied by the person asking, a match confirms what they already hold rather than disclosing a student; it adds the pass itself — destination, status, and the current day’s departure or return time. The page returns no roster, no multi-day history, and no internal identifiers. The page does not require a teacher or student login. Share the link only with intended school staff.</p>
@@ -132,7 +132,7 @@
                     <section class="public-section" id="app-vs-infra">
                         <h2>8. Hosting, Service Providers, and Encryption Limits</h2>
                         <p>The application needs access to its encryption key to display protected fields. A person or process with both the database and that key can decrypt those fields. Field encryption does not make data inaccessible to every infrastructure administrator.</p>
-                        <p>The public site is published through GitHub Pages and loads fonts from Google Fonts and styling from jsDelivr. The application integrates Cloudflare Turnstile when configured and supports operational monitoring. These services receive technical request information; Turnstile verification can include the visitor’s IP address.</p>
+                        <p>The public site is published through GitHub Pages and loads fonts from Google Fonts and styling from jsDelivr. The application uses Cloudflare Turnstile on sign-in, claiming, recovery, and hall-pass verification forms, and Bitwarden Passwordless.dev for teacher passkeys, and supports operational monitoring. These services receive technical request information; Turnstile verification can include the visitor’s IP address, and passkey registration shares the teacher’s username with Passwordless.dev.</p>
                         <p>See <a href="./privacy.html#logging">technical data and service providers</a> for information about these requests. Contact support with questions about hosting and data handling.</p>
                     </section>
 
@@ -180,22 +180,16 @@
         <div class="landing-shell landing-footer-grid">
             <div class="landing-footer-links">
                 <a href="./index.html" target="_self">Home</a>
-                <a href="https://github.com/timwonderer/classroom-token-hub" target="_blank" rel="noopener">Project Repository <span class="visually-hidden">(opens in a new tab)</span></a>
-                <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog <span class="visually-hidden">(opens in a new tab)</span></a>
+                <a href="./district.html" target="_self">District Partners</a>
+                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">System Status <span class="visually-hidden">(opens in a new tab)</span></a>
             </div>
             <div class="landing-footer-links">
-                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">System Status <span class="visually-hidden">(opens in a new tab)</span></a>
                 <a href="./terms.html" target="_self">Terms of Service</a>
                 <a href="./privacy.html" target="_self">Privacy Policy</a>
-                <a href="./district.html" target="_self">District Partners</a>
-            </div>
-            <div class="landing-footer-links">
                 <a href="/docs/" target="_self">Developer Documentation</a>
-                <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing <span class="visually-hidden">(opens in a new tab)</span></a>
-                <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">License <span class="visually-hidden">(opens in a new tab)</span></a>
             </div>
             <div class="landing-footer-meta">
-                <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under PolyForm Noncommercial v1.0.0</p>
+                <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm Noncommercial v1.0.0 <span class="visually-hidden">(opens in a new tab)</span></a></p>
                 <p><em>This app is developed, operated, maintained, and self-funded by a full-time high school teacher. As such, we do not display advertisements, use third-party tracking tools, or collect information about you unless it is necessary for the operation of the platform.</em></p>
                 <p><a class="text-decoration-none text-white" href="mailto:support@classroomtokenhub.com">Need help? Reach us at support@classroomtokenhub.com</a></p>
             </div>

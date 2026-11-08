@@ -9,7 +9,7 @@ from __future__ import annotations
 import secrets
 
 from app.extensions import db
-from app.models import EntitlementEvent, Seat, StoreProduct
+from app.models import ClassEconomy, EntitlementEvent, Seat, StoreProduct
 from app.feats.base import generate_correlation_id
 from app.services.entitlement_read_service import (
     ended_entitlement_ids,
@@ -22,6 +22,19 @@ from app.utils.canonical_temporal_resolver import (
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
 )
+
+
+def can_adjust_hall_passes(ctx) -> bool:
+    """Evaluate class-owner teacher authority without mutation (INV-ARC-003)."""
+    return bool(
+        ctx.actor_role == "teacher"
+        and ClassEconomy.query.filter_by(
+            class_id=ctx.class_id, teacher_user_id=ctx.user_id,
+        ).first()
+        and Seat.query.filter_by(
+            id=ctx.seat_id, class_id=ctx.class_id, user_id=ctx.user_id, role="teacher",
+        ).first()
+    )
 
 
 def get_hall_pass_balance(seat_id: int, class_id: str) -> int:
@@ -390,54 +403,36 @@ def grant_insurance_entitlement(
 def remove_hall_passes(
     seat: Seat,
     quantity: int,
+    *,
+    actor_seat_id: int | None = None,
+    correlation_id: str | None = None,
 ) -> int:
-    """Remove available hall passes by appending REVOKED events.
-
-    Reuses the entitlement_id from the grant being revoked to maintain
-    lineage per DOM-STORE-001 §VII.
-    """
+    """Revoke unused direct grants only; purchases require Ledger reversal."""
     quantity_to_remove = int(quantity or 0)
     if quantity_to_remove <= 0:
         raise ValueError("Hall-pass removal quantity must be positive")
-
     lock_hall_pass_holder(seat.id, seat.class_id)
-    current_balance = get_hall_pass_balance(seat.id, seat.class_id)
-    if quantity_to_remove > current_balance:
-        raise ValueError("Cannot remove more hall passes than the current available balance")
-
-    remaining = quantity_to_remove
-    while remaining:
-        grant = _available_hall_pass_grant(seat.id, seat.class_id)
-        if grant is None:
-            break
-        event = EntitlementEvent(
-            class_id=seat.class_id,
-            target_seat_id=seat.id,
-            actor_seat_id=seat.id,
-            entitlement_id=grant.entitlement_id,
-            product_id=grant.product_id,
-            entitlement_type="HALL_PASS",
-            acquisition_type=grant.acquisition_type,
-            event_type="REVOKED",
-            correlation_id=grant.correlation_id,
-            payload={
-                "source": "remove_hall_passes",
-            },
-            timestamp=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
-        )
-        db.session.add(event)
-        db.session.flush()
-        remaining -= 1
-
-    if remaining:
-        # The balance counts a pass with a request waiting, but such a pass
-        # cannot be removed until the request is resolved (owner ruling
-        # 2026-10-09). The whole removal rolls back.
+    grants = EntitlementEvent.query.filter_by(
+        class_id=seat.class_id, target_seat_id=seat.id,
+        entitlement_type="HALL_PASS", event_type="GRANTED", acquisition_type="GRANT",
+    ).order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc()).all()
+    ids = [grant.entitlement_id for grant in grants]
+    unavailable = ended_entitlement_ids(seat.class_id, ids) | entitlements_with_pending_action(seat.class_id, ids)
+    available = [grant for grant in grants if grant.entitlement_id not in unavailable]
+    if len(available) < quantity_to_remove:
         raise ValueError(
-            "Cannot remove that many hall passes: a pass with a request waiting can't be "
-            "removed until the request is approved or rejected"
+            "Not enough unused teacher-granted hall passes. Purchased passes, rent perks, "
+            "and passes with a request waiting cannot be removed here."
         )
-
+    removal_correlation = correlation_id or generate_correlation_id()
+    for grant in available[:quantity_to_remove]:
+        revoke_entitlement(
+            class_id=seat.class_id, target_seat_id=seat.id,
+            actor_seat_id=actor_seat_id if actor_seat_id is not None else seat.id,
+            entitlement_id=grant.entitlement_id, product_id=grant.product_id,
+            entitlement_type="HALL_PASS", acquisition_type="GRANT",
+            correlation_id=removal_correlation, payload={"source": "remove_hall_passes"},
+        )
     db.session.flush()
     return get_hall_pass_balance(seat.id, seat.class_id)
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Authority Level |
 |------------------|---------|----------------|-----------------|
-| SPEC-STORE-001 | 1.6 | 2026-10-07 | Normative |
+| SPEC-STORE-001 | 1.7 | 2026-10-28 | Normative |
 
 ## I. Purpose
 
@@ -185,7 +185,7 @@ standing state, so neither is bought more than one at a time (`FEAT-STOR-001`).
 - `rent_linked` MUST be true when `rent_grant_quantity` is set.
 - A rent-linked entitlement's expiration boundary is derived from the applicable rent cycle and is not independently configurable through Store.
 - A rent-linked product MUST NOT use Store auto-delist as its entitlement termination mechanism.
-- A product that is not rent-linked is always directly purchasable; the teacher-facing direct-purchase choice is only meaningful when `rent_linked` is true.
+- A product that is not rent-linked is always directly purchasable while it is on sale (`IN_USE`); the teacher-facing direct-purchase choice is only meaningful when `rent_linked` is true. A HIDDEN product that is not rent-linked MAY keep `direct_purchase_allowed: false` and no price: configuration import (SPEC-CLASS-001) brings a grant-only rent perk across without its rent link, and the teacher links or prices it before it returns to sale (owner ruling 2026-10-28). Editing it publishes a version that meets the on-sale rule.
 - For a rent-linked product, `direct_purchase_allowed` remains independently configurable.
 - The class-level overdue purchase policy (`ALL_ITEMS`, `SPECIFIED_ITEMS_ONLY`, or `NO_ITEMS`) is read from its owning domain through the lawful FEAT coordination path. It is not copied into product payload or Store/Entitlements state.
 - The overdue purchase policy applies only to direct Store purchase and MUST NOT block a lawful rent-triggered grant.
@@ -433,6 +433,7 @@ If any validation step fails, raise an exception immediately. Do not attempt rec
 | 1.3 | 2026-09-14 | `price` is nullable: required when `direct_purchase_allowed` is true and null for a grant-only product, which is not purchasable and is excluded from the student purchase catalog. Aligns Sections IV.A, V.A and V.C with the grant-only product the acquisition rules already permitted |
 | 1.5 | 2026-10-03 | Removed bundles (`bundle_quantity`). A bundle and a bulk purchase already stored the same way, as N entitlements under one charge, and the verdicts of DOM-STORE-001 §VIII.E.4 move no money for either, so a bundle added a concept with no distinct behavior; a pack of N is a purchase of N at a bulk price. Bulk discount now pairs with collective goal in Section V.B. Migration: production held no bundle product on 2026-10-03 (no row with the bundle flag set or a bundle quantity), so no policy needs upgrading; payloads carrying the field are rejected as unknown |
 | 1.6 | 2026-10-07 | A collective goal is one buy-in per student (owner ruling 2026-10-07): holding limit hard-set to 1 and purchase quantity exactly one, enforced source-independently like PRIVILEGE. Production evidence: on 2026-10-07 one student bought 32 units of a whole-class goal |
+| 1.7 | 2026-10-28 | An unlinked product may be non-purchasable while HIDDEN, so a configuration import can carry a grant-only rent perk without its rent link (owner ruling 2026-10-28). The on-sale rule is unchanged. |
 
 ## IX. Amendment Process
 

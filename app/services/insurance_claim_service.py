@@ -71,8 +71,8 @@ class ProductivityDateConflict(InsuranceClaimServiceError):
     """A class-local date already participates in a PRODUCTIVITY claim lifecycle.
 
     Enforces the settled one-date-one-lifecycle invariant: within one entitlement
-    a date lives in at most one claim regardless of SUBMITTED/APPROVED/REJECTED.
-    Rejection does not free the date.
+    a date is reserved by at most one SUBMITTED or APPROVED claim.
+    Rejection releases the date without deleting its evidence.
     """
 
 
@@ -317,10 +317,14 @@ def add_productivity_claim_dates(
     explanation are never rewritten).
 
     Raises :class:`ProductivityDateConflict` if a date is already used by a
-    *different* claim under the same entitlement (the ``UNIQUE(entitlement_id,
-    claim_date)`` invariant). The DB constraint is the concurrency backstop; this
-    pre-check turns the common case into a clean domain error.
+    *different* active claim under the same entitlement. The GRANTED row is
+    locked here to serialize date reservations, including direct domain callers.
     """
+    db.session.query(EntitlementEvent).filter(
+        EntitlementEvent.entitlement_id == claim.entitlement_id,
+        EntitlementEvent.class_id == claim.class_id,
+        EntitlementEvent.event_type == "GRANTED",
+    ).with_for_update().one()
     created: list[InsuranceClaimProductivityDate] = []
     for claim_date, student_claimed_hours, student_explanation in dates:
         if not isinstance(claim_date, date):
@@ -349,10 +353,14 @@ def add_productivity_claim_dates(
             created.append(same_case)
             continue
 
-        # A date already claimed under this entitlement (any status) is taken.
+        # Only pending and approved claims reserve a date; history remains intact.
         taken = (
             db.session.query(InsuranceClaimProductivityDate)
+            .join(InsuranceClaim, InsuranceClaim.claim_id == InsuranceClaimProductivityDate.claim_id)
             .filter(
+                InsuranceClaim.class_id == claim.class_id,
+                InsuranceClaim.status.in_([SUBMITTED, APPROVED]),
+                InsuranceClaimProductivityDate.class_id == claim.class_id,
                 InsuranceClaimProductivityDate.entitlement_id == claim.entitlement_id,
                 InsuranceClaimProductivityDate.claim_date == claim_date,
             )
@@ -476,6 +484,17 @@ def list_productivity_dates_with_status_for_entitlement(
         )
         for claim_date, student_claimed_hours, teacher_approved_hours, status in rows
     ]
+
+
+def count_productivity_date_filings(*, class_id, entitlement_id, submitted_from, submitted_before):
+    """Count submitted date assertions, including rejected and incomplete claims."""
+    return sum(
+        len((claim.claim_basis or {}).get("claimed_dates") or [])
+        for claim in list_claims_for_entitlement(
+            class_id=class_id, entitlement_id=entitlement_id,
+            submitted_from=submitted_from, submitted_before=submitted_before,
+        )
+    )
 
 
 def sum_recognized_payout_for_entitlement(

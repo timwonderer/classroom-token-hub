@@ -74,7 +74,7 @@ from app.services.context_resolver import CanonicalContext
 from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminClassSetupForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     AdminClaimProcessForm, PayrollSettingsForm,
-    ManualPaymentForm
+    ManualPaymentForm, TeacherFineForm
 )
 # Import utility functions
 from app.utils.helpers import safe_redirect_target, generate_anonymous_code, loggable_token, render_template_with_fallback as render_template
@@ -228,7 +228,7 @@ from app.services.payroll.corrections import (
     incident_is_open,
 )
 from app.services.payroll.cycle_completion import get_completed_cycle_window
-from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
+from app.feats.direct_entitlement_grant_feat import execute_hall_pass_adjustment
 # execute_insurance_claim_resolution removed — insurance_claim_feat.py deleted; insurance feature broken pending DOM-OBL-001 migration
 from app.feats.transaction_void_feat import (
     ObligationTransactionNotVoidable,
@@ -239,7 +239,7 @@ from app.feats.transaction_void_feat import (
 from app.services.ledger_correction_service import REVERSAL_RECORD_TYPES
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
-from app.services.attendance_service import calculate_unpaid_attendance_seconds
+from app.services.attendance_service import calculate_unpaid_attendance_seconds, is_live_session
 from app.services.payroll.pricing import estimate_payable_amount
 from app.services.unpaid_work_notice_view_model import build_unpaid_work_notice_view
 from app.services.payroll.schedule import (
@@ -253,9 +253,9 @@ from app.services.payroll.settings import (
     pending_payroll_settings,
     save_payroll_setting,
 )
-from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
+from app.services.hall_pass_request_queue import list_open_hall_pass_requests
 from app.services import access_policy_service, obligations_service
-from app.services.entitlement_service import get_hall_pass_balance, grant_hall_passes, remove_hall_passes
+from app.services.entitlement_service import get_hall_pass_balance
 from app.services import operational_event_service
 from app.services.ledger_balance_query_service import get_available_balances
 from app.services.admin_identity_service import (
@@ -2331,7 +2331,7 @@ def dashboard():
         redemption_query_service.get_pending_redemption_count(active_class_id)
         + redemption_query_service.get_pending_acknowledgement_count(active_class_id)
     )
-    pending_hall_pass_requests = list_pending_hall_pass_requests_for_class(ctx.class_id)
+    pending_hall_pass_requests = list_open_hall_pass_requests(ctx)
     pending_hall_passes_count = len(pending_hall_pass_requests)
     pending_insurance_claims = (
         InsuranceClaim.query
@@ -3421,6 +3421,7 @@ def student_detail_public(actor_public_id):
         .filter(
             EntitlementEvent.target_seat_id == seat_id,
             EntitlementEvent.event_type == "GRANTED",
+            EntitlementEvent.product_id.isnot(None),
         )
     )
     if class_id:
@@ -3772,6 +3773,7 @@ def student_detail_public(actor_public_id):
                          scoped_total_earnings=scoped_total_earnings,
                          payroll_event_history=payroll_event_history,
                          hall_pass_balance=hall_pass_balance,
+                         hall_pass_adjustment_request_id=secrets.token_urlsafe(24),
                          current_join_code=None,
                          current_class_id=class_id,
                          rent_privileges=rent_privileges,
@@ -3810,39 +3812,21 @@ def adjust_hall_pass_entitlements(seat_public_id):
 
     student_name = target_seat.identity_profile.full_name if target_seat.identity_profile else "Unnamed student"
 
-    # Get teacher seat for actor_seat_id
-    teacher_seat = Seat.query.filter_by(
-        user_id=canonical_context.user_id,
-        class_id=target_seat.class_id,
-    ).first()
-
-    if not teacher_seat:
-        flash("Error: Teacher seat not found for this class.", "error")
+    request_id = (request.form.get('request_id') or '').strip()
+    if not request_id or len(request_id) > 128:
+        flash("Reload the page before adjusting hall passes.", "error")
         return _redirect_to_student_detail(target_seat.public_id)
-
-    if action == "add":
-        # Use FEAT-STOR-004 to grant entitlements
-        result = execute_direct_grant(
-            canonical_context=canonical_context,
-            target_seat_id=target_seat.id,
-            product_id=1,  # TODO: Determine correct product_id for hall passes from policy
-            quantity=quantity,
+    try:
+        execute_hall_pass_adjustment(
+            canonical_context=canonical_context, target_seat_id=target_seat.id,
+            quantity=quantity, operation=action,
+            idempotency_key=f"hall-pass-adjust:{canonical_context.class_id}:{target_seat.id}:{request_id}",
         )
-
-        if result.success:
-            flash(f"Granted {quantity} hall pass(es) to {student_name}.", "success")
-        else:
-            error_msg = result.error_message or f"Grant failed: {result.error_code}"
-            flash(error_msg, "error")
+    except ValueError as exc:
+        flash(str(exc), "error")
     else:
-        # Remove functionality requires FEAT-STOR-002 (revocation/lifecycle transitions)
-        # which is not yet implemented in Phase 4
-        flash(
-            "Hall pass removal is not yet available. Use FEAT-STOR-002 (pending implementation). "
-            "Contact support to revoke hall passes.",
-            "warning"
-        )
-
+        verb = "Added" if action == "add" else "Removed"
+        flash(f"{verb} {quantity} hall pass(es) for {student_name}.", "success")
     return _redirect_to_student_detail(target_seat.public_id)
 
 
@@ -6128,6 +6112,9 @@ def process_claim(claim_id):
     if form.validate_on_submit():
         decision = (form.status.data or "").strip().lower()
         date_adjustments = None
+        if productivity is not None and decision == "approved" and not productivity.dates:
+            flash("This claim has no date evidence to approve. Reject it with a reason instead.", "danger")
+            return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
         if productivity is not None and decision == "approved":
             # Lost time is decided per day. A day set to fewer hours than claimed
             # needs a reason; every day at 0 hours is a rejection, and those
@@ -6359,7 +6346,7 @@ def hall_pass():
         )
 
     pending_requests = []
-    for pending_request in list_pending_hall_pass_requests_for_class(selected_class_id):
+    for pending_request in list_open_hall_pass_requests(ctx):
         seat = db.session.get(Seat, pending_request.requested_by_seat_id)
         if not seat or seat.class_id != selected_class_id:
             continue
@@ -7540,6 +7527,9 @@ def payroll():
     settings_form.block.choices = []
 
     manual_payment_form = ManualPaymentForm()
+    fine_form = TeacherFineForm()
+    from app.services.economic_engine import resolve_overdraft_fine
+    fine_band = resolve_overdraft_fine(class_id=selected_class_id)
     # Quick stats
     avg_payout = total_payroll_estimate / len(students) if students else 0
     display_total_payroll_estimate = f"${Decimal(str(total_payroll_estimate)):.2f}"
@@ -7656,6 +7646,8 @@ def payroll():
         payroll_config=payroll_config,
         # Manual Payment tab
         manual_payment_form=manual_payment_form,
+        fine_form=fine_form,
+        fine_band=fine_band,
         all_students=student_payroll_views,
         # History tab
         payroll_history=payroll_history,
@@ -7911,18 +7903,17 @@ def payroll_manual_payment():
     if form.validate_on_submit():
         try:
             student_ids = request.form.getlist('student_ids')
-            save_action = 'apply_only'
             payment_type = request.form.get('payment_type', 'deposit')
 
             description = form.description.data
             amount = Decimal(str(form.amount.data))
 
-            if save_action in ['apply_only', 'save_and_apply'] and not student_ids:
+            if not student_ids:
                 flash('Please select at least one student to apply the payment.', 'warning')
                 return redirect(url_for('admin.payroll'))
 
             if payment_type != 'deposit':
-                flash('Manual deductions belong to Obligations and are no longer handled by Payroll.', 'error')
+                flash('Manual payments only add money. Use Fine Students to take money from a student.', 'error')
                 return redirect(url_for('admin.payroll'))
 
             if amount <= Decimal("0"):
@@ -8055,8 +8046,6 @@ def payroll_manual_payment():
                 )
             else:
                 message = f'Manual credit of ${amount:.2f} applied to {applied_count} student(s)!'
-                if save_action == 'save_and_apply':
-                    message = f'Template saved and manual credit applied to {applied_count} student(s)!'
                 flash(message, 'success')
 
         except HTTPException:
@@ -8072,6 +8061,131 @@ def payroll_manual_payment():
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
 
+    return redirect(url_for('admin.payroll'))
+
+
+def _fine_selection(form):
+    """Class-scoped seats for the submitted students, or None when any is not in this class.
+
+    A selected student who can't be resolved refuses the whole fine; it is never
+    dropped silently from the selection.
+    """
+    class_id = _require_payroll_feature_scope_from_request()['class_id']
+    public_ids = list(dict.fromkeys(request.form.getlist('student_ids')))
+    seats = [_resolve_student_detail_seat(str(pid)) for pid in public_ids]
+    if not public_ids or any(seat is None or seat.class_id != class_id for seat in seats):
+        return class_id, None
+    return class_id, seats
+
+
+def _fine_review(form, class_id, seats, *, notice=None):
+    """Render the confirmation: requested fine, CWI band and each student's resolved outcome."""
+    from app.services.class_configuration_query_service import get_banking_directive
+    from app.services.economic_engine import resolve_overdraft_fine
+    from app.services.ledger_penalty_service import penalty_preview_digest, resolve_penalty_plans
+
+    resolved = resolve_penalty_plans(
+        class_id=class_id, seat_ids=[s.id for s in seats], amount=form.amount.data,
+        reason=form.reason.data, actor_seat_id=g.canonical_context.seat_id,
+        banking_directive=get_banking_directive(class_id),
+    )
+    def money(value):
+        return f"-${abs(value):.2f}" if value < 0 else f"${value:.2f}"
+
+    seats_by_id = {s.id: s for s in seats}
+    band = resolve_overdraft_fine(class_id=class_id)
+    amount = resolved[0].intended_plan.debit_amount
+    has_band = band.flat_fee_lower is not None
+    rows = []
+    for r in resolved:
+        seat = seats_by_id[r.intended_plan.seat_id]
+        profile = seat.identity_profile
+        rows.append({
+            'public_id': seat.public_id,
+            'name': profile.full_name if profile else 'Student',
+            'checking_before': money(r.checking_before),
+            'savings_before': money(r.savings_before),
+            'protection_transfer': money(r.recovery_transfer_amount) if r.recovery_transfer_amount else None,
+            'checking_after': money(r.checking_after),
+            'savings_after': money(r.savings_after),
+            'goes_negative': r.checking_after < 0,
+        })
+    return render_template(
+        'admin_fine_confirm.html',
+        form=form,
+        amount=money(amount),
+        reason=form.reason.data.strip(),
+        band_low=money(band.flat_fee_lower) if has_band else None,
+        band_high=money(band.flat_fee_upper) if has_band else None,
+        out_of_band=has_band and not (band.flat_fee_lower <= amount <= band.flat_fee_upper),
+        notice=notice,
+        rows=rows,
+        preview_digest=penalty_preview_digest(resolved),
+        # Minted per review: a double-submitted confirmation replays this token,
+        # while a second, deliberate fine with the same amount and reason gets its own.
+        submission_token=uuid.uuid4().hex,
+        current_page="payroll",
+    )
+
+
+@admin_bp.route('/payroll/fine/review', methods=['POST'])
+@admin_required
+def payroll_fine_review():
+    """Show what a fine will do before anything posts. Writes nothing."""
+    form = TeacherFineForm()
+    if not form.validate_on_submit():
+        flash('Enter a reason and an amount of at least $0.01 for the fine.', 'error')
+        return redirect(url_for('admin.payroll'))
+    class_id, seats = _fine_selection(form)
+    if seats is None:
+        flash('Select students from your current class to fine. Reload the page if your '
+              'active class changed in another tab.', 'warning')
+        return redirect(url_for('admin.payroll'))
+    return _fine_review(form, class_id, seats)
+
+
+@admin_bp.route('/payroll/fine', methods=['POST'])
+@admin_required
+def payroll_fine():
+    """Apply a reviewed fine to every selected student, or to none (FEAT-LED-006)."""
+    from app.feats.base import generate_correlation_id
+    from app.feats.penalty_feat import (
+        PenaltyPreviewChanged, PenaltyRefused, execute_teacher_penalty,
+    )
+
+    form = TeacherFineForm()
+    token = (request.form.get('submission_token') or '').strip()
+    if not form.validate_on_submit() or not token:
+        flash('The fine could not be applied. Review it again.', 'error')
+        return redirect(url_for('admin.payroll'))
+    class_id, seats = _fine_selection(form)
+    if seats is None:
+        flash('No fine was applied. The selected students are not in your current class.', 'warning')
+        return redirect(url_for('admin.payroll'))
+    try:
+        result = execute_teacher_penalty(
+            class_id=class_id,
+            seat_ids=[s.id for s in seats],
+            amount=form.amount.data,
+            reason=form.reason.data,
+            actor_seat_id=g.canonical_context.seat_id,
+            expected_preview_digest=request.form.get('preview_digest', ''),
+            correlation_id=generate_correlation_id(),
+            idempotency_key=token,
+        )
+    except PenaltyPreviewChanged:
+        return _fine_review(
+            form, class_id, seats,
+            notice='A balance changed since you reviewed this fine, so nothing was applied. '
+                   'Check the updated outcome below and confirm again.',
+        )
+    except PenaltyRefused as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('admin.payroll'))
+    if result.replayed:
+        flash('This fine was already applied; it was not applied again.', 'info')
+    else:
+        flash(f'Fine of ${form.amount.data:.2f} applied to {len(result.transactions)} student(s).', 'success')
     return redirect(url_for('admin.payroll'))
 
 
@@ -8338,7 +8452,7 @@ def tap_out_students():
             latest_by_seat_id = _latest_attendance_events_for_class(class_id)
             seat_ids = [
                 seat.id for seat in student_seats
-                if latest_by_seat_id.get(seat.id) and latest_by_seat_id[seat.id].status == "active"
+                if is_live_session(ctx, latest_by_seat_id.get(seat.id))
             ]
         else:
             seat_ids = [int(seat_id) for seat_id in seat_ids]
@@ -8353,7 +8467,7 @@ def tap_out_students():
                 continue
 
             latest_event = latest_by_seat_id.get(seat_id)
-            if not latest_event or latest_event.status != "active":
+            if not is_live_session(ctx, latest_event):
                 profile = IdentityProfile.query.filter_by(seat_id=seat_id).first()
                 name = f"{profile.first_name} {profile.last_name}" if profile else "Unnamed student"
                 already_inactive.append(name)
@@ -8435,7 +8549,7 @@ def tap_in_students():
                 continue
 
             latest_event = latest_by_seat_id.get(seat_id)
-            if latest_event and latest_event.status == "active":
+            if is_live_session(ctx, latest_event):
                 profile = IdentityProfile.query.filter_by(seat_id=seat_id).first()
                 name = f"{profile.first_name} {profile.last_name}" if profile else "Unnamed student"
                 already_active.append(name)
@@ -8499,25 +8613,29 @@ def tap_in_students():
 @admin_required
 def bulk_adjust_hall_pass_entitlements():
     """Bulk grant or remove hall-pass entitlements for selected students."""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(status="error", message="A JSON object is required."), 400
+    request_id = data.get("request_id")
+    if not isinstance(request_id, str) or not request_id.strip() or len(request_id) > 128:
+        return jsonify(status="error", message="An adjustment request identifier is required."), 400
 
     # Get parameters
     student_ids = data.get('student_ids', [])
     update_type = data.get('update_type')
     value = data.get('value', 0)
 
-    if not student_ids:
+    if not isinstance(student_ids, list) or not student_ids:
         return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
 
     if update_type not in ['add', 'remove']:
         return jsonify({"status": "error", "message": "update_type must be 'add' or 'remove'."}), 400
 
-    try:
-        value = int(value)
-        if value <= 0:
-            return jsonify({"status": "error", "message": "Value must be positive."}), 400
-    except (ValueError, TypeError):
-        return jsonify({"status": "error", "message": "Value must be a valid integer."}), 400
+    if type(value) is not int or value <= 0:
+        return jsonify(status="error", message="Value must be a positive integer."), 400
+    if any(type(seat_id) is not int or seat_id <= 0 for seat_id in student_ids):
+        return jsonify(status="error", message="Student identifiers must be positive integers."), 400
+    student_ids = list(dict.fromkeys(student_ids))
 
     updated = []
     errors = []
@@ -8530,7 +8648,8 @@ def bulk_adjust_hall_pass_entitlements():
             student = (
                 Seat.query
                 .filter(
-                    Seat.id == int(seat_id),
+                    Seat.id == seat_id,
+                    Seat.class_id == g.canonical_context.class_id,
                     Seat.role == "student",
                     Seat.claimed_at.isnot(None),
                 )
@@ -8545,28 +8664,16 @@ def bulk_adjust_hall_pass_entitlements():
                 errors.append(f"Student {seat_id} not found")
                 continue
 
-            if update_type == 'add':
+            try:
                 execute_hall_pass_adjustment(
                     canonical_context=g.canonical_context,
-                    target_seat_id=student.id,
-                    quantity=value,
-                    operation="add",
-                    correlation_id=generate_correlation_id(),
-                    idempotency_key=f"store:hall-pass-adjust:{student.class_id}:{student.id}:add",
+                    target_seat_id=student.id, quantity=value, operation=update_type,
+                    idempotency_key=f"hall-pass-adjust:{student.class_id}:{student.id}:{request_id}",
                 )
-            else:
-                try:
-                    execute_hall_pass_adjustment(
-                        canonical_context=g.canonical_context,
-                        target_seat_id=student.id,
-                        quantity=value,
-                        operation="remove",
-                        correlation_id=generate_correlation_id(),
-                        idempotency_key=f"store:hall-pass-adjust:{student.class_id}:{student.id}:remove",
-                    )
-                except ValueError as exc:
-                    errors.append(f"{student.identity_profile.full_name if student.identity_profile else 'Unnamed student'}: {exc}")
-                    continue
+            except ValueError as exc:
+                label = student.identity_profile.full_name if student.identity_profile else "Unnamed student"
+                errors.append(f"{label}: {exc}")
+                continue
 
             updated.append(student.identity_profile.full_name if student.identity_profile else "Unnamed student")
             new_value = get_hall_pass_balance(student.id, student.class_id)
@@ -8576,20 +8683,23 @@ def bulk_adjust_hall_pass_entitlements():
                 student.public_id, update_type, value, new_value,
             )
 
-        # Commit all updates
         # Build response message
         action_text = {
             'add': f'granted {value}',
             'remove': f'removed {value}'
         }
 
-        message = f"Successfully adjusted hall-pass entitlements for {len(updated)} student(s) ({action_text[update_type]})"
-        if errors:
-            message += f". {len(errors)} error(s) occurred"
+        if updated:
+            message = f"Adjusted hall-pass entitlements for {len(updated)} student(s) ({action_text[update_type]})"
+            if errors:
+                message += f". {len(errors)} student(s) could not be adjusted."
+        else:
+            message = "No hall-pass entitlements were adjusted."
 
         return jsonify({
-            "status": "success",
+            "status": "success" if updated else "error",
             "message": message,
+            "errors": errors,
             "updated": updated
         })
 

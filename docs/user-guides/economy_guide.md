@@ -140,11 +140,11 @@ If you set coverage above 5x premium or a cap outside 6x-10x, expect more volati
 
 | Policy | Range | Typical midpoint |
 | --- | --- | --- |
-| Tight | 0.07x to 0.18x CWI | 0.11x |
-| Default | 0.05x to 0.15x CWI | 0.10x |
-| Comfortable | 0.04x to 0.12x CWI | 0.08x |
+| Tight | 0.05x to 0.10x CWI | 0.075x |
+| Default | 0.05x to 0.12x CWI | 0.085x |
+| Comfortable | 0.07x to 0.15x CWI | 0.11x |
 
-Try to keep fine sizes consistent so students can predict consequences.
+These are the ranges the **Fine Students** review shows (see [Manual Payments](features/teacher/economy/manual-payments.md)). You can fine outside them; you are warned, not stopped. Try to keep fine sizes consistent so students can predict consequences.
 
 ### Savings interest
 

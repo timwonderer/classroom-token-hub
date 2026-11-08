@@ -602,8 +602,9 @@ class Transaction(db.Model):
         # the separate write-time casing validator (FEAT-LED-005 §IX) retires
         # them; this constraint only closes the vocabulary, it does not enforce
         # canonical spelling on new rows. Migration a4d7e9c2f1b6 adds this NOT
-        # VALID and e3b7c1d9a2f4 re-creates it without bug_reward, so it is
-        # documentation here, not itself re-applied by Alembic.
+        # VALID, e3b7c1d9a2f4 re-creates it without bug_reward and a0faf8b2a35d
+        # adds penalty, so it is documentation here, not itself re-applied by
+        # Alembic.
         db.CheckConstraint(
             "type IS NULL OR type IN ("
             "'interest', 'Interest', "
@@ -619,6 +620,7 @@ class Transaction(db.Model):
             "'payroll', "
             "'payroll_correction', "
             "'manual_payment', "
+            "'penalty', "
             "'issue_reversal', "
             "'issue_compensation', "
             "'rent_payment', "
@@ -2160,13 +2162,9 @@ class InsuranceClaimProductivityDate(db.Model):
     teacher's adjudicated hours, an optional per-date adjustment note, and the
     immutable recognized economic result.
 
-    The ``UNIQUE(entitlement_id, claim_date)`` constraint is the structural
-    enforcement of the settled invariant (FEAT-STOR-003 §V.B): within one
-    entitlement a class-local date may participate in at most one PRODUCTIVITY
-    claim lifecycle, regardless of SUBMITTED / APPROVED / REJECTED. Rejection does
-    NOT free the date — the row remains, so a same-date re-file collides with the
-    constraint. ``UNIQUE(claim_id, claim_date)`` forbids a date appearing twice
-    within a single case.
+    Pending and approved claims reserve a date under the GRANTED entitlement
+    row lock. Rejection releases it while retaining immutable date evidence.
+    ``UNIQUE(claim_id, claim_date)`` forbids repeats within a single case.
 
     No mutable counters live here. Weekly claimed hours, weekly/period recognized
     payout consumption, and date-allowance-used are all re-derived by reading this
@@ -2217,7 +2215,6 @@ class InsuranceClaimProductivityDate(db.Model):
     )
 
     __table_args__ = (
-        db.UniqueConstraint('entitlement_id', 'claim_date', name='uq_icpd_entitlement_date'),
         db.UniqueConstraint('claim_id', 'claim_date', name='uq_icpd_claim_date'),
         db.Index('ix_icpd_claim_id', 'claim_id'),
         db.Index('ix_icpd_entitlement_id', 'entitlement_id'),

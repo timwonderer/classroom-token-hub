@@ -103,6 +103,40 @@ register("admin_payroll_correction.html", "nothing-to-correct", lambda: {
 }, path="/admin/payroll/correction", actor="teacher")
 
 
+# ---- admin_fine_confirm.html -------------------------------------------------
+
+def _fine_confirm(*, out_of_band, notice=None, band=True):
+    from app.forms import TeacherFineForm
+
+    form = TeacherFineForm(data={"reason": "Talking during the test", "amount": Decimal("20.00")})
+    return {
+        **admin_layout(current_page="payroll"),
+        "form": form, "amount": "$20.00", "reason": "Talking during the test",
+        "band_low": "$5.00" if band else None, "band_high": "$12.00" if band else None,
+        "out_of_band": out_of_band, "notice": notice,
+        "rows": [
+            {"public_id": "pub-11", "name": "Sam Student", "checking_before": "$30.00",
+             "savings_before": "$0.00", "protection_transfer": None, "checking_after": "$10.00",
+             "savings_after": "$0.00", "goes_negative": False},
+            {"public_id": "pub-12", "name": "Riley Learner", "checking_before": "$5.00",
+             "savings_before": "$40.00", "protection_transfer": "$15.00", "checking_after": "$0.00",
+             "savings_after": "$25.00", "goes_negative": False},
+            {"public_id": "pub-13", "name": "Jordan Pupil", "checking_before": "$2.00",
+             "savings_before": "$3.00", "protection_transfer": None, "checking_after": "-$18.00",
+             "savings_after": "$3.00", "goes_negative": True},
+        ],
+        "preview_digest": "0" * 64, "submission_token": "f" * 32,
+    }
+
+
+register("admin_fine_confirm.html", "out-of-band", lambda: _fine_confirm(out_of_band=True),
+         path="/admin/payroll/fine/review", actor="teacher")
+register("admin_fine_confirm.html", "balances-changed-no-band", lambda: _fine_confirm(
+    out_of_band=False, band=False,
+    notice="A balance changed since you reviewed this fine, so nothing was applied.",
+), path="/admin/payroll/fine", actor="teacher")
+
+
 # ---- admin_process_claim.html -----------------------------------------------
 
 def _policy(**overrides):
@@ -114,7 +148,7 @@ def _policy(**overrides):
 def _contract(**overrides):
     values = dict(
         coverage_effective_date=date(2030, 1, 3), coverage_start_utc=_NOW - timedelta(days=15),
-        claim_window_days=14, period_allowance=4, period_consumed=1, allowance_unit="claim",
+        claim_window_days=14, weekly_allowance=4, weekly_consumed=1, allowance_unit="claim",
         allowance_per_week=2, maximum_policy_payout=Decimal("20.00"), remaining_period_cap=Decimal("16.00"),
         filed_within_window=True, period_start_utc=_NOW - timedelta(days=10), period_end_utc=_NOW + timedelta(days=4),
     )

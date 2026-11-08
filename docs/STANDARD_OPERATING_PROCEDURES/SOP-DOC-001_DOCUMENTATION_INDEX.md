@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.45 | 2026-10-27 | 3.44 | Normative |
+| SOP-DOC-001 | 3.52 | 2026-11-06 | 3.51 | Normative |
 
 ---
 
@@ -118,6 +118,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
 - [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
+- [FEAT-LED-006 — Apply Teacher Penalty](../FEATURE-EXECUTION/FEAT-LED-006_APPLY_TEACHER_PENALTY.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
 - [FEAT-OBL-003 — Satisfy Obligation](../FEATURE-EXECUTION/FEAT-OBL-003_SATISFY_OBLIGATION.md)
 - [FEAT-OBL-004 — Insurance Policy Purchase / Enrollment](../FEATURE-EXECUTION/FEAT-OBL-004_INSURANCE_POLICY_PURCHASE.md)
@@ -279,6 +280,27 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.52 (2026-11-06):**
+- Register SOP-DEP-002 v1.21: a `new` release-notes tag; release notes gain a *New* section between Highlights and Fixed.
+
+**Version 3.51 (2026-11-05):**
+- Register SOP-DEP-002 v1.20: release records name no class by `class_id`, `join_code` or name (`DOM-OPS-001` §7); the step 8 balance baseline is one summary row with a fingerprint of the per-class table, not a row per class.
+
+**Version 3.50 (2026-11-04):**
+- Register DOM-STORE-001 v5.10, FEAT-STOR-004 v1.1, and FEAT-STOR-002 v2.5: independent teacher hall-pass adjustments limited to 100 passes per student per request, request replay protection, direct-grant-only removal, and purchased hall passes shown as available count and transaction rather than My Items.
+
+**Version 3.49 (2026-11-04):**
+- Register FEAT-LED-006 v1.0 (Apply Teacher Penalty), DOM-LED-001 v2.19, DOM-PROD-001 v1.15, DOM-OBL-001 v3.4, DOM-CORE-001 v1.3, DOM-CORE-002 v1.20, DOM-POL-001 v2.11 and DOM-ITR-001 v1.10: a teacher-applied fine is a Ledger `penalty`, not an obligation; there is no fine or reward catalog; the NSF fee was never an obligation (owner ruling 2026-11-04, issue #1701).
+
+**Version 3.48 (2026-11-03):**
+- Register DOM-STORE-001 v5.9, FEAT-STOR-003 v1.6, and SPEC-ECON-003 v2.4: weekly filing limits, rejection releases target reservations but retains allowance usage, atomic submission, and claim-level rejection of incomplete claims.
+
+**Version 3.47 (2026-11-01):**
+- Register DOM-STORE-001 v5.8 and FEAT-PROD-002 v1.2: a hall-pass request still open at the end of its class-local day closes like a rejection and consumes nothing, and an approved pass never left on reads Revoked once its day has ended, derived and never stored (owner ruling 2026-11-01).
+
+**Version 3.46 (2026-10-28):**
+- Register DOM-CORE-002 v1.19, DOM-POL-001 v2.10, DOM-POL-001A v2.6, FEAT-POL-001 v2.3, FEAT-CLASS-003 v0.4, SPEC-CLASS-001 v1.1 and SPEC-STORE-001 v1.7: configuration export includes rent-linked store products without their rent-product links; a product not directly purchasable imports HIDDEN with its terms unchanged (owner ruling 2026-10-28).
 
 **Version 3.45 (2026-10-27):**
 - Register DOM-OPS-001 v2.15: `classes.class_id`, `seats.id` and `users.id` stay inside the database; log lines, telemetry, operator-facing pages and URLs name a class by `class_public_id` or `join_code` and an actor by `seats.public_id`, including inside composed idempotency keys and correlation ids (owner ruling 2026-10-27).

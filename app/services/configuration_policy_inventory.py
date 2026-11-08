@@ -11,9 +11,9 @@ def policy_inventory(context):
     payroll = current_payroll_setting(class_id)
     rent = get_rent_settings(class_id)
     hall = _current_hall_pass_settings(class_id)
-    linked = {b.get("product_lineage_uuid") for b in rent.get_satisfaction_benefit_grants()} if rent else set()
-    store = [project(row, "store", context) for row in store_service.list_products(class_id, states=["IN_USE"])
-             if row.product_lineage_uuid not in linked]
+    # Rent-linked products export like any other; the link itself lives on rent
+    # settings (satisfaction_benefits) and never travels (owner ruling 2026-10-28).
+    store = [project(row, "store", context) for row in store_service.list_products(class_id, states=["IN_USE"])]
     groups = {}
     insurance = []
     for row in insurance_definition_service.list_insurance_definitions(class_id=class_id, availability_states=["IN_USE"]):

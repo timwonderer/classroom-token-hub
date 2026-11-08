@@ -62,7 +62,6 @@ def _pending_request(classroom, student, request_id="req-1"):
         class_id=classroom.class_id,
         seat_id=student.seat.id,
         destination="Bathroom",
-        requested_at_utc=datetime(2026, 9, 21, 4, 0, tzinfo=timezone.utc),
     )
 
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.18 | 2026-10-27 | 2.17 | Constitutional |
+| DOM-LED-001 | 2.19 | 2026-11-04 | 2.18 | Constitutional |
 
 ---
 
@@ -97,6 +97,7 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
   | `payroll` | — |
   | `payroll_correction` | — |
   | `manual_payment` | — |
+  | `penalty` | — |
   | `issue_reversal` | — |
   | `issue_compensation` | — |
   | `rent_payment` | — |
@@ -307,6 +308,8 @@ Every origin independently enforces §VII.1A: total attributable recovery never 
 `resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
 
 ## X. Change Notes
+
+**2.19 (2026-11-04)** adds `penalty` to INV-LED-017's enumeration (owner ruling 2026-11-04, issue #1701). A teacher-applied fine is a Ledger penalty: a direct checking debit carrying the teacher's reason, posted by `FEAT-LED-006` after `SPEC-ECON-003` §4.5.1.1A funding. It is not an obligation and never generates a fee (§4.5.1.1). Ledger owns the transaction and the resulting balance; correction is an exact reversal under `FEAT-LED-002`, never an edit. Migration `a0faf8b2a35d` re-creates `ck_ledger_transaction_type_closed_vocabulary` from the amended table. Its downgrade narrows the vocabulary only while no `penalty` row exists and otherwise leaves `penalty` admitted, so it stays reversible without stranding a posted fine. The constraint stays `NOT VALID`.
 
 **2.18 (2026-10-27)** removes `bug_reward` from INV-LED-017's enumeration (owner ruling 2026-10-27: the sysadmin bug reward is retired until badges are formally implemented; DOM-SUP-001 v1.10). No row has ever carried it and nothing writes it. Migration `e3b7c1d9a2f4` re-creates `ck_ledger_transaction_type_closed_vocabulary` from the amended table and refuses to run while any `bug_reward` row exists, so the vocabulary stays closed over every existing row. Like its predecessor the constraint is `NOT VALID`; validating it against existing rows remains a separate step.
 

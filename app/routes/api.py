@@ -68,7 +68,10 @@ from app.services.class_configuration_query_service import (
 )
 from app.services.entitlement_service import consume_entitlement, get_hall_pass_balance, grant_hall_passes
 from app.services.hall_pass_status_service import (
+    HALL_PASS_STATUS_LEFT,
     HALL_PASS_STATUS_RETURNED,
+    HALL_PASS_STATUS_REVOKED,
+    hall_pass_revoked,
     resolve_hall_pass_lifecycle_status,
 )
 from app.feats.hall_pass_request_feat import (
@@ -97,6 +100,7 @@ from app.services.attendance_service import (
     calculate_worked_attendance_seconds_today,
     get_class_attendance_status,
     is_done_for_day,
+    is_live_session,
 )
 from app.services.ledger_posting_service import create_pending_transaction, create_pending_transaction_idempotent
 from app.services.ledger_balance_query_service import get_available_balances
@@ -715,7 +719,7 @@ def request_hall_pass():
         .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
         .first()
     )
-    if not latest_event or latest_event.status != "active":
+    if not is_live_session(context, latest_event):
         return jsonify({"status": "error", "message": "Start work before requesting a hall pass."}), 400
 
     evaluation = canonical_temporal_resolver(
@@ -837,16 +841,19 @@ def handle_hall_pass_action(pass_id, action):
 
     try:
         if action == 'leave':
-            latest_event = (
-                AttendanceSession.query.filter_by(
-                    target_seat_id=log_entry.requested_by_seat_id,
-                    class_id=log_entry.class_id,
-                )
-                .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-                .first()
+            # A pass leaves once: this pass's own attendance sequence decides,
+            # as it does for a return.
+            lifecycle = resolve_hall_pass_lifecycle_status(
+                class_id=log_entry.class_id,
+                seat_id=log_entry.requested_by_seat_id,
+                hall_pass_id=log_entry.hall_pass_id,
             )
-            if latest_event and latest_event.status == "inactive" and latest_event.reason_code == AttendanceReasonCode.HALL_PASS.value:
+            if lifecycle.status == HALL_PASS_STATUS_LEFT:
                 return jsonify({"status": "success", "message": "Student is already marked out."})
+            if lifecycle.status == HALL_PASS_STATUS_RETURNED:
+                return jsonify({"status": "error", "message": "This pass has already ended."}), 400
+            if hall_pass_revoked(ctx, log_entry, lifecycle):
+                return jsonify({"status": "error", "message": "This pass is no longer valid."}), 400
             record_attendance_session(
                 ctx=ctx,
                 target_seat_id=log_entry.requested_by_seat_id,
@@ -860,15 +867,14 @@ def handle_hall_pass_action(pass_id, action):
             )
             return jsonify({"status": "success", "message": "Student has left the class."})
         if action == 'return':
-            latest_event = (
-                AttendanceSession.query.filter_by(
-                    target_seat_id=log_entry.requested_by_seat_id,
-                    class_id=log_entry.class_id,
-                )
-                .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-                .first()
+            # This pass's own sequence, as in checkin_hall_pass: the seat's latest
+            # event being active says nothing about whether this pass has ended.
+            lifecycle = resolve_hall_pass_lifecycle_status(
+                class_id=log_entry.class_id,
+                seat_id=log_entry.requested_by_seat_id,
+                hall_pass_id=log_entry.hall_pass_id,
             )
-            if latest_event and latest_event.status == "active":
+            if lifecycle.status == HALL_PASS_STATUS_RETURNED:
                 return jsonify({"status": "success", "message": "Student is already marked returned."})
             record_attendance_session(
                 ctx=ctx,
@@ -945,20 +951,21 @@ def checkout_hall_pass():
         return context_error
 
     try:
-        latest_event = (
-            AttendanceSession.query.filter_by(
-                target_seat_id=student.id,
-                class_id=log_entry.class_id,
-            )
-            .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-            .first()
+        lifecycle = resolve_hall_pass_lifecycle_status(
+            class_id=log_entry.class_id,
+            seat_id=student.id,
+            hall_pass_id=log_entry.hall_pass_id,
         )
-        if latest_event and latest_event.status == "inactive" and latest_event.reason_code == AttendanceReasonCode.HALL_PASS.value:
+        if lifecycle.status == HALL_PASS_STATUS_LEFT:
             return jsonify({
                 "status": "success",
                 "message": "You are already checked out.",
                 "destination": log_entry.destination,
             })
+        if lifecycle.status == HALL_PASS_STATUS_RETURNED:
+            return jsonify({"status": "error", "message": "This pass has already ended."}), 400
+        if hall_pass_revoked(context, log_entry, lifecycle):
+            return jsonify({"status": "error", "message": "This pass is no longer valid."}), 400
 
         record_attendance_session(
             ctx=context,
@@ -1231,7 +1238,7 @@ def hall_pass_history():
             )
             left_row = lifecycle.left_row
             return_row = lifecycle.return_row
-            status = lifecycle.status
+            status = HALL_PASS_STATUS_REVOKED if hall_pass_revoked(context, record, lifecycle) else lifecycle.status
             records_data.append({
                 "id": record.id,
                 "student_name": student_name,
@@ -1676,7 +1683,7 @@ def handle_tap():
         .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
         .first()
     )
-    currently_active = bool(latest_event and latest_event.status == "active")
+    currently_active = is_live_session(context, latest_event)
 
     if normalized_action == "start_work" and currently_active:
         return jsonify({

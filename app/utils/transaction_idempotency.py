@@ -18,6 +18,7 @@ IDEMPOTENT_TRANSACTION_TYPES = frozenset(
         "payroll",
         "payroll_correction",
         "manual_payment",
+        "penalty",
         "issue_reversal",
         "issue_compensation",
         "rent_payment",

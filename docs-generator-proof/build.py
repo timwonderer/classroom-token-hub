@@ -119,7 +119,7 @@ def stage_navigation(published, titles):
     """Home, the full catalog and one page per category; the hero owns the h1 on home and catalog."""
     generated = {'type': 'docs', 'source_h1': True, 'sourceEditURL': ''}
     write_page(Path('index.md'), {'title': 'Developer documentation', 'type': 'home', 'url': '/',
-                                  'description': 'Invariants, domain authority, feature contracts, and operating procedures.'}, '')
+                                  'description': 'See how and why Classroom Token Hub was built this way.'}, '')
     catalog = [f'{len(published)} documents, generated from the published source set. '
                'This catalog is navigation; SOP-DOC-001 is the canonical index of record.\n']
     for prefix, title, description in GROUPS:
@@ -179,9 +179,9 @@ def stage_theme():
     (SITE / 'layouts/_partials/footer.html').write_text(footer)
     hero = Environment(loader=FileSystemLoader(ROOT / 'templates'), autoescape=True).get_template('macros/docs_hero.html').module.docs_hero
     (SITE / 'layouts/_partials/cth-hero.html').write_text(str(hero(
-        'Developer documentation', 'Invariants, domain authority, feature contracts, and operating procedures.')))
+        'Developer documentation', 'See how and why Classroom Token Hub was built this way.')))
     (SITE / 'layouts/_partials/cth-catalog-hero.html').write_text(str(hero(
-        'All documents', 'Explore the contracts, architecture, and operating procedures behind Classroom Token Hub.')))
+        'All documents', 'Explore the underlying rules, architecture, and operating procedures that power Classroom Token Hub.')))
 
 
 def prepare():

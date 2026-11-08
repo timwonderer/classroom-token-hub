@@ -612,3 +612,56 @@ def test_heading_outline_detector_reports_a_skipped_level():
     levels = _page_headings('<nav><h4>side</h4></nav><main><h1>T</h1><div class="offcanvas"><h5>help</h5></div>'
         '<div class="d-none"><h3>hidden</h3></div><h2>A</h2><h5>skip</h5></main>')
     assert levels == [1, 2, 5]
+
+
+def _link_to_rent(context, *products):
+    from tests.helpers.class_domain import customize_rent_settings
+    enable_class_feature(class_id=context.class_id, feature="rent")
+    customize_rent_settings(context.class_id, satisfaction_benefits=[
+        {"entitlement_type": "DELAYED_USE", "quantity": 1, "product_lineage_uuid": product.product_lineage_uuid}
+        for product in products])
+
+
+def test_rent_linked_products_export_without_their_link(app):
+    """Owner ruling 2026-10-28: the item travels, the rent link does not."""
+    from app.services.class_configuration_query_service import get_rent_settings
+    context, nonce = setup_transfer(app)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"perk:{uuid4()}"):
+        perk = transfer.publish_product(class_id=context.class_id, actor_seat_id=context.seat_id,
+            definition={"name": "Print pass", "price": 30, "economic_role": "necessity", "item_type": "delayed"})
+    _link_to_rent(context, perk)
+    names = [row["name"] for row in transfer.inventory(context)["store"]]
+    assert "Print pass" in names
+    raw = transfer.export_configuration(context, nonce, {"store": [names.index("Print pass")]})
+    assert "product_lineage_uuid" not in raw.decode() and "satisfaction_benefits" not in raw.decode()
+    preview = transfer.preview_import(context, nonce, raw)
+    transfer.confirm_import(context, nonce, raw, preview["token"])
+    copies = StoreProduct.query.filter_by(class_id=context.class_id, name="Print pass").all()
+    copy = next(row for row in copies if row.product_lineage_uuid != perk.product_lineage_uuid)
+    assert copy.availability_state == "IN_USE"
+    linked = {b["product_lineage_uuid"] for b in get_rent_settings(context.class_id).get_satisfaction_benefit_grants()}
+    assert perk.product_lineage_uuid in linked and copy.product_lineage_uuid not in linked
+
+
+def test_grant_only_rent_perk_imports_hidden_with_its_settings(app):
+    context, nonce = setup_transfer(app)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"grant:{uuid4()}"):
+        perk = transfer.publish_product(class_id=context.class_id, actor_seat_id=context.seat_id,
+            definition={"name": "Rent reward", "economic_role": "necessity", "item_type": "delayed",
+                "direct_purchase_allowed": False})
+    _link_to_rent(context, perk)
+    names = [row["name"] for row in transfer.inventory(context)["store"]]
+    raw = transfer.export_configuration(context, nonce, {"store": [names.index("Rent reward")]})
+    preview = transfer.preview_import(context, nonce, raw)
+    transfer.confirm_import(context, nonce, raw, preview["token"])
+    copy = next(row for row in StoreProduct.query.filter_by(class_id=context.class_id, name="Rent reward")
+        if row.product_lineage_uuid != perk.product_lineage_uuid)
+    assert copy.availability_state == "HIDDEN"
+    assert copy.direct_purchase_allowed is False and copy.price is None
+
+
+def test_preview_says_a_grant_only_item_arrives_hidden():
+    from app.services.configuration_display import preview_sections
+    item = {"name": "Rent reward", "direct_purchase_allowed": False, "price": None}
+    [store] = preview_sections({"store": [item]})
+    assert {"label": "Arrives", "value": "Hidden until you link it to rent or give it a price"} in store["blocks"][0]["rows"]

@@ -76,6 +76,15 @@ The same **Choose Break Type** dialog has a separate **Done for the day** button
 > **Your clock stops while you are out.** Pressing **Leave** marks you inactive and pressing **Return** marks you active again, so the time between them is not paid. Forgetting to press **Return** keeps you off the clock and quietly costs you money.
 
 > [!NOTE]
+> **If you are still out when the school day ends, you are marked returned and done for the day.** The time you were out is not paid. Next time, press **Start Work** as usual.
+
+> [!NOTE]
+> **An approved pass you have not left on by the end of the school day is revoked.** You can no longer leave on it, and it stays used. Ask for a new pass if you need one.
+
+> [!NOTE]
+> **A request still waiting at the end of the school day is closed, the same as if your teacher declined it.** You keep your pass.
+
+> [!NOTE]
 > **You can only have one request waiting at a time.** Asking again while a request is pending replaces the first one rather than queuing a second.
 
 > [!TIP]

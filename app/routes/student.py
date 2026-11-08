@@ -2233,14 +2233,11 @@ def _active_insurance_entitlement_id(seat_id, class_id, policy_uuid):
     return None
 
 
-def _eligible_claim_transactions(seat_id, class_id, limit=25):
+def _eligible_claim_transactions(seat_id, class_id, entitlement_id, limit=25):
     """Recent money-out transactions a TRANSACTION policy might cover (FEAT validates).
 
-    Excludes a transaction that already backs a claim of any status — a source
-    transaction may back at most one claim lifecycle, ever (FEAT-STOR-003's
-    DUPLICATE_CLAIM_SUBJECT gate at submission enforces this already). Listing
-    an already-claimed transaction here just let a student pick it and be
-    refused, so this reads the same fact the submission gate checks.
+    Pending and approved claims under this coverage reserve their transaction;
+    rejected claims release it. The FEAT independently enforces weekly allowance.
     """
     from app.models import InsuranceClaim
     from app.services.insurance_eligibility_contract import (
@@ -2258,8 +2255,8 @@ def _eligible_claim_transactions(seat_id, class_id, limit=25):
     already_claimed_txn_ids = {
         (claim.claim_basis or {}).get("transaction_id")
         for claim in InsuranceClaim.query.filter_by(
-            class_id=class_id, target_seat_id=seat_id,
-        ).all()
+            class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id,
+        ).filter(InsuranceClaim.status.in_(["SUBMITTED", "APPROVED"])).all()
     }
     return [
         t for t in rows
@@ -2299,7 +2296,7 @@ def file_claim(policy_uuid):
     claimable = is_transaction_type or is_productivity_type
     form = InsuranceClaimForm()
     if is_transaction_type:
-        eligible = _eligible_claim_transactions(seat_id, class_id)
+        eligible = _eligible_claim_transactions(seat_id, class_id, entitlement_id)
         from app.services.store.builders import build_claim_transaction_choices
         form.transaction_id.choices = [("", "Select a transaction…")] + build_claim_transaction_choices(
             g.canonical_context, eligible,
@@ -2541,12 +2538,10 @@ def shop():
 
     entitlements = []
     product_by_key = _resolve_entitlement_products(class_id)
-    for entry in get_entitlement_history(seat_id=seat.id, class_id=class_id):
-        # Insurance entitlements are governed by InsurancePolicy, not by the
-        # store catalog. Skip them so an insurance grant is never rendered as a
-        # store item.
-        if entry["entitlement_type"] == "INSURANCE":
-            continue
+    for entry in get_entitlement_history(
+        seat_id=seat.id, class_id=class_id,
+        exclude_entitlement_types=("INSURANCE", "HALL_PASS"),
+    ):
         item = _product_for_entitlement(product_by_key, entry)
         if item is None:
             continue

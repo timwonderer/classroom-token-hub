@@ -44,6 +44,8 @@ def test_DOM_LED_001__idempotent_transaction_types_are_explicit():
         # updating this pin. A rent charge must not double-post on retry, so it
         # belongs in the set; the enumeration here is what had gone stale.
         "rent_payment",
+        # FEAT-LED-006 teacher fines (#1701): a fine must not post twice on retry.
+        "penalty",
         "Interest",
         "void_item_removed",
     })

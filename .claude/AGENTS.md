@@ -8,6 +8,7 @@ These notes orient future agents working on this repository—especially ongoing
 - **Tests:** run `pytest -q` before committing; add focused tests for tenancy helpers when changing scoping logic.
 - **App entry:** `wsgi.py`; Flask app factory in `app/__init__.py`.
 - **Access gate:** Cloudflare Access manages restricted work windows. The app has no maintenance flag, page, or bypass (DOM-OPS-001).
+- **Releases are gated on the droplet, not here.** `release-v2.yml`'s SSH calls to production refuse unless the Access gate is closed and `infra/db-backup/prerelease.sh evidence <sha>` has uploaded fresh, signed proof of a real backup/restore for that exact revision (`infra/release-gate/`, `SOP-DEP-002` §VII.A step 7a). This is enforced by `sshd` on the droplet and cannot be satisfied from inside a session — if a release dispatch fails with `guarded-deploy: ...`, that is this gate, not a bug; the fix is running the real procedure from the owner's Mac mini, never editing or working around the gate itself.
 
 ## Database Migrations - CRITICAL FOR AGENTS
 

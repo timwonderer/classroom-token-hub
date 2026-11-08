@@ -34,6 +34,7 @@ def enforce_daily_limits_job():
         canonical_temporal_resolver,
     )
     from sqlalchemy import func
+    from sqlalchemy.orm import aliased
 
     logger = logging.getLogger('scheduled_tasks')
     logger.info("Starting scheduled daily-limit enforcement job")
@@ -65,8 +66,26 @@ def enforce_daily_limits_job():
             .all()
         )
 
+        # A pass still open ends with its day (DOM-PROD-001 §XI.1): an exit that
+        # no active row names, whatever the seat has done since.
+        return_row = aliased(AttendanceSession)
+        seats_with_open_pass = (
+            db.session.query(AttendanceSession.target_seat_id, AttendanceSession.class_id)
+            .filter(
+                AttendanceSession.reason_code == AttendanceReasonCode.HALL_PASS.value,
+                ~db.session.query(return_row.id).filter(
+                    return_row.class_id == AttendanceSession.class_id,
+                    return_row.target_seat_id == AttendanceSession.target_seat_id,
+                    return_row.hall_pass_id == AttendanceSession.hall_pass_id,
+                    return_row.status == "active",
+                ).exists(),
+            )
+            .distinct()
+            .all()
+        )
+
         seat_ids_by_class_id = {}
-        for seat_id, class_id in active_seats:
+        for seat_id, class_id in {tuple(row) for row in [*active_seats, *seats_with_open_pass]}:
             seat_ids_by_class_id.setdefault(class_id, []).append(seat_id)
 
         checked_count = 0
@@ -121,6 +140,8 @@ def enforce_daily_limits_job():
                         from app.services.attendance_service import close_due_attendance_intervals
                         closures = close_due_attendance_intervals(ctx=ctx, seat_id=seat_id, as_of_utc=now_utc)
                         closed_count += len(closures)
+                        from app.services.attendance_writer_service import close_due_hanging_hall_pass
+                        closed_count += len(close_due_hanging_hall_pass(ctx=ctx, seat_id=seat_id, as_of_utc=now_utc))
                 except FEATContextError:
                     # A constitutional violation is never per-seat noise. Swallowing
                     # it here is how this job reported success while closing zero
@@ -786,6 +807,40 @@ def purge_expired_teacher_signups_job():
         idempotency_key='teacher-signup:purge')
 
 
+def close_prior_day_hall_pass_requests_job():
+    """Close every class's hall-pass requests whose day has ended (FEAT-PROD-002 §III.A)."""
+    from app.extensions import db
+    from app.feats.base import FEATContextError, generate_correlation_id
+    from app.feats.hall_pass_request_feat import close_prior_day_hall_pass_requests
+    from app.models import ClassEconomy
+    from app.services.context_resolver import CanonicalContext
+    from app.services.hall_pass_request_queue import list_class_ids_with_pending_hall_pass_requests
+    from app.services.identity_service import resolve_teacher_seat_for_class
+
+    logger = logging.getLogger('scheduled_tasks')
+    for class_id in list_class_ids_with_pending_hall_pass_requests():
+        try:
+            class_row = db.session.get(ClassEconomy, class_id)
+            close_prior_day_hall_pass_requests(
+                ctx=CanonicalContext(
+                    user_id=class_row.teacher_user_id,
+                    class_id=class_id,
+                    seat_id=resolve_teacher_seat_for_class(class_id).id,
+                    actor_role="teacher",
+                ),
+                correlation_id=generate_correlation_id(),
+                idempotency_key=f"hall-pass-request-close:{generate_correlation_id()}",
+            )
+        except FEATContextError:
+            raise
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Error closing hall-pass requests in class %s: %s",
+                class_log_ref(class_id), e, exc_info=True,
+            )
+
+
 SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
     # The nine hourly jobs below are cron-triggered on distinct minutes of the
     # hour, not `interval, hours=1`. An interval trigger anchors to the instant
@@ -808,6 +863,13 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         func=purge_stale_teacher_accounts_job,
         trigger='cron',
         trigger_kwargs={'minute': 6},
+    ),
+    ScheduledJobSpec(
+        id='close_prior_day_hall_pass_requests',
+        name='Close hall-pass requests whose day has ended',
+        func=close_prior_day_hall_pass_requests_job,
+        trigger='cron',
+        trigger_kwargs={'minute': 15},
     ),
     ScheduledJobSpec(
         id='enforce_daily_limits',

@@ -744,6 +744,7 @@
                         <form action="{{ url_for('admin.adjust_hall_pass_entitlements', seat_public_id=student.public_id) }}" method="post"
                             class="row g-3 align-items-end">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="request_id" value="{{ hall_pass_adjustment_request_id }}">
                             <div class="col-md-4">
                                 <label for="hall_pass_action" class="form-label fw-bold">Action</label>
                                 <select class="form-select form-select-lg" name="hall_pass_action" id="hall_pass_action" required>
@@ -754,7 +755,7 @@
                             <div class="col-md-4">
                                 <label for="hall_pass_quantity" class="form-label fw-bold">Quantity</label>
                                 <input type="number" class="form-control form-control-lg" name="hall_pass_quantity"
-                                    id="hall_pass_quantity" value="1" min="1" required>
+                                    id="hall_pass_quantity" value="1" min="1" max="100" required>
                             </div>
                             <div class="col-md-4">
                                 <button type="submit" class="btn btn-warning btn-lg w-100">
@@ -763,7 +764,7 @@
                             </div>
                         </form>
                         {% call cards.alert_card('info', 'How hall pass adjustments are recorded', icon='confirmation_number', body_class='mt-3 mb-0') %}
-                            <p class="mb-0">Hall passes are entitlement events. Add creates new grant events; remove appends reversals against unconsumed grant correlations.</p>
+                            <p class="mb-0">Add increases the available hall-pass count. Remove takes back unused teacher-granted passes. Purchased passes and rent perks cannot be removed here.</p>
                         {% endcall %}
                     </div>
                 </div>

@@ -11,6 +11,9 @@ keywords: [teacher, features, guide, classroom, economy, bills, settings]
 
 Use this index to jump straight to the exact feature you need. Each section links to short, focused pages so you do not have to scan a mega-guide.
 
+## Before you start
+- [Is Classroom Token Hub Right for You?](design-choices.md)
+
 ## Classroom
 - [Classroom Features](classroom/index.md)
 

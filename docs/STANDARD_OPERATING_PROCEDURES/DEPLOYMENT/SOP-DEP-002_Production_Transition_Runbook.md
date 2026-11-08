@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.16 | 2026-10-23 | 1.15 | Normative |
+| SOP-DEP-002 | 1.21 | 2026-11-06 | 1.20 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -67,6 +67,12 @@ Current branch verification references:
   approved deployment path;
 - transport smoke test: `.github/workflows/tailscale-ssh-smoke-test.yml`
 - migration safety check: `bash scripts/check-migrations.sh`
+- droplet-side release gate: `infra/release-gate/` — two forced SSH commands, enforced by `sshd`,
+  independent of anything in this repository's own CI config. `guarded-deploy.sh`, on its own
+  dedicated key (`RELEASE_DEPLOY_KEY`), refuses every one of `release-v2.yml`'s calls to production
+  unless the Access gate is closed and step 7a's evidence is fresh and valid. `guarded-ci.sh`, on the
+  shared `DO_DEPLOY_KEY`, restricts `login-notice.yml` and `tailscale-ssh-smoke-test.yml` to exactly
+  those two operations, so that repository secret cannot be used for an ungated deploy.
 
 The production release lineage is configured as the protected environment
 variable `V2_RELEASE_LINEAGE_REF`. A release request MUST provide a full
@@ -100,7 +106,10 @@ there is no application flag, sysadmin bypass, or query-token alternative.
 
 Every tagged release follows these steps in order, whether or not it carries a migration. A step is skipped only
 where this section says so, and the release record says which step and why. Commands run from the operator's Mac
-at the repository root; database reads use read-only, aggregate-only queries with class ids, never names.
+at the repository root; database reads use read-only, aggregate-only queries. Release records are published in this
+public repository, so nothing copied into one names a class by `class_id`, `join_code` or name, or a seat or user
+by its id (`DOM-OPS-001` §7); a record carries totals, and where it must point at one class it uses
+`class_public_id`.
 
 Roles are those of §V. A single operator may hold all three under the solo-operator exception (`SOP-DEP-001`
 §XIII), whose conditions the record must show met or name as a deviation. Checks run by an AI assistant are
@@ -113,7 +122,7 @@ advisory and are recorded as such, never as the independent verifier.
    in the section belongs to a PR in that range (`git merge-base --is-ancestor <merge> vPREV` is false). Subsections
    appear only from this list, in this order, each once: Added, Changed, Deprecated, Removed, Fixed, Security,
    Investigated, no code change. Each entry also names its release-notes section in an invisible tag after its
-   bullet, `- <!-- notes: fixed|security-reliability|accessibility|internal[, highlight] --> **Headline** ...`
+   bullet, `- <!-- notes: new|fixed|security-reliability|accessibility|internal[, highlight] --> **Headline** ...`
    (step 13). Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
 2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
@@ -141,9 +150,15 @@ advisory and are recorded as such, never as the independent verifier.
    the key against `recipients.txt`, restores into the in-memory database, runs the manifest and no-resurrection
    checks, deletes the identity with `rm -P`, closes the SSH tunnel to production, and stops the verify container.
    Both checks must PASS. A run abandoned before `restore` closes the tunnel with `prerelease.sh close-tunnel`.
+7a. **Evidence.** `bash infra/db-backup/prerelease.sh evidence <SHA>` signs proof that steps 5-7 just
+   passed, for this exact revision, and uploads it to the droplet. `release-v2.yml`'s SSH calls will
+   refuse without it — see `infra/release-gate/README.md`. This step cannot be skipped by anything
+   short of not installing the gate described there in the first place.
 8. **Balance baseline**, read with the application stopped. Each snapshot is compared only with the ledger rows
    at or below its `reconciled_through_posting_sequence` (`DOM-LED-001` §VIII.2); later rows are pending and are
-   reported apart:
+   reported apart. The query returns one row however many classes exist: totals, the number of class/account rows
+   whose posted ledger differs from their snapshots, and a fingerprint of the whole per-class table, so step 10 can
+   tell an unchanged table from one whose totals merely agree:
 
    ```sql
    WITH s AS (SELECT class_id, seat_id, account_type, posted_balance_cents, reconciled_through_posting_sequence AS cursor
@@ -156,15 +171,23 @@ advisory and are recorded as such, never as the independent verifier.
          LEFT JOIN s ON s.class_id = t.class_id AND s.seat_id = t.seat_id AND s.account_type = t.account_type
          GROUP BY 1, 2),
    ss AS (SELECT class_id, account_type, count(*) AS snapshots, sum(posted_balance_cents) AS snapshot_cents
-          FROM s GROUP BY 1, 2)
-   SELECT coalesce(l.class_id, ss.class_id) AS class_id, coalesce(l.account_type, ss.account_type) AS account,
-          l.txns, l.ledger_posted_cents, ss.snapshots, ss.snapshot_cents, l.pending_cents,
-          l.ledger_posted_cents IS NOT DISTINCT FROM ss.snapshot_cents AS posted_matches
-   FROM l FULL JOIN ss ON ss.class_id = l.class_id AND ss.account_type = l.account_type
-   ORDER BY 1, 2;
+          FROM s GROUP BY 1, 2),
+   r AS (SELECT coalesce(l.class_id, ss.class_id) AS class_id, coalesce(l.account_type, ss.account_type) AS account,
+                l.txns, l.ledger_posted_cents, ss.snapshots, ss.snapshot_cents, l.pending_cents,
+                l.ledger_posted_cents IS NOT DISTINCT FROM ss.snapshot_cents AS posted_matches
+         FROM l FULL JOIN ss ON ss.class_id = l.class_id AND ss.account_type = l.account_type)
+   SELECT count(DISTINCT class_id) AS classes, count(*) AS account_rows, sum(txns) AS txns,
+          sum(ledger_posted_cents) AS ledger_posted_cents, sum(snapshot_cents) AS snapshot_cents,
+          sum(pending_cents) AS pending_cents,
+          count(*) FILTER (WHERE NOT posted_matches) AS mismatched_rows,
+          md5(string_agg(concat_ws('|', class_id, account, txns, ledger_posted_cents, snapshots, snapshot_cents,
+                                   pending_cents), ',' ORDER BY class_id, account)) AS fingerprint
+   FROM r;
    ```
 
-   `posted_matches` is true in every row; keep the table, including `pending_cents`, for the record.
+   `mismatched_rows` is 0; keep the row, including `pending_cents` and the fingerprint, for the record. When it is
+   not 0, find the rows by rerunning `r` with `WHERE NOT posted_matches`, joined to `classes` for
+   `class_public_id`; the record names those classes by `class_public_id` only.
 9. **Tag and dispatch.** `git tag -a vX.Y.Z <SHA> -m "vX.Y.Z" && git push origin vX.Y.Z`, then
    `gh workflow run release-v2.yml -f revision=<full SHA> -f lineage_ref=main`. Dispatch once only: a second
    dispatch races the first. Watch the run through its health step.
@@ -173,12 +196,14 @@ advisory and are recorded as such, never as the independent verifier.
 
 10. **§VIII verification.** Host HEAD is the release SHA; the service is active; `127.0.0.1:8000/health` answers
     `ok`; `/docs` followed to its final response is 200 (`curl -L`), not just its 308; the scheduler has started; the journal has no `ERROR`, `CRITICAL`, `Traceback` or `WORKER TIMEOUT` lines
-    since the restart; `alembic_version` is the single head; the step 8 query matches the baseline, apart from
-    what the release itself is meant to change. The operator runs the browser checks in §VIII.
+    since the restart; `alembic_version` is the single head; the step 8 query returns `mismatched_rows` 0 and the
+    baseline's fingerprint. A different fingerprint is explained by what the release itself is meant to change,
+    or by activity after the application restarted (rows timestamped after the restart, by type), and the record
+    says which. The operator runs the browser checks in §VIII.
 11. **Reopen** by changing the Access policy (§VI).
 12. **Release record PR.** `docs/ops/audits/DEPLOY_<UTC date>_<short SHA>.md`, in the shape of the previous one:
     identity table, contents, migrations, §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
-    restore results), baseline, release run, §VIII results, rollback, follow-ups. Each follow-up is an issue on the
+    restore results), the step 8 summary row, release run, §VIII results, rollback, follow-ups. Each follow-up is an issue on the
     [CTH Backlog](https://github.com/users/timwonderer/projects/6) project, opened before the record merges, and the record links it rather than
     describing open work in prose. In the same PR, update the
     version in `README.md` and `DEVELOPMENT.md`, and make the first line of the CHANGELOG section exactly:
@@ -198,7 +223,7 @@ advisory and are recorded as such, never as the independent verifier.
     gh release create vX.Y.Z --verify-tag --title "$(python3 scripts/release_notes.py X.Y.Z --title)" --notes-file /tmp/notes.md
     ```
 
-    The notes are grouped for readers: Highlights (entries tagged `highlight`), then Fixed, Security & Reliability,
+    The notes are grouped for readers: Highlights (entries tagged `highlight`), then New, Fixed, Security & Reliability,
     Accessibility and Internal Changes, each listing one headline per entry with the full entries collapsed, and
     the deployment record and release run linked at the end (owner, 2026-10-22). The script refuses a section out
     of shape (heading, `Released as` line, subsection names and order), an entry without a known notes tag, and a
@@ -260,6 +285,7 @@ Maintenance window:
 Pre-window confirmation
 - Backup/snapshot reference:
 - Restore procedure verified:
+- Release evidence uploaded (step 7a):
 - flask db heads:
 - flask db current:
 - bash scripts/check-migrations.sh:
@@ -314,6 +340,49 @@ Record:
 ## XIII. Amendment
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.21 (2026-11-06):** §VII.A steps 1 and 13: a `new` release-notes tag and a *New* section, shown after Highlights and before Fixed, for something users can now do that they could not before (a feature, a guide page). Until now a new feature had to be tagged `fixed`, which misdescribed it, or `internal`, which hid it from teachers. Owner direction, 2026-11-04.
+
+**Version 1.20 (2026-11-05):** §VII.A: release records are published in this public repository, so they name no
+class by `class_id`, `join_code` or name (`DOM-OPS-001` §7, 2.15); a class a record must point at is named by
+`class_public_id`. Step 8's baseline query returns one summary row (totals, `mismatched_rows`, and an `md5`
+fingerprint of the per-class table) instead of a row per class and account, and step 10 compares the
+fingerprint. The old query printed every class's `class_id`, so every record from v2.1.1 (2026-10-04) to v2.4.3
+published them, and its table grew with the number of classes. Earlier records are left as published. Owner,
+2026-11-05.
+
+**Version 1.19 (2026-10-29):** v1.18 restricted `release-v2.yml` to its own dedicated key
+(`RELEASE_DEPLOY_KEY`) but left `DO_DEPLOY_KEY` itself unrestricted — and `DO_DEPLOY_KEY` is a
+repository secret, available to any workflow, so the same identity the whole gate exists to constrain
+could have simply pointed `release-v2.yml` (or a new workflow) back at `DO_DEPLOY_KEY` and deployed
+with no gate at all. `infra/release-gate/guarded-ci.sh` closes this: `DO_DEPLOY_KEY`'s
+`authorized_keys` line now carries its own forced command, restricted to exactly the two operations
+`login-notice.yml` and `tailscale-ssh-smoke-test.yml` use — a deploy-shaped command sent over this key
+is refused regardless of which workflow sent it. Every key GitHub Actions can use against the droplet
+is now forced-command-restricted to a fixed, hardcoded set of operations; none passes a client command
+through to a shell. Found before the v1.18 install was completed, so nothing needed to be undone.
+Owner direction, 2026-10-29.
+
+**Version 1.18 (2026-10-29):** `release-v2.yml`'s SSH authentication key is now `RELEASE_DEPLOY_KEY`, a
+key dedicated to that workflow, instead of the `DO_DEPLOY_KEY` secret shared with `login-notice.yml`
+and `tailscale-ssh-smoke-test.yml`. Discovered while installing v1.17's gate: `guarded-deploy.sh` only
+recognizes `release-v2.yml`'s three command shapes, so forcing it onto `DO_DEPLOY_KEY`'s
+`authorized_keys` line would have refused every request from those other two workflows the moment it
+was installed. `infra/release-gate/README.md` installs the new key directly with the forced command
+already on its line; `DO_DEPLOY_KEY`'s existing line is untouched. Owner direction, 2026-10-29.
+
+**Version 1.17 (2026-10-29):** §VI adds the droplet-side release gate (`infra/release-gate/`) and §VII.A
+adds step 7a, which produces the signed evidence that gate requires. Added after v2.4.0 (2026-10-29)
+was dispatched through the real, unmodified `release-v2.yml` before the maintenance window opened — an
+agent misread a time hint as a deadline and skipped steps 4-8. Investigated and rejected first: a
+required `workflow_dispatch` input/passphrase (the same shared GitHub identity can read or satisfy
+anything checked inside the workflow), a GitHub environment's required reviewers (self-approval is
+permitted there, unlike PR review), branch protection requiring review on `main` (this repository has
+one collaborator, so self-approval would either deadlock every PR or be skipped via admin bypass), and
+narrowing the GitHub connector's scope (owner confirmed 2026-10-29 it cannot be changed). None of those
+act on anything outside the identity the incident itself used. The gate in `infra/release-gate/` is
+enforced by `sshd` on the droplet from a root-owned file no PR can reach, and its evidence is signed
+by a key that has never been issued to any GitHub-authenticated identity. Owner direction, 2026-10-29.
 
 **Version 1.16 (2026-10-23):** §VI Cloudflare Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23.
 
