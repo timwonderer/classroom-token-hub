@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.54 | 2026-11-08 | 3.53 | Normative |
+| SOP-DOC-001 | 3.55 | 2026-11-08 | 3.54 | Normative |
 
 ---
 
@@ -179,7 +179,7 @@ Archived material is deliberately absent; see §VI.
 ### Procedures — Deployment (SOP-DEP)
 - [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.12: §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
 - [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.0: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
-- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.1: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, never teachers, students or live classes; each row separates evidence type from result.
+- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.2: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, never teachers, students or live classes; the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
 - [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.55 (2026-11-08):**
+- Register SOP-DEP-001B v1.2: the required check follows what the release changed in a feature, a browser check for what a browser observes and server-side evidence of the changed behaviour for server-only changes; classroom activity in its own course may satisfy a server-side check; a check that waits on a time boundary after the release window is *pending*, not a deviation; a release's checks are sub-issues of one parent Backlog issue, linked from the release record.
 
 **Version 3.54 (2026-11-08):**
 - Register SOP-DEP-001B v1.1: release validation is a development and operations responsibility; teachers and students take no part and live classroom activity is never orchestrated to satisfy a gate; server-side evidence establishes server behaviour only; *not exercised* is kept for a required check the operator could have run and did not.
