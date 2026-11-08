@@ -6,6 +6,7 @@ from opentelemetry.trace import TraceState
 
 
 def test_long_malformed_tracestate_does_not_stall_parser():
+    """Bound parsing time for the malformed header that triggered the CVE."""
     # Bound the vulnerable parser's runtime in a child process, never a server.
     result = subprocess.run(
         [sys.executable, "-c", """
@@ -20,6 +21,7 @@ assert list(TraceState.from_header(["vendor=value" + " " * 1_000_000 + "!"]).ite
 
 
 def test_valid_tracestate_is_preserved():
+    """Preserve valid tracing entries after the dependency upgrade."""
     assert list(TraceState.from_header(["vendor=value,other=second"]).items()) == [
         ("vendor", "value"), ("other", "second"),
     ]

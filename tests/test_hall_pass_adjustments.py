@@ -83,12 +83,14 @@ def test_changed_replay_payload_is_rejected(client, app, surface, action, quanti
 
 @pytest.mark.parametrize("surface", ["bulk", "detail"])
 def test_adjustment_cannot_target_another_class(client, app, surface):
+    """Reject other-class seats without exposing their internal identifiers."""
     other = initialize("ap_csp_p3", app)
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     response = _post(client, other.students[0], surface, "wrong-class")
     assert response.status_code == (200 if surface == "bulk" else 404)
     if surface == "bulk":
         assert response.get_json()["status"] == "error"
+        assert response.get_json()["errors"] == ["Student not found"]
     assert get_hall_pass_balance(other.students[0].seat_id, other.class_id) == 0
     assert EntitlementEvent.query.filter_by(class_id=classroom.class_id).count() == 0
 
@@ -107,11 +109,13 @@ def test_student_actor_cannot_call_adjustment(app):
 
 @pytest.mark.parametrize("surface,error_type", [("bulk", ValueError), ("detail", ValueError), ("bulk", RuntimeError)])
 def test_adjustment_hides_unexpected_exception_text(client, app, monkeypatch, surface, error_type, caplog):
+    """Keep unexpected exception contents out of responses and logs."""
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     student = classroom.students[0]
     secret = "private-db-password /srv/private/config.sql"
 
     def fail(**kwargs):
+        """Simulate a FEAT failure containing private diagnostic text."""
         raise error_type(secret)
 
     monkeypatch.setattr("app.routes.admin.execute_hall_pass_adjustment", fail)

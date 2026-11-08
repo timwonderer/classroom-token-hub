@@ -21,7 +21,8 @@ change.
   formatter returns only three literal, reviewed validation messages, otherwise a
   generic failure. It never returns exception-derived text. The detail route uses
   the same formatter because it called the same FEAT and flashed raw exceptions.
-- Bulk errors use the seat's public ID, not a student's name or internal ID.
+- Bulk adjustment errors use the seat's public ID, not a student's name or
+  internal ID. Missing or inaccessible seats return a generic not-found message.
   The outer bulk failure log records the exception class, not its contents.
 - Existing useful quantity/replay/removal guidance and partial-result behavior
   are retained. Regression tests inject private-looking exception text into both
@@ -71,3 +72,7 @@ case: **57 passed in 32.94 seconds**. Fresh full requirements install and
 updated Flask instrumentor successfully handled a request carrying valid W3C
 trace context; Requests/SQLAlchemy instrumentation and HTTP exporter imports also
 passed. This smoke check did not send telemetry or connect to production.
+
+PR review follow-up: both bulk not-found paths now omit the submitted internal
+seat ID. The cross-class regression asserts the exact generic response. The same
+four targeted files pass again on Python 3.10: **57 passed in 31.70 seconds**.

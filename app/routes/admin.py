@@ -3782,7 +3782,7 @@ def student_detail_public(actor_public_id):
 
 
 def _hall_pass_adjustment_error_message(error):
-    # Only reviewed validation messages may cross the HTTP boundary (INV-ARC-005).
+    """Return only reviewed validation messages across HTTP (INV-ARC-005)."""
     messages = (
         "Hall-pass quantity must be between 1 and 100 per adjustment",
         "This adjustment request was already used with different inputs",
@@ -8671,11 +8671,11 @@ def bulk_adjust_hall_pass_entitlements():
             )
 
             if not student:
-                errors.append(f"Student {seat_id} not found")
+                errors.append("Student not found")
                 continue
 
             if not verify_teacher_owns_class(student.class_id, g.canonical_context.user_id):
-                errors.append(f"Student {seat_id} not found")
+                errors.append("Student not found")
                 continue
 
             try:
