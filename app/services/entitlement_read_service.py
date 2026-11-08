@@ -865,9 +865,12 @@ def entitlement_expires_at(grant) -> Optional[datetime]:
     ).shifted_timestamp_utc
 
 
-def entitlement_past_expiry(grant, reference_time_utc: Optional[datetime] = None) -> bool:
-    """True once ``entitlement_expires_at`` has been reached."""
-    expires_at = entitlement_expires_at(grant)
+def entitlement_past_expiry(
+    grant, reference_time_utc: Optional[datetime] = None, *, expires_at: Optional[datetime] = None,
+) -> bool:
+    """True once ``entitlement_expires_at`` has been reached (pass it if already known)."""
+    if expires_at is None:
+        expires_at = entitlement_expires_at(grant)
     if expires_at is None:
         return False
     context = SimpleNamespace(class_id=grant.class_id)

@@ -295,3 +295,34 @@ def test_sweep_records_expiry_for_a_hall_pass(client, app, shop):
         expired = EntitlementEvent.query.filter_by(entitlement_id=entitlement_id, event_type="EXPIRED").all()
         assert len(expired) == 1
         assert expired[0].timestamp == expires_at
+
+
+def test_sweep_expires_items_whose_version_was_retired_by_an_edit(client, app, shop):
+    """The sweep reads only versions with an expiry, retired ones included: an
+    edit retires the version a student bought, and its terms still bind."""
+    from app.models import StoreProduct
+    from app.services import store_service
+
+    classroom, student, product = shop
+    entitlement_id = _buy(client, student, product)
+    with app.app_context():
+        current = StoreProduct.query.filter_by(policy_uuid=product.policy_uuid).one()
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"expiry:edit:{product.policy_uuid}"):
+            store_service.supersede_product(
+                current=current,
+                definition={
+                    "name": "Expiring pass, no expiry now",
+                    "price": "5.00",
+                    "item_type": "delayed",
+                    "economic_role": "necessity",
+                    "direct_purchase_allowed": True,
+                },
+                actor_seat_id=classroom.teacher_seat_id,
+            )
+        db.session.commit()
+        assert StoreProduct.query.filter_by(policy_uuid=product.policy_uuid).one().availability_state == "RETIRED"
+
+        expires_at = temporal.calendar_days_later(_BOUGHT_AT, 3, class_id=classroom.class_id)
+        with temporal.pinned_clock(temporal.shifted(expires_at, hours=1)):
+            run_store_item_expiry_job()
+        assert EntitlementEvent.query.filter_by(entitlement_id=entitlement_id, event_type="EXPIRED").count() == 1

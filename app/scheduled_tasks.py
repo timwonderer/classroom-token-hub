@@ -791,7 +791,7 @@ def run_store_item_expiry_job():
     """
     from app.extensions import db
     from app.feats.base import FEATContext
-    from app.models import EntitlementEvent
+    from app.models import EntitlementEvent, StoreProduct
     from app.services import entitlement_service
     from app.services.entitlement_read_service import (
         _STORE_EXPIRING_TYPES,
@@ -808,10 +808,19 @@ def run_store_item_expiry_job():
 
     ended = aliased(EntitlementEvent)
     try:
+        # Only versions with an expiry can expire anything, in any state: a
+        # holding keeps the terms of the version it was granted under, retired
+        # by a later edit or not (FEAT-STOR-002 §VIII).
+        expiring_versions = (
+            db.session.query(StoreProduct.policy_uuid)
+            .filter(StoreProduct.auto_expiry_days > 0)
+            .scalar_subquery()
+        )
         grants = (
             EntitlementEvent.query
             .filter(
                 EntitlementEvent.event_type == "GRANTED",
+                EntitlementEvent.payload["policy_uuid"].as_string().in_(expiring_versions),
                 EntitlementEvent.entitlement_type.in_(_STORE_EXPIRING_TYPES),
                 EntitlementEvent.acquisition_type != "PERK",
                 ~db.session.query(ended.event_id).filter(
@@ -823,14 +832,18 @@ def run_store_item_expiry_job():
             .order_by(EntitlementEvent.class_id.asc(), EntitlementEvent.timestamp.asc())
             .all()
         )
-        due = [grant for grant in grants if entitlement_past_expiry(grant)]
+        due = []
+        for grant in grants:
+            expires_at = entitlement_expires_at(grant)
+            if entitlement_past_expiry(grant, expires_at=expires_at):
+                due.append((grant, expires_at))
     except Exception:
         db.session.rollback()
         logger.exception("Store item expiry job could not enumerate holdings")
         return
 
     expired = skipped = failed = 0
-    for grant in due:
+    for grant, expires_at in due:
         try:
             ids = [grant.entitlement_id]
             if (
@@ -854,7 +867,7 @@ def run_store_item_expiry_job():
                         "source": "run_store_item_expiry_job",
                         "policy_uuid": (grant.payload or {}).get("policy_uuid"),
                     },
-                    effective_at=entitlement_expires_at(grant),
+                    effective_at=expires_at,
                 )
             expired += 1
         except Exception:
