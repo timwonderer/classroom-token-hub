@@ -40,6 +40,8 @@ def allocate_payroll_cents(pricing, *, original_credit, allocation_version):
             raise AllocationIntegrityError("Membership does not sum to its pricing share.") from exc
         if not proven:
             raise AllocationIntegrityError("Membership does not sum to its pricing share.")
+        if cents and not credited:  # SPEC-PROD-001 §VI: nonzero C with S = 0
+            raise AllocationIntegrityError("Nonzero share has no credited membership.")
         ranked, allocated = [], 0
         for source in sources:
             key = (source["opening_event_id"], source["closing_event_id"])
