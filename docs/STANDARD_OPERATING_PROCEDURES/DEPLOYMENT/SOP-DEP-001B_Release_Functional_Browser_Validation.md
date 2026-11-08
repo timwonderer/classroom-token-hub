@@ -106,8 +106,8 @@ one result:
 - *Pending*: the required check depends on a time boundary that falls after the release window (a class-local day,
   a bill or pay cycle, an item's expiry, a scheduled run), so it could not be run inside it. The row names the
   boundary, when it falls, and how the operator will observe it (a test class, or server-side evidence §V.A.4
-  allows). It stays open until observed and is then recorded with its result. Waiting on time is neither a
-  deviation nor *not exercised*.
+  allows). It stays open until observed, and its result is recorded on its follow-up issue (§VIII). Waiting on
+  time is neither a deviation nor *not exercised*.
 - *Not exercised*: a required check the operator could have run and did not. A check this template does not
   require, including any action by a teacher or student, is never recorded as *not exercised*.
 
@@ -123,8 +123,10 @@ one result:
 Results may be recorded as the checks run or afterward, from contemporaneous evidence: the request log, the
 database, the operator's notes or the session transcript. A row may not assert a result its evidence does not show,
 and names what ran (route, action, status, build), not a verdict. The table is complete before the release record
-merges, except *pending* rows, which name their boundary and the follow-up issue where their result will be recorded.
-When it is observed, the result is added to the record. The release record under `docs/ops/audits/` carries:
+merges. A *pending* row, and a *not exercised* row whose check the operator will still run, links a follow-up issue on
+the CTH Backlog (`SOP-DEP-002` §VII.A step 12); the issue may hold several such checks as a checklist. The result
+is recorded on the issue as each check is observed, with its evidence and the build it ran on, and the record is
+not amended. The release record under `docs/ops/audits/` carries:
 
 | Feature | Why in scope | Evidence type | Result | Operator | Time (UTC) | Evidence or defect |
 |---|---|---|---|---|---|---|
@@ -143,6 +145,6 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
-| 1.2 | 2026-11-08 | The required check follows what the release changed, not what the feature has: a browser check where the release changes what a browser observes (§VI.1); server-side evidence of the changed behaviour itself, from the release build, where it changes the feature only on the server (§VI.5); both where it changes both. Server-side evidence must show the changed path and its result, not only that a request arrived. §V.A.4: classroom activity in its own course may satisfy a server-side check for what it shows; an operator who teaches while watching tables or logs is still teaching. §VII: a *pending* result for a check that waits on a time boundary after the release window; §VIII: a pending row names its boundary and the follow-up that records it. Owner ruling, 2026-11-08 (v2.4.4 payroll). |
+| 1.2 | 2026-11-08 | The required check follows what the release changed, not what the feature has: a browser check where the release changes what a browser observes (§VI.1); server-side evidence of the changed behaviour itself, from the release build, where it changes the feature only on the server (§VI.5); both where it changes both. Server-side evidence must show the changed path and its result, not only that a request arrived. §V.A.4: classroom activity in its own course may satisfy a server-side check for what it shows; an operator who teaches while watching tables or logs is still teaching. §VII: a *pending* result for a check that waits on a time boundary after the release window; §VIII: a *pending* row, or a *not exercised* row still to be checked, links a follow-up issue where its result is recorded; the record is not amended. Owner ruling, 2026-11-08 (v2.4.4 payroll). |
 | 1.1 | 2026-11-08 | §V.A: release validation is a development and operations responsibility; teachers and students take no part, and live classroom activity is never orchestrated to satisfy a gate. §VI: a browser check for each in-scope feature with a browser surface; server-side evidence establishes server behaviour only, checks a feature with no browser surface, and never stands in for a browser check; suite tests may be named but never make a check evidenced. §VII: a row separates responsibility, evidence type and result; the result definitions are this template's own; *not exercised* is kept for a required check the operator could have run and did not. §VIII: an *Evidence type* column; *Owner* becomes *Operator*. Owner ruling, 2026-11-08 (v2.4.4). |
 | 1.0 | 2026-10-22 | Extracted from `SOP-DEP-001` §XI (2.9) as the release template: scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; results recorded during or after the checks; known risks recorded without an ordering rule. Owner rulings, 2026-10-22. |
