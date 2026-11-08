@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.52 | 2026-11-06 | 3.51 | Normative |
+| SOP-DOC-001 | 3.53 | 2026-11-07 | 3.52 | Normative |
 
 ---
 
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.53 (2026-11-07):**
+- Register SPEC-PROD-001 v1.5: a payroll share's seconds truncate once over its members' exact durations (SPEC-TIME-001 v1.3), so frozen membership is consistent by the members' sum or that total.
 
 **Version 3.52 (2026-11-06):**
 - Register SOP-DEP-002 v1.21: a `new` release-notes tag; release notes gain a *New* section between Highlights and Fixed.

@@ -37,6 +37,18 @@ def test_duplicate_pair_and_missing_seconds_denied():
                 original_credit="0.05",allocation_version=1)
 
 
+def test_share_seconds_truncated_once_across_members_still_allocates():
+    """SPEC-TIME-001 1.3: 600.6 s + 600.6 s is a 1201-second share over 600 + 600."""
+    members = [dict(source(1, 2, 600, "2026-10-01T12:10:00.600000+00:00"), opening_timestamp="2026-10-01T12:00:00+00:00"),
+        dict(source(3, 4, 600, "2026-10-01T12:30:00.600000+00:00"), opening_timestamp="2026-10-01T12:20:00+00:00")]
+    result = allocate_payroll_cents([{"seconds": 1201, "pay_rate_per_minute": "0.05", "intervals": members}],
+        original_credit="1.00", allocation_version=1)
+    assert sum(result.values()) == 100
+    with pytest.raises(AllocationIntegrityError):  # a total the members cannot reproduce
+        allocate_payroll_cents([{"seconds": 1202, "pay_rate_per_minute": "0.05", "intervals": members}],
+            original_credit="1.00", allocation_version=1)
+
+
 def test_due_system_close_has_persisted_ids_and_is_recorded_once(app):
     from datetime import timedelta
     from app.extensions import db

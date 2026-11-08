@@ -209,7 +209,11 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                         raise ValueError('Malformed source identity or duration')
                     for share in shares:
                         members = share.get('intervals', ())
-                        if sum(source['credited_seconds'] for source in members) != share['seconds']:
+                        # SPEC-TIME-001 1.3: the share truncates once over exact durations.
+                        if (sum(source['credited_seconds'] for source in members) != share['seconds']
+                                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=[
+                                (datetime.fromisoformat(i["opening_timestamp"]), datetime.fromisoformat(i["closing_timestamp"]))
+                                for i in members]).elapsed_seconds != share['seconds']):
                             consistency = 'MISMATCH'; reasons.append('RECORDED_SHARE_MEMBERSHIP_MISMATCH')
                         for source in members:
                             closed = datetime.fromisoformat(source['closing_timestamp'])

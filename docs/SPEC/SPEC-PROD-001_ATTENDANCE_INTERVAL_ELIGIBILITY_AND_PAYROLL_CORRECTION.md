@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-PROD-001 | 1.4 | 2026-10-03 | 1.3 | Normative technical contract; incorporated authority only |
+| SPEC-PROD-001 | 1.5 | 2026-11-07 | 1.4 | Normative technical contract; incorporated authority only |
 
 ## I. Purpose
 
@@ -49,6 +49,8 @@ Each new payroll settlement freezes its complete interval membership in `payroll
 Persist source inputs, not allocated amounts: no earnings cache, payroll amount column, or monetary amount in PROD summary JSON is introduced. PROD owns frozen participation, original pricing facts, settlement membership, and eligibility conclusions. FEAT supplies those proven inputs to Ledger; Ledger performs monetary allocation/correction arithmetic and validates it against its original posted credit. Ledger must never discover or reinterpret attendance intervals, select payroll policies, or resolve business eligibility itself.
 
 For each governing setting, retain the original pricing rule: total credited seconds × original per-minute rate ÷ 60, quantized once to cents using exact decimal/rational arithmetic, nearest cent with ties to even (`ROUND_HALF_EVEN`) for allocation version 1. Do not round interval durations or separately quantize interval earnings. Historical reproduction must establish the original quantization contract rather than infer it from today's default.
+
+A setting share's seconds are its members' exact durations summed and truncated once (`SPEC-TIME-001` `elapsed_duration`, v1.3), while each member's credited seconds are truncated alone, so the share may exceed its members' sum by less than one second per member. Frozen membership is consistent when its members' credited seconds sum to the share's seconds, or when `elapsed_duration` over the members' frozen opening and closing timestamps equals them; any other share is an integrity failure.
 
 Let a setting's quantized share be integer cents C and its interval seconds be s_i, summing to S. Allocate floor(C × s_i / S) cents to each interval, then distribute the remaining cents one each in descending order of fractional remainder. Resolve equal remainders by ascending closing-event UTC timestamp, then ascending opening-event ID, then ascending closing-event ID. This ordering is canonical, not query order. Exact rational arithmetic prevents floating-point ties. If S = 0, C must be zero and every allocation is zero; nonzero C with S = 0 is an integrity failure. Negative credited seconds or a negative original payroll credit fail integrity validation.
 
@@ -172,6 +174,8 @@ Target-seat destruction removes its invalidations and source business records un
 | Target seat or class is lawfully destroyed | Remove dependent business records under existing lifecycle authority; no retained earnings archive. |
 
 ## IX. Amendment
+
+Version 1.5 (2026-11-07) states that a share's seconds truncate once over its members' exact durations (`SPEC-TIME-001` v1.3) and that frozen membership is consistent by either the members' sum or that truncate-once total; allocation weights stay s_i / S. Corrects readers that demanded the members' sum alone and so refused every payroll written since v2.4.0 with a fractional carry (production incident 2026-11-02 to 2026-11-07). No record, schema or pricing rule changes.
 
 Version 1.3 (2026-10-03) separately defines conditional historical graph attribution (§VI.2) without widening §VI.1 or changing current receipts/writers. Supersedes future-only graph design scope, not original-evidence, monetary execution or signature requirements; no persistence is introduced.
 
