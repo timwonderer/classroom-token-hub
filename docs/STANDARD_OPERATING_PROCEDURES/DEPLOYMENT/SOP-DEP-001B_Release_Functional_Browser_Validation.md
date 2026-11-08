@@ -86,7 +86,12 @@ in plain words.
    behaviour itself: not only that a request arrived or a job ran, but that it took the path the release changed and
    produced the result the release asserts. Such a feature needs no browser check, and none is recorded as missing.
    A feature the release changes in both places needs both checks.
-6. A row may also name the release-suite tests that cover the feature, with their result on the recorded suite run
+6. A feature in scope without being changed itself takes its check from what put it in scope. A *connected*
+   feature (§V.2) is checked where the change it runs through acts: a browser check for a shared layout, component,
+   script or stylesheet, server-side evidence for a shared service, model, table or constraint. A feature in scope
+   only as a *known problem* (§V.3) is checked where the problem shows: a browser check for a problem a browser
+   observes, server-side evidence for one that shows only on the server, both where it shows in both.
+7. A check may also name the release-suite tests that cover the feature, with their result on the recorded suite run
    (`INV-ARC-017` §V.5). Suite evidence never makes a required browser or server-side check evidenced.
 
 ## VII. Results and the decision to open
@@ -94,7 +99,7 @@ in plain words.
 Each check keeps three things apart: who validated (always development and operations, §V.A), the type of evidence
 (*browser*, *server-side*, *suite*), and the result. The required check follows what the release changed in the
 feature: a browser check for what a browser observes (§VI.1), server-side evidence for what changed only on the
-server (§VI.5), both where it changed both. Each in-scope feature takes
+server (§VI.5), both where it changed both; a connected or known-problem feature as §VI.6 says. Each in-scope feature takes
 one result:
 
 - *Evidenced*: the required check ran on the release build and the feature behaved as the release asserts.
@@ -152,6 +157,6 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
-| 1.2 | 2026-11-08 | The required check follows what the release changed, not what the feature has: a browser check where the release changes what a browser observes (§VI.1); server-side evidence of the changed behaviour itself, from the release build, where it changes the feature only on the server (§VI.5); both where it changes both. Server-side evidence must show the changed path and its result, not only that a request arrived. §V.A.4: classroom activity in its own course may satisfy a server-side check for what it shows; an operator who teaches while watching tables or logs is still teaching. §VII: a *pending* result for a check that waits on a time boundary after the release window; §VIII: a release's browser validation is one parent CTH Backlog issue with each in-scope feature's check as a sub-issue carrying evidence type, result, operator and evidence; a check evidenced or failed at release is closed at once, any other stays open until run; the release record links the parent, lists each feature with its result at release and its sub-issue, and is not amended as sub-issues close. Owner ruling, 2026-11-08 (v2.4.4 payroll). |
+| 1.2 | 2026-11-08 | The required check follows what the release changed, not what the feature has: a browser check where the release changes what a browser observes (§VI.1); server-side evidence of the changed behaviour itself, from the release build, where it changes the feature only on the server (§VI.5); both where it changes both; a connected or known-problem feature takes its check from what put it in scope (§VI.6). Server-side evidence must show the changed path and its result, not only that a request arrived. §V.A.4: classroom activity in its own course may satisfy a server-side check for what it shows; an operator who teaches while watching tables or logs is still teaching. §VII: a *pending* result for a check that waits on a time boundary after the release window; §VIII: a release's browser validation is one parent CTH Backlog issue with each in-scope feature's check as a sub-issue carrying evidence type, result, operator and evidence; a check evidenced or failed at release is closed at once, any other stays open until run; the release record links the parent, lists each feature with its result at release and its sub-issue, and is not amended as sub-issues close. Owner ruling, 2026-11-08 (v2.4.4 payroll). |
 | 1.1 | 2026-11-08 | §V.A: release validation is a development and operations responsibility; teachers and students take no part, and live classroom activity is never orchestrated to satisfy a gate. §VI: a browser check for each in-scope feature with a browser surface; server-side evidence establishes server behaviour only, checks a feature with no browser surface, and never stands in for a browser check; suite tests may be named but never make a check evidenced. §VII: a row separates responsibility, evidence type and result; the result definitions are this template's own; *not exercised* is kept for a required check the operator could have run and did not. §VIII: an *Evidence type* column; *Owner* becomes *Operator*. Owner ruling, 2026-11-08 (v2.4.4). |
 | 1.0 | 2026-10-22 | Extracted from `SOP-DEP-001` §XI (2.9) as the release template: scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; results recorded during or after the checks; known risks recorded without an ordering rule. Owner rulings, 2026-10-22. |
