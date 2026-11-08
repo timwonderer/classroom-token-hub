@@ -228,7 +228,7 @@ from app.services.payroll.corrections import (
     incident_is_open,
 )
 from app.services.payroll.cycle_completion import get_completed_cycle_window
-from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
+from app.feats.direct_entitlement_grant_feat import execute_hall_pass_adjustment
 # execute_insurance_claim_resolution removed — insurance_claim_feat.py deleted; insurance feature broken pending DOM-OBL-001 migration
 from app.feats.transaction_void_feat import (
     ObligationTransactionNotVoidable,
@@ -255,7 +255,7 @@ from app.services.payroll.settings import (
 )
 from app.services.hall_pass_request_queue import list_open_hall_pass_requests
 from app.services import access_policy_service, obligations_service
-from app.services.entitlement_service import get_hall_pass_balance, grant_hall_passes, remove_hall_passes
+from app.services.entitlement_service import get_hall_pass_balance
 from app.services import operational_event_service
 from app.services.ledger_balance_query_service import get_available_balances
 from app.services.admin_identity_service import (
@@ -2194,7 +2194,7 @@ def select_class_context():
     )
 
 
-@requires_feat_context("FEAT-IDEN-001")
+@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
 def _apply_teacher_class_selection(ctx, raw_options):
     """The submitted class selection: move the teacher's canonical pointers."""
     selected_class_id = (request.form.get("class_id") or "").strip()
@@ -3421,6 +3421,7 @@ def student_detail_public(actor_public_id):
         .filter(
             EntitlementEvent.target_seat_id == seat_id,
             EntitlementEvent.event_type == "GRANTED",
+            EntitlementEvent.product_id.isnot(None),
         )
     )
     if class_id:
@@ -3772,6 +3773,7 @@ def student_detail_public(actor_public_id):
                          scoped_total_earnings=scoped_total_earnings,
                          payroll_event_history=payroll_event_history,
                          hall_pass_balance=hall_pass_balance,
+                         hall_pass_adjustment_request_id=secrets.token_urlsafe(24),
                          current_join_code=None,
                          current_class_id=class_id,
                          rent_privileges=rent_privileges,
@@ -3810,39 +3812,21 @@ def adjust_hall_pass_entitlements(seat_public_id):
 
     student_name = target_seat.identity_profile.full_name if target_seat.identity_profile else "Unnamed student"
 
-    # Get teacher seat for actor_seat_id
-    teacher_seat = Seat.query.filter_by(
-        user_id=canonical_context.user_id,
-        class_id=target_seat.class_id,
-    ).first()
-
-    if not teacher_seat:
-        flash("Error: Teacher seat not found for this class.", "error")
+    request_id = (request.form.get('request_id') or '').strip()
+    if not request_id or len(request_id) > 128:
+        flash("Reload the page before adjusting hall passes.", "error")
         return _redirect_to_student_detail(target_seat.public_id)
-
-    if action == "add":
-        # Use FEAT-STOR-004 to grant entitlements
-        result = execute_direct_grant(
-            canonical_context=canonical_context,
-            target_seat_id=target_seat.id,
-            product_id=1,  # TODO: Determine correct product_id for hall passes from policy
-            quantity=quantity,
+    try:
+        execute_hall_pass_adjustment(
+            canonical_context=canonical_context, target_seat_id=target_seat.id,
+            quantity=quantity, operation=action,
+            idempotency_key=f"hall-pass-adjust:{canonical_context.class_id}:{target_seat.id}:{request_id}",
         )
-
-        if result.success:
-            flash(f"Granted {quantity} hall pass(es) to {student_name}.", "success")
-        else:
-            error_msg = result.error_message or f"Grant failed: {result.error_code}"
-            flash(error_msg, "error")
+    except ValueError as exc:
+        flash(str(exc), "error")
     else:
-        # Remove functionality requires FEAT-STOR-002 (revocation/lifecycle transitions)
-        # which is not yet implemented in Phase 4
-        flash(
-            "Hall pass removal is not yet available. Use FEAT-STOR-002 (pending implementation). "
-            "Contact support to revoke hall passes.",
-            "warning"
-        )
-
+        verb = "Added" if action == "add" else "Removed"
+        flash(f"{verb} {quantity} hall pass(es) for {student_name}.", "success")
     return _redirect_to_student_detail(target_seat.public_id)
 
 
@@ -8629,25 +8613,29 @@ def tap_in_students():
 @admin_required
 def bulk_adjust_hall_pass_entitlements():
     """Bulk grant or remove hall-pass entitlements for selected students."""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(status="error", message="A JSON object is required."), 400
+    request_id = data.get("request_id")
+    if not isinstance(request_id, str) or not request_id.strip() or len(request_id) > 128:
+        return jsonify(status="error", message="An adjustment request identifier is required."), 400
 
     # Get parameters
     student_ids = data.get('student_ids', [])
     update_type = data.get('update_type')
     value = data.get('value', 0)
 
-    if not student_ids:
+    if not isinstance(student_ids, list) or not student_ids:
         return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
 
     if update_type not in ['add', 'remove']:
         return jsonify({"status": "error", "message": "update_type must be 'add' or 'remove'."}), 400
 
-    try:
-        value = int(value)
-        if value <= 0:
-            return jsonify({"status": "error", "message": "Value must be positive."}), 400
-    except (ValueError, TypeError):
-        return jsonify({"status": "error", "message": "Value must be a valid integer."}), 400
+    if type(value) is not int or value <= 0:
+        return jsonify(status="error", message="Value must be a positive integer."), 400
+    if any(type(seat_id) is not int or seat_id <= 0 for seat_id in student_ids):
+        return jsonify(status="error", message="Student identifiers must be positive integers."), 400
+    student_ids = list(dict.fromkeys(student_ids))
 
     updated = []
     errors = []
@@ -8660,7 +8648,8 @@ def bulk_adjust_hall_pass_entitlements():
             student = (
                 Seat.query
                 .filter(
-                    Seat.id == int(seat_id),
+                    Seat.id == seat_id,
+                    Seat.class_id == g.canonical_context.class_id,
                     Seat.role == "student",
                     Seat.claimed_at.isnot(None),
                 )
@@ -8675,28 +8664,16 @@ def bulk_adjust_hall_pass_entitlements():
                 errors.append(f"Student {seat_id} not found")
                 continue
 
-            if update_type == 'add':
+            try:
                 execute_hall_pass_adjustment(
                     canonical_context=g.canonical_context,
-                    target_seat_id=student.id,
-                    quantity=value,
-                    operation="add",
-                    correlation_id=generate_correlation_id(),
-                    idempotency_key=f"store:hall-pass-adjust:{student.class_id}:{student.id}:add",
+                    target_seat_id=student.id, quantity=value, operation=update_type,
+                    idempotency_key=f"hall-pass-adjust:{student.class_id}:{student.id}:{request_id}",
                 )
-            else:
-                try:
-                    execute_hall_pass_adjustment(
-                        canonical_context=g.canonical_context,
-                        target_seat_id=student.id,
-                        quantity=value,
-                        operation="remove",
-                        correlation_id=generate_correlation_id(),
-                        idempotency_key=f"store:hall-pass-adjust:{student.class_id}:{student.id}:remove",
-                    )
-                except ValueError as exc:
-                    errors.append(f"{student.identity_profile.full_name if student.identity_profile else 'Unnamed student'}: {exc}")
-                    continue
+            except ValueError as exc:
+                label = student.identity_profile.full_name if student.identity_profile else "Unnamed student"
+                errors.append(f"{label}: {exc}")
+                continue
 
             updated.append(student.identity_profile.full_name if student.identity_profile else "Unnamed student")
             new_value = get_hall_pass_balance(student.id, student.class_id)
@@ -8706,20 +8683,23 @@ def bulk_adjust_hall_pass_entitlements():
                 student.public_id, update_type, value, new_value,
             )
 
-        # Commit all updates
         # Build response message
         action_text = {
             'add': f'granted {value}',
             'remove': f'removed {value}'
         }
 
-        message = f"Successfully adjusted hall-pass entitlements for {len(updated)} student(s) ({action_text[update_type]})"
-        if errors:
-            message += f". {len(errors)} error(s) occurred"
+        if updated:
+            message = f"Adjusted hall-pass entitlements for {len(updated)} student(s) ({action_text[update_type]})"
+            if errors:
+                message += f". {len(errors)} student(s) could not be adjusted."
+        else:
+            message = "No hall-pass entitlements were adjusted."
 
         return jsonify({
-            "status": "success",
+            "status": "success" if updated else "error",
             "message": message,
+            "errors": errors,
             "updated": updated
         })
 
@@ -10276,7 +10256,7 @@ def passkey_register_start():
 
 @admin_bp.route('/passkey/register/finish', methods=['POST'])
 @admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_register_finish():
     """
@@ -10353,7 +10333,7 @@ def passkey_auth_start():
 
 
 @admin_bp.route('/passkey/auth/finish', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("20 per minute")
 def passkey_auth_finish():
     """
@@ -10412,7 +10392,7 @@ def passkey_auth_finish():
 
 @admin_bp.route('/passkey/<int:passkey_id>/delete', methods=['DELETE'])
 @admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_delete(passkey_id):
     """Delete a passkey."""
@@ -10647,8 +10627,8 @@ def view_issue(issue_ref):
 
 
 @admin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
-@requires_feat_context("FEAT-SUP-001")
 @admin_required
+@requires_feat_context("FEAT-SUP-001", key_per_call=True)
 def resolve_issue(issue_ref):
     """
     Resolve an issue at the teacher/admin level.
@@ -10678,7 +10658,7 @@ def resolve_issue(issue_ref):
         class_row = get_class_economy(class_id)
         if class_row:
             issue_query = issue_query.filter_by(class_public_id=class_row.class_public_id)
-    issue = issue_query.first_or_404()
+    issue = issue_query.populate_existing().with_for_update().first_or_404()
 
     action_type = request.form.get('action_type')
     resolution_notes = request.form.get('teacher_notes', '').strip()
@@ -10835,7 +10815,7 @@ def resolve_issue(issue_ref):
 
 @admin_bp.route('/issues/<issue_ref>/escalate', methods=['POST'])
 @admin_required
-@requires_feat_context("FEAT-SUP-001")
+@requires_feat_context("FEAT-SUP-001", key_per_call=True)
 def escalate_issue(issue_ref):
     """
     Escalate an issue to sysadmin (developer).
@@ -10920,7 +10900,7 @@ def escalate_issue(issue_ref):
 
 @admin_bp.route('/issues/<issue_ref>/close', methods=['POST'])
 @admin_required
-@requires_feat_context("FEAT-SUP-001")
+@requires_feat_context("FEAT-SUP-001", key_per_call=True)
 def close_issue(issue_ref):
     """Owner/admin-only closure after final review."""
     from app.models import Issue
@@ -10938,7 +10918,7 @@ def close_issue(issue_ref):
         class_row = get_class_economy(class_id)
         if class_row:
             issue_query = issue_query.filter_by(class_public_id=class_row.class_public_id)
-    issue = issue_query.first_or_404()
+    issue = issue_query.populate_existing().with_for_update().first_or_404()
 
     allowed_statuses = {
         Issue.STATUS_TEACHER_FINAL_REVIEW,

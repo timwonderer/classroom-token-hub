@@ -54,7 +54,22 @@ def execute_use_item_request(
     correlation_id: str | None = None,
     idempotency_key: str | None = None,
 ) -> None:
-    """Create a pending action for item use request."""
+    """Create a pending action for item use request.
+
+    Availability is rechecked under the holder lock the expiry sweep also
+    takes, so an item cannot gain a request after it has expired.
+    """
+    from app.services.entitlement_read_service import (
+        entitlements_with_pending_action,
+        is_entitlement_exercisable,
+    )
+    from app.services.entitlement_service import lock_hall_pass_holder
+
+    lock_hall_pass_holder(seat_id, class_id)
+    if not is_entitlement_exercisable(entitlement_id, class_id):
+        raise ValueError("This item has expired or has already been used.")
+    if entitlements_with_pending_action(class_id, [entitlement_id]):
+        raise ValueError("A request for this item is already waiting for your teacher.")
     pending_action = PendingAction(
         class_id=class_id,
         seat_id=seat_id,

@@ -78,7 +78,7 @@ Bulk discounts are available on **Delayed Use** and **Hall Pass** items only. Th
 #### Advanced Settings
 
 - **Auto-Delist Date** — the item is automatically hidden on this date.
-- **Item Expiry in Days** — for delayed-use items, how long the student has before their purchase expires.
+- **Item Expiry in Days** — for delayed-use, privilege and hall-pass items, how many days from purchase the student has to use it. At that moment the item can no longer be used and leaves the student's My Items. A redemption request the student sent before then still waits for your answer. Editing the item later does not change the expiry of items already bought. Leave it blank for an item that never expires.
 - **Redemption Prompt** — optional text shown to students when they redeem a delayed-use item, so you collect what you need up front. Example: *Please describe when and where you'd like to use this item.*
 
 Finish with **Save Item**.

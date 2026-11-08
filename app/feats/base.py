@@ -633,15 +633,24 @@ def audit_protected(
         raise
 
 
-def requires_feat_context(feat_name: str):
+def requires_feat_context(feat_name: str, *, key_per_call: bool = False):
     """
     Decorator to ensure a function is executed within a FEAT context.
+
+    ``key_per_call`` declares that every invocation is a distinct command whose
+    replay is already refused by the state it acts on (a consumed challenge, a
+    locked status transition, a convergent sweep), so the key is generated here
+    when the caller supplies none (FEAT-CORE-000 §III.3, "accepted or
+    generated"). Never declare it for a command a caller can resubmit with the
+    same effect, such as a purchase: that caller must supply a stable key.
     """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             correlation_id = kwargs.get("correlation_id")
             idempotency_key = kwargs.get("idempotency_key")
+            if idempotency_key is None and key_per_call:
+                idempotency_key = f"{feat_name.lower()}:{f.__name__}:{uuid.uuid4().hex}"
             with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=idempotency_key):
                 return f(*args, **kwargs)
         return decorated_function

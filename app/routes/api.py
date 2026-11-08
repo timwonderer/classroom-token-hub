@@ -279,6 +279,14 @@ def purchase_item():
     data = request.get_json(silent=True) or {}
     policy_uuid = data.get('policy_uuid')
     passphrase = data.get('passphrase')
+    # One rendered Confirm is one purchase command (FEAT-STOR-001 §IX): the shop
+    # sends the same id on a double-click or a retry, so the FEAT replays the
+    # original purchase instead of charging again. A client without one (a page
+    # cached before this field existed) still gets a keyed, if unprotected, write.
+    client_purchase_id = str(data.get('client_purchase_id') or '').strip() or uuid.uuid4().hex
+    idempotency_key = purchase_transaction_key(context.seat_id, client_purchase_id)
+    if len(idempotency_key) > MAX_IDEMPOTENCY_KEY_LENGTH:
+        return jsonify({"status": "error", "message": "Purchase request ID is too long."}), 400
 
     try:
         quantity = int(data.get('quantity', 1))
@@ -296,11 +304,21 @@ def purchase_item():
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 4. Call FEAT-STOR-001: Create entitlement grants via purchase
-    result = execute_store_purchase(
-        canonical_context=context,
-        policy_uuid=policy_uuid,
-        quantity=quantity,
-    )
+    try:
+        result = execute_store_purchase(
+            canonical_context=context,
+            policy_uuid=policy_uuid,
+            quantity=quantity,
+            idempotency_key=idempotency_key,
+        )
+    except ValueError as exc:
+        # The same purchase id sent with a different item or quantity.
+        if "Replay fingerprint mismatch" not in str(exc):
+            raise
+        return jsonify({
+            "status": "error",
+            "message": "This purchase changed after it was sent. Close the window and try again.",
+        }), 409
 
     if not result.success:
         # `result.error_message` is a diagnostic written for developers and
@@ -439,13 +457,20 @@ def use_item():
         .count()
     )
     from app.feats.entitlement_lifecycle_feat import execute_use_item_request
-    execute_use_item_request(
-        class_id=entitlement.class_id,
-        seat_id=student.id,
-        entitlement_id=entitlement.entitlement_id,
-        action_payload=action_payload,
-        idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
-    )
+    try:
+        execute_use_item_request(
+            class_id=entitlement.class_id,
+            seat_id=student.id,
+            entitlement_id=entitlement.entitlement_id,
+            action_payload=action_payload,
+            idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
+        )
+    except ValueError:
+        # Refused under the holder lock: expired, used, or already requested.
+        return jsonify({
+            "status": "error",
+            "message": "This item can't be used right now. It may have expired or already have a request waiting.",
+        }), 400
     return jsonify({"status": "success", "message": f"You have requested to use {store_item.name}. Awaiting admin approval."})
 
 

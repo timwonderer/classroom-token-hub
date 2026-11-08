@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.6    | 2026-11-04     | 1.5        | Constitutional |
+| INV-ARC-018      | 1.6     | 2026-11-04     | 1.5        | Constitutional |
 
 ---
 
@@ -111,11 +111,11 @@ Only the following PII fields are permitted in the v2 schema. Any PII column not
 ## VII. Prohibited Storage Patterns
 
 1. **Plaintext PII at rest** — no column, row, file, or cache entry may contain PII in plaintext form on disk or in the database.
-2. **PII in non-governed columns** — PII must not appear in ungoverned `description`, `notes`, `metadata`, JSON blobs, or free-text columns. 
+2. **PII in non-governed columns** — PII must not appear in ungoverned `description`, `notes`, `metadata`, JSON blobs, or free-text columns.
 
 > [!IMPORTANT]
-> This policy governs what the application MUST comply with. This policy SHALL NOT govern what the user MAY enter into a persistent free-text field that is subsequently stored on the database. For example, this platform SHALL NOT arbitarily attach student name to a generated text field. However, this platform SHALL remain ignorant to what the user have entered into those text fields. 
-> 
+> This policy governs what the application MUST comply with. This policy SHALL NOT govern what the user MAY enter into a persistent free-text field that is subsequently stored on the database. For example, this platform SHALL NOT arbitrarily attach student name to a generated text field. However, this platform SHALL remain ignorant of what users have entered into those text fields.
+
 3. **PII in indexed plaintext** — database indexes must not expose plaintext PII. Indexes on hashed columns are permitted.
 4. **PII in backup-only retention** — PII must not survive in database backups beyond the retention window of the owning record. Backup retention policy must align with class lifecycle deletion (INV-CORE-000 §III.5).
 5. **Redundant PII** — the same PII value must not be stored in multiple tables unless each instance serves a distinct invariant-defined purpose with a distinct storage form.

@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Reviewed:** 2026-11-03 UTC
-**Latest Recorded Application Deployment:** [v2.4.2 (`6e42f43`)](docs/ops/audits/DEPLOY_2026-11-03_6e42f43.md), 2026-11-03 UTC. This is release-record evidence, not a live production check
+**Latest Recorded Application Deployment:** [v2.4.3 (`135dc67`)](docs/ops/audits/DEPLOY_2026-11-05_135dc67.md), 2026-11-05 UTC. This is release-record evidence, not a live production check
 **Engineering State:** v2 in production; post-launch hardening
 **Integration Target:** `main` (feature branches and worktrees may differ)
 
@@ -56,7 +56,7 @@ on a custom database URL.
 
 ### Released baseline
 
-The latest application deployment record is [v2.4.2](docs/ops/audits/DEPLOY_2026-11-03_6e42f43.md).
+The latest application deployment record is [v2.4.3](docs/ops/audits/DEPLOY_2026-11-05_135dc67.md).
 It adds class-local day closure for hall passes and removes the unreachable developer view from
 the in-app help backend. The record distinguishes verified behavior from hall-pass flows still
 awaiting live observation. It also records an attendance review needed before the next payroll.

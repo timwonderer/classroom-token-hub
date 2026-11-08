@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.49 | 2026-11-04 | 3.48 | Normative |
+| SOP-DOC-001 | 3.56 | 2026-11-08 | 3.55 | Normative |
 
 ---
 
@@ -179,7 +179,7 @@ Archived material is deliberately absent; see §VI.
 ### Procedures — Deployment (SOP-DEP)
 - [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.13: initial-host and rehearsal scope; §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
 - [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.1: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
-- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.0: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row.
+- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.2: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, never teachers, students or live classes; the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
 - [SOP-DEP-002 — Production Release Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -280,6 +280,31 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.56 (2026-11-08):**
+- Register SOP-DEP-002 v1.22 as the Production Release Runbook following the completed v2 launch; retain its source path and existing release safeguards.
+- Register SOP-DEP-001 v2.13: distinguish initial-host/rehearsal setup from recurring production releases and remove the stale holding-page host assumption.
+- Register SOP-DEP-001A v1.1, SOP-DB-004 v1.3, SOP-OPS-002 v1.1 and SOP-CORE-000 v1.4: update descriptions of the production release procedure without changing their operational requirements.
+- Register SPEC-SEC-001 v1.6: identify the lookup encoding cutover as historical; the pre-launch absence of data is not permission to replace live credential data.
+- Register INV-ARC-018 v1.6: §VII.2 governs what the application stores, not what a user types into a persisted free-text field; the platform attaches no PII to generated text and stays ignorant of what users enter.
+
+**Version 3.55 (2026-11-08):**
+- Register SOP-DEP-001B v1.2: the required check follows what the release changed in a feature, a browser check for what a browser observes and server-side evidence of the changed behaviour for server-only changes; classroom activity in its own course may satisfy a server-side check; a check that waits on a time boundary after the release window is *pending*, not a deviation; a release's checks are sub-issues of one parent Backlog issue, linked from the release record.
+
+**Version 3.54 (2026-11-08):**
+- Register SOP-DEP-001B v1.1: release validation is a development and operations responsibility; teachers and students take no part and live classroom activity is never orchestrated to satisfy a gate; server-side evidence establishes server behaviour only; *not exercised* is kept for a required check the operator could have run and did not.
+
+**Version 3.53 (2026-11-07):**
+- Register SPEC-PROD-001 v1.5: a payroll share's seconds truncate once over its members' exact durations (SPEC-TIME-001 v1.3), so frozen membership is consistent by the members' sum or that total.
+
+**Version 3.52 (2026-11-06):**
+- Register SOP-DEP-002 v1.21: a `new` release-notes tag; release notes gain a *New* section between Highlights and Fixed.
+
+**Version 3.51 (2026-11-05):**
+- Register SOP-DEP-002 v1.20: release records name no class by `class_id`, `join_code` or name (`DOM-OPS-001` §7); the step 8 balance baseline is one summary row with a fingerprint of the per-class table, not a row per class.
+
+**Version 3.50 (2026-11-04):**
+- Register DOM-STORE-001 v5.10, FEAT-STOR-004 v1.1, and FEAT-STOR-002 v2.5: independent teacher hall-pass adjustments limited to 100 passes per student per request, request replay protection, direct-grant-only removal, and purchased hall passes shown as available count and transaction rather than My Items.
 
 **Version 3.49 (2026-11-04):**
 - Register FEAT-LED-006 v1.0 (Apply Teacher Penalty), DOM-LED-001 v2.19, DOM-PROD-001 v1.15, DOM-OBL-001 v3.4, DOM-CORE-001 v1.3, DOM-CORE-002 v1.20, DOM-POL-001 v2.11 and DOM-ITR-001 v1.10: a teacher-applied fine is a Ledger `penalty`, not an obligation; there is no fine or reward catalog; the NSF fee was never an obligation (owner ruling 2026-11-04, issue #1701).
