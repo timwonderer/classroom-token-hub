@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Reviewed:** 2026-11-03 UTC
-**Latest Recorded Application Deployment:** [v2.4.3 (`135dc67`)](docs/ops/audits/DEPLOY_2026-11-05_135dc67.md), 2026-11-05 UTC. This is release-record evidence, not a live production check
+**Latest Recorded Application Deployment:** [v2.4.4 (`f530954`)](docs/ops/audits/DEPLOY_2026-11-08_f530954.md), 2026-11-08 UTC. This is release-record evidence, not a live production check
 **Engineering State:** v2 in production; post-launch hardening
 **Integration Target:** `main` (feature branches and worktrees may differ)
 
@@ -56,10 +56,11 @@ on a custom database URL.
 
 ### Released baseline
 
-The latest application deployment record is [v2.4.3](docs/ops/audits/DEPLOY_2026-11-05_135dc67.md).
-It adds class-local day closure for hall passes and removes the unreachable developer view from
-the in-app help backend. The record distinguishes verified behavior from hall-pass flows still
-awaiting live observation. It also records an attendance review needed before the next payroll.
+The latest application deployment record is [v2.4.4](docs/ops/audits/DEPLOY_2026-11-08_f530954.md).
+It is a hotfix release: payroll runs again in the three classes it had refused since 2–3 November,
+store items now expire, My Items lists only items a student can still use, and a double-clicked
+purchase charges once. The record distinguishes what was verified at release from the student-side
+store checks still awaiting live observation.
 
 Recent releases also delivered Copy Configuration between classes, canonical temporal resolution,
 Hugo + Hextra developer documentation, and the host-side production release gate. The application,
