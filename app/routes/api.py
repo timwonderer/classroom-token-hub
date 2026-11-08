@@ -304,12 +304,21 @@ def purchase_item():
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 4. Call FEAT-STOR-001: Create entitlement grants via purchase
-    result = execute_store_purchase(
-        canonical_context=context,
-        policy_uuid=policy_uuid,
-        quantity=quantity,
-        idempotency_key=idempotency_key,
-    )
+    try:
+        result = execute_store_purchase(
+            canonical_context=context,
+            policy_uuid=policy_uuid,
+            quantity=quantity,
+            idempotency_key=idempotency_key,
+        )
+    except ValueError as exc:
+        # The same purchase id sent with a different item or quantity.
+        if "Replay fingerprint mismatch" not in str(exc):
+            raise
+        return jsonify({
+            "status": "error",
+            "message": "This purchase changed after it was sent. Close the window and try again.",
+        }), 409
 
     if not result.success:
         # `result.error_message` is a diagnostic written for developers and
@@ -448,13 +457,16 @@ def use_item():
         .count()
     )
     from app.feats.entitlement_lifecycle_feat import execute_use_item_request
-    execute_use_item_request(
-        class_id=entitlement.class_id,
-        seat_id=student.id,
-        entitlement_id=entitlement.entitlement_id,
-        action_payload=action_payload,
-        idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
-    )
+    try:
+        execute_use_item_request(
+            class_id=entitlement.class_id,
+            seat_id=student.id,
+            entitlement_id=entitlement.entitlement_id,
+            action_payload=action_payload,
+            idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "message": f"You have requested to use {store_item.name}. Awaiting admin approval."})
 
 

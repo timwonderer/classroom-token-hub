@@ -10627,8 +10627,8 @@ def view_issue(issue_ref):
 
 
 @admin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
-@requires_feat_context("FEAT-SUP-001", key_per_call=True)
 @admin_required
+@requires_feat_context("FEAT-SUP-001", key_per_call=True)
 def resolve_issue(issue_ref):
     """
     Resolve an issue at the teacher/admin level.
@@ -10658,7 +10658,7 @@ def resolve_issue(issue_ref):
         class_row = get_class_economy(class_id)
         if class_row:
             issue_query = issue_query.filter_by(class_public_id=class_row.class_public_id)
-    issue = issue_query.with_for_update().first_or_404()
+    issue = issue_query.populate_existing().with_for_update().first_or_404()
 
     action_type = request.form.get('action_type')
     resolution_notes = request.form.get('teacher_notes', '').strip()
@@ -10918,7 +10918,7 @@ def close_issue(issue_ref):
         class_row = get_class_economy(class_id)
         if class_row:
             issue_query = issue_query.filter_by(class_public_id=class_row.class_public_id)
-    issue = issue_query.with_for_update().first_or_404()
+    issue = issue_query.populate_existing().with_for_update().first_or_404()
 
     allowed_statuses = {
         Issue.STATUS_TEACHER_FINAL_REVIEW,

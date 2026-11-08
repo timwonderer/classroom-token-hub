@@ -107,3 +107,24 @@ def test_overlong_purchase_request_id_is_refused(client, app, shop):
     with app.app_context():
         charges, _ = _purchase_rows(classroom.class_id, student.seat_id)
         assert charges == []
+
+
+def test_purchase_id_reused_for_a_different_quantity_is_refused(client, app, shop):
+    classroom, student, product = shop
+    request_id = str(uuid.uuid4())
+
+    first = purchase_entitlement_item(
+        client, policy_uuid=product.policy_uuid, passphrase=student.passphrase,
+        quantity=1, client_purchase_id=request_id,
+    )
+    second = purchase_entitlement_item(
+        client, policy_uuid=product.policy_uuid, passphrase=student.passphrase,
+        quantity=3, client_purchase_id=request_id,
+    )
+
+    assert first.get_json()["status"] == "success"
+    assert second.status_code == 409, second.get_data(as_text=True)[:300]
+    with app.app_context():
+        charges, grants = _purchase_rows(classroom.class_id, student.seat_id)
+        assert len(charges) == 1
+        assert len(grants) == 1

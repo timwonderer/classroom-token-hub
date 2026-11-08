@@ -78,6 +78,7 @@ from app.services.entitlement_read_service import (
     get_active_entitlements,
     get_entitlement_status,
     derive_display_status,
+    ended_entitlement_ids,
     entitlement_expires_at,
 )
 from app.services import insurance_definition_service as insurance_defs
@@ -2305,32 +2306,16 @@ def file_claim(policy_uuid):
     else:
         form.transaction_id.choices = []  # SelectField requires choices even when unused
 
-    # One rendered form is one submission (FEAT-STOR-003 §XIII). A resubmit carries
-    # the same nonce and is answered with the claim it already filed, before form
-    # validation, which would refuse it: a claimed transaction leaves the choices.
-    from app.services.insurance_claim_service import list_claims_for_entitlement
-
-    claim_nonce = (request.form.get('claim_nonce') or '').strip()[:64] or uuid.uuid4().hex
-    claim_key = f"corr_ins-claim:{entitlement_id}:{claim_nonce}"
-    if request.method == 'POST' and any(
-        claim.correlation_id == claim_key
-        for claim in list_claims_for_entitlement(
-            class_id=class_id, entitlement_id=entitlement_id, target_seat_id=seat_id,
-        )
-    ):
-        flash("Insurance claim submitted.", "success")
-        return redirect(url_for("student.student_insurance"))
-
-    if claimable and form.validate_on_submit():
-        claim_subject = {"policy_claim_type": policy.insurance_type}
+    def _claim_subject():
+        subject = {"policy_claim_type": policy.insurance_type}
         if is_transaction_type:
             tid = form.transaction_id.data
-            claim_subject["transaction_id"] = int(tid) if tid not in (None, "") else None
+            subject["transaction_id"] = int(tid) if str(tid or "").isdigit() else None
             # The "Briefly describe what happened" field was rendered and
             # submitted but never read here, so it was silently dropped --
             # the admin review page's "Claim Description" was guaranteed blank
             # for every TRANSACTION claim regardless of what the student typed.
-            claim_subject["description"] = (form.description.data or "").strip() or None
+            subject["description"] = (form.description.data or "").strip() or None
         else:
             # PRODUCTIVITY: one or more class-local loss-dates, each with hours and
             # the student's own explanation (evidentiary; FEAT-STOR-003 validates).
@@ -2346,8 +2331,33 @@ def file_claim(policy_uuid):
                     "hours": (hours[idx] if idx < len(hours) else "").strip(),
                     "explanation": (explanations[idx] if idx < len(explanations) else "").strip(),
                 })
-            claim_subject["claimed_dates"] = claimed_dates
-            claim_subject["additional_information"] = (form.description.data or "").strip() or None
+            subject["claimed_dates"] = claimed_dates
+            subject["additional_information"] = (form.description.data or "").strip() or None
+        return subject
+
+    # One rendered form is one submission (FEAT-STOR-003 §XIII). A resubmit carries
+    # the same nonce and is answered with the claim it already filed, before form
+    # validation, which would refuse it: a claimed transaction leaves the choices.
+    # Changed evidence under the same nonce is refused, as the FEAT refuses it.
+    from app.services.insurance_claim_service import list_claims_for_entitlement
+
+    claim_nonce = (request.form.get('claim_nonce') or '').strip()[:64] or uuid.uuid4().hex
+    claim_key = f"corr_ins-claim:{entitlement_id}:{claim_nonce}"
+    filed = None
+    if request.method == 'POST' and claimable:
+        filed = next((
+            claim for claim in list_claims_for_entitlement(
+                class_id=class_id, entitlement_id=entitlement_id, target_seat_id=seat_id,
+            )
+            if claim.correlation_id == claim_key
+        ), None)
+    if filed is not None and filed.claim_basis == _claim_subject():
+        flash("Insurance claim submitted.", "success")
+        return redirect(url_for("student.student_insurance"))
+    if filed is not None:
+        flash("This form was already used for a different claim. Please start a new claim.", "error")
+    elif claimable and form.validate_on_submit():
+        claim_subject = _claim_subject()
         result = submit_insurance_claim(
             entitlement_id=entitlement_id,
             canonical_context=context,
@@ -2562,14 +2572,20 @@ def shop():
     entitlements = []
     seen_lineages = set()
     product_by_key = _resolve_entitlement_products(class_id)
+    # Insurance is governed by InsurancePolicy and hall passes have their own
+    # panel (#1705); neither is rendered as a store item here. Finished items
+    # are dropped in one query, so status is derived only for what is held.
+    grants = [
+        grant for grant in get_active_entitlements(seat_id=seat.id, class_id=class_id)
+        if grant.entitlement_type not in ("INSURANCE", "HALL_PASS")
+    ]
+    ended = ended_entitlement_ids(class_id, [grant.entitlement_id for grant in grants])
     grants = sorted(
-        get_active_entitlements(seat_id=seat.id, class_id=class_id),
+        (grant for grant in grants if grant.entitlement_id not in ended),
         key=lambda grant: grant.timestamp, reverse=True,
     )
     for grant in grants:
-        # Insurance is governed by InsurancePolicy and hall passes have their
-        # own panel (#1705); neither is rendered as a store item here.
-        if grant.entitlement_type in ("INSURANCE", "HALL_PASS") or grant.entitlement_id in seen_lineages:
+        if grant.entitlement_id in seen_lineages:
             continue
         seen_lineages.add(grant.entitlement_id)
         status = derive_display_status(grant.entitlement_id)

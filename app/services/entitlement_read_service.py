@@ -88,14 +88,14 @@ def get_entitlement_balance(
     - seat_id must be valid in class
     - class_id must exist
     - entitlement_type must be one of: HALL_PASS, INSURANCE, PRIVILEGE, IMMEDIATE_USE, DELAYED_USE, COLLECTIVE_GOAL
-    - If reference_time_utc provided, used for expiration window checks (TODO)
+    - reference_time_utc, when given, is the instant expiry is judged at
 
     Args:
         seat_id: Target seat
         class_id: Class scope
         entitlement_type: Entitlement type (see preconditions)
         product_id: Optional product filter
-        reference_time_utc: Optional timestamp for expiration checks (not yet used)
+        reference_time_utc: Time to judge expiry at (default: now)
 
     Returns:
         Available count as integer (may be negative if overclaimed)
@@ -147,6 +147,20 @@ def get_entitlement_balance(
             or 0
         )
         terminal_count += logged_only
+
+    # Past its expiry an item is gone before the hourly sweep records it
+    # (FEAT-STOR-002 §VIII), unless a request sent in time is still waiting.
+    if entitlement_type in _STORE_EXPIRING_TYPES:
+        open_grants = granted.with_entities(EntitlementEvent).filter(
+            EntitlementEvent.acquisition_type != "PERK",
+        ).all()
+        ids = [grant.entitlement_id for grant in open_grants]
+        if ids:
+            closed = ended_entitlement_ids(class_id, ids) | entitlements_with_pending_action(class_id, ids)
+            terminal_count += sum(
+                1 for grant in open_grants
+                if grant.entitlement_id not in closed and entitlement_past_expiry(grant, reference_time_utc)
+            )
 
     return granted_count - terminal_count
 

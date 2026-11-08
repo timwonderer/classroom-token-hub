@@ -1124,7 +1124,7 @@ def resolve_escalated_issue(issue_ref):
         Issue.id == issue_id,
         escalated_clause(),
         Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
-    ).with_for_update().first_or_404()
+    ).populate_existing().with_for_update().first_or_404()
 
     resolution_note = request.form.get('resolution_note', '').strip()
     sysadmin_user_id = g.canonical_context.user_id

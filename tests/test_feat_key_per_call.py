@@ -39,3 +39,13 @@ def test_undeclared_feat_without_a_key_still_warns(app, caplog):
         assert _caller_keyed() is None
 
     assert "FEAT-TEST-CALLER-KEY (Blast=LOW) missing idempotency_key" in caplog.text
+
+
+def test_FEAT_CORE_000_III_1__unauthenticated_issue_resolve_enters_no_feat(client, caplog):
+    """A FEAT resolves its actor before anything else (FEAT-CORE-000 §III.1), so
+    authentication runs outside it: a signed-out request never opens one."""
+    caplog.set_level(logging.INFO, logger="app.feats.base")
+    response = client.post("/admin/issues/any-issue/resolve", data={})
+
+    assert response.status_code in (302, 401, 403)
+    assert not [r for r in caplog.records if "FEAT-ENTRY: feat=FEAT-SUP-001" in r.getMessage()]

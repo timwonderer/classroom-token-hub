@@ -52,7 +52,7 @@ For an immediate item you will see *You used [item].* For a delayed or hall pass
 
 ### If the tab is empty
 
-*No Purchased Items — You haven't purchased any items yet. Browse the store to get started!*
+*No items to use — You have no items to use right now. Browse the store to get started!*
 
 ## Important notes
 
