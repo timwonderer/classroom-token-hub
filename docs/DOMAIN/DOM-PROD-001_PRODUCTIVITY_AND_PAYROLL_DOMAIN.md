@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.15 | 2026-11-04 | 1.14 | Constitutional |
+| DOM-PROD-001 | 1.16 | 2026-11-10 | 1.15 | Constitutional |
 
 ---
 
@@ -685,7 +685,19 @@ PROD incorporates SPEC-PROD-001 §VI.2 and SPEC-PROD-002 §VI.2 for the complete
 
 PROD-PAY-001 uses explicit original corrected-event IDs and per-window worked/replay-paid subsegments. Manual top-ups are non-boundary original positive credits; unrelated manual credits are not attributed work. Same-domain source identities and opaque Ledger locators remain non-FK references. Missing/ambiguous graph edges, duplicate or overlapping selected contributions, source-budget exhaustion or changed evidence deny the entire paid action. No raw scan or original summary changes. Ledger alone owns exact historical money, allocation and complete prior recovery. FEAT obtains Policies/Operations/Ledger conclusions through their interfaces; no DOM-to-DOM dependencies or calls are introduced. Existing target/class destruction removes the business facts; no derived graph archive survives.
 
+### 11. Closed-session settlement
+
+*Ratifies the rule already implemented and cited in code as "DOM-PROD-001 §VI.3" (issue #1439); §VI is the Schema Authority Declaration and has no subsections, so that citation named nothing.*
+
+A session is payable once it has closed after the seat's last `payroll` event, and it is paid in full by the payroll run whose cycle settles the window in which it closed (§XV.3 prices it by the setting in force at that instant). A still-open session is never payable: it contributes no amount to any run while it remains open, and becomes payable only once it closes. Every session is therefore paid exactly once, by exactly one run, and never split across runs.
+
+A class-level run (`FEAT-PROD-004`) that finds no seat with a closed, unpaid session has nothing to settle and MUST be refused rather than recorded as an empty cycle (`NoPayableAttendanceError`, not a zero-event `payroll_cycle_id`). A student still working when the run executes is paid by the first run after they clock out, not by the run in progress when they were working.
+
+The single authoritative reading of what a seat's attendance owes under this rule separates each session into exactly one of: payable (closed, unpaid), in-progress (still open, never payable yet), or unprovable (excluded from estimate and settlement alike, §XV.9–10). The payroll run and every unpaid-time preview shown to a teacher or student read this same reading, so what is shown and what is paid cannot diverge.
+
 ## XVI. Amendment
+
+**Version 1.16 (2026-11-10)** ratifies the closed-session settlement rule (§XV.11) that code already implemented and had cited as "DOM-PROD-001 §VI.3", a section with no subsections (issue #1439/#1644). No runtime behavior changes; this corrects an unratified citation.
 
 **Version 1.15 (2026-11-04)** supersedes the statement that fine/debit manual deductions belong to Obligations (owner ruling 2026-11-04, issue #1701): a teacher-applied fine is a Ledger penalty under `FEAT-LED-006`. No PROD persistence, event type or writer changes.
 

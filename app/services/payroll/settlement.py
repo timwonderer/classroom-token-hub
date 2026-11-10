@@ -63,7 +63,7 @@ class PayrollNotConfiguredError(ClassSettlementError):
 class NoPayableAttendanceError(ClassSettlementError):
     """Raised when no seat in the class has a closed, unpaid session.
 
-    A payroll run settles closed work only (DOM-PROD-001 §VI.3), so a run with
+    A payroll run settles closed work only (DOM-PROD-001 §XV.11), so a run with
     nothing closed and unpaid has nothing to settle and is refused rather than
     recorded as an empty cycle. Students still working are paid by the first run
     after they clock out.
