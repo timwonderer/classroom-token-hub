@@ -101,6 +101,50 @@ def test_whole_shortfall_and_reservation_replay(
             )
 
 
+def test_zero_principal_plan_never_triggers_a_funding_transfer(app):
+    """A free charge must not recover an unrelated pre-existing overdraft.
+
+    ``shortfall`` is ``principal - checking``, so a zero-priced charge against
+    an already-negative checking balance would otherwise look like a positive
+    shortfall and pull money out of savings for a purchase that moved nothing.
+    """
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    seat_id = classroom.students[0].seat.id
+    class_id = classroom.class_id
+    with FEATContext("FEAT-LED-001", idempotency_key="zero:seed"):
+        record_ledger_fixture(
+            seat_id=seat_id, class_id=class_id, amount=Decimal("-10.00")
+        )
+        record_ledger_fixture(
+            seat_id=seat_id,
+            class_id=class_id,
+            amount=Decimal("20.00"),
+            account_type="savings",
+        )
+    db.session.commit()
+    directive = replace(get_banking_directive(class_id), protection_enabled=True)
+    with FEATContext("FEAT-LED-001", idempotency_key="zero:charge"):
+        plan = build_intended_ledger_plan(
+            seat_id=seat_id,
+            class_id=class_id,
+            actor_seat_id=seat_id,
+            target_seat_id=seat_id,
+            mechanism="self",
+            debit_amount=Decimal("0.00"),
+            description="Free item",
+            transaction_type="purchase",
+        )
+        resolved = resolve_intended_ledger_plan(plan=plan, banking_directive=directive)
+        assert resolved.shortfall == Decimal("0.00")
+        assert resolved.recovery_transfer_amount == Decimal("0.00")
+        assert resolved.outcome == "ACCEPT"
+        apply_resolved_ledger_plan(resolved_plan=resolved, idempotency_key="zero:charge")
+    db.session.commit()
+    balances = get_available_balances(seat_id, class_id)
+    assert balances[0] == Decimal("-10.00")
+    assert balances[1] == Decimal("20.00")
+
+
 def test_stale_funding_plan_fails_before_effect_creation(app):
     classroom = provision_ledger_classroom("chemistry_p1", app)
     seat_id = classroom.students[0].seat.id

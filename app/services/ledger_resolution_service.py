@@ -113,7 +113,7 @@ def resolve_intended_ledger_plan(*, plan, banking_directive):
             savings - principal,
             (),
         )
-    shortfall = max(principal - checking, Decimal("0.00"))
+    shortfall = max(principal - checking, Decimal("0.00")) if principal else Decimal("0.00")
     transfer = (
         shortfall
         if shortfall > 0

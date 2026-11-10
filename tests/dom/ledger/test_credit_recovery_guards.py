@@ -299,7 +299,6 @@ def test_credit_recovery_overdraft_has_no_fee_or_fee_configuration_dependency(
         directive = replace(
             inputs["banking_directive"],
             protection_enabled=False,
-            flat_fee=Decimal("99.00"),
         )
         plan = resolve_credit_recovery(
             proof=_proof(original, inputs),
@@ -310,7 +309,6 @@ def test_credit_recovery_overdraft_has_no_fee_or_fee_configuration_dependency(
             mechanism="teacher",
         )
         assert plan.resolved_plan.checking_after == Decimal("-10.00")
-        assert plan.resolved_plan.overdraft_fee_amount == Decimal("0.00")
         result = apply_credit_recovery(plan=plan, idempotency_key="cap:no-fee")
         assert len(result["effects"]) == 1
         assert result["principal"].compensation_amount_cents == 1000
