@@ -7,9 +7,15 @@ student claim/recovery setup and lifecycle operations that must erase its data
 fail closed with a generic 503.
 
 The existing Python Redis dependency is used. Redis must support ACL subcommands
-and `SET KEEPTTL` (Redis 6.0 or newer, which introduced both). Production runs
-6.0.16. Do not point this at the rate-limit store, a managed persistent
-instance, a replica, or a backed-up volume.
+and `SET KEEPTTL` (Redis 6.0 or newer, which introduced both), and `CONFIG GET`
+with multiple pattern arguments in one call (`app/services/student_setup.py`'s
+`client()` passes `save`, `appendonly` and `slowlog-log-slower-than` as three
+separate arguments to one `CONFIG GET`), which Redis added only in 7.0; a
+pre-7.0 server rejects that call, and `client()` turns the resulting
+`RedisError` into a generic `SetupUnavailable`/503 indistinguishable from the
+service being down. Redis 7 or newer is therefore still required. Do not point
+this at the rate-limit store, a managed persistent instance, a replica, or a
+backed-up volume.
 
 ## Provision before application deployment
 
