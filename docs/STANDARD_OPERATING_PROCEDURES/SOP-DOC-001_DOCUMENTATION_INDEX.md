@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.57 | 2026-11-08 | 3.56 | Normative |
+| SOP-DOC-001 | 3.58 | 2026-11-10 | 3.57 | Normative |
 
 ---
 
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.58 (2026-11-10):**
+- Register DOM-ITR-001 v1.11: correct the implementation-status appendix, which described the cycle-record materialization writer (`materialize_interpretation_cycle`, invoked by `FEAT-PROD-004`) as absent from runtime; it has existed and been wired in since slice 8.3d. Status correction only; no doctrine or invariant change.
 
 **Version 3.57 (2026-11-08):**
 - Register SOP-DEP-001A v1.2: validation is a development and operations responsibility as SOP-DEP-001B §V.A defines; teachers and students take no part, and on a host serving live classes no live class is used and live classroom activity is never orchestrated.
