@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Removed
+
+- <!-- notes: internal --> **Retired the leftover NSF/overdraft-fee machinery** (#1647; `SPEC-ECON-003` v2.5). No overdraft/NSF fee has been assessed since the 2026-10-07 owner ruling, but the `fee_authority` ledger-resolution parameter, the dead `apply_overdraft_fee_if_needed` / `record_nsf_fee_obligation` orchestration, and the teacher-facing overdraft-fee settings and rebalance suggestion on the Banking page were still present. Removed all of it; overdraft protection (the savings-to-checking transfer) is unaffected, and the `flat_overdraft_fee` / `progressive_overdraft_fee` `economic_engine` columns are untouched (no migration).
+
 ### Changed
 
 - <!-- notes: internal --> **Initial-deployment validation is development and operations alone, too** (`SOP-DEP-001A` v1.2). The rule `SOP-DEP-001B` §V.A set for releases now also governs `SOP-DEP-001A`, including a release the owner designates as a full validation on a host serving live classes: the operator runs every item in test classes with test accounts, and teachers, students and live classes take no part. `SOP-DOC-001` v3.57.

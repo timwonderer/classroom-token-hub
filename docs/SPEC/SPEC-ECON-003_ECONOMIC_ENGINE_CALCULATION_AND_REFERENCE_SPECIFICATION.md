@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-003    |  2.4    |     2026-11-03 |        2.3 |       Normative |
+| SPEC-ECON-003    |  2.5    |     2026-11-10 |        2.4 |       Normative |
 
 ---
 
@@ -629,44 +629,18 @@ assessments, and is subject to late fees under its own policy. An NSF fee was
 never an obligation: it is a Ledger fee, a side effect of a negative balance, and
 a historical one may be reversed like any other fee (`DOM-OBL-001` §II.C).
 
-The rest of §4.5.1.1 (the fee's scope, amount and recording) and the economic
-engine's overdraft-fee settings describe the retired fee and are superseded by
-the paragraph above; they are removed in the next revision of this
-specification. §4.5.1.1A (charge and deduction funding, including overdraft
-protection) is unaffected.
+A **Store purchase** is not charged an NSF fee. A purchase requires sufficient
+funds: when checking, together with any full overdraft-protection transfer
+under §4.5.1.1A, does not cover it, the Store refuses it before anything posts
+(`FEAT-STOR-001` §VI.E). No agreement was formed, so there is no failed
+agreement and no fee, as a declined card purchase costs nothing. §4.5.1.1A
+(charge and deduction funding, including overdraft protection) is unaffected.
 
-A **Store purchase** is not charged an NSF fee (owner ruling 2026-10-07). A purchase requires
-sufficient funds: when checking, together with any full overdraft-protection
-transfer under §4.5.1.1A, does not cover it, the Store refuses it before anything
-posts (`FEAT-STOR-001` §VI.E). No agreement was formed, so there is no failed
-agreement and no fee, as a declined card purchase costs nothing.
-
-An NSF fee SHALL NOT be charged for:
-
-- **Transfers** — a transfer is a lateral movement between the seat's OWN
-  accounts (e.g. checking↔savings). It is not spending and not an agreement. On
-  insufficient funds a transfer is simply **invalid**: it does not proceed and
-  incurs no fee.
-- **Penalties** — a teacher-applied deduction (an admin adjustment / fine) is
-  itself a penalty, neither a purchase nor an obligation. A penalty **cannot
-  generate a fine**; it posts as a direct debit (settling below zero if the
-  balance cannot cover it), after applying the shared protection rule of §4.5.1.1A. Savings eligibility for funding and fee applicability are separate decisions.
-- **Payroll corrections** — interval or residual recovery is a separately authorized corrective debit, not a failed agreement. It incurs no NSF fee and creates no obligation or deferred deduction.
-
-Fee amount (authority): the **teacher sets** the fee amount. The Economic Engine
-does not determine it; per §4.5.1 the CWI helper surfaces a **CWI-normed
-recommended range** for the teacher's reference (not a single value) and displays
-a warning when the chosen amount falls outside that range. The teacher's chosen
-value is persisted on the engine (`flat_overdraft_fee` /
-`progressive_overdraft_fee`); when a fee is charged, the Ledger posts that
-teacher-set amount.
-
-Recording and layering (informative): the Ledger posts the fee debit and stays
-domain-blind (`DOM-LED-001` §II). Because the NSF fee is a fine, it is also an
-obligation (`DOM-OBL-001` §II.C, immediate charge), recorded by the
-**originating business FEAT's** cross-domain orchestration — never by the Ledger
-resolution primitive. This resolves the
-overdraft/NSF ownership question previously open in `DOM-ITR-001` §XIII.c.
+The fee's former scope, amount and recording (the teacher-set
+`flat_overdraft_fee` / `progressive_overdraft_fee` and the business FEAT's
+NSF-obligation orchestration) are retired along with the fee: the engine
+columns and any historical rows they produced are untouched, but nothing
+reads or writes them for a new fee going forward (issue #1647).
 
 ---
 
@@ -1067,6 +1041,8 @@ Revisions to this document must:
 3. remain consistent with the class-economy authority chain.
 
 ### Revision history
+
+- **2.5 (2026-11-10)** — Completes the §4.5.1.1 revision that **2.3** flagged as pending: removes the retired fee's scope/amount/recording text and the teacher-facing fee settings and warning it described (issue #1647). No calculation or formula changes; `flat_overdraft_fee` / `progressive_overdraft_fee` remain persisted engine columns, now written by nothing.
 
 - **2.3 (2026-10-07)**, owner rulings 2026-10-07: no overdraft or NSF fee is assessed; a failed obligation payment leaves the obligation unpaid, accumulating, and subject to late fees (§4.5.1.1; `DOM-OBL-001` 3.3). A Store purchase requires sufficient funds and is refused before posting, with no fee, when checking and any full protection transfer do not cover it (§4.5.1.1, §4.5.1.1A; `FEAT-STOR-001` 3.2). Funding semantics for authorized charges are unchanged.
 

@@ -45,7 +45,7 @@ def test_route_change_still_has_an_inv_arc_021_family_selected():
 
 
 @pytest.mark.parametrize("path", [
-    "app/services/ledger_fee_service.py",
+    "app/services/ledger_recovery_service.py",
     "app/feats/store.py",
     "app/models.py",
     "migrations/versions/new_revision.py",

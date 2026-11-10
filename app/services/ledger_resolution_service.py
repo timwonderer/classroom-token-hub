@@ -2,12 +2,16 @@
 
 FEAT-LED-000 XI.5; DOM-LED-001 VII. No domain eligibility/configuration lookup
 occurs here, and no FEAT context is opened by these domain interfaces.
+
+No overdraft/NSF fee is ever resolved here (owner ruling 2026-10-07;
+SPEC-ECON-003 §4.5.1.1): a shortfall this module cannot fund through savings
+simply posts a negative checking balance (or, for an obligation payment or
+purchase, is refused by the calling FEAT before anything posts).
 """
 
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
-from app.extensions import db
-from app.models import Transaction, _quantize_currency
+from decimal import Decimal
+from app.models import _quantize_currency
 from app.services.ledger_balance_query_service import get_available_balances
 from app.services.ledger_command_service import create_reserved_effects
 from app.services.ledger_transfer_service import build_transfer_effect_pair
@@ -23,7 +27,6 @@ class IntendedLedgerPlan:
     actor_seat_id: int
     target_seat_id: int
     mechanism: str
-    fee_actor_seat_id: int | None = None
     source_account: str = "checking"
     target_account: str | None = None
     compensation_origin_locator: str | None = None
@@ -40,7 +43,6 @@ class ResolvedLedgerPlan:
     intended_plan: IntendedLedgerPlan
     shortfall: Decimal
     recovery_transfer_amount: Decimal
-    overdraft_fee_amount: Decimal
     checking_before: Decimal
     savings_before: Decimal
     checking_after: Decimal
@@ -58,7 +60,6 @@ def build_intended_ledger_plan(
     actor_seat_id,
     target_seat_id,
     mechanism,
-    fee_actor_seat_id=None,
     source_account="checking",
     target_account=None,
     compensation_origin_locator=None,
@@ -80,7 +81,6 @@ def build_intended_ledger_plan(
         actor_seat_id,
         target_seat_id,
         mechanism,
-        fee_actor_seat_id,
         source_account,
         target_account,
         compensation_origin_locator,
@@ -92,74 +92,19 @@ def build_intended_ledger_plan(
     )
 
 
-def directive_identity(directive, *, include_fees=False):
-    base = (directive.class_id, directive.version_locator, directive.protection_enabled)
-    return (
-        base
-        + (
-            str(directive.flat_fee),
-            directive.progressive_fee,
-            str(directive.cwi),
-            (
-                directive.fee_period_start.isoformat()
-                if directive.fee_period_start
-                else None
-            ),
-        )
-        if include_fees
-        else base
-    )
+def directive_identity(directive):
+    return (directive.class_id, directive.version_locator, directive.protection_enabled)
 
 
-def _fee_amount(plan, directive):
-    if directive.flat_fee is not None:
-        flat = Decimal(directive.flat_fee)
-        if not flat.is_finite() or flat < 0:
-            raise ValueError("Invalid banking fee directive.")
-        return _quantize_currency(flat)
-    if directive.progressive_fee is None:
-        raise ValueError("Unavailable banking fee directive.")
-    if not directive.progressive_fee:
-        return Decimal("0.00")
-    if directive.cwi is None or directive.fee_period_start is None:
-        raise ValueError("Unavailable banking fee directive.")
-    if not directive.cwi.is_finite() or directive.cwi < 0:
-        raise ValueError("Invalid banking fee directive.")
-    count = Transaction.query.filter(
-        Transaction.class_id == plan.class_id,
-        Transaction.seat_id == plan.seat_id,
-        Transaction.type == "overdraft_fee",
-        Transaction.timestamp >= directive.fee_period_start,
-    ).count()
-    tier = "tier_1" if count == 0 else "tier_2" if count == 1 else "tier_3"
-    raw = dict(directive.progressive_fee).get(tier)
-    try:
-        rate = Decimal(str(raw).strip().rstrip("%")) / 100
-    except (ValueError, InvalidOperation):
-        raise ValueError("Unavailable banking fee directive.")
-    if not rate.is_finite() or rate < 0:
-        raise ValueError("Invalid banking fee directive.")
-    return _quantize_currency(directive.cwi * rate)
-
-
-def resolve_intended_ledger_plan(
-    *, plan, banking_directive, fee_authority="NONE", force_overdraft_fee=False
-):
-    if banking_directive.class_id != plan.class_id or fee_authority not in {
-        "NONE",
-        "FAILED_AGREEMENT",
-        "EXPLICIT_FEE",
-    }:
-        raise ValueError("Invalid funding directive scope or fee authority.")
+def resolve_intended_ledger_plan(*, plan, banking_directive):
+    if banking_directive.class_id != plan.class_id:
+        raise ValueError("Invalid funding directive scope.")
     checking, savings = get_available_balances(plan.seat_id, plan.class_id)
     principal = plan.debit_amount
     if plan.source_account == "savings":
-        if fee_authority != "NONE":
-            raise ValueError("Savings recovery cannot create a checking fee.")
         return ResolvedLedgerPlan(
             "ACCEPT",
             plan,
-            Decimal("0.00"),
             Decimal("0.00"),
             Decimal("0.00"),
             checking,
@@ -169,14 +114,6 @@ def resolve_intended_ledger_plan(
             (),
         )
     shortfall = max(principal - checking, Decimal("0.00"))
-    can_protect = banking_directive.protection_enabled and savings >= shortfall
-    fee = Decimal("0.00")
-    if fee_authority == "EXPLICIT_FEE" and (force_overdraft_fee or checking < 0):
-        fee = _fee_amount(plan, banking_directive)
-    elif fee_authority == "FAILED_AGREEMENT" and shortfall > 0 and (not can_protect):
-        fee = _fee_amount(plan, banking_directive)
-    total = principal + fee
-    shortfall = max(total - checking, Decimal("0.00")) if total else Decimal("0.00")
     transfer = (
         shortfall
         if shortfall > 0
@@ -185,21 +122,20 @@ def resolve_intended_ledger_plan(
         else Decimal("0.00")
     )
     return ResolvedLedgerPlan(
-        "TRANSFORM" if transfer or fee else "ACCEPT",
+        "TRANSFORM" if transfer else "ACCEPT",
         plan,
         shortfall,
         transfer,
-        fee,
         checking,
         savings,
-        checking + transfer - total,
+        checking + transfer - principal,
         savings - transfer,
-        directive_identity(banking_directive, include_fees=fee_authority != "NONE"),
+        directive_identity(banking_directive),
     )
 
 
 def apply_resolved_ledger_plan(*, resolved_plan, idempotency_key):
-    """One reservation owns principal, funding legs and any separately authorized fee."""
+    """One reservation owns the principal debit and its overdraft-protection funding leg."""
     from app.feats.base import get_active_feat_name
 
     p = resolved_plan.intended_plan
@@ -256,30 +192,12 @@ def apply_resolved_ledger_plan(*, resolved_plan, idempotency_key):
                 ),
             )
         )
-    fee_index = None
-    if resolved_plan.overdraft_fee_amount:
-        if p.fee_actor_seat_id is None:
-            raise ValueError("A fee requires its resolved authority actor.")
-        fee_index = len(effects)
-        effects.append(
-            dict(
-                common,
-                actor_seat_id=p.fee_actor_seat_id,
-                mechanism="system",
-                target_seat_id=p.seat_id,
-                account_type="checking",
-                amount=-resolved_plan.overdraft_fee_amount,
-                type="overdraft_fee",
-                description="Non-sufficient funds fee",
-            )
-        )
     if not effects:
         return {
             "accepted": True,
             "reason": resolved_plan.outcome,
             "effects": (),
             "principal": None,
-            "ledger_transaction_id": None,
         }
     from app.models import LedgerCommandReservation
     from app.services.ledger_recovery_service import lock_recovery_scope
@@ -310,5 +228,4 @@ def apply_resolved_ledger_plan(*, resolved_plan, idempotency_key):
         "effects": tuple(rows),
         "created": created,
         "principal": rows[principal_index] if principal_index is not None else None,
-        "ledger_transaction_id": rows[fee_index].id if fee_index is not None else None,
     }

@@ -54,7 +54,7 @@ Before anything posts, the teacher sees the requested deduction, the class's rec
 2. Lock every selected seat in ascending seat order (`lock_ledger_seats`).
 3. Every seat must be claimed. An unclaimed seat takes part in no economic activity, so a selection that contains one is refused whole; it is never dropped silently.
 4. Lock the ClassEconomy row, so concurrent submissions sharing a token serialize, then look up every reservation made under this token (§VIII.4).
-5. Resolve each seat's plan with `fee_authority = NONE` under the class's banking directive, and compare the digest of the resolved outcome to `expected_preview_digest`. On any difference nothing posts and the teacher reviews the updated outcome.
+5. Resolve each seat's plan under the class's banking directive (never a fee — `SPEC-ECON-003` §4.5.1.1), and compare the digest of the resolved outcome to `expected_preview_digest`. On any difference nothing posts and the teacher reviews the updated outcome.
 
 ### 3. Mutation
 
