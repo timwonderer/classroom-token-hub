@@ -102,6 +102,25 @@ def attendance_tap_seat_limit_key():
     return _seat_or_ip_limit_key()
 
 
+def student_seat_limit_key():
+    """Key an authenticated student-facing route by seat, not network address.
+
+    Audit #1642: every signed-in student route without its own limiter
+    decorator inherited the ``default_limits`` IP key, so a school's shared
+    address pooled dashboard, transfer, shop, insurance, and hall-pass
+    traffic from every student behind it into the same 200/hour budget.
+    Reads only ``g.canonical_context``, the same way
+    :func:`attendance_tap_seat_limit_key` and
+    :func:`student_status_seat_limit_key` do, so it is only meaningful on a
+    decorator placed below ``@login_required`` (or, for ``/api`` routes,
+    behind the app-wide ``before_request`` context resolution those routes
+    already rely on). Falls back to the address key when no context is
+    attached, which leaves unauthenticated requests on their existing
+    network-scoped budget.
+    """
+    return _seat_or_ip_limit_key()
+
+
 def student_login_identity_limit_key():
     """Key a student login attempt by the submitted username, not address.
 

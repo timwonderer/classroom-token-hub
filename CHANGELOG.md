@@ -17,6 +17,7 @@ and this project follows semantic versioning principles.
 
 ### Security
 
+- <!-- notes: security-reliability --> **Signed-in student routes are rate limited per seat, not per shared school address** (#1642). Every `@login_required` route in the student blueprint and the student-facing `/api` routes — dashboard, payroll, transfer, insurance, shop, rent, and the hall-pass request/checkout/checkin endpoints — previously fell back to the application's address-keyed `200 per hour` default, so a school's students sharing one public address could exhaust each other's budget. Each route now carries an explicit seat-keyed limit (the same `(class_id, seat_id)` key already used by `/api/tap` and `/api/student-status`), falling back to the address key only when no student context is attached; `/student/logout` is explicitly exempt rather than left uncovered.
 - <!-- notes: security-reliability --> **Hall-pass adjustment errors no longer expose arbitrary exception text.** Both teacher adjustment surfaces return reviewed validation messages or a generic failure. Bulk errors identify students by public seat ID rather than placing names in error messages. Addresses CodeQL alert #327; unexpected exception text is covered by a route regression test.
 - <!-- notes: security-reliability --> **Update the OpenTelemetry package family to 1.45.2 / 0.66b2.** This includes the linear-time tracestate parser correction for CVE-2026-114603 (Dependabot alert #100), with regression checks for long malformed and valid headers.
 

@@ -18,7 +18,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import verify_password
 
-from app.extensions import db, limiter, student_status_seat_limit_key, attendance_tap_seat_limit_key
+from app.extensions import db, limiter, student_status_seat_limit_key, attendance_tap_seat_limit_key, student_seat_limit_key
 from app.models import (
     Transaction, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
@@ -255,6 +255,7 @@ def _student_purchase_error(error_code):
 
 @api_bp.route('/purchase-item', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def purchase_item():
     """
     Purchase an item from the store.
@@ -347,6 +348,7 @@ def purchase_item():
 
 @api_bp.route('/use-item', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def use_item():
     context = getattr(g, "canonical_context", None)
     if not context:
@@ -711,6 +713,7 @@ HALL_PASS_NOT_SET_UP = "Hall passes are not set up for this class yet. Ask your 
 
 @api_bp.route('/hall-pass/request', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def request_hall_pass():
     """Submit a hall-pass request for teacher approval (a ``pending_actions`` row)."""
     context = getattr(g, "canonical_context", None)
@@ -778,6 +781,7 @@ def request_hall_pass():
 
 @api_bp.route('/hall-pass/request/<request_id>/cancel', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def cancel_pending_hall_pass_request(request_id):
     """Cancel the current student's own pending hall-pass request."""
     context = getattr(g, "canonical_context", None)
@@ -951,6 +955,7 @@ def _enforce_hall_pass_student_context(student, log_entry):
 
 @api_bp.route('/hall-pass/checkout', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def checkout_hall_pass():
     """Append an inactive attendance row for an issued hall pass."""
     context = getattr(g, "canonical_context", None)
@@ -1033,6 +1038,7 @@ def checkout_hall_pass():
 
 @api_bp.route('/hall-pass/checkin', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def checkin_hall_pass():
     """Append an active attendance row when the student returns from hall pass."""
     context = getattr(g, "canonical_context", None)
@@ -1439,6 +1445,7 @@ def rotate_hall_pass_verify_token():
 
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def get_available_hall_pass_types():
     """Get available pass types for the current class.
 

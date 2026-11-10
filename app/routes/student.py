@@ -23,7 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import hash_password, verify_password
 import pytz
 
-from app.extensions import db, limiter, student_login_identity_limit_key
+from app.extensions import db, limiter, student_login_identity_limit_key, student_seat_limit_key
 from app.services import student_setup
 from app.models import (
     Transaction, AttendanceSession, StoreItemVisibility,
@@ -996,6 +996,7 @@ def setup_pin_passphrase():
 
 @student_bp.route('/add-class', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def add_class():
     """
     Allow logged-in students to add a new class by entering a join code.
@@ -1157,6 +1158,7 @@ def _product_for_entitlement(
 
 @student_bp.route('/dashboard')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def dashboard():
     """Student dashboard with balance, attendance, transactions, and quick actions."""
     context = resolve_canonical_context()
@@ -1459,6 +1461,7 @@ def dashboard():
 
 @student_bp.route('/payroll')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def payroll():
     """Student payroll page with attendance record, productivity stats, and projected pay."""
     # Check if payroll feature is enabled
@@ -1555,6 +1558,7 @@ def payroll():
 
 @student_bp.route('/transfer', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def transfer():
     """Transfer funds between checking and savings accounts."""
     # Check if banking feature is enabled
@@ -1776,6 +1780,7 @@ def transfer():
 
 @student_bp.route('/insurance', endpoint='student_insurance')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
     # Disabled insurance stays reachable while a premium is owed (DOM-OBL-001
@@ -1937,6 +1942,7 @@ def insurance_marketplace():
 
 @student_bp.route('/insurance/purchase/<policy_uuid>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def purchase_insurance(policy_uuid):
     """Purchase (enroll in) an insurance policy via FEAT-OBL-004."""
     context = resolve_canonical_context()
@@ -1983,6 +1989,7 @@ def purchase_insurance(policy_uuid):
 
 @student_bp.route('/insurance/cancel/<policy_uuid>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def cancel_insurance(policy_uuid):
     """Cancel (stop renewal on) the student's coverage for a policy via FEAT-OBL-005.
 
@@ -2028,6 +2035,7 @@ def cancel_insurance(policy_uuid):
 
 @student_bp.route('/insurance/policy/<policy_uuid>/pay-premium', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def pay_insurance_premium(policy_uuid):
     """Pay the oldest outstanding premium on the student's coverage for a policy.
 
@@ -2268,6 +2276,7 @@ def _eligible_claim_transactions(seat_id, class_id, entitlement_id, limit=25):
 
 @student_bp.route('/insurance/claim/<policy_uuid>', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def file_claim(policy_uuid):
     """File an insurance claim against coverage the student currently holds."""
     context = resolve_canonical_context()
@@ -2401,6 +2410,7 @@ def file_claim(policy_uuid):
 
 @student_bp.route('/insurance/policy/<policy_uuid>')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def view_policy(policy_uuid):
     """View policy details and claims history."""
     from app.services.insurance_policy_service import normalize_insurance_type
@@ -2520,6 +2530,7 @@ def view_policy(policy_uuid):
 
 @student_bp.route('/shop')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def shop():
     """Student shop - browse and purchase items."""
     # Check if store feature is enabled
@@ -2748,6 +2759,7 @@ def shop():
 
 @student_bp.route('/rent')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def rent():
     """View rent status and payment history (canonical obligation events).
 
@@ -2866,6 +2878,7 @@ def rent():
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def rent_pay(period):
     """Satisfy the student's outstanding rent obligation via the canonical FEAT.
 
@@ -3262,6 +3275,7 @@ def select_class_context():
 
 @student_bp.route('/logout')
 @login_required
+@limiter.exempt
 def logout():
     """Student logout."""
     session.clear()
@@ -3271,6 +3285,7 @@ def logout():
 
 @student_bp.route('/switch-class/<class_public_id>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 @requires_feat_context("FEAT-IDEN-001", key_per_call=True)
 def switch_class(class_public_id):
     """Switch to a different class. The URL carries the class's public id
@@ -3324,6 +3339,7 @@ def switch_class(class_public_id):
 
 @student_bp.route('/setup-complete')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def setup_complete():
     """Setup completion confirmation page."""
     student = _get_canonical_student_from_context()
@@ -3335,6 +3351,7 @@ def setup_complete():
 
 @student_bp.route('/help-support', methods=['GET'])
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def help_support():
     """Show the student help and support page with issue tracking."""
     class_context = resolve_canonical_context()
@@ -3361,6 +3378,7 @@ def help_support():
 
 @student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def submit_general_issue():
     """Submit a general issue or help request."""
     from app.utils.issue_categories import get_active_categories
@@ -3416,6 +3434,7 @@ def submit_general_issue():
 
 @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def report_transaction_issue(transaction_id):
     """Report an issue with a specific transaction."""
     from app.utils.issue_categories import get_active_categories
@@ -3484,6 +3503,7 @@ def report_transaction_issue(transaction_id):
 
 @student_bp.route('/help-support/attendance-session/<int:attendance_session_id>/report', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def report_attendance_session_issue(attendance_session_id):
     """Report an issue with a specific attendance session record."""
     from app.utils.issue_categories import get_active_categories
@@ -3551,6 +3571,7 @@ def report_attendance_session_issue(attendance_session_id):
 
 @student_bp.route('/verify-recovery/<int:code_id>', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def verify_recovery(code_id):
     """
     Student verification page for teacher account recovery.
