@@ -37,7 +37,7 @@ def _seed(classroom):
             actor_seat_id=classroom.teacher_seat_id, reason_code="start_work",
             timestamp=now - timedelta(minutes=30),
         ))
-        # Closed: payroll settles finished sessions only (DOM-PROD-001 §VI.3).
+        # Closed: payroll settles finished sessions only (DOM-PROD-001 §XV.11).
         db.session.add(AttendanceSession(
             target_seat_id=student.seat.id, class_id=cid,
             actor_seat_id=classroom.teacher_seat_id, status="inactive",
