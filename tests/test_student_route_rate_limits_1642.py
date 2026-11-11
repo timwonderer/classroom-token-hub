@@ -152,13 +152,17 @@ def test_unauthenticated_dashboard_request_spends_no_seat_budget(client, app, li
 def test_logout_is_exempt_rather_than_silently_uncovered(client, app, limiter_on, clock):
     """Logout was deliberately decided ``exempt``, not accidentally missed.
 
-    A classmate behind the same address burning through every other limited
-    route must never be able to lock a student out of signing out.
+    Mutation proof: hammer ``/student/logout`` itself past the address-keyed
+    ``200 per hour`` default from an anonymous caller sharing the signed-in
+    student's address, then confirm that student can still log out. Without
+    ``@limiter.exempt`` the anonymous traffic would spend the same address
+    budget and the student's own logout call would 429 too.
     """
     _, first, _ = _two_students_one_class(client, app)
+    anonymous = app.test_client()
 
-    for _ in range(DASHBOARD_LIMIT_PER_MINUTE + 10):
-        first.get("/student/dashboard", headers=SCHOOL_ADDRESS)
+    for _ in range(205):
+        anonymous.get("/student/logout", headers=SCHOOL_ADDRESS)
 
     assert first.get("/student/logout", headers=SCHOOL_ADDRESS).status_code in (200, 302)
 
