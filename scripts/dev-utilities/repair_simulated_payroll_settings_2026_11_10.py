@@ -57,8 +57,8 @@ Worse, this whole persistent world (tests/simulated/conftest.py) is seeded
 *once* from a production snapshot and never rebuilt, so there is no script
 that can regenerate "Rabbit Hole 101" as it was. No local backup existed
 either. The loss (that specific issue, both insurance claims, the hall-pass
-log, and the identities behind teacher seat 1 / student seat 3 "Jordan Lee")
-is permanent on this machine.
+log, and the identities behind teacher seat 1 / student seat 3) is permanent
+on this machine.
 
 ## The actual fix / mitigation
 
@@ -244,7 +244,16 @@ def repair(database_url: str) -> None:
     if null_first_pay_date or ambiguous_classes:
         print("a7e3c9d1f5b2's preflight will still refuse. Investigate before running `flask db upgrade`.")
         sys.exit(1)
-    print("a7e3c9d1f5b2's preflight conditions are clear.")
+    # This only re-checks the two conditions this script fixes (orphaned RETIRED
+    # rows, NULL first_pay_date). a7e3c9d1f5b2's _preflight() also refuses on
+    # missing/duplicate created_at, unsupported pay_schedule_type, cross-class
+    # policy versions, and unmapped policy_uuids -- none of which this script
+    # touches, so a clean result here is not a guarantee the migration will pass.
+    print(
+        "The two conditions this script addresses are clear. "
+        "a7e3c9d1f5b2's preflight checks more than this script fixes; "
+        "run `flask db upgrade` to find out definitively."
+    )
 
 
 def main() -> None:

@@ -15,7 +15,7 @@ hard-coded assumption about what, if anything, the world already contains.
 
 That matters here specifically: this file originally hard-coded its anchor
 as "Rabbit Hole 101" (class_id 6135423f-80cf-43ec-9ce3-4e05ffb98fad, teacher
-seat 1, student seat 3 / "Jordan Lee"), found once by querying the world
+seat 1, student seat 3), found once by querying the world
 directly (see docs/ops/audits/ for the mapping that sorted every template
 into a group). That entire class -- including both seats, not just its
 issue/claims/hall-pass-log -- was deleted by mistake during 2026-11 test-DB
@@ -279,12 +279,12 @@ def _fund_and_purchase_fixture_policy(policy_uuid: str):
     return purchase
 
 
-def _has_active_entitlement(policy_uuid: str) -> bool:
-    """Whether the anchor student holds unterminated INSURANCE coverage under
-    ``policy_uuid``: an entitlement lineage with a GRANTED event and no later
-    CONSUMED/EXPIRED/REVOKED event. ``policy_uuid`` is frozen in ``payload``,
-    not a column, so this reads it back in Python the way
-    ``app/services/store_service.py:resolve_entitlement_product`` does.
+def _active_entitlement_id(policy_uuid: str) -> str | None:
+    """The anchor student's unterminated INSURANCE entitlement id under
+    ``policy_uuid``, if one exists: an entitlement lineage with a GRANTED
+    event and no later CONSUMED/EXPIRED/REVOKED event. ``policy_uuid`` is
+    frozen in ``payload``, not a column, so this reads it back in Python the
+    way ``app/services/store_service.py:resolve_entitlement_product`` does.
     """
     events = (
         EntitlementEvent.query.filter_by(
@@ -298,9 +298,14 @@ def _has_active_entitlement(policy_uuid: str) -> bool:
         if e.event_type == "GRANTED" and (e.payload or {}).get("policy_uuid") == policy_uuid
     }
     if not granted_lineages:
-        return False
+        return None
     terminated_lineages = {e.entitlement_id for e in events if e.event_type in ("CONSUMED", "EXPIRED", "REVOKED")}
-    return bool(granted_lineages - terminated_lineages)
+    active = granted_lineages - terminated_lineages
+    return next(iter(active), None)
+
+
+def _has_active_entitlement(policy_uuid: str) -> bool:
+    return _active_entitlement_id(policy_uuid) is not None
 
 
 def _find_or_create_active_policy_uuid() -> str:
@@ -402,7 +407,10 @@ def _find_or_create_claim() -> str:
             return claim.claim_id
 
     policy_uuid = _fixture_policy_uuid()
-    purchase = _fund_and_purchase_fixture_policy(policy_uuid)
+    entitlement_id = _active_entitlement_id(policy_uuid)
+    if entitlement_id is None:
+        purchase = _fund_and_purchase_fixture_policy(policy_uuid)
+        entitlement_id = purchase.entitlement_id
 
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"groupd:loss:{uuid4().hex}"):
         loss, _ = create_ledger_idempotent_transaction(
@@ -413,7 +421,7 @@ def _find_or_create_claim() -> str:
         loss_id = loss.id
     db.session.commit()
     filed = submit_insurance_claim(
-        canonical_context=_student_ctx(), entitlement_id=purchase.entitlement_id,
+        canonical_context=_student_ctx(), entitlement_id=entitlement_id,
         claim_subject={"transaction_id": loss_id}, correlation_id=f"claim:{uuid4().hex}",
     )
     db.session.commit()
