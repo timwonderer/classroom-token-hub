@@ -132,7 +132,7 @@ def resolve_reconstructed_recovery(
     )
     resolved = (
         resolve_intended_ledger_plan(
-            plan=intended, banking_directive=banking_directive, fee_authority="NONE"
+            plan=intended, banking_directive=banking_directive
         )
         if total
         else None
@@ -518,7 +518,7 @@ def resolve_credit_recovery(
         correlation_id=p.correlation_id if recovery_kind == "EXACT_REVERSAL" else None,
     )
     resolved = resolve_intended_ledger_plan(
-        plan=intended, banking_directive=banking_directive, fee_authority="NONE"
+        plan=intended, banking_directive=banking_directive
     )
     material = (
         proof.material,

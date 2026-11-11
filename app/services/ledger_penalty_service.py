@@ -1,9 +1,8 @@
 """Teacher penalty (fine) plans: SPEC-ECON-003 §4.5.1.1 and §4.5.1.1A, FEAT-LED-006.
 
 A penalty is a direct checking debit. It is never an obligation and never
-generates a fee, so every plan resolves with ``fee_authority="NONE"``. The
-caller supplies the Class Configuration banking directive (FEAT-LED-000 §XI.5).
-Read-only: nothing here posts.
+generates a fee. The caller supplies the Class Configuration banking directive
+(FEAT-LED-000 §XI.5). Read-only: nothing here posts.
 """
 
 import hashlib
@@ -62,7 +61,6 @@ def resolve_penalty_plans(*, class_id, seat_ids, amount, reason, actor_seat_id, 
                 canonical_intent=(PENALTY_TYPE, seat_id, str(amount), description),
             ),
             banking_directive=banking_directive,
-            fee_authority="NONE",
         )
         for seat_id in sorted(set(seat_ids))
     )

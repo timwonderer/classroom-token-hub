@@ -31,8 +31,10 @@ def execute_evolve_economic_engine(
                      economy_policy_mode, expected_weekly_hours, interest_rate,
                      interest_calculation_type, compound_frequency,
                      interest_accrual_frequency, interest_payout_frequency,
-                     flat_overdraft_fee, progressive_overdraft_fee,
                      overdraft_protection_enabled
+                 (flat_overdraft_fee / progressive_overdraft_fee are retired —
+                 issue #1647 — and carry forward unchanged; they cannot be set
+                 through this whitelist)
         feature_list: List of features affected by this transition (e.g., ['payroll', 'rent'])
         effective_at: When this transition takes effect (default: canonical_now, ISO 8601 string)
         correlation_id: Optional; generated if not provided

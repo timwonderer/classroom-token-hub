@@ -513,6 +513,36 @@ def test_banking_schedule_rejects_contradictions(app, calculation, cadence):
     assert decoded["compound_frequency"] is None
 
 
+def test_banking_schema_has_no_retired_fee_fields(app):
+    """The retired overdraft/NSF fee never round-trips through transfer (#1647).
+
+    An export built before the fields were retired, or a hand-crafted import,
+    must not be able to resurrect ``flat_overdraft_fee`` /
+    ``progressive_overdraft_fee`` through ``evolve_economic_engine`` — the
+    whole portable surface (export projection, import decoding, and the
+    explicit-update whitelist) has to agree they no longer exist.
+    """
+    from app.services.configuration_fields import SCHEMAS
+    from app.services.economic_configuration_commands import _validate_engine_field
+
+    assert "flat_overdraft_fee" not in SCHEMAS["banking"]
+    assert "progressive_overdraft_fee" not in SCHEMAS["banking"]
+
+    context, _ = setup_transfer(app)
+    values = {field: None for field in SCHEMAS["banking"]}
+    with pytest.raises(ConfigurationError, match="Unexpected or missing"):
+        transfer._validate(
+            {"banking": {**values, "flat_overdraft_fee": "5.00"}}, context,
+        )
+
+    for field, stale_value in (
+        ("flat_overdraft_fee", "5.00"), ("progressive_overdraft_fee", {"tier_1": "1"}),
+    ):
+        valid, message = _validate_engine_field(field, stale_value)
+        assert not valid
+        assert "not a valid EconomicEngine field" in message
+
+
 def test_transfer_displays_class_time_without_changing_receipt_instants(app):
     context, nonce = setup_transfer(app)
     with temporal.pinned_clock(temporal.class_wall_time(context.class_id, date(2030, 1, 15), 9)):
@@ -560,9 +590,6 @@ def test_preview_values_follow_domain_meaning():
     from app.services.configuration_display import value_text
     # payroll reads a missing unit as hours (payroll.settings.daily_limit_seconds)
     assert value_text("max_time_per_day", "2", {"max_time_per_day_unit": None}) == "2 hours"
-    # progressive overdraft tiers are percent of CWI, not dollars
-    assert value_text("progressive_overdraft_fee", {"tier_1": "5", "tier_2": "10", "tier_3": "15"}, {}) == (
-        "1st overdraft: 5% of CWI, 2nd: 10% of CWI, 3rd and later: 15% of CWI")
     # teacher-authored text is shown exactly as it will be imported
     for field in ("description", "redemption_prompt", "tier_name", "marketing_badge"):
         assert value_text(field, "Use CODE_A", {}) == "Use CODE_A"

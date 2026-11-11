@@ -1,15 +1,13 @@
 """Every rebalance row is carried out by the command that owns it.
 
-FEAT-CLASS-005 §XI delegates rent to rent supersession, Store prices to product
-version supersession, and the overdraft fee to Economic Engine evolution. Two
-rows the preview offered had no path to their owner: a scheduled Store price was
-skipped when transitions were queued, and an overdraft fee was skipped on both
-paths, while the page still flashed success.
+FEAT-CLASS-005 §XI delegates rent to rent supersession and Store prices to
+product version supersession. A scheduled Store price row had no path to its
+owner when transitions were queued, while the page still flashed success.
 
-Neither Store prices nor the overdraft fee has a later activation boundary
-(FEAT-ECON-001 §VIII), so both take effect at once; rent terms always take
-effect from the next unbilled period. There is no activation choice (owner
-ruling 2026-09-30), and a submitted ``activation_mode`` changes nothing.
+Store prices have no later activation boundary (FEAT-ECON-001 §VIII), so they
+take effect at once; rent terms always take effect from the next unbilled
+period. There is no activation choice (owner ruling 2026-09-30), and a
+submitted ``activation_mode`` changes nothing.
 
 The owning table's new row is the whole record of a change: the rebalance keeps
 no lineage of its own (operator ruling 2026-09-30, DOM-CLASS-003 §IX).
@@ -22,16 +20,8 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.feats.class_configuration.feat_class_005_economic_engine_evolution import (
-    execute_evolve_economic_engine,
-)
-from app.models import ClassFeature, EconomicEngine, RentSettings, StoreProduct
-from app.services.class_configuration_query_service import (
-    get_current_economic_engine,
-    get_rent_settings,
-    is_feature_enabled,
-)
-from app.services.context_resolver import CanonicalContext
+from app.models import RentSettings, StoreProduct
+from app.services.class_configuration_query_service import get_rent_settings
 from app.services.store_service import get_current_version
 from tests.helpers.class_domain import customize_rent_settings, update_expected_weekly_hours
 from tests.helpers.classroom_initializer import initialize_as_teacher
@@ -98,42 +88,6 @@ def test_immediate_store_price_supersedes_the_product(client, app):
         assert StoreProduct.query.filter_by(
             class_id=classroom.class_id, product_lineage_uuid=product.product_lineage_uuid,
         ).count() == 2
-
-
-def test_immediate_overdraft_fee_evolves_the_economic_engine(client, app):
-    classroom = _teacher_class(client, app)
-    with app.app_context():
-        context = CanonicalContext(
-            user_id=classroom.teacher_user.id,
-            class_id=classroom.class_id,
-            seat_id=classroom.teacher_seat.id,
-            actor_role="teacher",
-        )
-        result = execute_evolve_economic_engine(
-            canonical_context=context,
-            class_id=classroom.class_id,
-            updates={"flat_overdraft_fee": 999.0},
-            feature_list=[
-                feature for feature in ClassFeature.feature_names()
-                if is_feature_enabled(classroom.class_id, feature)
-            ],
-            idempotency_key=f"rebalance-owner:overdraft-seed:{classroom.class_id}",
-        )
-        assert result.success, result.error_message
-    assert "overdraft_fee" in _offered(client)
-    with app.app_context():
-        versions_before = EconomicEngine.query.filter_by(class_id=classroom.class_id).count()
-
-    response = client.post(
-        "/admin/economy-policy/rebalance",
-        data={"selected_changes": ["overdraft_fee"]},
-    )
-
-    assert response.status_code == 302
-    with app.app_context():
-        engine = get_current_economic_engine(classroom.class_id)
-        assert Decimal(str(engine.flat_overdraft_fee)) < Decimal("999.00")
-        assert EconomicEngine.query.filter_by(class_id=classroom.class_id).count() == versions_before + 1
 
 
 def test_scheduled_rent_and_late_penalty_become_one_dated_rent_row(client, app):
@@ -236,7 +190,7 @@ def test_insurance_advisory_row_is_judged_in_the_class_policy_mode(app, monkeypa
     with app.app_context():
         _build_rebalance_preview(
             None, "class-id", checker, Decimal("100.00"), None, [policy],
-            store_items=[], economic_engine=None,
+            store_items=[],
         )
 
     assert seen == ["tight"]

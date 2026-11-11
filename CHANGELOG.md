@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Removed
+
+- <!-- notes: internal --> **Retired the leftover NSF/overdraft-fee machinery** (#1647; `SPEC-ECON-003` v2.5). No overdraft/NSF fee has been assessed since the 2026-10-07 owner ruling, but the `fee_authority` ledger-resolution parameter, the dead `apply_overdraft_fee_if_needed` / `record_nsf_fee_obligation` orchestration, the teacher-facing overdraft-fee settings and rebalance suggestion on the Banking page, and the configuration-transfer export/import/preview of the two fee fields (which could otherwise resurrect a fee value through an import) were still present. Removed all of it; overdraft protection (the savings-to-checking transfer) is unaffected, and the `flat_overdraft_fee` / `progressive_overdraft_fee` `economic_engine` columns are untouched and still carried forward on every engine evolution (no migration).
+
 ### Fixed
 
 - <!-- notes: internal --> **Cycle materialization binds `expected_weekly_hours`/`cwi` to the closed cycle's boundary, closing the gap `DOM-ITR-001` v1.11 flagged.** `capture_reference_configuration` (`app/services/interpretation/reference_configuration.py`) read `expected_weekly_hours` from whichever Economic Engine version was current when the writer ran, not the version in force when the cycle closed — a version saved between `cycle_completed_at` and that moment could leak into the materialized record, while `hourly_pay_rate`/`policy` were already correctly boundary-bound. A new resolver, `class_configuration_query_service.economic_engine_in_force_before` (mirroring `payroll_setting_in_force_before`), closes it. Already-materialized `interpretation_cycle_record` rows are historical fact and are not recomputed. `DOM-ITR-001` v1.12.
