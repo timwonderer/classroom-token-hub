@@ -100,7 +100,7 @@ Before you have created anything: *No store items yet. Use the Add New Item tab 
 
 Each card has two controls in its footer: **Edit** and **Deactivate**.
 
-**Deactivate** asks for confirmation and then *removes it from the student store but preserves purchase history. You can reactivate it later.* It is the control to use for anything you want gone from the store; per-item hard deletion is not offered here. Delete the class join code instead for a full scoped cleanup.
+**Deactivate** asks for confirmation and then *removes it from the student store but preserves purchase history.* It retires every version of the item for good — there is no way to bring that exact item back, so create a new item if you want to offer it again. It is the control to use for anything you want gone from the store; per-item hard deletion is not offered here. Delete the class join code instead for a full scoped cleanup.
 
 ### Rent-linked items
 
