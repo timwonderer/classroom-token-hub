@@ -1,8 +1,10 @@
-# Deployment record: 2026-10-05 production release, `1cdbf03da`
+# Deployment record: 2026-10-06 UTC production release, `1cdbf03da`
 
 **Type:** Routine release under `SOP-DEP-002`. No migrations. `CHANGELOG.md` (§ `[2.2.0]`) lists
 this release as one of the "last two [with] no release record" from this window; this record fills
-that gap.
+that gap. The release run below started 2026-10-06T03:10:13Z UTC; the filename keeps the
+`2026-10-05` date already used by `DEPLOY_2026-10-04_35bad089a.md`'s cross-reference, rather than
+renaming.
 
 ## Release identity
 
