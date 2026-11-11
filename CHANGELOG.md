@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- <!-- notes: internal --> **Cycle materialization binds `expected_weekly_hours`/`cwi` to the closed cycle's boundary, closing the gap `DOM-ITR-001` v1.11 flagged.** `capture_reference_configuration` (`app/services/interpretation/reference_configuration.py`) read `expected_weekly_hours` from whichever Economic Engine version was current when the writer ran, not the version in force when the cycle closed — a version saved between `cycle_completed_at` and that moment could leak into the materialized record, while `hourly_pay_rate`/`policy` were already correctly boundary-bound. A new resolver, `class_configuration_query_service.economic_engine_in_force_before` (mirroring `payroll_setting_in_force_before`), closes it. Already-materialized `interpretation_cycle_record` rows are historical fact and are not recomputed. `DOM-ITR-001` v1.12.
+
 ### Changed
 
 - <!-- notes: internal --> **The cycle-record materialization writer is no longer documented as missing, across all four documents that said so** (`DOM-ITR-001` v1.11, `DOM-CORE-001` v1.4, `DOM-CORE-002` v1.21, `SPEC-ITR-001` v1.7). `materialize_interpretation_cycle` (`app/services/interpretation/materialization.py`) has been invoked directly by `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`) since slice 8.3d; each document's status line still called it "NOT IMPLEMENTED" or said no row is written. `DOM-ITR-001` §XIII.b's Historical Configuration Binding row is marked PARTIALLY RESOLVED rather than fully resolved: the writer binds `hourly_pay_rate`/`policy` to the closed cycle's boundary but reads `expected_weekly_hours`/`cwi` from the current Economic Engine, not one scoped to that boundary, which remains open. Status corrections only; no doctrine, invariant, or runtime behavior change. `SOP-DOC-001` v3.58.
