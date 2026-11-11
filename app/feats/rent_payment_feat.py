@@ -446,7 +446,7 @@ def pay_rent(
     intended=build_intended_ledger_plan(seat_id=seat_id,class_id=class_id,debit_amount=this_payment,
         description=rent_payment_description(class_id,assessment),transaction_type='rent_payment',
         target_seat_id=authority_seat_id,actor_seat_id=seat_id,mechanism='self', canonical_intent=canonical_intent)
-    resolved=resolve_intended_ledger_plan(plan=intended,banking_directive=get_banking_directive(class_id),fee_authority='NONE')
+    resolved=resolve_intended_ledger_plan(plan=intended,banking_directive=get_banking_directive(class_id))
     # DOM-OBL-001 §II.C / SPEC-ECON-003 §4.5.1.1: a payment the seat cannot cover
     # (checking, with any full overdraft-protection transfer) leaves the rent
     # owed. Nothing has been written yet, so refusing here changes no state.
@@ -663,7 +663,6 @@ def pay_rent_bill(
                 actor_seat_id=seat_id, mechanism="self",
             ),
             banking_directive=get_banking_directive(class_id),
-            fee_authority="NONE",
         )
         if funding.checking_after < 0:
             return RentBillPaymentResult(

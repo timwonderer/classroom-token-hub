@@ -9,8 +9,7 @@ SCHEMAS = {
     "economy": {"economy_policy_mode": "text", "expected_weekly_hours": "decimal"},
     "banking": {"interest_rate": "decimal", "interest_calculation_type": "text",
         "compound_frequency": "text", "interest_accrual_frequency": "text",
-        "interest_payout_frequency": "text", "flat_overdraft_fee": "decimal",
-        "progressive_overdraft_fee": "tiers", "overdraft_protection_enabled": "bool"},
+        "interest_payout_frequency": "text", "overdraft_protection_enabled": "bool"},
     "payroll": {"pay_rate": "decimal", "overtime_threshold": "decimal",
         "overtime_threshold_unit": "text", "max_time_per_day": "decimal",
         "max_time_per_day_unit": "text", "pay_schedule_type": "text", "first_pay_date": "date"},
@@ -58,8 +57,6 @@ def project(row, family, context):
                 value = day.isoformat()
             elif kind == "decimal":
                 value = str(value)
-            elif kind == "tiers":
-                value = {key: str(amount) for key, amount in value.items()}
         result[field] = value
     return result
 
@@ -78,15 +75,6 @@ def decode(values, family, context):
                 raise ConfigurationError(f"{field} must be a nonnegative whole number")
             if kind in ("decimal", "text", "date", "end_date") and not isinstance(value, str):
                 raise ConfigurationError(f"{field} must be text")
-            if kind == "tiers":
-                if not isinstance(value, dict) or set(value) != {"tier_1", "tier_2", "tier_3"}:
-                    raise ConfigurationError("Overdraft tiers must have exactly three rates")
-                for amount in value.values():
-                    try:
-                        if not isinstance(amount, str) or not Decimal(amount).is_finite() or Decimal(amount) < 0:
-                            raise ValueError
-                    except (InvalidOperation, ValueError):
-                        raise ConfigurationError("Invalid overdraft tier rate")
             if kind == "decimal":
                 try:
                     value = Decimal(value)

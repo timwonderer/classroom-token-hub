@@ -13,7 +13,6 @@ FIELD_LABELS = {
     "economy_policy_mode": "Policy mode", "expected_weekly_hours": "Expected work time",
     "interest_rate": "Savings interest", "interest_calculation_type": "Interest type",
     "compound_frequency": "Compounds", "interest_accrual_frequency": "Accrues", "interest_payout_frequency": "Pays out",
-    "flat_overdraft_fee": "Overdraft fee", "progressive_overdraft_fee": "Progressive overdraft fees",
     "overdraft_protection_enabled": "Overdraft protection",
     "pay_rate": "Pay rate", "overtime_threshold": "Overtime after", "max_time_per_day": "Maximum paid time per day",
     "pay_schedule_type": "Pay schedule", "first_pay_date": "First payday",
@@ -40,7 +39,7 @@ FIELD_LABELS = {
     "marketing_badge": "Badge",
 }
 VALUE_LABELS = {"biweekly": "Bi-weekly"}
-MONEY = {"flat_overdraft_fee", "rent_amount", "late_penalty_amount", "price", "premium"}
+MONEY = {"rent_amount", "late_penalty_amount", "price", "premium"}
 PERCENT = {"reimbursement_percentage", "bulk_discount_percentage"}
 DATES = {"first_pay_date", "first_rent_due_date", "activation_at", "auto_delist_date", "collective_goal_expires_at"}
 # Teacher-authored text, shown exactly as written.
@@ -83,10 +82,6 @@ def value_text(field, value, row):
         return _plural(value, row.get(field + "_unit") or "hours")
     if field == "custom_frequency_value":
         return _plural(value, row.get("custom_frequency_unit") or "day")
-    if field == "progressive_overdraft_fee":
-        # percent of CWI per overdraft in the fee period (ledger_resolution_service._fee_amount)
-        names = {"tier_1": "1st overdraft", "tier_2": "2nd", "tier_3": "3rd and later"}
-        return ", ".join(f"{names[key]}: {_number(amount)}% of CWI" for key, amount in sorted(value.items()))
     if field == "bulk_discount_percentage":
         quantity = row.get("bulk_discount_quantity")
         return f"{_number(value)}% off" + (f" when buying {quantity} or more" if quantity else "")

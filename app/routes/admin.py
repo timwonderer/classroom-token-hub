@@ -1935,7 +1935,7 @@ def _safe_rebalance_owner_url(endpoint):
         return None
 
 
-def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_settings, insurance_policies, store_items=None, economic_engine=None):
+def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_settings, insurance_policies, store_items=None):
     preview_items = []
 
     # Insurance is deliberately advisory here. Premium determines the policy's
@@ -2063,27 +2063,6 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
                 'current_value': str(current), 'new_value': str(midpoint),
             },
         })
-
-    # Insurance and overdraft/fine rows are intentionally added only when their
-    # owning resolver supplies a concrete range. The rebalance surface must not
-    # invent ranges or reinterpret coverage policy.
-    if economic_engine and economic_engine.flat_overdraft_fee is not None:
-        fine_band = checker.fine_band(cwi)
-        current = Decimal(str(economic_engine.flat_overdraft_fee))
-        if current < fine_band['min'] or current > fine_band['max']:
-            midpoint = ((fine_band['min'] + fine_band['max']) / Decimal('2')).quantize(Decimal('0.01'))
-            preview_items.append({
-                'key': 'overdraft_fee', 'label': 'Banking: Overdraft / NSF fee',
-                'owner_label': 'Banking', 'owner_url': _safe_rebalance_owner_url('admin.banking'),
-                'current': _format_money(current),
-                'recommended': f"{_format_money(fine_band['min'])}–{_format_money(fine_band['max'])}",
-                'apply_by_default': False,
-                'recommended_value': str(midpoint),
-                'recommended_min': str(fine_band['min']),
-                'recommended_max': str(fine_band['max']),
-                'change': {'type': 'overdraft_fee', 'class_id': class_id,
-                           'current_value': str(current), 'new_value': str(midpoint)},
-            })
 
     return preview_items
 
@@ -6569,7 +6548,6 @@ def apply_economy_rebalance():
         rent_settings,
         insurance_policies,
         store_items=scoped_store_items,
-        economic_engine=_resolve_economic_engine_for_class_id(selected_scope['class_id']),
     )
 
     change_plan = [
@@ -6776,7 +6754,6 @@ def economic_engine():
             rent_settings,
             insurance_policies,
             store_items=store_items,
-            economic_engine=economic_engine,
         )
 
     feature_links = {
@@ -8757,31 +8734,21 @@ def banking():
     interest_calculation_type = (engine.interest_calculation_type if engine else None) or 'simple'
     compound_frequency = (engine.compound_frequency if engine else None) or 'never'
 
-    # ---- Overdraft (internal fine) state — lives on the same canonical engine ----
+    # ---- Overdraft protection state — lives on the same canonical engine ----
+    # No overdraft/NSF fee is charged (owner ruling 2026-10-07; SPEC-ECON-003
+    # §4.5.1.1); only the savings-protection transfer is configurable here.
     overdraft_protection_enabled = bool(engine.overdraft_protection_enabled) if engine else False
-    flat_overdraft_fee = engine.flat_overdraft_fee if engine else None
 
     # ---- Economic Engine recommendations (canonical source of pricing logic) ----
     # Advisory only; never persisted. The recommended savings-interest ceiling depends
     # on the compound frequency the teacher intends to use, so resolve it for the
     # currently-configured frequency.
-    from app.services.economic_engine import resolve_savings, resolve_overdraft_fine
+    from app.services.economic_engine import resolve_savings
 
     savings_reco = resolve_savings(
         class_id=selected_class_id,
         compound_frequency=compound_frequency,
     )
-    overdraft_reco = resolve_overdraft_fine(class_id=selected_class_id)
-
-    # Advisory alert (non-blocking): the teacher sets the fee; the CWI helper only
-    # recommends a range (SPEC-ECON-003 §4.6.1.1). Surface a warning — mirroring the
-    # rent/store balance alerts — when the current fee is outside the recommended
-    # band. Empty when no fee is set or CWI is undefined.
-    overdraft_fee_warnings = []
-    if flat_overdraft_fee is not None and overdraft_reco.cwi is not None:
-        overdraft_fee_warnings = EconomyBalanceChecker(
-            g.canonical_context.user_id, class_id=selected_class_id
-        ).check_overdraft_fee_balance(flat_overdraft_fee, float(overdraft_reco.cwi))
 
     # ---- Transaction log (class-scoped, filtered, paginated) ----
     account_q = request.args.get('account', '')
@@ -8936,10 +8903,7 @@ def banking():
         interest_calculation_type=interest_calculation_type,
         compound_frequency=compound_frequency,
         overdraft_protection_enabled=overdraft_protection_enabled,
-        flat_overdraft_fee=flat_overdraft_fee,
         savings_reco=savings_reco,
-        overdraft_reco=overdraft_reco,
-        overdraft_fee_warnings=overdraft_fee_warnings,
         current_page="banking",
         selected_feature_scope=selected_scope,
     )
@@ -8995,17 +8959,10 @@ def banking_settings_update():
                 flash('Compound frequency must be daily, weekly, or monthly.', 'error')
                 return redirect(url_for('admin.banking'))
 
-        # ---- Overdraft (internal fine) ----
+        # ---- Overdraft protection ----
+        # No overdraft/NSF fee is charged (owner ruling 2026-10-07; SPEC-ECON-003
+        # §4.5.1.1), so there is nothing else to collect here.
         overdraft_protection_enabled = request.form.get('overdraft_protection_enabled') == 'on'
-        # A blank/absent fee disables the overdraft fee (persist NULL, SPEC-ECON-003 §4.6.1).
-        fee_raw = (request.form.get('flat_overdraft_fee', '') or '').strip()
-        if fee_raw == '':
-            flat_overdraft_fee = None
-        else:
-            flat_overdraft_fee = _quantize_currency(fee_raw)
-            if flat_overdraft_fee < 0:
-                flash('Overdraft fee must be zero or greater.', 'error')
-                return redirect(url_for('admin.banking'))
     except (ValueError, InvalidOperation):
         flash('Invalid banking settings value.', 'error')
         return redirect(url_for('admin.banking'))
@@ -9022,15 +8979,11 @@ def banking_settings_update():
         'interest_calculation_type': calc_type,
         'compound_frequency': compound_frequency,
         'overdraft_protection_enabled': bool(overdraft_protection_enabled),
-        # Setting a flat fee (or clearing it) clears any progressive schedule so the
-        # mutual-exclusivity CHECK (ck_economic_engine_overdraft_fee_exclusive) holds.
-        'flat_overdraft_fee': (float(flat_overdraft_fee) if flat_overdraft_fee is not None else None),
-        'progressive_overdraft_fee': None,
     }
 
     idempotency_key = (
         f"feat:class-005:banking:{class_id}:{interest_rate}:{payout_frequency}:"
-        f"{calc_type}:{compound_frequency}:{overdraft_protection_enabled}:{flat_overdraft_fee}"
+        f"{calc_type}:{compound_frequency}:{overdraft_protection_enabled}"
     )
     result = execute_evolve_economic_engine(
         canonical_context=ctx,
@@ -9049,9 +9002,8 @@ def banking_settings_update():
         return redirect(url_for('admin.banking'))
 
     flash(
-        f'Banking settings saved: {interest_apy:.2f}% APY ({calc_type}, {payout_frequency} payouts); '
-        + (f'overdraft fee {flat_overdraft_fee}' if flat_overdraft_fee is not None else 'no overdraft fee')
-        + (', protection ON' if overdraft_protection_enabled else ', protection OFF')
+        f'Banking settings saved: {interest_apy:.2f}% APY ({calc_type}, {payout_frequency} payouts), '
+        + ('overdraft protection ON' if overdraft_protection_enabled else 'overdraft protection OFF')
         + '.',
         'success',
     )

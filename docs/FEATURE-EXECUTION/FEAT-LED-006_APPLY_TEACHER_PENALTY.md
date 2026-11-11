@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-006 | 1.0 | 2026-11-04 | — | Normative |
+| FEAT-LED-006 | 1.1 | 2026-11-10 | 1.0 | Normative |
 
 ---
 
@@ -54,7 +54,7 @@ Before anything posts, the teacher sees the requested deduction, the class's rec
 2. Lock every selected seat in ascending seat order (`lock_ledger_seats`).
 3. Every seat must be claimed. An unclaimed seat takes part in no economic activity, so a selection that contains one is refused whole; it is never dropped silently.
 4. Lock the ClassEconomy row, so concurrent submissions sharing a token serialize, then look up every reservation made under this token (§VIII.4).
-5. Resolve each seat's plan with `fee_authority = NONE` under the class's banking directive, and compare the digest of the resolved outcome to `expected_preview_digest`. On any difference nothing posts and the teacher reviews the updated outcome.
+5. Resolve each seat's plan under the class's banking directive (never a fee — `SPEC-ECON-003` §4.5.1.1), and compare the digest of the resolved outcome to `expected_preview_digest`. On any difference nothing posts and the teacher reviews the updated outcome.
 
 ### 3. Mutation
 
@@ -74,6 +74,8 @@ For each seat, `apply_resolved_ledger_plan` posts the funding legs, if any, and 
 Increment the version and effective date, identify superseded rules, and preserve the governing INV and DOM hierarchy.
 
 ### Change Notes
+
+**1.1 (2026-11-10)** rewords §VII.5's plan-resolution step for the retired `fee_authority` ledger-resolution parameter (`SPEC-ECON-003` v2.5, issue #1647): resolution never took a fee authority of its own, so dropping the parameter changes no behavior here, only the words describing it. Supersedes the step's 1.0 wording.
 
 **1.0 (2026-11-04, review)** binds each submission token to its complete batch (§VII.3, §VIII.4), serializes same-token submissions on the ClassEconomy lock, and adds the student-visible text to the confirmed-outcome digest. Contract version unchanged: these complete the 1.0 invariants before first release.
 

@@ -101,6 +101,50 @@ def test_whole_shortfall_and_reservation_replay(
             )
 
 
+def test_zero_principal_plan_never_triggers_a_funding_transfer(app):
+    """A free charge must not recover an unrelated pre-existing overdraft.
+
+    ``shortfall`` is ``principal - checking``, so a zero-priced charge against
+    an already-negative checking balance would otherwise look like a positive
+    shortfall and pull money out of savings for a purchase that moved nothing.
+    """
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    seat_id = classroom.students[0].seat.id
+    class_id = classroom.class_id
+    with FEATContext("FEAT-LED-001", idempotency_key="zero:seed"):
+        record_ledger_fixture(
+            seat_id=seat_id, class_id=class_id, amount=Decimal("-10.00")
+        )
+        record_ledger_fixture(
+            seat_id=seat_id,
+            class_id=class_id,
+            amount=Decimal("20.00"),
+            account_type="savings",
+        )
+    db.session.commit()
+    directive = replace(get_banking_directive(class_id), protection_enabled=True)
+    with FEATContext("FEAT-LED-001", idempotency_key="zero:charge"):
+        plan = build_intended_ledger_plan(
+            seat_id=seat_id,
+            class_id=class_id,
+            actor_seat_id=seat_id,
+            target_seat_id=seat_id,
+            mechanism="self",
+            debit_amount=Decimal("0.00"),
+            description="Free item",
+            transaction_type="purchase",
+        )
+        resolved = resolve_intended_ledger_plan(plan=plan, banking_directive=directive)
+        assert resolved.shortfall == Decimal("0.00")
+        assert resolved.recovery_transfer_amount == Decimal("0.00")
+        assert resolved.outcome == "ACCEPT"
+        apply_resolved_ledger_plan(resolved_plan=resolved, idempotency_key="zero:charge")
+    db.session.commit()
+    balances = get_available_balances(seat_id, class_id)
+    assert balances[0] == Decimal("-10.00")
+    assert balances[1] == Decimal("20.00")
+
+
 def test_stale_funding_plan_fails_before_effect_creation(app):
     classroom = provision_ledger_classroom("chemistry_p1", app)
     seat_id = classroom.students[0].seat.id
@@ -220,134 +264,3 @@ def test_partial_funding_creation_rolls_back_reservation_and_all_legs(app, monke
     )
 
 
-def test_funded_explicit_fee_replay_does_not_reprice_or_charge_twice(app):
-    from app.services.ledger_fee_service import apply_overdraft_fee_if_needed
-    from app.models import Seat
-
-    classroom = provision_ledger_classroom("chemistry_p1", app)
-    seat = db.session.get(Seat, classroom.students[0].seat.id)
-    with FEATContext("FEAT-LED-001", idempotency_key="fee:seed"):
-        record_ledger_fixture(
-            seat_id=seat.id, class_id=seat.class_id, amount=Decimal("2.00")
-        )
-        record_ledger_fixture(
-            seat_id=seat.id,
-            class_id=seat.class_id,
-            amount=Decimal("30.00"),
-            account_type="savings",
-        )
-    db.session.commit()
-    directive = replace(
-        get_banking_directive(seat.class_id),
-        protection_enabled=True,
-        flat_fee=Decimal("10.00"),
-    )
-    with FEATContext("FEAT-LED-001", idempotency_key="fee:charge"):
-        accepted, amount = apply_overdraft_fee_if_needed(
-            seat,
-            banking_directive=directive,
-            actor_seat_id=classroom.teacher_seat_id,
-            force=True,
-            idempotency_key="fee:charge",
-        )
-        assert accepted and amount == Decimal("10.00")
-    db.session.commit()
-    before = get_available_balances(seat.id, seat.class_id)
-    ids = [
-        row.id
-        for row in Transaction.query.filter_by(idempotency_key="fee:charge").all()
-    ]
-    assert len(ids) == 3
-    with FEATContext("FEAT-LED-001", idempotency_key="fee:charge"):
-        accepted, amount = apply_overdraft_fee_if_needed(
-            seat,
-            banking_directive=replace(directive, flat_fee=Decimal("20.00")),
-            actor_seat_id=classroom.teacher_seat_id,
-            force=True,
-            idempotency_key="fee:charge",
-        )
-        assert accepted and amount == Decimal("10.00")
-        with pytest.raises(ValueError, match="fingerprint"):
-            apply_overdraft_fee_if_needed(
-                seat,
-                banking_directive=directive,
-                actor_seat_id=classroom.teacher_seat_id,
-                force=False,
-                idempotency_key="fee:charge",
-            )
-    assert get_available_balances(seat.id, seat.class_id) == before
-    assert [
-        row.id
-        for row in Transaction.query.filter_by(idempotency_key="fee:charge").all()
-    ] == ids
-
-
-@pytest.mark.parametrize(
-    "fee_inputs",
-    [
-        {"flat_fee": Decimal("-1.00")},
-        {"flat_fee": Decimal("NaN")},
-        {"flat_fee": None, "progressive_fee": (("tier_1", "10%"),), "cwi": None},
-    ],
-)
-def test_malformed_applicable_fee_inputs_fail_closed(app, fee_inputs):
-    classroom = provision_ledger_classroom("chemistry_p1", app)
-    seat_id = classroom.students[0].seat.id
-    directive = replace(get_banking_directive(classroom.class_id), **fee_inputs)
-    plan = build_intended_ledger_plan(
-        seat_id=seat_id,
-        class_id=classroom.class_id,
-        actor_seat_id=classroom.teacher_seat_id,
-        target_seat_id=seat_id,
-        mechanism="system",
-        debit_amount=Decimal("0.00"),
-        description="Fee",
-        transaction_type="overdraft_fee",
-        fee_actor_seat_id=classroom.teacher_seat_id,
-    )
-    with pytest.raises(ValueError, match="banking fee directive"):
-        resolve_intended_ledger_plan(
-            plan=plan,
-            banking_directive=directive,
-            fee_authority="EXPLICIT_FEE",
-            force_overdraft_fee=True,
-        )
-    assert Transaction.query.filter_by(class_id=classroom.class_id).count() == 0
-
-
-@pytest.mark.parametrize(
-    "fee_inputs",
-    [
-        {"flat_fee": Decimal("-1.00")},
-        {"flat_fee": Decimal("NaN")},
-        {"flat_fee": Decimal("Infinity")},
-        {"flat_fee": None, "progressive_fee": None, "cwi": None},
-    ],
-)
-def test_irrelevant_malformed_fee_inputs_do_not_block_funded_or_no_fee_charge(
-    app, fee_inputs
-):
-    classroom = provision_ledger_classroom("chemistry_p1", app)
-    seat_id = classroom.students[0].seat.id
-    with FEATContext("FEAT-LED-001", idempotency_key="irrelevant-fee:seed"):
-        record_ledger_fixture(
-            seat_id=seat_id, class_id=classroom.class_id, amount=Decimal("20.00")
-        )
-    db.session.commit()
-    directive = replace(get_banking_directive(classroom.class_id), **fee_inputs)
-    plan = build_intended_ledger_plan(
-        seat_id=seat_id,
-        class_id=classroom.class_id,
-        actor_seat_id=seat_id,
-        target_seat_id=seat_id,
-        mechanism="self",
-        debit_amount=Decimal("10.00"),
-        description="Charge",
-        transaction_type="purchase",
-    )
-    for authority in ("NONE", "FAILED_AGREEMENT"):
-        resolved = resolve_intended_ledger_plan(
-            plan=plan, banking_directive=directive, fee_authority=authority
-        )
-        assert resolved.checking_after == Decimal("10.00")
-        assert resolved.overdraft_fee_amount == Decimal("0.00")
