@@ -392,9 +392,6 @@
                 <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.product_lineage_uuid }}" data-item-name="{{ item.name }}" title="Withdraw">
                   <span class="material-symbols-outlined" aria-hidden="true">visibility_off</span>
                 </button>
-                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal" data-item-id="{{ item.product_lineage_uuid }}" data-item-name="{{ item.name }}" title="Delete Permanently">
-                  <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                </button>
               </div>
             </div>
           </div>
@@ -664,32 +661,6 @@
   </div>
 </div>
 
-<!-- Delete Item Modal (Hard Delete) -->
-<div class="modal fade" id="deleteItemModal" tabindex="-1" aria-labelledby="deleteItemModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header bg-danger text-white">
-        <h2 class="modal-title h5" id="deleteItemModalLabel">Permanently Delete Item</h2>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        {% call cards.alert_card('danger', 'Permanent deletion', icon='warning', body_class='mb-3') %}
-          <p class="mb-0">This action cannot be undone.</p>
-        {% endcall %}
-        <p>Are you sure you want to permanently delete <strong id="modalDeleteItemName"></strong>?</p>
-        <p class="text-muted small">This will completely remove the item from the database and delete related purchase records. Transaction history will remain in the ledger.</p>
-      </div>
-      <div class="modal-footer">
-        <form id="deleteItemForm" method="POST">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Delete Permanently</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
   // Deactivate modal handler
   const deactivateItemModal = document.getElementById('deactivateItemModal');
@@ -703,20 +674,6 @@
 
     modalItemName.textContent = itemName;
     deactivateForm.action = `/admin/item/deactivate/${itemId}`;
-  });
-
-  // Delete modal handler
-  const deleteItemModal = document.getElementById('deleteItemModal');
-  deleteItemModal.addEventListener('show.bs.modal', event => {
-    const button = event.relatedTarget;
-    const itemName = button.getAttribute('data-item-name');
-    const itemId = button.getAttribute('data-item-id');
-
-    const modalItemName = deleteItemModal.querySelector('#modalDeleteItemName');
-    const deleteForm = deleteItemModal.querySelector('#deleteItemForm');
-
-    modalItemName.textContent = itemName;
-    deleteForm.action = `/admin/store/hard-delete/${itemId}`;
   });
 
   function getOrCreateToastContainer() {

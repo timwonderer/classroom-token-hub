@@ -18,6 +18,7 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- <!-- notes: fixed --> **Store items no longer offer a "Delete Permanently" button that the route always refuses** (#1652). Confirming it only produced an error flash telling the teacher to use Deactivate instead; the control promised a deletion that never happens. The button and its confirmation modal are removed from the store management page — Deactivate is the only removal control it offers, and the teacher guide no longer describes a Delete Permanently option.
 - <!-- notes: fixed --> **"Open full guide" on the three student Report an Issue pages now opens the report-issues guide instead of the generic Help Center.** The routes passed `current_page='help'` into the template, which won over the endpoint-based lookup that `help_doc_map` already had correctly keyed. Regression-tested across all three routes.
 - <!-- notes: fixed --> **The student dashboard's Hall passes help topic now links to the dedicated hall-pass troubleshooting guide**, which previously had no in-app entry point at all.
 - <!-- notes: fixed --> **The Banking page's Transactions help topic now explains the reverse-transaction control**, including that it only appears on an unused, un-reversed Store purchase with no pending request; an overpaid payroll deposit has its own correction (**Recover payment** on Payroll History), and rent, insurance, and other charges use a manual credit instead.
