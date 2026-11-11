@@ -112,10 +112,14 @@ import argparse
 import sys
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import make_url
 
 
 ORPHANED_PAYROLL_SETTINGS_POLICY_UUID = "f367154e-eb85-46d6-a6e7-7c110f599a72"
 ORPHANED_PAYROLL_SETTINGS_CLASS_ID = "6135423f-80cf-43ec-9ce3-4e05ffb98fad"
+
+
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1"}
 
 
 def _assert_safe_target(database_url: str) -> None:
@@ -124,16 +128,23 @@ def _assert_safe_target(database_url: str) -> None:
     This is a blunt, conservative check (not a security boundary) matching
     this project's "dev DB is protected, never run destructive ops against
     anything that isn't obviously a scratch/test database" convention.
+
+    Checks the parsed host and database name specifically, not the whole URL
+    string -- a substring search over the full URL is bypassable by a
+    "test"/"localhost" token anywhere in it (credentials, query parameters),
+    which would authorize this against a real, remote, or non-test database.
     """
-    lowered = database_url.lower()
-    looks_local = "localhost" in lowered or "127.0.0.1" in lowered
-    looks_test = "test" in lowered or "simulated" in lowered
+    url = make_url(database_url)
+    host = (url.host or "").lower()
+    database = (url.database or "").lower()
+    looks_local = host in _LOOPBACK_HOSTS
+    looks_test = "test" in database or "simulated" in database
     if not (looks_local and looks_test):
         print(
             "Refusing to run: --database-url does not look like a local "
-            "test/simulated database (expected 'localhost' or '127.0.0.1' "
-            "AND 'test' or 'simulated' in the URL). This script never runs "
-            "against production.",
+            "test/simulated database (expected host in "
+            f"{sorted(_LOOPBACK_HOSTS)!r} AND 'test' or 'simulated' in the "
+            "database name). This script never runs against production.",
             file=sys.stderr,
         )
         sys.exit(1)
