@@ -675,12 +675,12 @@ savings sweeps are prohibited. Resolution uses current authoritative available
 balances while holding the seat serialization lock through posting.
 
 Own-account transfers are excluded: insufficient source funds deny the transfer,
-with no protection transfer or fee. A Store purchase is eligible only when this
+with no protection transfer. A Store purchase is eligible only when this
 rule leaves checking at or above zero (`FEAT-STOR-001` §VI.E); a purchase never
-takes the "applies the debit to checking, which may become negative" branch. Fee applicability remains the separate
-failed-agreement test in §4.5.1.1. Funding an NSF fee does not generate another
-NSF fee. A payroll correction always has zero NSF fee and cannot generate an
-obligation, deferred debt or future deduction.
+takes the "applies the debit to checking, which may become negative" branch.
+No overdraft or NSF fee is ever assessed (§4.5.1.1); this funding rule governs
+only whether and how much savings transfers to cover a shortfall. A payroll
+correction cannot generate an obligation, deferred debt or future deduction.
 
 | Checking | Savings | Debit | Protection | Transfer | Final checking | Final savings |
 |---:|---:|---:|:---:|---:|---:|---:|
@@ -987,7 +987,7 @@ The following table is the canonical reference set for the Economic Engine.
 
 The `Insurance premium` row is the **premium pricing envelope only** (the economic-mode / cost axis of § 4.4), and is engine guidance rather than a hard cap. It does not define any coverage, reimbursement percentage, payout cap, or claim allowance. Those belong to the insurance-tier / coverage axis and are defined by the canonical preset tables in § 4.4.3–§ 4.4.5 with the deterministic selection rule in § 4.4.8; this table MUST NOT be read as a complete insurance economic model. For `NON_MONETARY` this band is affordability guidance only (§ 4.4.5). For `PRODUCTIVITY` the settled mechanical bounds in § 4.4.4 (remaining period payout capacity and remaining claim allowance, with the configured daily payroll limit as the submission-time hours ceiling) bound exposure independently of this row; the weekly `expected_weekly_hours` and `CWI` figures are advisory economic-coherence guidance.
 
-System-defined fines such as rent late fees, and the teacher-issued internal fine recommendation of § 4.5.1 (`resolve_overdraft_fine`, read-only and non-persisted), shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. Progressive internal fee schedules are the one exception: they are priced against the self-contained tier table in § 4.5.1 and are not bounded by the `Fine` row above. Actual configured fine amount shall persist on `rent_settings` for rent late fees; no fine persists on `economic_engine` (§ 4.5.1.1, § 4.5.1).
+System-defined fines such as rent late fees, and the teacher-issued internal fine recommendation of § 4.5.1 (`resolve_overdraft_fine`, read-only and non-persisted), shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. The progressive tier table § 4.5.1 historically described was the one exception to this flat-band reference; that persistence design is superseded (§ 4.5.1.1), and `resolve_overdraft_fine`'s surviving teacher-penalty consumer never reads it. Actual configured fine amount shall persist on `rent_settings` for rent late fees; no fine persists on `economic_engine` (§ 4.5.1.1, § 4.5.1).
 
 Store economic-role reference:
 
@@ -1054,7 +1054,7 @@ Revisions to this document must:
 
 ### Revision history
 
-- **2.5 (2026-11-10)** — Completes the §4.5.1.1 revision that **2.3** flagged as pending: removes the retired fee's scope/amount/recording text and the teacher-facing fee settings and warning it described, and marks §4.5.1's persistence/schedule description and §8's overdraft-fee reference as historical (issue #1647). No calculation or formula changes. `flat_overdraft_fee` / `progressive_overdraft_fee` remain persisted engine columns and continue to carry forward unchanged on every engine evolution (the carry-forward is not a write of a new value); no caller — including configuration transfer's explicit-update path, which is closed too — can set either field to a new value going forward.
+- **2.5 (2026-11-10)** — Completes the §4.5.1.1 revision that **2.3** flagged as pending: removes the retired fee's scope/amount/recording text and the teacher-facing fee settings and warning it described, and marks §4.5.1's persistence/schedule description, §4.5.1.1A's fee-applicability sentence, and §8's overdraft-fee and progressive-fee-schedule references as historical (issue #1647). No calculation or formula changes. `flat_overdraft_fee` / `progressive_overdraft_fee` remain persisted engine columns and continue to carry forward unchanged on every engine evolution (the carry-forward is not a write of a new value); no caller — including configuration transfer's explicit-update path, which is closed too — can set either field to a new value going forward.
 
 - **2.3 (2026-10-07)**, owner rulings 2026-10-07: no overdraft or NSF fee is assessed; a failed obligation payment leaves the obligation unpaid, accumulating, and subject to late fees (§4.5.1.1; `DOM-OBL-001` 3.3). A Store purchase requires sufficient funds and is refused before posting, with no fee, when checking and any full protection transfer do not cover it (§4.5.1.1, §4.5.1.1A; `FEAT-STOR-001` 3.2). Funding semantics for authorized charges are unchanged.
 
