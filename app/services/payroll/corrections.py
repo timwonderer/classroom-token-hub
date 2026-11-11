@@ -1,6 +1,6 @@
 """One-time payroll corrections for platform defects (incident PROD-PAY-001).
 
-Before the closed-session rule (DOM-PROD-001 §VI.3), a payroll run loaded only
+Before the closed-session rule (DOM-PROD-001 §XV.11), a payroll run loaded only
 the attendance rows after the seat's previous payroll, so a session still running
 at that payroll lost its clock-in and the rest of it went unpaid. This module
 reproduces, for each run settled by that earlier rule, what the run paid and what
