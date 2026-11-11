@@ -123,6 +123,27 @@ def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
     return economic_engine_effective_at(class_id, None)
 
 
+def economic_engine_in_force_before(class_id: str, instant: datetime) -> Optional[EconomicEngine]:
+    """The Economic Engine version in force immediately before ``instant``.
+
+    Shaped like ``payroll_settings.payroll_setting_in_force_before``, but for a
+    different reason: unlike payroll, an Economic Engine change is never deferred
+    to a boundary — it governs from its own ``effective_at``, immediate by default
+    (DOM-CLASS-003 §VII). This resolver exists for a caller that itself needs a
+    strict "before instant" cut, such as a materialized historical snapshot that
+    must not pick up a version saved after the instant it is freezing (DOM-ITR-001
+    §IX reference configuration).
+    """
+    if not class_id:
+        return None
+    return _engine_newest_first(
+        EconomicEngine.query.filter(
+            EconomicEngine.class_id == class_id,
+            EconomicEngine.effective_at < instant,
+        )
+    ).first()
+
+
 class EconomicEngineTimeline:
     """Every version of one class's engine, answering ``at(instant)`` in memory.
 
@@ -446,6 +467,20 @@ def calculate_cwi(class_id: str) -> Optional[float]:
 def resolve_expected_weekly_hours(class_id: str) -> Optional[float]:
     """Return the canonical Economic Engine expected-hours value for payroll."""
     engine = get_current_economic_engine(class_id)
+    if engine is None or engine.expected_weekly_hours is None:
+        return None
+    return float(engine.expected_weekly_hours)
+
+
+def resolve_expected_weekly_hours_in_force_before(class_id: str, instant: datetime) -> Optional[float]:
+    """The expected-weekly-hours value in force immediately before ``instant``.
+
+    For binding a historical cycle boundary to its governing configuration
+    (DOM-ITR-001 §IX) rather than to whatever is current now. Mirrors
+    ``resolve_expected_weekly_hours``, reading through
+    ``economic_engine_in_force_before`` instead of ``get_current_economic_engine``.
+    """
+    engine = economic_engine_in_force_before(class_id, instant)
     if engine is None or engine.expected_weekly_hours is None:
         return None
     return float(engine.expected_weekly_hours)
