@@ -1,4 +1,4 @@
-"""Regression: payroll settles closed, unpaid sessions only (DOM-PROD-001 §VI.3).
+"""Regression: payroll settles closed, unpaid sessions only (DOM-PROD-001 §XV.11).
 
 Production incident, 2026-09-28: a teacher ran payroll while students were still
 clocked in, then ran it again later. The second run paid almost nobody. The
