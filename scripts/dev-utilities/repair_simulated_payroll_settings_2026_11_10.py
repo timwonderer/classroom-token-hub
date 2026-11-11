@@ -133,8 +133,28 @@ def _assert_safe_target(database_url: str) -> None:
     string -- a substring search over the full URL is bypassable by a
     "test"/"localhost" token anywhere in it (credentials, query parameters),
     which would authorize this against a real, remote, or non-test database.
+
+    Also refuses any query parameter on the URL. The psycopg2 dialect's
+    ``create_connect_args`` layers ``url.query`` on top of the connect
+    arguments it derives from the URL's host/port/database/user/password
+    (``opts.update(url.query)``), so a URL whose authority looks local and
+    safe -- ``postgresql://user@localhost/simulated_test?host=remote-db&dbname=production`` --
+    can still have the actual connection redirected to a different host or
+    database once SQLAlchemy builds the DBAPI connect args. This one-off
+    utility has no legitimate use for query parameters, so it rejects the
+    URL outright rather than trying to enumerate which parameter names are
+    dangerous.
     """
     url = make_url(database_url)
+    if url.query:
+        print(
+            "Refusing to run: --database-url has query parameters "
+            f"({sorted(url.query)!r}). The PostgreSQL driver can use these "
+            "to override the connection's host/database, which would defeat "
+            "this safety check. Pass a URL with no query string.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     host = (url.host or "").lower()
     database = (url.database or "").lower()
     looks_local = host in _LOOPBACK_HOSTS
@@ -177,8 +197,12 @@ def repair(database_url: str) -> None:
                   AND availability_state = 'RETIRED'
                   AND NOT EXISTS (
                       SELECT 1 FROM payroll_event e
+                      LEFT JOIN policy_versions pv ON pv.id = e.policy_version_id
                       WHERE e.class_id = payroll_settings.class_id
-                        AND (e.policy_version_id = 1 OR e.policy_uuid = payroll_settings.policy_uuid)
+                        AND (
+                          e.policy_uuid = payroll_settings.policy_uuid
+                          OR pv.policy_uuid = payroll_settings.policy_uuid
+                        )
                   )
                 """
             ),

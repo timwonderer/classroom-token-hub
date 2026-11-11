@@ -101,16 +101,30 @@ def _find_or_create_anchor_classroom() -> tuple[str, int, int, str]:
     """
     from app.models import ClassEconomy, Seat
 
-    existing = ClassEconomy.query.filter_by(display_name=ANCHOR_DISPLAY_NAME).first()
-    if existing is not None:
-        teacher_seat = Seat.query.filter_by(class_id=existing.class_id, role="teacher").first()
-        student_seat = (
-            Seat.query.filter_by(class_id=existing.class_id, role="student")
+    # Search every matching class, not just the first: an earlier interrupted
+    # run can leave an incomplete anchor (same display_name, no student user)
+    # behind in this persistent world, and a naive .first() could keep
+    # re-selecting that same incomplete row forever -- discarding it and
+    # minting a fresh replacement on every run instead of ever converging on
+    # a completed one.
+    existing = None
+    teacher_seat = student_seat = None
+    for candidate in ClassEconomy.query.filter_by(display_name=ANCHOR_DISPLAY_NAME).order_by(
+        ClassEconomy.class_id.asc()
+    ):
+        candidate_teacher_seat = Seat.query.filter_by(class_id=candidate.class_id, role="teacher").first()
+        candidate_student_seat = (
+            Seat.query.filter_by(class_id=candidate.class_id, role="student")
             .order_by(Seat.id.asc())
             .first()
         )
-        if teacher_seat is None or student_seat is None or student_seat.user_id is None:
-            existing = None  # incomplete row from an earlier partial run -- provision a new one below
+        if (
+            candidate_teacher_seat is not None
+            and candidate_student_seat is not None
+            and candidate_student_seat.user_id is not None
+        ):
+            existing, teacher_seat, student_seat = candidate, candidate_teacher_seat, candidate_student_seat
+            break  # first complete anchor found -- reuse it
 
     if existing is None:
         from app.feats.base import FEATContext
@@ -316,12 +330,22 @@ def _find_or_create_issue(app, client) -> int:
     """
     from app.models import Issue
 
+    # admin.escalate_issue (app/routes/admin.py) only escalates a ticket whose
+    # status is OPEN/TEACHER_REVIEW ('submitted'/'teacher_review'); a resolved
+    # or closed one is rejected. Picking the student's oldest issue
+    # unconditionally can land on exactly such a ticket even when a newer,
+    # already-escalated or still-escalatable one exists -- prefer one that
+    # already qualifies over blindly taking the oldest.
+    escalatable_statuses = {Issue.STATUS_OPEN, Issue.STATUS_TEACHER_REVIEW, 'submitted', 'teacher_review'}
     seat = Seat.query.filter_by(id=STUDENT_SEAT_ID, class_id=CLASS_ID).one()
-    issue = (
+    candidates = (
         Issue.query.filter_by(actor_public_id=seat.public_id)
         .order_by(Issue.id.asc())
-        .first()
+        .all()
     )
+    issue = next((i for i in candidates if i.escalated_at is not None), None)
+    if issue is None:
+        issue = next((i for i in candidates if i.status in escalatable_statuses), None)
     if issue is None:
         categories = get_active_categories("general")
         if not categories:
