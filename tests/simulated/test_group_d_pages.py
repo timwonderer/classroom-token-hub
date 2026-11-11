@@ -113,16 +113,16 @@ def _find_or_create_anchor_classroom() -> tuple[str, int, int, str]:
         ClassEconomy.class_id.asc()
     ):
         candidate_teacher_seat = Seat.query.filter_by(class_id=candidate.class_id, role="teacher").first()
+        # Filter for a claimed seat (user_id set) here rather than after: an
+        # unclaimed seat ordered ahead of a claimed one would otherwise make
+        # this candidate look incomplete even though a usable seat exists.
         candidate_student_seat = (
             Seat.query.filter_by(class_id=candidate.class_id, role="student")
+            .filter(Seat.user_id.isnot(None))
             .order_by(Seat.id.asc())
             .first()
         )
-        if (
-            candidate_teacher_seat is not None
-            and candidate_student_seat is not None
-            and candidate_student_seat.user_id is not None
-        ):
+        if candidate_teacher_seat is not None and candidate_student_seat is not None:
             existing, teacher_seat, student_seat = candidate, candidate_teacher_seat, candidate_student_seat
             break  # first complete anchor found -- reuse it
 
@@ -343,8 +343,14 @@ def _find_or_create_issue(app, client) -> int:
     # already qualifies over blindly taking the oldest.
     escalatable_statuses = {Issue.STATUS_OPEN, Issue.STATUS_TEACHER_REVIEW, 'submitted', 'teacher_review'}
     seat = Seat.query.filter_by(id=STUDENT_SEAT_ID, class_id=CLASS_ID).one()
+    # Scope to this fixture's own explanation text, not every issue the anchor
+    # seat happens to have: the anchor seat is dedicated to this file, but an
+    # unrelated issue filed against it (manual testing, another tool) should
+    # never get escalated by this test as a side effect of running it.
     candidates = (
-        Issue.query.filter_by(actor_public_id=seat.public_id)
+        Issue.query.filter_by(
+            actor_public_id=seat.public_id, student_explanation="Group D accessibility fixture issue.",
+        )
         .order_by(Issue.id.asc())
         .all()
     )
