@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002 | 1.20 | 2026-11-04 | 1.19 | Constitutional |
+| DOM-CORE-002 | 1.21 | 2026-11-10 | 1.20 | Constitutional |
 
 ---
 
@@ -294,7 +294,7 @@ The protected-row `lineage_event_id` linkage is mandated narrowly by `INV-ARC-01
 
 **Tables:**
 
-- `interpretation_cycle_record` — durable, immutable per-cycle materialization bound to `payroll_cycle_id`, self-describing via persisted economic reference values (`DOM-ITR-001` §IX). Materialized only as a declared side effect of `FEAT-PROD-004` at payroll completion. Table built in the runtime schema via migration `b3d7f1a9c2e4` (persistence surface implemented); the `FEAT-PROD-004` materialization writer that populates it is not yet built, so no rows exist yet.
+- `interpretation_cycle_record` — durable, immutable per-cycle materialization bound to `payroll_cycle_id`, self-describing via persisted economic reference values (`DOM-ITR-001` §IX). Materialized only as a declared side effect of `FEAT-PROD-004` at payroll completion. Table built in the runtime schema via migration `b3d7f1a9c2e4` (persistence surface implemented); the `FEAT-PROD-004` materialization writer (`materialize_interpretation_cycle`) that populates it is implemented, writing one row per `(class_id, payroll_cycle_id)` on every payroll-cycle completion.
 
 The former `interpretation_snapshots` (cache) and `interpretation_annotations` tables are retired and superseded by `interpretation_cycle_record` per `DOM-ITR-001` v1.4 §IX. Neither existed in the runtime schema.
 

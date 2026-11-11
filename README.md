@@ -139,7 +139,7 @@ The application doesn't serve the marketing site, and the marketing site doesn't
 
 - Python 3.10 for application/runtime parity (`runtime.txt`); separate CI jobs also use 3.11 and 3.13
 - PostgreSQL 15 or 16 (the versions CI runs against)
-- Redis 7 or later (`redis-server`) for student account setup. Tests that need it start their own private instance; deployment requires a dedicated, non-persistent service ([infra/student-setup/README.md](infra/student-setup/README.md))
+- Redis 6.0 or later (`redis-server`) for student account setup. Tests that need it start their own private instance; deployment requires a dedicated, non-persistent service ([infra/student-setup/README.md](infra/student-setup/README.md))
 - A virtual environment
 
 ### Setup
