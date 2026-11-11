@@ -123,6 +123,26 @@ def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
     return economic_engine_effective_at(class_id, None)
 
 
+def economic_engine_in_force_before(class_id: str, instant: datetime) -> Optional[EconomicEngine]:
+    """The Economic Engine version in force immediately before ``instant``.
+
+    Mirrors ``payroll_settings.payroll_setting_in_force_before``: an
+    economic-cycle boundary at ``instant`` is where a pending version takes
+    effect, so the version that governed a cycle closing there is the one in
+    force just before it, not the one in force at it (DOM-ITR-001 §IX
+    reference configuration; DOM-CLASS-003 §VII — nothing is activated at the
+    boundary).
+    """
+    if not class_id:
+        return None
+    return _engine_newest_first(
+        EconomicEngine.query.filter(
+            EconomicEngine.class_id == class_id,
+            EconomicEngine.effective_at < instant,
+        )
+    ).first()
+
+
 class EconomicEngineTimeline:
     """Every version of one class's engine, answering ``at(instant)`` in memory.
 
@@ -446,6 +466,20 @@ def calculate_cwi(class_id: str) -> Optional[float]:
 def resolve_expected_weekly_hours(class_id: str) -> Optional[float]:
     """Return the canonical Economic Engine expected-hours value for payroll."""
     engine = get_current_economic_engine(class_id)
+    if engine is None or engine.expected_weekly_hours is None:
+        return None
+    return float(engine.expected_weekly_hours)
+
+
+def resolve_expected_weekly_hours_in_force_before(class_id: str, instant: datetime) -> Optional[float]:
+    """The expected-weekly-hours value in force immediately before ``instant``.
+
+    For binding a historical cycle boundary to its governing configuration
+    (DOM-ITR-001 §IX) rather than to whatever is current now. Mirrors
+    ``resolve_expected_weekly_hours``, reading through
+    ``economic_engine_in_force_before`` instead of ``get_current_economic_engine``.
+    """
+    engine = economic_engine_in_force_before(class_id, instant)
     if engine is None or engine.expected_weekly_hours is None:
         return None
     return float(engine.expected_weekly_hours)

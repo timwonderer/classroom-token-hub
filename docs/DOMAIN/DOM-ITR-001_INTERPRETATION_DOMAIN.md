@@ -2,9 +2,23 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ITR-001      | 1.11    | 2026-11-10     | 1.10       | Constitutional  |
+| DOM-ITR-001      | 1.12    | 2026-11-11     | 1.11       | Constitutional  |
 
 > [!IMPORTANT]
+> **v1.12 (2026-11-11).** Implementation-status correction only: closes the narrow
+> compliance gap v1.11 opened in §XIII.b. `capture_reference_configuration`
+> (`app/services/interpretation/reference_configuration.py`) now binds
+> `expected_weekly_hours`/`cwi` to the cycle's closing boundary the same way it
+> already bound `hourly_pay_rate`/`policy` — through a new boundary-scoped
+> resolver, `class_configuration_query_service.economic_engine_in_force_before`
+> (mirroring `payroll_setting_in_force_before`) and
+> `resolve_expected_weekly_hours_in_force_before`, in place of
+> `get_current_economic_engine`. The Historical Configuration Binding row in
+> §XIII.b is marked RESOLVED. Already-materialized `interpretation_cycle_record`
+> rows are historical fact and are not recomputed (§VII, §IX): this closes the
+> gap for cycles materialized from this change forward only. No doctrine,
+> invariant, or runtime behavior changes outside that read.
+>
 > **v1.11 (2026-11-10).** Implementation-status correction only: §V, §VIII, §IX and §XIII.a/§XIII.b described the cycle-record materialization writer as absent from runtime ("materialization writer NOT IMPLEMENTED", "no row is written"). `materialize_interpretation_cycle` (`app/services/interpretation/materialization.py`) has been invoked directly by `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`) since slice 8.3d. The affected status lines are corrected to IMPLEMENTED and the resolved `Materialize Cycle Interpretation` row is removed from the XIII.a absent-capability table. The Historical Configuration Binding row in XIII.b is marked PARTIALLY RESOLVED, not fully resolved: `capture_reference_configuration` binds `hourly_pay_rate`/`policy` to the cycle boundary correctly but reads `expected_weekly_hours`/`cwi` from the current Economic Engine rather than the boundary-scoped one, leaving a narrow open compliance gap. No doctrine, invariant, or runtime behavior changes.
 >
 > **v1.10 (2026-11-04).** Corrects the overdraft / NSF ownership entries (§II, §XIII.c), which still called the NSF fee an immediate obligation: since `DOM-OBL-001` 3.3 (owner ruling 2026-10-07) no NSF fee is charged and the fee was never an obligation. Records that a teacher-applied fine is a Ledger penalty (`FEAT-LED-006`). No Interpretation invariant changes.
