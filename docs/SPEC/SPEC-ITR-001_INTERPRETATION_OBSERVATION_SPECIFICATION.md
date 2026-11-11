@@ -2,11 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ITR-001     |  1.6    |     2026-10-18 |        1.5 |       Normative |
+| SPEC-ITR-001     |  1.7    |     2026-11-10 |        1.6 |       Normative |
 
 ---
 
 > [!IMPORTANT]
+> **v1.7 (2026-11-10).** §16's status note is corrected: the materialization writer (`materialize_interpretation_cycle`, slice 8.3d) that validates `observations_json` against this specification's serialized shape before writing an `interpretation_cycle_record` is implemented and invoked directly by `FEAT-PROD-004`, not pending. No change to the serialization contract itself.
+>
 > **v1.6 (2026-10-18).** §6.6 and P4 (§17) are updated: migration `a4d7e9c2f1b6` deploys the DB `CHECK` constraint (`ck_ledger_transaction_type_closed_vocabulary`) enumerating `DOM-LED-001` INV-LED-017's full canonical/legacy table, so `Transaction.type` now rejects any out-of-vocabulary value at write time (`NULL` still permitted). This closes the *vocabulary*, not the §6.3 classifier itself: as of this revision `ledger_provenance_query_service.py` has not yet cut over from the removed `SYSTEM_ORIGINATED_FEAT_CODES` `feat_code` test to `Transaction.type` (`DOM-ITR-001` §XIII.b KNOWN NONCOMPLIANCE, a separate already-scheduled PR); §6.3's rule describes that cutover's contractual target, not current runtime behavior. The write-time **casing** validator — rejecting a legacy spelling on a *new* row while the constraint still accepts it on existing rows — remains undeployed and is unchanged scope for a later PR; see the revised §6.6 for what is and is not covered today.
 >
 > **v1.5 (2026-10-18).** §6.6 and P4 (§17) are corrected: they had claimed the closed `type` vocabulary was already enforced at write time. It is not — `Transaction.type` is still unconstrained pending a later PR (`FEAT-LED-005` §IX). Both are now marked runtime noncompliance until that PR lands, consistent with §6.3's own note that the `type` clause is redundant with, not a substitute for, `mechanism`.
@@ -772,7 +774,7 @@ For clarity, and to prevent implementations from over-reaching:
 
 - No numeric thresholds for any candidate (§14.4).
 - No alert content or `suggested_action` text (§14.5).
-- No persistence schema for Interpretation outputs. `DOM-ITR-001` §IX now specifies the durable, immutable `interpretation_cycle_record` (cycle-bound, self-describing via a versioned `reference_configuration` projection), materialized only as a declared side effect of `FEAT-PROD-004` at payroll completion. Its schema, migration, and schema certification are now delivered (migration `b3d7f1a9c2e4`, slice 8.1) — the persistence surface is implemented; the materialization writer that populates a row is not yet built. This specification defines the observations that populate `observations_json` (§§5–13) and, as of v1.3, the canonical serialized shape of that payload (§15) — but not the table build itself.
+- No persistence schema for Interpretation outputs. `DOM-ITR-001` §IX now specifies the durable, immutable `interpretation_cycle_record` (cycle-bound, self-describing via a versioned `reference_configuration` projection), materialized only as a declared side effect of `FEAT-PROD-004` at payroll completion. Its schema, migration, and schema certification are delivered (migration `b3d7f1a9c2e4`, slice 8.1), and the materialization writer that populates a row (`materialize_interpretation_cycle`, slice 8.3d) is also implemented and invoked directly by `FEAT-PROD-004`. This specification defines the observations that populate `observations_json` (§§5–13) and, as of v1.3, the canonical serialized shape of that payload (§15) — but not the table build itself.
 - FEAT registry rename in code — landed. `FEAT-ITR-001` is now the canonical name in `app/feats/base.py` per `DOM-ITR-001` §VIII; the previous `FEAT-ANLY-001` alias has been removed. Consumer sites (`app/utils/analytics_engine.py`, `app/routes/analytics.py`) updated in the same slice.
 - No axis assignments — the Behavioral / Structural frame is retired by `DOM-ITR-001` v1.2 §IV.
 - No trend indicators — no prior cycle-record source exists yet per `DOM-ITR-001` §XIII.a.
