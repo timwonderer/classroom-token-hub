@@ -239,6 +239,25 @@ def test_reference_configuration_binds_expected_weekly_hours_to_cycle_boundary(a
     assert captured_next_cycle["economic_engine"]["expected_weekly_hours"] == "17.5"
     assert captured_next_cycle["economic_engine"]["cwi"] == "525.00"
 
+    # A version effective EXACTLY at the closing boundary must not govern that
+    # boundary's own cycle: the resolver is strict-before (`<`), not `<=`, so a
+    # cycle whose cycle_completed_at lands exactly on later_version.effective_at
+    # still sees governing_version, not later_version.
+    captured_at_later_effective_at = capture_reference_configuration(
+        cid, cycle_completed_at=later_version.effective_at
+    )
+    assert captured_at_later_effective_at["economic_engine"]["expected_weekly_hours"] == "12.5"
+    assert captured_at_later_effective_at["economic_engine"]["cwi"] == "375.00"
+
+    # Symmetrically, a cycle closing exactly at governing_version's own
+    # effective_at does not see governing_version either — it governs from the
+    # version before it (the provisioned root, with no expected_weekly_hours set).
+    captured_at_governing_effective_at = capture_reference_configuration(
+        cid, cycle_completed_at=governing_version.effective_at
+    )
+    assert captured_at_governing_effective_at["economic_engine"]["expected_weekly_hours"] is None
+    assert captured_at_governing_effective_at["economic_engine"]["cwi"] is None
+
 
 def test_records_are_scoped_by_class_and_cycle(app):
     class_a = initialize("chemistry_p1", app).class_id

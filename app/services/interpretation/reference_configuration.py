@@ -73,9 +73,13 @@ def capture_reference_configuration(class_id: str, *, cycle_completed_at=None) -
         # pay_rate is stored as $/minute; the CWI reference uses $/hour.
         hourly_pay_rate = Decimal(str(payroll.pay_rate)) * 60
 
-    # Bound to the same boundary as the pay rate above: a change to the
-    # Economic Engine saved during the cycle takes effect at the closing
-    # boundary and governs the next cycle, not this one (DOM-CLASS-003 §VII).
+    # Bound to the same boundary as the pay rate above. Unlike payroll_settings,
+    # an Economic Engine change is NOT deferred to the next boundary -- it governs
+    # from its own effective_at, immediately by default (DOM-CLASS-003 §VII). The
+    # boundary cutoff here is this writer's own historical-snapshot rule (DOM-ITR-001
+    # §VII, §IX): the record is self-describing for the cycle that already closed, so
+    # it must not pick up a later version saved after cycle_completed_at but before
+    # this writer actually runs.
     expected_weekly_hours = resolve_expected_weekly_hours_in_force_before(class_id, boundary)
     cwi = None
     if hourly_pay_rate is not None and expected_weekly_hours is not None:

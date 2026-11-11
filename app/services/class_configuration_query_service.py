@@ -126,12 +126,13 @@ def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
 def economic_engine_in_force_before(class_id: str, instant: datetime) -> Optional[EconomicEngine]:
     """The Economic Engine version in force immediately before ``instant``.
 
-    Mirrors ``payroll_settings.payroll_setting_in_force_before``: an
-    economic-cycle boundary at ``instant`` is where a pending version takes
-    effect, so the version that governed a cycle closing there is the one in
-    force just before it, not the one in force at it (DOM-ITR-001 §IX
-    reference configuration; DOM-CLASS-003 §VII — nothing is activated at the
-    boundary).
+    Shaped like ``payroll_settings.payroll_setting_in_force_before``, but for a
+    different reason: unlike payroll, an Economic Engine change is never deferred
+    to a boundary — it governs from its own ``effective_at``, immediate by default
+    (DOM-CLASS-003 §VII). This resolver exists for a caller that itself needs a
+    strict "before instant" cut, such as a materialized historical snapshot that
+    must not pick up a version saved after the instant it is freezing (DOM-ITR-001
+    §IX reference configuration).
     """
     if not class_id:
         return None
