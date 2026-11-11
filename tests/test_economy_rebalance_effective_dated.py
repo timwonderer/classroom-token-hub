@@ -230,7 +230,7 @@ def test_an_engine_version_dated_for_later_is_pending_until_its_date(app):
         result = execute_evolve_economic_engine(
             canonical_context=_teacher_context(classroom),
             class_id=cid,
-            updates={"flat_overdraft_fee": 3.0},
+            updates={"interest_rate": 0.03},
             feature_list=[
                 feature for feature in ClassFeature.feature_names()
                 if is_feature_enabled(cid, feature)
@@ -244,5 +244,5 @@ def test_an_engine_version_dated_for_later_is_pending_until_its_date(app):
         assert get_current_economic_engine(cid).economic_version_id == before.economic_version_id
         dated = economic_engine_effective_at(cid, effective_at)
         assert dated.economic_version_id == result.new_engine_id
-        assert Decimal(str(dated.flat_overdraft_fee)) == Decimal("3.00")
+        assert Decimal(str(dated.interest_rate)) == Decimal("0.030000")
         assert get_pending_rebalance_effective_at(cid) == effective_at

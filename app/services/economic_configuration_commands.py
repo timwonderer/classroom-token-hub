@@ -91,21 +91,6 @@ def _validate_engine_field(field_name: str, value):
     elif field_name == 'interest_payout_frequency':
         if value is not None and value not in _VALID_PAYOUT_FREQS:
             return False, f"interest_payout_frequency must be one of {_VALID_PAYOUT_FREQS}"
-    elif field_name == 'flat_overdraft_fee':
-        try:
-            if value is not None and float(value) < 0:
-                return False, "flat_overdraft_fee must be >= 0"
-        except (TypeError, ValueError):
-            return False, "flat_overdraft_fee must be numeric"
-    elif field_name == 'progressive_overdraft_fee':
-        if value is not None:
-            if not isinstance(value, dict) or set(value) != {'tier_1', 'tier_2', 'tier_3'}:
-                return False, "progressive_overdraft_fee must contain tier_1, tier_2, and tier_3"
-            try:
-                if any(float(value[tier]) < 0 for tier in ('tier_1', 'tier_2', 'tier_3')):
-                    return False, "progressive_overdraft_fee tiers must be >= 0"
-            except (TypeError, ValueError, KeyError):
-                return False, "progressive_overdraft_fee tiers must be numeric"
     elif field_name == 'overdraft_protection_enabled':
         if value is not None and not isinstance(value, bool):
             return False, "overdraft_protection_enabled must be boolean or unset"

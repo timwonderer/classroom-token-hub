@@ -10,7 +10,7 @@ and this project follows semantic versioning principles.
 
 ### Removed
 
-- <!-- notes: internal --> **Retired the leftover NSF/overdraft-fee machinery** (#1647; `SPEC-ECON-003` v2.5). No overdraft/NSF fee has been assessed since the 2026-10-07 owner ruling, but the `fee_authority` ledger-resolution parameter, the dead `apply_overdraft_fee_if_needed` / `record_nsf_fee_obligation` orchestration, and the teacher-facing overdraft-fee settings and rebalance suggestion on the Banking page were still present. Removed all of it; overdraft protection (the savings-to-checking transfer) is unaffected, and the `flat_overdraft_fee` / `progressive_overdraft_fee` `economic_engine` columns are untouched (no migration).
+- <!-- notes: internal --> **Retired the leftover NSF/overdraft-fee machinery** (#1647; `SPEC-ECON-003` v2.5). No overdraft/NSF fee has been assessed since the 2026-10-07 owner ruling, but the `fee_authority` ledger-resolution parameter, the dead `apply_overdraft_fee_if_needed` / `record_nsf_fee_obligation` orchestration, the teacher-facing overdraft-fee settings and rebalance suggestion on the Banking page, and the configuration-transfer export/import/preview of the two fee fields (which could otherwise resurrect a fee value through an import) were still present. Removed all of it; overdraft protection (the savings-to-checking transfer) is unaffected, and the `flat_overdraft_fee` / `progressive_overdraft_fee` `economic_engine` columns are untouched and still carried forward on every engine evolution (no migration).
 
 ### Changed
 
