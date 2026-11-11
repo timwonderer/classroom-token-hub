@@ -7,8 +7,15 @@ student claim/recovery setup and lifecycle operations that must erase its data
 fail closed with a generic 503.
 
 The existing Python Redis dependency is used. Redis must support ACL subcommands
-and `SET KEEPTTL` (Redis 7 or newer). Do not point this at the rate-limit store,
-a managed persistent instance, a replica, or a backed-up volume.
+and `SET KEEPTTL` (Redis 6.0 or newer, which introduced both). `client()` in
+`app/services/student_setup.py` also calls `CONFIG GET save appendonly
+slowlog-log-slower-than` (three parameters in one call); a 2026-10-04
+production check ran that exact call against this host's actual Redis
+6.0.16 via `redis-cli` and got back all three values correctly (see
+`docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md`, "Student-setup memory
+store"), so multi-parameter `CONFIG GET` is not 7.0-only in practice on this
+version. Do not point this at the rate-limit store, a managed persistent
+instance, a replica, or a backed-up volume.
 
 ## Provision before application deployment
 

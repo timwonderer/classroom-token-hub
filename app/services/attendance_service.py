@@ -463,7 +463,7 @@ class SeatPayrollIntervals:
 def calculate_seat_payroll_intervals(
     seat_id: int, class_id: str, *, ctx, as_of_utc=None
 ) -> SeatPayrollIntervals:
-    """The single PROD reading of what a seat's attendance owes (DOM-PROD-001 §VI.3).
+    """The single PROD reading of what a seat's attendance owes (DOM-PROD-001 §XV.11).
 
     A session is payable once it has closed after the seat's last ``payroll``
     event, and it is paid in full by the payroll window in which it closes. A

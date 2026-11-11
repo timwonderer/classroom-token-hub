@@ -447,7 +447,7 @@ def _record_payroll_event_impl(
         if amount is not None:
             raise ValueError("FEAT-PROD-003 derives a payroll event's amount; it cannot be supplied.")
         # Only closed, unpaid sessions are payable; an open session is settled
-        # in full by the run after it closes (DOM-PROD-001 §VI.3). Each is priced
+        # in full by the run after it closes (DOM-PROD-001 §XV.11). Each is priced
         # by the setting in force when it closed, never by the one in force now
         # (DOM-PROD-001 §XV.3), and the pricing inputs are recorded so the
         # amount is reproducible without storing it (INV-CORE-000 §III.3).
