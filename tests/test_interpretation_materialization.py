@@ -37,6 +37,7 @@ from app.services.interpretation.reference_configuration import (
     capture_reference_configuration,
 )
 from app.utils.canonical_temporal_resolver import utc_now
+from tests.helpers import temporal
 from tests.helpers.class_domain import disable_class_feature
 from tests.helpers.classroom_initializer import initialize
 
@@ -195,21 +196,23 @@ def test_reference_configuration_binds_expected_weekly_hours_to_cycle_boundary(a
     # The closing boundary sits well after the provisioned root engine (so the
     # governing version below supersedes it) and well before the "later" version
     # (so that version is unambiguously saved after the cycle closed).
-    boundary = utc_now() + timedelta(hours=1)
+    boundary = temporal.shifted(temporal.now(), hours=1)
 
     root = (
         EconomicEngine.query.filter_by(class_id=cid)
         .order_by(EconomicEngine.created_at.asc())
         .first()
     )
+    governing_effective_at = temporal.shifted(boundary, minutes=-5)
+    later_effective_at = temporal.shifted(boundary, minutes=5)
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"econ-engine-fixture:{cid}"):
         governing_version = EconomicEngine(
             class_id=cid,
             previous_version_id=root.economic_version_id,
             expected_weekly_hours=12.5,
             economy_policy_mode="default",
-            effective_at=boundary - timedelta(minutes=5),
-            created_at=boundary - timedelta(minutes=5),
+            effective_at=governing_effective_at,
+            created_at=governing_effective_at,
         )
         db.session.add(governing_version)
         db.session.flush()
@@ -219,8 +222,8 @@ def test_reference_configuration_binds_expected_weekly_hours_to_cycle_boundary(a
             previous_version_id=governing_version.economic_version_id,
             expected_weekly_hours=17.5,
             economy_policy_mode="default",
-            effective_at=boundary + timedelta(minutes=5),
-            created_at=boundary + timedelta(minutes=5),
+            effective_at=later_effective_at,
+            created_at=later_effective_at,
         )
         db.session.add(later_version)
         db.session.flush()
@@ -234,7 +237,7 @@ def test_reference_configuration_binds_expected_weekly_hours_to_cycle_boundary(a
 
     # A cycle closing after the later version took effect sees that version.
     captured_next_cycle = capture_reference_configuration(
-        cid, cycle_completed_at=boundary + timedelta(minutes=10)
+        cid, cycle_completed_at=temporal.shifted(boundary, minutes=10)
     )
     assert captured_next_cycle["economic_engine"]["expected_weekly_hours"] == "17.5"
     assert captured_next_cycle["economic_engine"]["cwi"] == "525.00"
