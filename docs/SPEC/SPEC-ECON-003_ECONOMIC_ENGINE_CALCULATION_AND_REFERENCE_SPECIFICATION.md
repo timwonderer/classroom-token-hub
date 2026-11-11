@@ -584,17 +584,25 @@ fine = CWI × fine_rate
 ```
 #### 4.5.1 Internal Fines
 
-Fines such as overdraft or non-sufficient funds (NSF) fees and late fees shall use the same formula as generic classroom fines recommendations — `fine = CWI × rate`. These recommendations shall surface the recommended price range of the fines, not a single recommended price.
+**Historical persistence design, superseded by § 4.5.1.1 (issue #1647).** This
+subsection originally specified how the retired overdraft/NSF fee was priced
+and persisted. That fee is retired and nothing below is a live requirement;
+it is kept only so the historical meaning of the `flat_overdraft_fee` /
+`progressive_overdraft_fee` `economic_engine` columns, and any rows they
+produced before the 2026-10-07 ruling, stays readable. The flat recommendation
+band still has one live consumer, described after the table.
 
-An internal fine may be configured in one of two shapes, and the two are priced
-against **different** reference sets:
+Overdraft/NSF fees and late fees used the same formula as generic classroom
+fines recommendations — `fine = CWI × rate`. These recommendations surfaced
+the recommended price range of the fine, not a single recommended price.
 
-- **Flat.** Persisted as `flat_overdraft_fee`. A flat internal fee is an ordinary
-  fine and SHALL be recommended against the generic fine band of § 4.5.
-- **Progressive.** Persisted as the precomputed `progressive_overdraft_fee` JSON
-  object, using the escalating schedule below.
+An internal fine could be configured in one of two shapes, priced against
+**different** reference sets:
 
-Economic engine table shall persist the chosen overdraft fee under `flat_overdraft_fee` or persist the precomputed `progressive_overdraft_fee` as json object with the following fine schedule
+- **Flat.** Persisted as `flat_overdraft_fee`. A flat internal fee was an
+  ordinary fine, recommended against the generic fine band of § 4.5.
+- **Progressive.** Persisted as the precomputed `progressive_overdraft_fee`
+  JSON object, using the escalating schedule below.
 
 | Economic Mode | Tier 1 | Tier 2 | Tier 3|
 | --- | --- | --- | --- |
@@ -602,22 +610,26 @@ Economic engine table shall persist the chosen overdraft fee under `flat_overdra
 | `default` | 5% CWI | 10% CWI | 15% CWI|
 | `comfortable` | 4% CWI | 8% CWI | 12% CWI |
 
-This progressive schedule is a **self-contained reference set**, not a subdivision
-of the § 4.5 generic fine band. Its purpose is escalation across repeat
-occurrences, so its upper tiers are expected to sit above the generic band's
-ceiling and its first tier may sit below the generic band's floor. Implementations
-MUST NOT clamp, rescale, or validate the progressive tiers against the § 4.5 band,
-and MUST NOT raise an out-of-band finding for a progressive tier that falls outside
-it. The § 8 instruction that system-defined fines reference the canonical table
-applies to the flat shape; the progressive shape is governed by this table.
+This progressive schedule was a **self-contained reference set**, not a
+subdivision of the § 4.5 generic fine band: its purpose was escalation across
+repeat occurrences, so its upper tiers sat above the generic band's ceiling
+and its first tier could sit below the generic band's floor. Nothing
+computes or persists a progressive fee today; `resolve_overdraft_fine`
+(`app/services/economic_engine.py`) still returns this schedule as part of
+its result, but no caller reads that part of it.
 
-The two schedules also order the economic modes differently, and this is deliberate.
-The generic band of § 4.5 rises from `tight` to `comfortable` alongside rent and the
-savings target. The progressive schedule instead escalates hardest under `tight`,
-because repeat-occurrence pressure is the lever a leaner economy uses. A mode that
-carries a lower generic fine band may therefore carry a higher tier-3 internal fee.
+The two schedules ordered the economic modes differently, by design: the
+generic band of § 4.5 rises from `tight` to `comfortable` alongside rent and
+the savings target, while the progressive schedule escalated hardest under
+`tight`, since repeat-occurrence pressure is the lever a leaner economy uses.
 
-Internal fines are only active if their value is not `NULL` for the economic policy being enforced. When disabling fines, the backend shall create a new economic policy with the value set to `NULL`
+**Live consumer.** `resolve_overdraft_fine` still surfaces the generic flat
+band (`fine = CWI × fine_rate`, § 4.5) as a recommended range for the
+unrelated teacher-issued-penalty feature (`FEAT-LED-006`, the admin "Issue
+Fine" page). That feature never persists to `economic_engine`: the teacher
+picks an amount within the recommended range and it is posted as an ordinary
+ledger penalty transaction. It never reads or sets the progressive schedule
+above.
 
 ##### 4.5.1.1 Overdraft / NSF Fee Applicability
 
@@ -975,7 +987,7 @@ The following table is the canonical reference set for the Economic Engine.
 
 The `Insurance premium` row is the **premium pricing envelope only** (the economic-mode / cost axis of § 4.4), and is engine guidance rather than a hard cap. It does not define any coverage, reimbursement percentage, payout cap, or claim allowance. Those belong to the insurance-tier / coverage axis and are defined by the canonical preset tables in § 4.4.3–§ 4.4.5 with the deterministic selection rule in § 4.4.8; this table MUST NOT be read as a complete insurance economic model. For `NON_MONETARY` this band is affordability guidance only (§ 4.4.5). For `PRODUCTIVITY` the settled mechanical bounds in § 4.4.4 (remaining period payout capacity and remaining claim allowance, with the configured daily payroll limit as the submission-time hours ceiling) bound exposure independently of this row; the weekly `expected_weekly_hours` and `CWI` figures are advisory economic-coherence guidance.
 
-System-defined fines such as rent late fees and overdraft fees shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. Progressive internal fee schedules are the one exception: they are priced against the self-contained tier table in § 4.5.1 and are not bounded by the `Fine` row above. Actual configured fine amount shall persist on `economic_engine` for overdraft fines and `rent_settings` for rent late fees.
+System-defined fines such as rent late fees, and the teacher-issued internal fine recommendation of § 4.5.1 (`resolve_overdraft_fine`, read-only and non-persisted), shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. Progressive internal fee schedules are the one exception: they are priced against the self-contained tier table in § 4.5.1 and are not bounded by the `Fine` row above. Actual configured fine amount shall persist on `rent_settings` for rent late fees; no fine persists on `economic_engine` (§ 4.5.1.1, § 4.5.1).
 
 Store economic-role reference:
 
@@ -1042,7 +1054,7 @@ Revisions to this document must:
 
 ### Revision history
 
-- **2.5 (2026-11-10)** — Completes the §4.5.1.1 revision that **2.3** flagged as pending: removes the retired fee's scope/amount/recording text and the teacher-facing fee settings and warning it described (issue #1647). No calculation or formula changes; `flat_overdraft_fee` / `progressive_overdraft_fee` remain persisted engine columns, now written by nothing.
+- **2.5 (2026-11-10)** — Completes the §4.5.1.1 revision that **2.3** flagged as pending: removes the retired fee's scope/amount/recording text and the teacher-facing fee settings and warning it described, and marks §4.5.1's persistence/schedule description and §8's overdraft-fee reference as historical (issue #1647). No calculation or formula changes. `flat_overdraft_fee` / `progressive_overdraft_fee` remain persisted engine columns and continue to carry forward unchanged on every engine evolution (the carry-forward is not a write of a new value); no caller — including configuration transfer's explicit-update path, which is closed too — can set either field to a new value going forward.
 
 - **2.3 (2026-10-07)**, owner rulings 2026-10-07: no overdraft or NSF fee is assessed; a failed obligation payment leaves the obligation unpaid, accumulating, and subject to late fees (§4.5.1.1; `DOM-OBL-001` 3.3). A Store purchase requires sufficient funds and is refused before posting, with no fee, when checking and any full protection transfer do not cover it (§4.5.1.1, §4.5.1.1A; `FEAT-STOR-001` 3.2). Funding semantics for authorized charges are unchanged.
 

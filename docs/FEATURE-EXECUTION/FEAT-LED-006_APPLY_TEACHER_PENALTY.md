@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-006 | 1.0 | 2026-11-04 | — | Normative |
+| FEAT-LED-006 | 1.1 | 2026-11-10 | 1.0 | Normative |
 
 ---
 
@@ -74,6 +74,8 @@ For each seat, `apply_resolved_ledger_plan` posts the funding legs, if any, and 
 Increment the version and effective date, identify superseded rules, and preserve the governing INV and DOM hierarchy.
 
 ### Change Notes
+
+**1.1 (2026-11-10)** rewords §VII.5's plan-resolution step for the retired `fee_authority` ledger-resolution parameter (`SPEC-ECON-003` v2.5, issue #1647): resolution never took a fee authority of its own, so dropping the parameter changes no behavior here, only the words describing it. Supersedes the step's 1.0 wording.
 
 **1.0 (2026-11-04, review)** binds each submission token to its complete batch (§VII.3, §VIII.4), serializes same-token submissions on the ClassEconomy lock, and adds the student-visible text to the confirmed-outcome digest. Contract version unchanged: these complete the 1.0 invariants before first release.
 
