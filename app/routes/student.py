@@ -3425,7 +3425,6 @@ def submit_general_issue():
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
-                         current_page='help',
                          page_title='Report an Issue',
                          form=form,
                          issue_type='general',
@@ -3490,7 +3489,6 @@ def report_transaction_issue(transaction_id):
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
-                         current_page='help',
                          page_title='Report Transaction Issue',
                          form=form,
                          issue_type='transaction',
@@ -3559,7 +3557,6 @@ def report_attendance_session_issue(attendance_session_id):
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
-                         current_page='help',
                          page_title='Report Attendance Issue',
                          form=form,
                          issue_type='attendance',
