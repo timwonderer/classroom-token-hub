@@ -119,8 +119,8 @@ def test_hall_pass_checkout_api_route_is_seat_keyed(client, app, limiter_on, clo
     """``/api/hall-pass/checkout`` is a non-admin, non-tap ``/api`` route the issue named."""
     _, first, second = _two_students_one_class(client, app)
 
-    # The route validates its own payload before the budget runs out; a
-    # malformed/empty body (400/404/etc.) still spends the same seat key,
+    # An empty body fails checkout_hall_pass()'s own `pass_id` check (400)
+    # before any hall-pass lookup, but it still spends the same seat key,
     # which is all this test needs to prove.
     within = [
         first.post("/api/hall-pass/checkout", json={}, headers=SCHOOL_ADDRESS).status_code
@@ -129,9 +129,9 @@ def test_hall_pass_checkout_api_route_is_seat_keyed(client, app, limiter_on, clo
     over = first.post("/api/hall-pass/checkout", json={}, headers=SCHOOL_ADDRESS)
     classmate = second.post("/api/hall-pass/checkout", json={}, headers=SCHOOL_ADDRESS)
 
-    assert all(code != 429 for code in within)
+    assert all(code == 400 for code in within)
     assert over.status_code == 429
-    assert classmate.status_code != 429
+    assert classmate.status_code == 400
 
 
 def test_unauthenticated_dashboard_request_spends_no_seat_budget(client, app, limiter_on, clock):
