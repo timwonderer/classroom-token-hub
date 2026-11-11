@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ITR-001      | 1.10    | 2026-11-04     | 1.9        | Constitutional  |
+| DOM-ITR-001      | 1.11    | 2026-11-10     | 1.10       | Constitutional  |
 
 > [!IMPORTANT]
+> **v1.11 (2026-11-10).** Implementation-status correction only: §V, §VIII, §IX and §XIII.a/§XIII.b described the cycle-record materialization writer as absent from runtime ("materialization writer NOT IMPLEMENTED", "no row is written"). `materialize_interpretation_cycle` (`app/services/interpretation/materialization.py`) has been invoked directly by `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`) since slice 8.3d. The affected status lines are corrected to IMPLEMENTED and the resolved `Materialize Cycle Interpretation` row is removed from the XIII.a absent-capability table. The Historical Configuration Binding row in XIII.b is marked PARTIALLY RESOLVED, not fully resolved: `capture_reference_configuration` binds `hourly_pay_rate`/`policy` to the cycle boundary correctly but reads `expected_weekly_hours`/`cwi` from the current Economic Engine rather than the boundary-scoped one, leaving a narrow open compliance gap. No doctrine, invariant, or runtime behavior changes.
+>
 > **v1.10 (2026-11-04).** Corrects the overdraft / NSF ownership entries (§II, §XIII.c), which still called the NSF fee an immediate obligation: since `DOM-OBL-001` 3.3 (owner ruling 2026-10-07) no NSF fee is charged and the fee was never an obligation. Records that a teacher-applied fine is a Ledger penalty (`FEAT-LED-006`). No Interpretation invariant changes.
 >
 > **v1.9 (2026-10-18), owner ruling.** INV-ITR-015 inverted: Interpretation now classifies Ledger event origin by `mechanism` and a closed, schema-validated `Transaction.type` (`DOM-LED-001` INV-LED-017), not by `feat_code`. The prior rule's own rationale — `type` was unconstrained free text with inconsistent casing, "ruled untrustworthy for semantics" — is resolved by that constraint, not dropped; `feat_code` is retained as provenance metadata but is no longer part of this classification. No change to any other invariant in this document.
@@ -130,7 +132,7 @@ Configuration input ranges, permissible policy-mode bands, and configured recomm
 | **Interpretive Signals** | Derived State | Descriptive inputs combined with a declared reference/model. |
 | **Trend Indicators** | Derived State | Requires a prior cycle record source. Available once `interpretation_cycle_record` accrues across cycles (§VIII, §IX). |
 | **Simulation Outputs** | Derived State | Hypothetical, non-persistent. Currently NOT IMPLEMENTED. |
-| **Cycle Interpretation Records** | Durable Authoritative Record | Immutable per-cycle materialization bound to `payroll_cycle_id`; self-describing via a versioned `reference_configuration` projection. Not a cache. Persistence surface IMPLEMENTED (`interpretation_cycle_record`, migration `b3d7f1a9c2e4`); materialization writer NOT IMPLEMENTED (§VIII, §IX). |
+| **Cycle Interpretation Records** | Durable Authoritative Record | Immutable per-cycle materialization bound to `payroll_cycle_id`; self-describing via a versioned `reference_configuration` projection. Not a cache. IMPLEMENTED: persistence surface (`interpretation_cycle_record`, migration `b3d7f1a9c2e4`) and materialization writer (`materialize_interpretation_cycle`), orchestrated by `FEAT-PROD-004` (§VIII, §IX). |
 | **Annotation Signals** | Derived State | Non-authoritative labels. Currently NOT IMPLEMENTED. |
 
 ---
@@ -212,7 +214,7 @@ Cycles that predate the cycle-bound materialization contract have no `interpreta
 - **Actor**: System
 - **Trigger**: economic-cycle boundary — successful payroll completion for the class (`DOM-PROD-001` §XV), orchestrated by `FEAT-PROD-004`.
 - **Behavior**: Computes the closed cycle's Interpretation and writes exactly one durable, immutable `interpretation_cycle_record` (§IX) bound to the run's `payroll_cycle_id`, capturing the economic reference values in effect for the cycle.
-- **Status**: Persistence surface IMPLEMENTED — the `interpretation_cycle_record` table, model, and schema certification exist via migration `b3d7f1a9c2e4` (§IX). Materialization writer NOT IMPLEMENTED — no row is written yet. Materialization is invoked only as a declared side effect of `FEAT-PROD-004`; Interpretation never decides on its own that some historical cycle is "ready" to materialize. The record is immutable and never recomputed. Building the writer remains subject to the provenance and certification requirements of its downstream contract (§X.9).
+- **Status**: IMPLEMENTED. The `interpretation_cycle_record` table, model, and schema certification exist via migration `b3d7f1a9c2e4` (§IX). The materialization writer (`materialize_interpretation_cycle`, `app/services/interpretation/materialization.py`) is invoked as a declared side effect of `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`), which orchestrates it directly after `compute_partial_payload`; Interpretation never decides on its own that some historical cycle is "ready" to materialize. The record is immutable and never recomputed.
 
 ### Invalidate Snapshot
 
@@ -230,7 +232,7 @@ Cycles that predate the cycle-bound materialization contract have no `interpreta
 
 ## IX. Derived Schema
 
-The schema declared in this section describes persistence for materialized cycle Interpretation. **As of v1.5, the `interpretation_cycle_record` table exists in the runtime schema and the migration chain (migration `b3d7f1a9c2e4`): the persistence surface is IMPLEMENTED.** No lawful materialization writer exists yet, so no row is written: all current Interpretation outputs are still computed on demand and returned as in-memory dataclasses. Populating this table requires the separately specified materialization slice, invoked only as a declared side effect of `FEAT-PROD-004` (§VIII, §X.9), which is NOT IMPLEMENTED.
+The schema declared in this section describes persistence for materialized cycle Interpretation. **As of v1.5, the `interpretation_cycle_record` table exists in the runtime schema and the migration chain (migration `b3d7f1a9c2e4`): the persistence surface is IMPLEMENTED.** The materialization writer is also IMPLEMENTED: `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`) invokes it as a declared side effect of each payroll-cycle completion, writing exactly one row per `(class_id, payroll_cycle_id)` (§VIII, §X.9). On-demand Interpretation outside that boundary is still computed and returned as in-memory dataclasses, not persisted.
 
 ### `interpretation_cycle_record`
 
@@ -337,7 +339,6 @@ Non-normative appendix. Records the divergences between doctrine and current run
 
 | Element | Doctrine Status | Runtime Status |
 |---|---|---|
-| Materialize Cycle Interpretation | SPECIFIED, cycle-bound (§VIII, §IX) | Persistence surface present: `interpretation_cycle_record` table + model + migration `b3d7f1a9c2e4` + schema certification (slice 8.1). Execution path absent: no materialization writer, so no row is written; invoked only as a declared side effect of `FEAT-PROD-004`, which is not built. |
 | Generate Simulation | Authorized (§VIII) | No simulation surface. |
 | Trend indicators with prior cycle-record source | Authorized (§V) | No prior cycle-record source available yet; `compute_trends` always receives `previous_snapshot=None` and returns `stable`. Unblocked once `interpretation_cycle_record` accrues. |
 
@@ -346,7 +347,7 @@ Non-normative appendix. Records the divergences between doctrine and current run
 | Element | Doctrinal Requirement | Runtime Behavior |
 |---|---|---|
 | ~~FEAT name for Compute~~ | ~~Compute Interpretation FEAT is `FEAT-ITR-001` under the Interpretation domain namespace.~~ | **RESOLVED.** Registered as `FEAT-ITR-001` under the `"Interpretation"` domain in `app/feats/base.py`. Consumer sites (`app/utils/analytics_engine.py`, `app/routes/analytics.py`) updated in the same slice. |
-| Historical Configuration Binding | §VII requires historical windows to be evaluated against their authoritative historical configuration. | **Contract resolved (§VII, §VIII, §IX):** cycle-bound materialization persists the governing reference values in an immutable `interpretation_cycle_record`, so cycles produced under the contract are self-describing and never reinterpreted. Runtime remains noncompliant only until the record is built; pre-contract cycles are declared **not replayable**, tracked toward zero. |
+| Historical Configuration Binding | §VII requires historical windows to be evaluated against their authoritative historical configuration. | **PARTIALLY RESOLVED.** Cycle-bound materialization (`FEAT-PROD-004` → `materialize_interpretation_cycle`) persists reference values in an immutable `interpretation_cycle_record` for every cycle closed from slice 8.3d onward, so a materialized cycle never reinterprets against later configuration for what it captures. Within that capture, `capture_reference_configuration` (`app/services/interpretation/reference_configuration.py`) correctly binds `hourly_pay_rate` and `policy` to the setting in force before `cycle_completed_at` (`payroll_setting_in_force_before`), but `expected_weekly_hours` and the derived `cwi` are read via `resolve_expected_weekly_hours` → `get_current_economic_engine`, which is **not** boundary-scoped: a change to the Economic Engine between `cycle_completed_at` and the writer's actual execution can still leak into the materialized record. Remains an open compliance item for `expected_weekly_hours`/`cwi` until that read is bound to `cycle_completed_at` the same way the pay rate is. Pre-materialization cycles have no record and are declared **not replayable** (§VII); that gap is tracked toward zero as cycles accrue. |
 | Completed-cycle window discipline | §VII requires completed cycles only. | Runtime accepts arbitrary caller-supplied windows without enforcement. |
 | Output Property Declaration (INV-ITR-012) | Every output SHALL declare Semantic Kind, Subject / Observation Basis / Aggregation, and Reference Dependency. | Current outputs declare none of these. |
 | ~~Provenance via canonical fields (INV-ITR-015)~~ | ~~Classification of Ledger events uses `mechanism`, the closed `Transaction.type` vocabulary, `correlation_id`, reversal linkage, and authoritative source-domain event tables. `feat_code` is not used for this classification.~~ | **RESOLVED.** `ledger_provenance_query_service._student_originated_filter()` now classifies by `mechanism == SELF` plus the closed `SYSTEM_ORIGINATED_TYPE_VALUES` exclusion set (`{payroll, payroll_correction, interest, Interest, overdraft_fee}` per SPEC-ITR-001 §6.3); `SYSTEM_ORIGINATED_FEAT_CODES` and its `feat_code` membership test are removed. The DB `CHECK` constraint and write-time casing validator on `Transaction.type` (`DOM-LED-001` INV-LED-017) remain a separate, not-yet-landed PR — see SPEC-ITR-001 §6.6. |
