@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.58 | 2026-11-10 | 3.57 | Normative |
+| SOP-DOC-001 | 3.59 | 2026-11-11 | 3.58 | Normative |
 
 ---
 
@@ -178,8 +178,8 @@ Archived material is deliberately absent; see §VI.
 
 ### Procedures — Deployment (SOP-DEP)
 - [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.13: initial-host and rehearsal scope; §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
-- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.2: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens; validation is development and operations alone (§V.5).
-- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.2: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, never teachers, students or live classes; the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
+- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.3: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens; validation is development and operations alone (§V.5).
+- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.3: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, and no check expects a teacher or student to act (the operator may use a test account of their own in a live class); the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
 - [SOP-DEP-002 — Production Release Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.59 (2026-11-11):**
+- Register SOP-DEP-001B v1.3 and SOP-DEP-001A v1.3: the validation-responsibility rule is that no check expects a teacher or student to act, not that no live class may be used; the operator may run a check in a live class through a test account the operator holds. Corrects the misstatement introduced in SOP-DEP-001B v1.1 and SOP-DEP-001A v1.2. Owner correction, 2026-11-11.
 
 **Version 3.58 (2026-11-10):**
 - Register DOM-ITR-001 v1.11, DOM-CORE-001 v1.4, DOM-CORE-002 v1.21, and SPEC-ITR-001 v1.7: correct the implementation-status appendices across all four documents, which described the cycle-record materialization writer (`materialize_interpretation_cycle`, invoked by `FEAT-PROD-004`) as absent from runtime; it has existed and been wired in since slice 8.3d. DOM-ITR-001's §XIII.b Historical Configuration Binding row is marked PARTIALLY RESOLVED, not fully resolved: `capture_reference_configuration` binds `hourly_pay_rate`/`policy` to the cycle boundary but reads `expected_weekly_hours`/`cwi` from the current, not boundary-scoped, Economic Engine. Status corrections only; no doctrine or invariant change.

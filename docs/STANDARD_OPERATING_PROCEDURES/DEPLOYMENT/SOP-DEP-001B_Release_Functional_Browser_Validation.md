@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001B     | 1.2     | 2026-11-08     | 1.1 | Normative |
+| SOP-DEP-001B     | 1.3     | 2026-11-11     | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -55,13 +55,17 @@ in plain words.
 ## V.A Validation responsibility
 
 1. Release validation is a development and operations responsibility. The operator, in the roles of `SOP-DEP-001`
-   §XIII, runs every check this template requires, using test classes and test accounts created for the check.
-   AI assistance is advisory there and here.
+   §XIII, runs every check this template requires, in a test class created for the check or through a test account
+   the operator holds, such as the operator's own dummy student seat in a live class. AI assistance is advisory there and here.
 2. Teachers and students take no part in release validation. No check expects, requests or waits for an action by
    a teacher or a student, and the absence of such an action is never a gap, a known risk or a deviation.
-3. Live classroom activity is never orchestrated to satisfy a release gate. No live class is used for a check, and
-   no teacher or student is asked, prompted, scheduled or timed to act so that a release produces evidence. This
-   holds when the operator also teaches a class: what the operator does in a live class as its teacher is classroom
+3. No check holds an expectation that a teacher or student performs it, and live classroom activity is never
+   orchestrated to satisfy a release gate: no teacher or student is asked, prompted, scheduled or timed to act so
+   that a release produces evidence. A live class is not itself barred: the operator may run a check there through
+   a test account the operator holds. What the check writes is test data: deleting the account removes the rows its
+   seat owns, while append-only audit events and class-level records already derived from the class (such as a
+   completed interpretation cycle record) remain as the class's history. Where a check must leave no trace in a live
+   class's history, use a test class. This holds when the operator also teaches a class: what the operator does in a live class as its teacher is classroom
    activity, not a check.
 4. Classroom activity that happens in its own course is evidence like any other request on the release build. It
    may satisfy a required server-side check (§VI.5) for what it shows, labelled as live-class activity. It
@@ -74,8 +78,9 @@ in plain words.
 1. Where the release changes what a browser observes in an in-scope feature (its template, page script or
    stylesheet, or what a page renders or sends), exercise that feature in a real browser, behind the Access gate
    where the release keeps it restricted. The operator runs the check (§V.A).
-2. Use a test class created for the check where the feature writes data, never a live class (`SOP-DEP-001` §XI.A).
-   A test class destroyed by the check (a deletion test) needs no cleanup.
+2. Where the feature writes data, run the check in a test class created for it or through a test account the
+   operator holds (§V.A.3), never through a teacher's or a student's account. No deliberate cross-scope attempt is
+   made on a host serving live classes (`SOP-DEP-001` §XI.A). A test class destroyed by the check (a deletion test) needs no cleanup.
 3. Where one action evidences several features, say so; a separate step per feature is not required.
 4. Server-side evidence counts for what it shows: a request in the access log, a row in the database, a FEAT entry
    in the journal, a scheduled job's record. It establishes server behaviour only: that a request arrived, a row was
@@ -161,6 +166,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-11-11 | §V.A.1, §V.A.3, §VI.2: the rule is that no check holds an expectation that a teacher or student performs it, not that no live class may be used. The operator may run a check in a live class through a test account the operator holds (for example a dummy student seat); what it writes is test data; deleting the account removes its seat-owned rows, while audit events and already-derived class records remain. 1.1 and 1.2 misstated the owner's ruling as "no live class is used for a check". The bar on deliberate cross-scope attempts (`SOP-DEP-001` §XI.A) is unchanged. Owner correction, 2026-11-11 (v2.4.4, #1720). |
 | 1.2 | 2026-11-08 | The required check follows what the release changed, not what the feature has: a browser check where the release changes what a browser observes (§VI.1); server-side evidence of the changed behaviour itself, from the release build, where it changes the feature only on the server (§VI.5); both where it changes both; a connected or known-problem feature takes its check from what put it in scope (§VI.6). Server-side evidence must show the changed path and its result, not only that a request arrived. §V.A.4: classroom activity in its own course may satisfy a server-side check for what it shows; an operator who teaches while watching tables or logs is still teaching. §VII: a *pending* result for a check that waits on a time boundary after the release window; §VIII: a release's browser validation is one parent CTH Backlog issue with each in-scope feature's check as a sub-issue carrying evidence type, result, operator and evidence; a check evidenced or failed at release is closed at once, any other stays open until run; the release record links the parent, lists each feature with its result at release and its sub-issue, and is not amended as sub-issues close. Owner ruling, 2026-11-08 (v2.4.4 payroll). |
 | 1.1 | 2026-11-08 | §V.A: release validation is a development and operations responsibility; teachers and students take no part, and live classroom activity is never orchestrated to satisfy a gate. §VI: a browser check for each in-scope feature with a browser surface; server-side evidence establishes server behaviour only, checks a feature with no browser surface, and never stands in for a browser check; suite tests may be named but never make a check evidenced. §VII: a row separates responsibility, evidence type and result; the result definitions are this template's own; *not exercised* is kept for a required check the operator could have run and did not. §VIII: an *Evidence type* column; *Owner* becomes *Operator*. Owner ruling, 2026-11-08 (v2.4.4). |
 | 1.0 | 2026-10-22 | Extracted from `SOP-DEP-001` §XI (2.9) as the release template: scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; results recorded during or after the checks; known risks recorded without an ordering rule. Owner rulings, 2026-10-22. |
