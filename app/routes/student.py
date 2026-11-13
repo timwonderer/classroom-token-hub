@@ -2269,7 +2269,7 @@ def _eligible_claim_transactions(seat_id, class_id, entitlement_id, limit=25):
             class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id,
         ).filter(InsuranceClaim.status.in_(["SUBMITTED", "APPROVED"])).all()
     }
-    obligation_related = obligation_related_transaction_ids(t.id for t in rows)
+    obligation_related = obligation_related_transaction_ids((t.id for t in rows), class_id=class_id)
     return [
         t for t in rows
         if (t.type or "").lower() not in excluded

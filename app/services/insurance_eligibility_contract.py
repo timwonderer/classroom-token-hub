@@ -13,16 +13,17 @@ A TRANSACTION claim's source transaction must satisfy ALL of:
 * it **belongs** to the covered seat and class;
 * its category/type is **not** in CTH's global disallowed-insurance set;
 * it is **not** a transfer;
-* it is **not** obligation-related (an obligation event references it:
-  rent, late fees, premiums);
+* it is **not** an obligation charge by type (the FEAT also refuses any
+  transaction an obligation event references: rent, late fees, premiums);
 * it is **not** collective-goal-related;
 * if it is **item-related**, the associated entitlement must have been purchased
   and **USED** (a CONSUMED event exists) and must **not** be REVOKED or EXPIRED.
 
-Two orthogonal gates live in the FEAT, not here, because they need temporal /
-claim-history context rather than transaction structure: the **filing window**
-(transaction date → submission, class-local calendar days) and the
-**one-transaction-one-claim** uniqueness guard.
+Three gates live in the FEAT, not here. **Obligation provenance** is an
+Obligations read, and only a FEAT may compose it (INV-ARC-021 §V.1). The
+**filing window** (transaction date → submission, class-local calendar days)
+and the **one-transaction-one-claim** uniqueness guard need temporal /
+claim-history context rather than transaction structure.
 """
 
 from __future__ import annotations
@@ -60,7 +61,8 @@ TRANSFER_TYPES = frozenset({"withdrawal", "deposit", "transfer", "internal_trans
 
 # Obligations are separately governed (DOM-OBL-001); never insurable here. Rent
 # and its late fees post as ``rent_payment``. This type check is a backstop: the
-# authority is provenance (an obligation event references the transaction).
+# authority is obligation provenance, which FEAT-STOR-003 composes with this
+# verdict because reading Obligations is cross-domain (INV-ARC-021 §V.1).
 OBLIGATION_TYPES = frozenset({"rent_payment"})
 
 # Entitlement taxonomy (EntitlementEvent.entitlement_type).
@@ -185,10 +187,7 @@ def evaluate_transaction_claim_basis(
     ttype = _normalized_type(transaction)
     if ttype in TRANSFER_TYPES:
         return EligibilityVerdict(False, TRANSFER, "Transfers are not insurable")
-    # SPEC-OPS-001 §VII: obligation-relatedness is provenance, not representation.
-    from app.services.obligations_service import is_obligation_related_transaction
-
-    if ttype in OBLIGATION_TYPES or is_obligation_related_transaction(transaction.id):
+    if ttype in OBLIGATION_TYPES:
         return EligibilityVerdict(
             False, OBLIGATION, "Obligation charges are not insurable"
         )
