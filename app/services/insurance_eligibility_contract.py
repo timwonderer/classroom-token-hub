@@ -13,7 +13,8 @@ A TRANSACTION claim's source transaction must satisfy ALL of:
 * it **belongs** to the covered seat and class;
 * its category/type is **not** in CTH's global disallowed-insurance set;
 * it is **not** a transfer;
-* it is **not** obligation-related (rent / property tax);
+* it is **not** obligation-related (an obligation event references it:
+  rent, late fees, premiums);
 * it is **not** collective-goal-related;
 * if it is **item-related**, the associated entitlement must have been purchased
   and **USED** (a CONSUMED event exists) and must **not** be REVOKED or EXPIRED.
@@ -35,21 +36,32 @@ from app.models import EntitlementEvent, Transaction
 
 
 # Ledger ``type`` strings that are structurally not an insurable loss. System
-# law — teachers cannot extend this. Compared case-insensitively.
+# law — teachers cannot extend this. Compared case-insensitively. Together with
+# TRANSFER_TYPES and OBLIGATION_TYPES this covers every type in the ledger's
+# closed vocabulary except ``purchase``; a guard test holds that coverage.
 DISALLOWED_TRANSACTION_TYPES = frozenset({
     "insurance_reimbursement",   # cannot insure an insurance payout
     "insurance_premium",         # the premium itself is not an insurable loss
     "overdraft_fee",             # penalty fees are not insurable
+    "penalty",                   # teacher-imposed penalty fee
     "interest",                  # credited income, not a loss
     "payroll",                   # income, not a loss
+    "payroll_correction",        # correction of income, not a loss
+    "manual_payment",            # teacher-issued income
+    "reversal",                  # Ledger correction, not a loss
+    "refund",                    # Ledger compensation, not a loss
+    "issue_reversal",            # support-issue correction
+    "issue_compensation",        # support-issue compensation
     "void_item_removed",         # bookkeeping reversal, not a loss
 })
 
 # Peer-to-peer / self movement of funds — not an insurable loss of value.
-TRANSFER_TYPES = frozenset({"withdrawal", "deposit", "transfer"})
+TRANSFER_TYPES = frozenset({"withdrawal", "deposit", "transfer", "internal_transfer"})
 
-# Obligations are separately governed (DOM-OBL-001); never insurable here.
-OBLIGATION_TYPES = frozenset({"rent", "property_tax"})
+# Obligations are separately governed (DOM-OBL-001); never insurable here. Rent
+# and its late fees post as ``rent_payment``. This type check is a backstop: the
+# authority is provenance (an obligation event references the transaction).
+OBLIGATION_TYPES = frozenset({"rent_payment"})
 
 # Entitlement taxonomy (EntitlementEvent.entitlement_type).
 _GOAL_ENTITLEMENT_TYPE = "COLLECTIVE_GOAL"
@@ -173,7 +185,10 @@ def evaluate_transaction_claim_basis(
     ttype = _normalized_type(transaction)
     if ttype in TRANSFER_TYPES:
         return EligibilityVerdict(False, TRANSFER, "Transfers are not insurable")
-    if ttype in OBLIGATION_TYPES:
+    # SPEC-OPS-001 §VII: obligation-relatedness is provenance, not representation.
+    from app.services.obligations_service import is_obligation_related_transaction
+
+    if ttype in OBLIGATION_TYPES or is_obligation_related_transaction(transaction.id):
         return EligibilityVerdict(
             False, OBLIGATION, "Obligation charges are not insurable"
         )
