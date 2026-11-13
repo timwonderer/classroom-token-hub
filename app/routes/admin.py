@@ -3313,7 +3313,12 @@ def _reversible_transaction_ids(transactions):
         return frozenset()
     from app.services.obligations_service import obligation_related_transaction_ids
 
-    obligation_related = obligation_related_transaction_ids(tx.id for tx in candidates)
+    obligation_related = frozenset().union(*(
+        obligation_related_transaction_ids(
+            (tx.id for tx in candidates if tx.class_id == class_id), class_id=class_id
+        )
+        for class_id in {tx.class_id for tx in candidates}
+    ))
     reversible = set()
     for tx in candidates:
         if tx.id in obligation_related:

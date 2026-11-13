@@ -251,7 +251,7 @@ def test_an_nsf_fee_reverses_and_its_obligation_record_stays_as_history(app, goa
         before = get_available_balance(seat_id, class_id, "checking")
         events_before = ObligationAssessment.query.filter_by(
             correlation_id="goal-reversal:nsf-reverse").count()
-        assert obligations_service.is_obligation_related_transaction(fee_id) is False
+        assert obligations_service.is_obligation_related_transaction(fee_id, class_id=class_id) is False
 
         fee = db.session.get(Transaction, fee_id)
         execute_void_transaction(
@@ -278,7 +278,7 @@ def test_a_rent_payment_stays_final(app, goal_purchase):
                                type="rent_payment", description="Rent Payment")
         _settle_obligation(class_id, seat_id, obligation_type="RENT", internal_ref="rent:final",
                            correlation_id="goal-reversal:rent-final", ledger_id=rent_id)
-        assert obligations_service.is_obligation_related_transaction(rent_id) is True
+        assert obligations_service.is_obligation_related_transaction(rent_id, class_id=class_id) is True
 
         rent = db.session.get(Transaction, rent_id)
         with pytest.raises(ObligationTransactionNotVoidable):
