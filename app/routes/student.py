@@ -2253,7 +2253,8 @@ def _eligible_claim_transactions(seat_id, class_id, entitlement_id, limit=25):
     from app.services.insurance_eligibility_contract import (
         TRANSFER_TYPES, OBLIGATION_TYPES, DISALLOWED_TRANSACTION_TYPES,
     )
-    excluded = TRANSFER_TYPES | OBLIGATION_TYPES | DISALLOWED_TRANSACTION_TYPES | {"insurance_premium"}
+    from app.services.obligations_service import obligation_related_transaction_ids
+    excluded = TRANSFER_TYPES | OBLIGATION_TYPES | DISALLOWED_TRANSACTION_TYPES
     rows = (
         Transaction.query
         .filter(Transaction.seat_id == seat_id, Transaction.class_id == class_id,
@@ -2268,9 +2269,12 @@ def _eligible_claim_transactions(seat_id, class_id, entitlement_id, limit=25):
             class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id,
         ).filter(InsuranceClaim.status.in_(["SUBMITTED", "APPROVED"])).all()
     }
+    obligation_related = obligation_related_transaction_ids((t.id for t in rows), class_id=class_id)
     return [
         t for t in rows
-        if (t.type or "").lower() not in excluded and t.id not in already_claimed_txn_ids
+        if (t.type or "").lower() not in excluded
+        and t.id not in obligation_related
+        and t.id not in already_claimed_txn_ids
     ][:limit]
 
 

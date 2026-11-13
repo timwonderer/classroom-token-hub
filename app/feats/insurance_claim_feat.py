@@ -42,6 +42,7 @@ from app.services import insurance_claim_service
 from app.services import insurance_coverage_service as insurance_coverage
 from app.services import insurance_eligibility_contract as eligibility
 from app.services import insurance_definition_service as insurance_defs
+from app.services import obligations_service
 
 
 class InsuranceClaimPolicyError(Exception):
@@ -491,6 +492,25 @@ def _enforce_waiting_period(
     )
 
 
+def _transaction_claim_basis_verdict(transaction, *, class_id, covered_seat_id):
+    """Store's claim-basis verdict composed with Obligations provenance.
+
+    FEAT-STOR-003 §A: obligation charges are never insurable. Obligation-
+    relatedness is provenance (SPEC-OPS-001 §VII), an Obligations read, so the
+    composition happens here rather than in the Store predicate (INV-ARC-021 §V.6).
+    """
+    verdict = eligibility.evaluate_transaction_claim_basis(
+        transaction, class_id=class_id, covered_seat_id=covered_seat_id
+    )
+    if verdict.eligible and obligations_service.is_obligation_related_transaction(
+        transaction.id, class_id=class_id
+    ):
+        return eligibility.EligibilityVerdict(
+            False, eligibility.OBLIGATION, "Obligation charges are not insurable"
+        )
+    return verdict
+
+
 def _enforce_transaction_submission(
     *,
     canonical_context: CanonicalContext,
@@ -530,7 +550,7 @@ def _enforce_transaction_submission(
     source_transaction = db.session.get(Transaction, transaction_id)
 
     # (a) System-law eligibility of the source transaction.
-    verdict = eligibility.evaluate_transaction_claim_basis(
+    verdict = _transaction_claim_basis_verdict(
         source_transaction, class_id=class_id, covered_seat_id=seat_id
     )
     if not verdict.eligible:
@@ -1923,7 +1943,7 @@ def _resolve_insurance_claim_impl(
 
             # Revalidate the transaction's structural eligibility at decision time —
             # facts may have changed post-submission (e.g. a linked item was revoked).
-            verdict = eligibility.evaluate_transaction_claim_basis(
+            verdict = _transaction_claim_basis_verdict(
                 source_transaction,
                 class_id=canonical_context.class_id,
                 covered_seat_id=claim.target_seat_id,
