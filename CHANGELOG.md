@@ -10,6 +10,7 @@ and this project follows semantic versioning principles.
 
 ### Removed
 
+- <!-- notes: internal --> **The OpenTelemetry packages are no longer installed.** The seven `opentelemetry-*` pins came over from the v1 `requirements.txt`, but the tracing code that used them (`app/telemetry.py`) never existed on v2, so nothing in the application imports them. Installing unused packages only adds alerts and attack surface: the tracestate CVE fixed by the 1.45.2 update above was never reachable. The pins and that update's regression test are removed. Production's `OTEL_*` environment settings have no reader and can be deleted from its `.env`.
 - <!-- notes: internal --> **Retired the leftover NSF/overdraft-fee machinery** (#1647; `SPEC-ECON-003` v2.5). No overdraft/NSF fee has been assessed since the 2026-10-07 owner ruling, but the `fee_authority` ledger-resolution parameter, the dead `apply_overdraft_fee_if_needed` / `record_nsf_fee_obligation` orchestration, the teacher-facing overdraft-fee settings and rebalance suggestion on the Banking page, and the configuration-transfer export/import/preview of the two fee fields (which could otherwise resurrect a fee value through an import) were still present. Removed all of it; overdraft protection (the savings-to-checking transfer) is unaffected, and the `flat_overdraft_fee` / `progressive_overdraft_fee` `economic_engine` columns are untouched and still carried forward on every engine evolution (no migration).
 
 ### Fixed
