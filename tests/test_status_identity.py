@@ -16,9 +16,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 # google-auth belongs to the separately deployed status service
 # (status_service/requirements.txt), not to the application, so environments
-# built from requirements.txt alone (Full Test Suite, Schema Change Gate) skip
-# this module rather than fail collection for every other test.
-# deploy-status.yml installs both files and runs this module by name.
+# built from requirements.txt alone (Schema Change Gate and the other PR
+# gates) skip this module rather than fail collection for every other test.
+# full-suite.yml and deploy-status.yml install both files and run it.
 pytest.importorskip("google.auth", reason="status_service/requirements.txt is not installed")
 
 from google.auth import jwt  # noqa: E402
