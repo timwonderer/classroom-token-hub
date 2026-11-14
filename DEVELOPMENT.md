@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Reviewed:** 2026-11-03 UTC
-**Latest Recorded Application Deployment:** [v2.4.4 (`f530954`)](docs/ops/audits/DEPLOY_2026-11-08_f530954.md), 2026-11-08 UTC. This is release-record evidence, not a live production check
+**Latest Recorded Application Deployment:** [v2.4.5 (`1d74ea8`)](docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md), 2026-11-14 UTC. This is release-record evidence, not a live production check
 **Engineering State:** v2 in production; post-launch hardening
 **Integration Target:** `main` (feature branches and worktrees may differ)
 
@@ -56,11 +56,11 @@ on a custom database URL.
 
 ### Released baseline
 
-The latest application deployment record is [v2.4.4](docs/ops/audits/DEPLOY_2026-11-08_f530954.md).
-It is a hotfix release: payroll runs again in the three classes it had refused since 2–3 November,
-store items now expire, My Items lists only items a student can still use, and a double-clicked
-purchase charges once. The record distinguishes what was verified at release from the student-side
-store checks still awaiting live observation.
+The latest application deployment record is [v2.4.5](docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md).
+Transaction insurance no longer accepts rent or fee charges as claims, signed-in student routes are
+rate limited per seat rather than per shared school address, and the leftover NSF/overdraft-fee
+machinery and unused OpenTelemetry packages are gone. The record distinguishes what was verified at
+release from the browser checks still open under #1755.
 
 Recent releases also delivered Copy Configuration between classes, canonical temporal resolution,
 Hugo + Hextra developer documentation, and the host-side production release gate. The application,
@@ -69,8 +69,7 @@ release record does not establish the deployed version of those other services.
 
 Use [CHANGELOG.md](CHANGELOG.md) for the full version history and [deployment records](docs/ops/audits/)
 for release-specific validation. Earlier releases' follow-ups are historical evidence, not a current
-priority list. The six missing early release records remain tracked in
-[#1650](https://github.com/timwonderer/classroom-token-hub/issues/1650).
+priority list. The six early release records that were never written now exist (#1743, #1650).
 
 ### Open work
 

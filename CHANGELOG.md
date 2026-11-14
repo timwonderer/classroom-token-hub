@@ -8,7 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-## [2.4.5] - 2026-11-13 — Per-student rate limits and security fixes
+## [2.4.5] - 2026-11-14 — Per-student rate limits and security fixes
+
+Released as `1d74ea8` on 2026-11-14 at 07:14 UTC by release run [43570114275](https://github.com/timwonderer/classroom-token-hub/actions/runs/43570114275). No migration. Record: [DEPLOY_2026-11-14_1d74ea8.md](docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md).
 
 ### Added
 
