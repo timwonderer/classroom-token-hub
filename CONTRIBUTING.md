@@ -36,7 +36,7 @@ FEAT contracts in `docs/FEATURE-EXECUTION/`. When documents disagree, the higher
     ```bash
     python3 -m venv venv
     source venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r requirements-test.txt
     ```
 5.  **Configure your environment variables:**
     Create a `.env` file. The **Quick start** section of `README.md` shows how to

@@ -153,7 +153,7 @@ git clone https://github.com/timwonderer/classroom-token-hub.git
 cd classroom-token-hub
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-test.txt
 
 # The heredoc delimiter is deliberately unquoted so the $(...) calls run.
 # With 'EOF' quoted, each key gets the literal command text as its value.
