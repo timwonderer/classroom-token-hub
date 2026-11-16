@@ -19,6 +19,8 @@ This handbook is for the operator who controls a private CTH installation, its h
 | When installing a new database | [Release-specific database baseline, verification and recovery](fresh-database.md) |
 | After the readiness check | [First authorized use, acceptance, maintenance, recovery and decommissioning](operations.md) |
 | When designing an isolated rehearsal | [Ephemeral staging controller inputs, evidence and teardown](staging-controller.md) |
+| When preparing the staging guest | [Release bundle, guest identity, connector and per-run credentials](staging-bootstrap.md) |
+| When authorizing the first cloud rehearsal | [Phase C execution plan and resource ownership review](phase-c.md) |
 
 **Evidence status.** The reference-host procedure is **proposed**. **Locally tested** applies only to the checks whose results are recorded for the selected release. B1 demonstrated database equivalence, a genuine successor upgrade, protected audit verification and CLI-only sysadmin bootstrap. **Reference-host tested** requires a successful run on the specified Ubuntu host. **Independently verified** additionally requires a second operator to complete the handbook from scratch without undocumented assistance. The latter two checks are pending.
 

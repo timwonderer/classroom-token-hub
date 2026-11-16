@@ -7,7 +7,7 @@ roles: [operator]
 
 # Contract for an ephemeral staging run
 
-**Proposed B3 interface.** B2 supplies the host installer. A future manually dispatched controller will arrange infrastructure, call the published stage commands and run a separate synthetic acceptance workflow. No staging resources are required to read or locally test the handbook.
+**Offline implementation.** The manual GitHub workflow delegates a bounded run to a staging-only operator coordinator. The coordinator owns the inventory, calls the [canonical installer](reference-installation.md) and retires the temporary Droplet. Its expiration timer runs independently of GitHub. Cloud operation and independent reproducibility await Phase C. See the [execution plan and ownership review](phase-c.md).
 
 ## Before dispatch
 
