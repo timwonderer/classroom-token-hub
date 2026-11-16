@@ -1,0 +1,11 @@
+[Unit]
+Description=Recover CTH staging leases outside GitHub Actions
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+AccuracySec=1s
+Unit=cth-staging-cleanup.service
+
+[Install]
+WantedBy=timers.target

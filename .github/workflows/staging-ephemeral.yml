@@ -1,0 +1,90 @@
+name: Ephemeral CTH staging
+on:
+  workflow_dispatch:
+    inputs:
+      app_sha:
+        description: Full approved application commit
+        required: true
+        type: string
+      profile:
+        description: Approved reference deployment
+        required: true
+        type: choice
+        options:
+          - sfo3-premium-amd
+
+permissions: {}
+concurrency:
+  group: cth-ephemeral-staging
+  cancel-in-progress: false
+
+jobs:
+  reference:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    environment: cth-ephemeral-staging
+    steps:
+      - name: Dispatch approved lease
+        env:
+          APP_SHA: ${{ inputs.app_sha }}
+          PROFILE: ${{ inputs.profile }}
+          COORDINATOR: ${{ vars.STAGING_COORDINATOR_HOST }}
+          DISPATCH_KEY: ${{ secrets.STAGING_DISPATCH_KEY }}
+          KNOWN_HOST: ${{ secrets.STAGING_COORDINATOR_KNOWN_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ $APP_SHA =~ ^[0-9a-f]{40}$ && $GITHUB_SHA =~ ^[0-9a-f]{40}$ &&
+             $GITHUB_RUN_ID =~ ^[1-9][0-9]{0,19}$ && $PROFILE == sfo3-premium-amd &&
+             $COORDINATOR =~ ^[a-z0-9][a-z0-9.-]+$ ]]
+          scratch=$(mktemp -d)
+          trap 'rm -rf -- "$scratch"' EXIT
+          printf '%s\n' "$DISPATCH_KEY" > "$scratch/id"
+          printf '%s\n' "$KNOWN_HOST" > "$scratch/hosts"
+          unset DISPATCH_KEY KNOWN_HOST
+          rc=0
+          ssh -F /dev/null -nT -i "$scratch/id" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o HostKeyAlias=cth-staging-coordinator \
+            -o "UserKnownHostsFile=$scratch/hosts" -o GlobalKnownHostsFile=/dev/null \
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+            "cthstage@$COORDINATOR" "dispatch $GITHUB_RUN_ID $APP_SHA $PROFILE $GITHUB_SHA" \
+            >"$scratch/response" 2>/dev/null || rc=$?
+          # Reconstruct evidence from a closed vocabulary. Never upload SSH output.
+          python3 - "$scratch/response" <<'PY'
+          import json, os, sys, time
+          from pathlib import Path
+          stages = "host postgres redis release config database services scheduler ingress readiness".split()
+          out = dict(run_id=os.environ["GITHUB_RUN_ID"], sha=os.environ["APP_SHA"], profile=os.environ["PROFILE"],
+                     stages=[], stage_times=[], issued_at=0, phase="dispatch", acceptance="unexecuted", execution="failed", cleanup="unresolved")
+          try:
+              with open(sys.argv[1], "rb") as f:
+                  data = f.read(2049)
+              if len(data) > 2048:
+                  raise ValueError()
+              raw = json.loads(data)
+              if not (set(raw) == set(out) and all(raw[k] == out[k] for k in ("sha","profile","run_id"))
+                      and isinstance(raw["stages"],list) and raw["stages"] == stages[:len(raw["stages"])]
+                      and type(raw["issued_at"]) is int and 0 < raw["issued_at"] <= time.time()+60
+                      and raw["phase"] in ("preparation","allocation","bootstrap","completed")
+                      and isinstance(raw["stage_times"],list) and len(raw["stage_times"])==len(raw["stages"])
+                      and all(type(t) is int and raw["issued_at"]-60 <= t <= time.time()+60 for t in raw["stage_times"])
+                      and raw["acceptance"] in ("unexecuted","passed") and raw["execution"] in ("failed","passed")
+                      and raw["cleanup"] in ("unresolved","retirement_pending","verified")):
+                  raise ValueError()
+              out = raw
+          except (ValueError, TypeError, KeyError, UnicodeError):
+              pass
+          Path(os.environ["RUNNER_TEMP"], "cth-staging-result.json").write_text(json.dumps(out))
+          sys.exit(0 if out["execution"]=="passed" and out["cleanup"]=="verified" and out["stages"]==stages else 1)
+          PY
+          exit "$rc"
+      - name: Retain sanitized stage results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-${{ github.run_id }}
+          path: ${{ runner.temp }}/cth-staging-result.json
+          retention-days: 3
+          if-no-files-found: warn
