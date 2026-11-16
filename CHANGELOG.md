@@ -17,6 +17,7 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: internal --> **Audit acceptance now requires a protected record and its complete class chain.** `DOM-OPS-002` v1.12 and `FEAT-OPS-001` v1.1 describe the scoped verification result and retire documentation of the obsolete integrity-status singleton writer.
 - <!-- notes: internal --> **The operator CLI attributes sysadmin creation to its own execution contract.** `FEAT-IDEN-008` governs creation of a system principal and TOTP enrollment. Duplicate logins retain their existing credentials.
+- <!-- notes: internal --> **Migration generation checks revision IDs against the active Alembic tree.** The generator retries an occupied ID and the Flask CLI refuses an explicit duplicate. The migration validator reports both filenames if independently authored revisions collide.
 
 ## [2.4.5] - 2026-11-14 — Per-student rate limits and security fixes
 

@@ -97,3 +97,12 @@ def test_committed_guard_clause_migrations_are_accepted(name):
     path = ROOT / "migrations" / "versions" / name
     errors = [e for e in validator.check_idempotency(path) if e.startswith("❌")]
     assert errors == []
+
+
+def test_final_tree_rejects_duplicate_ids_under_different_filenames(tmp_path, monkeypatch, capsys):
+    source = "revision = 'same'\ndown_revision = None\ndef upgrade(): pass\ndef downgrade(): pass\n"
+    (tmp_path / "first.py").write_text(source)
+    (tmp_path / "second.py").write_text(source.replace("revision =", "revision: str ="))
+    monkeypatch.setattr(validator, "MIGRATIONS_DIR", tmp_path)
+    assert validator.validate_migrations() == 1
+    assert "Duplicate revision ID 'same': first.py and second.py" in capsys.readouterr().out

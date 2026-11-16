@@ -162,5 +162,8 @@ def create_sysadmin_command(username):
 
 def init_app(app):
     """Register CLI commands with Flask app."""
+    from app.migration_cli import guard_revision_generation
+
+    guard_revision_generation(app)
     app.cli.add_command(normalize_claim_credentials_command)
     app.cli.add_command(create_sysadmin_command)
