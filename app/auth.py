@@ -20,6 +20,8 @@ from app.utils.auth_username import normalize_auth_username
 # -------------------- SESSION CONFIGURATION --------------------
 
 SESSION_TIMEOUT_MINUTES = 10
+# DOM-IDEN-003 §Session Establishment: fixed window from sign-in, never extended by activity.
+TEACHER_SESSION_MINUTES = 60
 SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES = 60
 
 
@@ -204,7 +206,7 @@ def admin_required(f):
     """
     Decorator to require admin authentication for a route.
 
-    Enforces session timeout based on last activity.
+    Enforces the fixed session window written at sign-in.
     Redirects to admin.login if not authenticated or session expired.
     """
     @wraps(f)
@@ -232,16 +234,18 @@ def admin_required(f):
 
         g.canonical_context = ctx
 
+        # The fixed window written at sign-in (DOM-IDEN-003). A session without
+        # one predates it and is ended rather than given an open-ended life.
+        from app.models import User
+        user = db.session.get(User, ctx.user_id)
+        expires_at = user.current_session_expires_at if user else None
         now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-        last_activity = session.get('last_activity')
+        if expires_at is None or not canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=now, reference=expires_at,
+        ).is_earlier:
+            session.clear()
+            return _teacher_session_ended("Your session expired. Please log in again.")
 
-        if last_activity:
-            last_activity = datetime.fromisoformat(last_activity)
-            if _session_idle_expired(last_activity, now, SESSION_TIMEOUT_MINUTES):
-                session.clear()
-                return _teacher_session_ended("Your session expired. Please log in again.")
-
-        session['last_activity'] = now.isoformat()
         return f(*args, **kwargs)
     return decorated_function
 
@@ -399,10 +403,42 @@ def set_canonical_user_session(*, username_lookup_hash: str, expected_role: str)
 
 
 def establish_teacher_session(user):
-    """Establish canonical teacher session keys."""
+    """Establish canonical teacher session keys and the fixed 60-minute window (DOM-IDEN-003)."""
+    from app.session_lifetime import SESSION_EXPIRES_AT_KEY
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    user.current_session_started_at = now
+    user.current_session_expires_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=TEACHER_SESSION_MINUTES * 60,
+    ).shifted_timestamp_utc
     session["user_id"] = user.id
     session["role"] = "admin"
+    # The cookie dies with the server-side window.
+    session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
     session.permanent = True
+
+
+def end_signed_in_session():
+    """Sign the browser out and void its sign-in on the ``users`` row.
+
+    Clearing only the cookie would leave ``current_session_nonce`` valid, so a
+    copy of the cookie would keep working (DOM-IDEN-002/003 §Session
+    Establishment). The row is cleared only for the sign-in this cookie holds:
+    a stale cookie must not end a newer sign-in elsewhere.
+    """
+    from app.feats.base import FEATContext
+    from app.models import User
+    from app.utils.user_ids import session_user_id
+
+    user_id = session_user_id(session)
+    nonce = session.get("current_session_nonce")
+    if user_id is not None and nonce:
+        with FEATContext("FEAT-IDEN-001", idempotency_key=f"identity:sign-out:{user_id}:{nonce}"):
+            user = User.query.filter_by(id=user_id).with_for_update().one_or_none()
+            if user is not None and user.current_session_nonce == nonce:
+                user.current_session_nonce = None
+                user.current_session_expires_at = None
+    session.clear()
 
 
 def establish_sysadmin_session(user):

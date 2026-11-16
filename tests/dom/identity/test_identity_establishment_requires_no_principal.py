@@ -54,7 +54,7 @@ REFUSAL_COPY = (
     ("h2", "What can I do?"),
     ("p", "Return to the login page and sign in again. Before continuing, close any older Classroom "
           "Token Hub tabs that are still open."),
-    ("a", "Return to login"),
+    ("button", "Return to login"),
 )
 ONBOARDING_KEYS = (
     'onboarding_seat_ref', 'onboarding_user_ref', 'onboarding_claim_generation',
@@ -73,29 +73,29 @@ def _session_state(client):
 
     Display metadata (SPEC-DISPLAY-001) is resolved fresh on every request
     since audit S10 and is never written to the session, so there is no
-    display-name cache key left to strip here.
+    display-name cache key left to strip here. The CSRF token is the one write
+    the refusal may cause: Flask-WTF mints it for the sign-out form when the
+    session has none. It names no principal and ends nothing.
     """
-    return _session(client)
+    return {k: v for k, v in _session(client).items() if k != 'csrf_token'}
 
 
 def _return_to_login(page):
-    return next(a for a in page.find_all('a') if a.get_text(strip=True) == "Return to login")
+    """The sign-out form behind the Return to login button."""
+    button = next(b for b in page.find_all('button') if b.get_text(strip=True) == "Return to login")
+    return button.find_parent('form')
 
 
-def _assert_return_to_login_signs_out(client, page, logout_path, login_path):
-    """The button ends the sign-in that caused the refusal and lands on that role's login page."""
-    button = _return_to_login(page)
-    assert button['href'] == logout_path
-    response = client.get(button['href'])
-    assert response.status_code == 302 and response.location.split('?')[0].endswith(login_path)
-    # The principal is gone; admin logout leaves a stale nonce key, which names nobody.
-    assert 'user_id' not in _session(client)
-    landed = client.get(response.location)
-    assert landed.status_code == 200
+def _post_return_to_login(client, page):
+    form = _return_to_login(page)
+    return client.post(form['action'], data={'csrf_token': form.find('input', attrs={'name': 'csrf_token'})['value']})
 
 
 def _assert_return_to_login_posts_sign_out(client, page, logout_path, login_path):
-    """A POST-only logout (sysadmin) is offered as a form carrying a CSRF token, not a link."""
+    """Every logout is POST-only, so it is offered as a form carrying a CSRF token, not a link.
+
+    The button ends the sign-in that caused the refusal and lands on that role's login page.
+    """
     assert not [a for a in page.find_all('a') if a.get_text(strip=True) == "Return to login"]
     button = next(b for b in page.find_all('button') if b.get_text(strip=True) == "Return to login")
     form = button.find_parent('form')
@@ -204,9 +204,9 @@ def test_OPS_DB_001__signed_in_claim_page_renders_refusal_without_touching_the_s
     response = client.get('/student/claim-account')
     assert response.status_code == 200
     page = BeautifulSoup(response.data, 'html.parser')
-    assert page.select_one('form') is None, "the claim form is not offered"
+    assert [f['action'] for f in page.select('form')] == ['/student/logout'], "the claim form is not offered"
     shown = [(el.name, ' '.join(el.get_text(' ', strip=True).split()))
-             for el in page.select_one('.auth-body').find_all(['h1', 'h2', 'p', 'a'])]
+             for el in page.select_one('.auth-body').find_all(['h1', 'h2', 'p', 'a', 'button'])]
     assert shown == list(REFUSAL_COPY), "the page says exactly the owner's copy and nothing else"
     assert page.select_one('a[href="/student/add-class"]') is None
     assert _session_state(client) == before, "GET must not change the session"
@@ -214,7 +214,7 @@ def test_OPS_DB_001__signed_in_claim_page_renders_refusal_without_touching_the_s
 
 def test_OPS_DB_001__return_to_login_signs_the_student_out(client, shared_chromebook):
     page = BeautifulSoup(client.get('/student/claim-account').data, 'html.parser')
-    _assert_return_to_login_signs_out(client, page, '/student/logout', '/student/login')
+    _assert_return_to_login_posts_sign_out(client, page, '/student/logout', '/student/login')
     # Signed out, the claim is no longer refused.
     assert SIGNED_IN not in _body(client.get('/student/claim-account'))
 
@@ -300,7 +300,8 @@ def test_OPS_DB_001__json_retention_check_is_refused_as_json(client, mid_setup_t
     assert response.is_json
     assert response.json['verified'] is False
     assert response.json['message'] == f"{SIGNED_IN} {CANCELLED}"
-    assert response.json['redirect'] == '/student/logout', "the page script follows it and ends the sign-in"
+    # A GET to the POST-only logout would be refused; the refusal page renders the sign-out form.
+    assert response.json['redirect'] == '/student/verify-username'
 
 
 # ------------------------------------------------------------- recovery entry
@@ -345,7 +346,7 @@ def test_OPS_DB_001__teacher_session_is_refused(client, shared_chromebook):
     response = _claim(client, classroom)
     assert response.status_code == 409
     assert shared_chromebook["calls"]["resolve_seat_claim"] == 0
-    _assert_return_to_login_signs_out(client, page, '/admin/logout', '/admin/login')
+    _assert_return_to_login_posts_sign_out(client, page, '/admin/logout', '/admin/login')
 
 
 def test_OPS_DB_001__sysadmin_session_is_refused(client, shared_chromebook):
@@ -362,7 +363,7 @@ def test_OPS_DB_001__sysadmin_session_is_refused(client, shared_chromebook):
 
 
 def test_OPS_DB_001__sysadmin_json_refusal_redirects_to_the_sign_out_page(client, shared_chromebook):
-    """A JSON caller follows ``redirect`` with a GET, which the POST-only sysadmin
+    """A JSON caller follows ``redirect`` with a GET, which a POST-only
     logout refuses with 405. It is sent back to the refusal page, whose GET
     renders the sign-out form."""
     _sign_out_browser(client)
@@ -401,7 +402,7 @@ def test_OPS_DB_001__shared_chromebook_sign_out_then_claim(client, shared_chrome
     maria_seats = {s.id for s in Seat.query.filter_by(user_id=maria.user.id)}
 
     refused = client.get('/student/claim-account')
-    client.get(_return_to_login(BeautifulSoup(refused.data, 'html.parser'))['href'])
+    _post_return_to_login(client, BeautifulSoup(refused.data, 'html.parser'))
     assert 'user_id' not in _session(client)
 
     response = _claim(client, classroom)

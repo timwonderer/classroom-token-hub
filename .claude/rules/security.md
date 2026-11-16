@@ -102,20 +102,22 @@ from app.auth import (
 )
 
 establish_student_session(user, class_id=class_id)  # user_id, class_id, role='student'
-establish_teacher_session(user)                     # user_id, role='admin'
+establish_teacher_session(user)                     # user_id, role='admin', fixed 60-minute window
 establish_sysadmin_session(user)                    # user_id, role='sysadmin'
 
-# Clear session on logout
-session.clear()
+# Logout (POST only): void the sign-in on the users row, then clear the cookie
+end_signed_in_session()
 ```
 
 The canonical keys are `user_id`, `role` (`'student'` | `'admin'` | `'sysadmin'`) and, for
 students, `class_id`. Handlers read identity through `resolve_canonical_context()` /
 `g.canonical_context`, never from these keys directly.
 
-**Session lifetimes** are per role, not `permanent_session_lifetime`:
-`SESSION_TIMEOUT_MINUTES = 10` (students and teachers) and
-`SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES = 60` in `app/auth.py`, applied to the cookie by
+**Session lifetimes** are per role, not `permanent_session_lifetime`. Students: a fixed
+`SESSION_TIMEOUT_MINUTES = 10` window from sign-in. Teachers: a fixed
+`TEACHER_SESSION_MINUTES = 60` window from sign-in that activity never extends
+(DOM-IDEN-003 §Session Establishment); both are stored on `users.current_session_expires_at`.
+Sysadmins: `SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES = 60` idle. All in `app/auth.py`, applied to the cookie by
 `RoleScopedSessionInterface` in `app/session_lifetime.py`. `PERMANENT_SESSION_LIFETIME`
 is deliberately left at Flask's default and does not bound authenticated cookies.
 
@@ -374,7 +376,7 @@ db.session.execute(f"SELECT id FROM seats WHERE public_id = '{user_input}'")
 
 Use the decorators in `app/auth.py`; do not write new ones. Each resolves identity with
 `resolve_canonical_context()`, checks `actor_role`, stores the result in
-`g.canonical_context`, and enforces the role's idle timeout:
+`g.canonical_context`, and enforces the role's session expiry:
 
 | Decorator | Role | Context | On failure |
 |-----------|------|---------|------------|
@@ -636,10 +638,11 @@ password_hash = hash_password(password)
 # ✅ CORRECT - Session timeout: per-role, enforced by the auth decorators and
 # RoleScopedSessionInterface (see Session Management above); do not add another
 
-# ✅ CORRECT - Clear session on logout
-@student_bp.route('/logout')
+# ✅ CORRECT - Logout is POST-only (CSRF-checked; a GET must not end a sign-in,
+# INV-ARC-007) and voids the sign-in on the users row, not just the cookie
+@student_bp.route('/logout', methods=['POST'])
 def logout():
-    session.clear()
+    end_signed_in_session()
     return redirect(url_for('student.login'))
 ```
 
@@ -663,7 +666,7 @@ def logout():
 - [ ] Credentials hashed with `hash_password()` (scrypt, salted, NOT peppered)
 - [ ] TOTP 2FA implemented
 - [ ] Session timeout configured
-- [ ] Logout clears session
+- [ ] Logout is POST-only and voids `users.current_session_nonce` (not just the cookie)
 - [ ] Login attempts rate limited
 - [ ] Password reset is secure
 
