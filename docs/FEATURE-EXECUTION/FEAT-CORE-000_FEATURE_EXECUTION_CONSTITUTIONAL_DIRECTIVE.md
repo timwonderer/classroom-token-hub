@@ -82,6 +82,13 @@ directive.
      because the request supplied it;
    * performs no lookup its governing section forbids (student recovery: no seat,
      class or profile lookup, `DOM-IDEN-002` §IX).
+
+   Additional classroom creation by an existing teacher (`DOM-IDEN-005` §VI;
+   `FEAT-CLASS-001` §III) is the one establishment operation with an authenticated
+   principal. `DOM-IDEN-005` §VI requires it to occur outside an existing class
+   scope, so it runs with the authenticated teacher `user_id` and no `class_id` or
+   `seat_id`, and it provisions the new class and the teacher's administrative seat
+   in one transaction.
 2. **Session boundary.** Sign-in and sign-out. Sign-in writes the `users` session
    fields on success and the class context is restored afterwards (`DOM-IDEN-002`
    §VII; `DOM-IDEN-003` §VII; `DOM-IDEN-006`). Sign-out does not require a
@@ -89,14 +96,20 @@ directive.
    principal may be held in a session because its context cannot be resolved; it
    verifies the session's own token before revoking it. The FEAT writes only the
    `users` session fields and nothing class-scoped.
-3. **Principal lifecycle.** Teacher account deletion only. Deletion is a
-   principal-level operation; the active class or seat is not its authority
-   boundary. The FEAT authenticates and authorizes the principal, including the
-   step-up `DOM-IDEN-003` §VII requires before the last class, and with it the
-   identity, is destroyed; resolves every affected
-   association through the owning domain's authority; and applies the destruction,
-   retention and audit rules in every affected class. No active class selection is
-   required.
+3. **Principal lifecycle.** Teacher account deletion only (FEAT-IDEN-007), by one
+   of two authorities. Deletion is a principal-level operation; the active class or
+   seat is not its authority boundary.
+   * **Manual deletion:** the FEAT authenticates and authorizes the signed-in
+     principal, including the step-up `DOM-IDEN-003` §VII requires before the last
+     class, and with it the identity, is destroyed.
+   * **Scheduled destruction:** the hourly lifecycle sweep of `DOM-IDEN-003` §IX.A.
+     Its authority is the retention policy, rechecked under the User row lock
+     before execution; it is neither a signed-in principal, a sysadmin session nor
+     impersonation, and interactive authentication and step-up do not apply to it.
+
+   Either way the FEAT resolves every affected association through the owning
+   domain's authority and applies the destruction, retention and audit rules in
+   every affected class. No active class selection is required.
 4. **System administration.** Operations of a principal whose `user_role` is
    `SYSADMIN`, which `INV-CORE-000` §III.4 forbids from holding class context.
    Not available to teacher or student principals.
@@ -104,8 +117,8 @@ directive.
    under host authority from the command line (`SPEC-OPS-004` §V: operator
    provisioning is out-of-band). The new system principal has no class or seat.
 
-No teacher operation outside identity establishment, the session boundary and
-account deletion may run without a teacher seat in the active class. Holding the
+No teacher operation outside identity establishment (including additional
+classroom creation), the session boundary and account deletion may run without a teacher seat in the active class. Holding the
 state an operation changes does not make the principal's `user_id` sufficient
 authority to change it.
 
