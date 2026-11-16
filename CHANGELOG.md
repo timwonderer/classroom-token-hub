@@ -12,6 +12,10 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: internal --> **Fresh PostgreSQL installations gain a release-specific schema baseline.** The artifact includes the migrated schema and required reference data at Alembic revision `a0faf8b2a35d`. Existing installations continue to use the migration chain.
 
+### Changed
+
+- <!-- notes: internal --> **Audit acceptance now requires a protected record and its complete class chain.** `DOM-OPS-002` v1.12 and `FEAT-OPS-001` v1.1 describe the scoped verification result and retire documentation of the obsolete integrity-status singleton writer.
+
 ## [2.4.5] - 2026-11-14 — Per-student rate limits and security fixes
 
 Released as `1d74ea8` on 2026-11-14 at 07:14 UTC by release run [43570114275](https://github.com/timwonderer/classroom-token-hub/actions/runs/43570114275). No migration. Record: [DEPLOY_2026-11-14_1d74ea8.md](docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md).

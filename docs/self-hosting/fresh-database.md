@@ -136,6 +136,14 @@ review. Never regenerate from production, a developer database or ORM metadata.
 
 ## B1 qualification evidence
 
+- For the separate test of real FEAT emission, use a disposable acceptance
+  database initialized above with a name ending in `_test`, on a socket-only
+  test server. Use an exported checkout without a `.env` file and the test
+  dependencies installed:
+  `python -m tests.helpers.verify_fresh_audit --host "$socket" --port "$port" --user "$owner" --database "$database" --installation-id "$enrollment"`.
+  This is a test-only, rollback-based check; never run this harness against a
+  database that serves users. The B1 check passed on the direct baseline and
+  preserved all 47 table counts and all 27 sequence states across rollback.
 - Two clean derivations using PostgreSQL 14.24 produced identical artifacts.
   Schema SHA-256: `36c0f9a82fdc3475cf7bc559d1876250626b756d34a03a66d82ad686c2f343ad`.
   Installation SQL SHA-256: `7d843eff08f9f888b89d9c5f2f4c3ee9c4e700eccf78d4a78627f9d1afe255fd`.

@@ -283,6 +283,7 @@ Their surviving content lives at:
 
 **Version 3.60 (2026-11-15):**
 
+- Updated DOM-OPS-002 v1.12 and FEAT-OPS-001 v1.1 for audit verification evidence.
 - Updated SOP-DEP-001 v2.14 for current-release fresh database initialization and existing installation upgrades.
 
 **Version 3.59 (2026-11-11):**

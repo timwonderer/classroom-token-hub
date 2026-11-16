@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| FEAT-OPS-001 | 1.0 | 2026-05-10 | N/A | Normative |
+| FEAT-OPS-001 | 1.1 | 2026-11-15 | 1.0 | Normative |
 
 ---
 
@@ -90,7 +90,7 @@ Normative. Subordinate to `INV-ARC-016`, `DOM-OPS-002`, and `FEAT-CORE-000`.
 
 3. **`AuditContextError` is not swallowable.** Any caller that catches `AuditContextError` and continues without re-raising violates `INV-ARC-016`. The error shall propagate and abort the transaction.
 
-4. **`lineage_token` is a pointer, not proof.** Setting `row.lineage_token` is a fast provenance marker only. Canonical proof of lawful existence requires a full chain walk by the verifier (`verify_chain`) confirming both HMAC continuity and payload digest match.
+4. **`lineage_token` is a pointer, not proof.** Setting `row.lineage_token` is a fast provenance marker only. Canonical creation proof follows DOM-OPS-002 §§6.2 and 6.2C. It checks the linked INSERT event, protected row payload and complete scoped HMAC chain against its head.
 
 5. **One emit per row per state change.** `audit_protected()` shall be called exactly once per protected row creation or update. Calling it multiple times for the same row without an intervening state change is prohibited.
 
