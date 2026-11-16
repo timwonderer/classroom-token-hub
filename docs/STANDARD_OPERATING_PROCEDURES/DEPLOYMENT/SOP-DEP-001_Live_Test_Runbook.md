@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.13    | 2026-11-04     | 2.12 | Normative |
+| SOP-DEP-001      | 2.14    | 2026-11-15     | 2.13 | Normative |
 
 ## I. Purpose
 
@@ -242,12 +242,15 @@ service is restarted only after the completeness check passes.
 2. Confirm the connection target is not a local, test, or legacy database.
 3. Confirm PostgreSQL version and required extensions match the rehearsal.
 4. Confirm no application process is writing to the database.
-5. Run the upgrade from the release artifact with the deployment `DATABASE_URL`:
-
-```bash
-flask db upgrade
-flask db current
-```
+5. For a new installation of a release with a reviewed fresh baseline, follow the
+   [fresh database installation procedure](../../self-hosting/fresh-database.md).
+   Install only on an explicitly identified, enrolled, offline, empty target.
+   Verify the complete installed schema and required initial data before recording
+   its single Alembic revision. If verification fails, keep the database offline
+   and unversioned; do not stamp or serve it. For releases without a reviewed
+   baseline, the supported migration path is `flask db upgrade` against the
+   confirmed target. Existing installations continue to use the migration path
+   under SOP-DB-004 and SOP-DEP-002; never enroll or initialize them as new.
 
 6. Confirm `flask db current` reports the expected single head.
 7. Confirm the schema contains no v1-only objects. The v1 identity tables
@@ -489,6 +492,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.14 | 2026-11-15 | §IX: distinguish the release-specific, verified empty-database installation from Alembic upgrades of existing installations. |
 | 2.13 | 2026-11-04 | Clarify initial-host/rehearsal scope after the completed v2 launch, replace the stale holding-page assumption with target verification, and point recurring releases to SOP-DEP-002. |
 | 2.12 | 2026-10-26 | §VI secrets: add `CONFIGURATION_EXPORT_KEY`, required by class configuration export/import (SPEC-CLASS-001). If it is missing or blank, the page loads but every transfer is refused, which the browser check before release found. |
 | 2.11 | 2026-10-23 | §VI Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23. |

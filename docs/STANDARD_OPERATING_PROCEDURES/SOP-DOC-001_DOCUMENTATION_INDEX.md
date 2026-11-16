@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.59 | 2026-11-11 | 3.58 | Normative |
+| SOP-DOC-001 | 3.60 | 2026-11-15 | 3.59 | Normative |
 
 ---
 
@@ -280,6 +280,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.60 (2026-11-15):**
+
+- Updated SOP-DEP-001 v2.14 for current-release fresh database initialization and existing installation upgrades.
 
 **Version 3.59 (2026-11-11):**
 - Register SOP-DEP-001B v1.3 and SOP-DEP-001A v1.3: the validation-responsibility rule is that no check expects a teacher or student to act, not that no live class may be used; the operator may run a check in a live class through a test account the operator holds. Corrects the misstatement introduced in SOP-DEP-001B v1.1 and SOP-DEP-001A v1.2. Owner correction, 2026-11-11.
