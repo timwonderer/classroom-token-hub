@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-CORE-000 | 1.1 | 2026-09-30 | 1.0 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
+| FEAT-CORE-000 | 1.2 | 2026-11-15 | 1.1 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
 
 ---
 
@@ -53,13 +53,89 @@ A FEAT **MUST** resolve:
 * `seat_id`
 * `class_id`
 
-before any domain interaction occurs.
+before any domain interaction occurs, unless its contract declares one of the
+exceptions in §III.1.A.
 
 **Failure Contract:**
 If context cannot be resolved:
 * execution **MUST** abort
 * no state mutation is allowed
 * an audit event **MUST** be emitted via DOM-OPS
+
+### 1.A Declared Execution Exceptions (MANDATORY)
+
+*(1.2, owner ruling 2026-11-15.)* Seat scope is the rule. A FEAT may run without a
+resolved `seat_id`, or without a principal, only when its contract declares exactly
+one of the classes below, names the operation, and cites the governing INV or DOM
+section that makes a seat or a principal impossible or forbidden for it. Each class
+is limited to the operations it lists. Adding an operation to a class amends this
+directive.
+
+1. **Identity establishment.** Student claim (`DOM-IDEN-005` §VII, §VIII), student
+   account recovery (`DOM-IDEN-002` §IX), teacher account provisioning
+   (`DOM-IDEN-005` §VI; `DOM-IDEN-003` §VII), and teacher account recovery
+   (`DOM-IDEN-003` §IX). The FEAT:
+   * requires the absence of an authenticated principal wherever `DOM-IDEN-005`
+     §VII requires it;
+   * at ingress, before any capability exists, performs only the initial proof and
+     lookups its governing section defines (student claim: join code to
+     `class_id`, then the roster fingerprint within that class, `DOM-IDEN-002`
+     §VIII; teacher recovery: the single knowledge-proof precheck, `DOM-IDEN-003`
+     §IX);
+   * after ingress, resolves only what the capability token it holds names
+     (`INV-ARC-019` §XI), and acts on a `class_id` or seat the request supplies
+     only when that capability binds it;
+   * performs no lookup its governing section forbids (student recovery: no seat,
+     class or profile lookup, `DOM-IDEN-002` §IX).
+
+   Additional classroom creation by an existing teacher (`DOM-IDEN-005` §VI;
+   `FEAT-CLASS-001` §III) is the one establishment operation with an authenticated
+   principal. `DOM-IDEN-005` §VI requires it to occur outside an existing class
+   scope, so it runs with the authenticated teacher `user_id` and no `class_id` or
+   `seat_id`, and it provisions the new class and the teacher's administrative seat
+   in one transaction.
+2. **Session boundary.** Sign-in and sign-out. Sign-in writes the `users` session
+   fields on success and the class context is restored afterwards (`DOM-IDEN-002`
+   §VII; `DOM-IDEN-003` §VII; `DOM-IDEN-006`). Sign-out does not require a
+   resolvable class or seat, because revoking a session removes authority and no
+   principal may be held in a session because its context cannot be resolved; it
+   verifies the session's own token before revoking it. The FEAT writes only
+   `users` fields and nothing class-scoped: the session fields, the class context
+   pointers sign-in restores, and, on a successful teacher sign-in,
+   `last_signed_in_at` under the User row lock (`DOM-IDEN-003` §IX.A).
+3. **Principal lifecycle.** Teacher account deletion only (FEAT-IDEN-007), by one
+   of two authorities. Deletion is a principal-level operation; the active class or
+   seat is not its authority boundary.
+   * **Manual deletion:** the FEAT authenticates and authorizes the signed-in
+     principal, including the step-up `DOM-IDEN-003` §VII requires before the last
+     class, and with it the identity, is destroyed.
+   * **Scheduled destruction:** the hourly lifecycle sweep of `DOM-IDEN-003` §IX.A.
+     Its authority is the retention policy, rechecked under the User row lock
+     before execution; it is neither a signed-in principal, a sysadmin session nor
+     impersonation, and interactive authentication and step-up do not apply to it.
+
+   Either way the FEAT resolves every affected association through the owning
+   domain's authority and applies the destruction, retention and audit rules in
+   every affected class. No active class selection is required.
+4. **System administration.** Operations of a principal whose `user_role` is
+   `SYSADMIN`, which `INV-CORE-000` §III.4 forbids from holding class context.
+   Not available to teacher or student principals.
+5. **Out-of-band operator.** The operator bootstrap command (FEAT-IDEN-008), run
+   under host authority from the command line (`SPEC-OPS-004` §V: operator
+   provisioning is out-of-band). The new system principal has no class or seat.
+
+No teacher operation outside identity establishment (including additional
+classroom creation), the session boundary and account deletion may run without a teacher seat in the active class. Holding the
+state an operation changes does not make the principal's `user_id` sufficient
+authority to change it.
+
+Two operations resolve a *target* seat rather than the active one, and need no
+exception: class selection, and authenticated class binding. Each resolves the
+target seat from the principal's own seats, or from the claim, under the chosen
+`class_id`, and meets §III.1 with it.
+
+A declared exception relaxes only §III.1, §VII.1 and §VIII.6. Every other
+requirement of this directive applies, including §III.2, §III.3, §III.4 and §V.1.
 
 ### 2. Single Transaction Boundary (MANDATORY)
 A FEAT **MUST** execute within a single atomic transaction.
@@ -93,7 +169,27 @@ Every FEAT execution **MUST** emit an audit record via DOM-OPS containing:
 * result (success/failure)
 * timestamp
 
+The actor fields are those the FEAT's scope resolves. Under a declared exception
+(§III.1.A), a field the scope does not resolve is recorded as absent; it is never
+inferred, defaulted or substituted from another identifier. Where the record is
+held and how a principal reference is represented in it are governed by DOM-OPS.
+
 **Failure to log = non-compliant execution**
+
+### 5. Workflows
+
+*(1.2.)* A FEAT contract may define a **workflow**: ordered steps performed by one
+actor under one authority grant.
+
+1. Each step is one execution: one request, one command path, and one transaction
+   under §III.2 (`INV-ARC-000` §V, §VIII.2).
+2. Authority carries from one step to the next only as a capability token defined by
+   an INV or DOM contract (`INV-ARC-019` §XI). Each step re-validates the token
+   against the owning domain's current state, under lock, before it mutates. An
+   earlier request's allow decision is never carried forward (`INV-CORE-001`
+   §VIII.2; `INV-ARC-010` §V).
+3. The whole workflow uses one FEAT identifier and one `correlation_id`.
+4. A change of actor or of authority source starts a different FEAT.
 
 ---
 
@@ -175,6 +271,12 @@ Enforcement: the runtime `FEATContext` guard rejects entering any FEAT context
 while another is active (regardless of feat_name/correlation), and a structural CI
 check forbids a FEAT module from importing another FEAT's executor.
 
+*(1.2.)* One request executes at most one FEAT. Two FEAT executions in one request
+are prohibited even when they are sequential and not nested (`INV-ARC-000`
+§VIII.2). This is not prohibited: a route renders a form or redirects, and a later
+request invokes a FEAT. That is two requests and two command paths. A contract may
+name the step that follows it (§III.5); it never invokes it.
+
 ---
 
 ## VI. Side-Effect Governance
@@ -210,7 +312,8 @@ These **MUST**:
 ## VII. Identity Authority Rules
 
 ### 1. Seat as Execution Context (MANDATORY)
-All FEAT execution **MUST** be scoped to a resolved `seat_id`.
+All FEAT execution **MUST** be scoped to a resolved `seat_id`, except under a
+declared exception (§III.1.A).
 
 No FEAT may operate using:
 * raw `user_id` alone
@@ -233,7 +336,7 @@ The following are explicitly forbidden:
 3. Ledger mutation during validation phase
 4. Partial state updates without ledger correlation
 5. Hidden entitlement creation without ledger trace (unless explicitly zero-value and declared)
-6. Context-less execution (no `seat_id`)
+6. Context-less execution (no `seat_id`) outside a declared exception (§III.1.A)
 7. Reconstruction of authoritative state from non-authoritative sources (e.g., using ledger as attendance truth)
 8. Direct mutation of constitutional economic policy state instead of appending a row to the owning table
 9. Hidden delayed economic mutation that is not a visible, effective-dated row
@@ -244,7 +347,7 @@ The following are explicitly forbidden:
 ## IX. Compliance Requirements
 
 All FEAT implementations **MUST**:
-* declare required context inputs
+* declare required context inputs: seat scope, or exactly one exception class from §III.1.A with its governing citation
 * define transaction boundary scope
 * specify idempotency mechanism
 * emit audit logs

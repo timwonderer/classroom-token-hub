@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.59 | 2026-11-11 | 3.58 | Normative |
+| SOP-DOC-001 | 3.60 | 2026-11-15 | 3.59 | Normative |
 
 ---
 
@@ -280,6 +280,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.60 (2026-11-15):**
+- Register FEAT-CORE-000 v1.2: seat scope stays the rule; §III.1.A names five exception classes (identity establishment including additional classroom creation, session boundary, principal lifecycle for manual and scheduled account deletion, system administration, out-of-band operator), each limited to listed operations with a governing citation; §III.4 records unresolved actor fields as absent; §III.5 defines workflows; §V.1 allows at most one FEAT per request. Owner ruling, 2026-11-15.
 
 **Version 3.59 (2026-11-11):**
 - Register SOP-DEP-001B v1.3 and SOP-DEP-001A v1.3: the validation-responsibility rule is that no check expects a teacher or student to act, not that no live class may be used; the operator may run a check in a live class through a test account the operator holds. Corrects the misstatement introduced in SOP-DEP-001B v1.1 and SOP-DEP-001A v1.2. Owner correction, 2026-11-11.

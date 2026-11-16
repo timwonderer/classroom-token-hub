@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- <!-- notes: internal --> **FEAT execution exceptions are named, not implied** (`FEAT-CORE-000` v1.2, owner ruling 2026-11-15). Every FEAT still resolves a seat unless its contract declares exactly one of five exception classes and cites the governing section: identity establishment (student claim, student recovery, teacher provisioning, teacher recovery, and an existing teacher creating another classroom), session boundary (sign-in; sign-out without a resolvable seat, after verifying the session's own token), principal lifecycle (teacher account deletion only, manual with step-up or by the scheduled retention sweep), system administration, and the out-of-band operator command. No other teacher operation may run without a teacher seat in the active class, and owning the state an operation changes does not by itself authorize changing it. An actor field an exception does not resolve is recorded as absent, never inferred. A contract may define a workflow of single-request steps that carry authority only as a re-validated capability token, and one request executes at most one FEAT. Normative only; no runtime change. `SOP-DOC-001` v3.60.
+
 ### Security
 
 - **Signing out now ends the sign-in on the server, and only a deliberate click signs anyone out** (#1635; INV-ARC-007 §V, DOM-IDEN-002/003 §Session Establishment, DOM-IDEN-006 §IX). Teacher and student sign-out are POST forms with a CSRF token, as sysadmin sign-out already was; `GET /admin/logout` and `GET /student/logout` answer 405 and change nothing, and opening `/admin/login` no longer signs a teacher out. Every sign-out (teacher, student, sysadmin) clears `users.current_session_nonce` and the session expiry through `FEAT-IDEN-001`, so a copy of the cookie stops working; a stale cookie cannot void a newer sign-in. A student with no active class can sign out. The "Return to login" button on the signed-in refusal page is a sign-out form for every role.
