@@ -11,6 +11,7 @@ and this project follows semantic versioning principles.
 ### Added
 
 - <!-- notes: internal --> **Fresh PostgreSQL installations gain a release-specific schema baseline.** The artifact includes the migrated schema and required reference data at Alembic revision `a0faf8b2a35d`. Existing installations continue to use the migration chain.
+- <!-- notes: internal --> **Self-hosting guidance distinguishes core installation, operational integrations and hosted status services.** It identifies production destinations that an isolated installation must override before testing those integrations.
 
 ### Changed
 
