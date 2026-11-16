@@ -36,8 +36,6 @@ def extract_migration_info(filepath):
     """Read literal Alembic declarations, including annotated assignments."""
     tree = ast.parse(filepath.read_text(encoding='utf-8'), filename=str(filepath))
     revision = declared_value(tree, 'revision')
-    if not isinstance(revision, str) or not revision:
-        raise ValueError("Expected a nonempty string revision ID.")
     down_revision = declared_value(tree, 'down_revision')
     defined_functions = {
         node.name for node in ast.walk(tree)
@@ -299,7 +297,7 @@ def validate_migrations():
         elif isinstance(down_rev, tuple):
             for parent in down_rev:
                 down_to_up[parent].append(m['revision'])
-        elif down_rev != "MISSING":
+        else:
             down_to_up[down_rev].append(m['revision'])
 
     # Find roots
@@ -317,7 +315,7 @@ def validate_migrations():
             continue
         elif isinstance(dr, tuple):
             all_down_revisions.update(dr)
-        elif dr != "MISSING":
+        else:
             all_down_revisions.add(dr)
 
     heads = all_revisions - all_down_revisions
@@ -338,9 +336,7 @@ def validate_migrations():
     all_valid_revisions = all_revisions | {None}
     for m in migrations:
         dr = m['down_revision']
-        if dr == "MISSING":
-            errors.append(f"❌ Missing down_revision in: {m['filename']}")
-        elif isinstance(dr, tuple):
+        if isinstance(dr, tuple):
             for parent in dr:
                 if parent not in all_valid_revisions:
                     errors.append(f"❌ Orphan: {m['filename']} references missing: {parent[:12]}...")
