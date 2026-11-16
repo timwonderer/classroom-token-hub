@@ -86,8 +86,18 @@ def record(
     }
 
     # Keep this as warning-or-info style operational telemetry, not exception noise.
+    # The row keeps internal ids; the log line names the same seat and class by
+    # their public ids only (DOM-OPS-001 §7).
+    from app.services.tlcp import class_log_ref, seat_log_ref
+    from app.utils.helpers import loggable_token
+    log_payload = {key: value for key, value in payload.items() if key not in ("actor_seat_id", "class_id")}
+    log_payload.update(
+        actor_seat=seat_log_ref(payload["actor_seat_id"]),
+        class_public_id=class_log_ref(class_id),
+        correlation_id=loggable_token(correlation_id),
+    )
     log_fn = current_app.logger.warning if severity in {"warning", "error", "critical", "security"} else current_app.logger.info
-    log_fn("OPERATIONAL_EVENT %s", payload)
+    log_fn("OPERATIONAL_EVENT %s", log_payload)
 
     level = _LEVEL_BY_SEVERITY.get((severity or "info").lower(), "INFO")
     try:

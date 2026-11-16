@@ -64,7 +64,8 @@ def extract(changelog: str, version: str):
     return f"v{version} — {m.group(2)}", body, released.group("sha")
 
 
-NOTES_SECTIONS = {  # tag -> heading, in the order the notes show them (owner, 2026-10-22)
+NOTES_SECTIONS = {  # tag -> heading, in the order the notes show them (owner, 2026-10-22; New added 2026-11-04)
+    "new": "New",
     "fixed": "Fixed",
     "security-reliability": "Security & Reliability",
     "accessibility": "Accessibility",
@@ -110,7 +111,7 @@ def _line(entry: str) -> str:
 
 
 def render(body: str) -> str:
-    """Reader-facing notes: Highlights, then Fixed, Security & Reliability, Accessibility and Internal Changes.
+    """Reader-facing notes: Highlights, then New, Fixed, Security & Reliability, Accessibility and Internal Changes.
 
     Every entry carries `<!-- notes: <section>[, highlight] -->` after its bullet; the CHANGELOG renders it
     invisibly. A section lists one line per entry (its bold headline and cited PRs), then the entries in full,

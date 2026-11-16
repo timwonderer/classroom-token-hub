@@ -37,7 +37,6 @@ from app.services.ledger_resolution_service import (
 from app.models import Seat, EntitlementEvent, ClassEconomy
 from app.services.context_resolver import CanonicalContext
 from app.services.class_configuration_query_service import get_banking_directive
-from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.class_configuration_query_service import get_rent_settings
 from app.services.obligation_view_model import build_student_obligation_view
 from app.services.store_policy_resolver import StorePolicyResolver, PolicyNotFound, PolicyParseError, PolicyValidationError
@@ -427,12 +426,11 @@ def _execute_store_purchase_impl(
         description=f"Purchase: {policy_config.name or policy_config.product_id} (x{quantity})",
         transaction_type="purchase", actor_seat_id=canonical_context.seat_id,
         target_seat_id=canonical_context.seat_id,mechanism='self',
-        fee_actor_seat_id=resolve_teacher_seat_for_class(canonical_context.class_id).id,
         source_account="checking",
         target_account="store_purchase",
         canonical_intent=canonical_intent,
     )
-    banking_directive = get_banking_directive(canonical_context.class_id,include_fees=True)
+    banking_directive = get_banking_directive(canonical_context.class_id)
     ledger_idempotency_key = idempotency_key or f"store-purchase:{corr_id}:ledger-plan"
     # A store purchase needs the money (owner ruling 2026-10-07; SPEC-ECON-003
     # §4.5.1.1). Funding still follows §4.5.1.1A: a full overdraft-protection
@@ -442,7 +440,6 @@ def _execute_store_purchase_impl(
     resolved_plan = resolve_intended_ledger_plan(
         plan=intended_plan,
         banking_directive=banking_directive,
-        fee_authority="NONE",
     )
     if debit_amount > 0 and resolved_plan.checking_after < 0:
         return StorePurchaseResult(

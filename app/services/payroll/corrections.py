@@ -1,6 +1,6 @@
 """One-time payroll corrections for platform defects (incident PROD-PAY-001).
 
-Before the closed-session rule (DOM-PROD-001 §VI.3), a payroll run loaded only
+Before the closed-session rule (DOM-PROD-001 §XV.11), a payroll run loaded only
 the attendance rows after the seat's previous payroll, so a session still running
 at that payroll lost its clock-in and the rest of it went unpaid. This module
 reproduces, for each run settled by that earlier rule, what the run paid and what
@@ -192,7 +192,7 @@ def _is_legacy(event: PayrollEvent) -> bool:
 
 def _student_name(seat: Seat) -> str:
     profile = getattr(seat, "identity_profile", None)
-    return (profile.full_name if profile else None) or f"Seat {seat.id}"
+    return (profile.full_name if profile else None) or "Unnamed student"
 
 
 def build_class_correction_proposal(

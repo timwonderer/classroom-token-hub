@@ -123,6 +123,27 @@ def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
     return economic_engine_effective_at(class_id, None)
 
 
+def economic_engine_in_force_before(class_id: str, instant: datetime) -> Optional[EconomicEngine]:
+    """The Economic Engine version in force immediately before ``instant``.
+
+    Shaped like ``payroll_settings.payroll_setting_in_force_before``, but for a
+    different reason: unlike payroll, an Economic Engine change is never deferred
+    to a boundary — it governs from its own ``effective_at``, immediate by default
+    (DOM-CLASS-003 §VII). This resolver exists for a caller that itself needs a
+    strict "before instant" cut, such as a materialized historical snapshot that
+    must not pick up a version saved after the instant it is freezing (DOM-ITR-001
+    §IX reference configuration).
+    """
+    if not class_id:
+        return None
+    return _engine_newest_first(
+        EconomicEngine.query.filter(
+            EconomicEngine.class_id == class_id,
+            EconomicEngine.effective_at < instant,
+        )
+    ).first()
+
+
 class EconomicEngineTimeline:
     """Every version of one class's engine, answering ``at(instant)`` in memory.
 
@@ -451,6 +472,20 @@ def resolve_expected_weekly_hours(class_id: str) -> Optional[float]:
     return float(engine.expected_weekly_hours)
 
 
+def resolve_expected_weekly_hours_in_force_before(class_id: str, instant: datetime) -> Optional[float]:
+    """The expected-weekly-hours value in force immediately before ``instant``.
+
+    For binding a historical cycle boundary to its governing configuration
+    (DOM-ITR-001 §IX) rather than to whatever is current now. Mirrors
+    ``resolve_expected_weekly_hours``, reading through
+    ``economic_engine_in_force_before`` instead of ``get_current_economic_engine``.
+    """
+    engine = economic_engine_in_force_before(class_id, instant)
+    if engine is None or engine.expected_weekly_hours is None:
+        return None
+    return float(engine.expected_weekly_hours)
+
+
 def get_policy_mode(class_id: str, feature: str = 'payroll') -> Optional[str]:
     """Get the current economic policy mode for a class via a feature anchor.
 
@@ -716,46 +751,13 @@ class BankingDirective:
     class_id: str
     version_locator: str | None
     protection_enabled: bool
-    flat_fee: Decimal | None
-    progressive_fee: tuple | None
-    cwi: Decimal | None
-    fee_period_start: datetime | None
 
 
-def get_banking_directive(class_id: str, effective_at=None, *, include_fees=False):
-    """Class-owned immutable funding/fee inputs supplied through an originating FEAT."""
-    from decimal import Decimal
-    from types import SimpleNamespace
-    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION
-
+def get_banking_directive(class_id: str, effective_at=None):
+    """Class-owned immutable funding inputs supplied through an originating FEAT."""
     engine = economic_engine_effective_at(class_id, effective_at)
-    evaluation = (
-        canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=SimpleNamespace(class_id=class_id),
-            primitive="evaluation_period_boundaries",
-            period="month",
-            reference_time_utc=effective_at,
-        )
-        if include_fees
-        else None
-    )
-    schedule = engine.progressive_overdraft_fee if engine and include_fees else None
-    cwi = calculate_cwi(class_id) if isinstance(schedule, dict) else None
     return BankingDirective(
         class_id,
         engine.economic_version_id if engine else None,
         bool(engine and engine.overdraft_protection_enabled is True),
-        (
-            Decimal(engine.flat_overdraft_fee)
-            if engine and include_fees and engine.flat_overdraft_fee is not None
-            else None
-        ),
-        (
-            tuple(sorted(schedule.items()))
-            if isinstance(schedule, dict) and schedule
-            else () if schedule is None else None
-        ),
-        Decimal(str(cwi)) if cwi is not None else None,
-        evaluation.boundary_start_utc if evaluation else None,
     )

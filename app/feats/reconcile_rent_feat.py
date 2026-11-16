@@ -41,6 +41,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.models import RentSettings, Seat
+from app.services.tlcp import class_log_ref
 from app.services import obligations_service
 from app.services import rent_schedule_service
 from app.services import entitlement_service
@@ -338,7 +339,7 @@ def _cycle_terms(class_id: str, cycle, current_settings: RentSettings, result) -
             logger.error(
                 "reconcile_rent: bill cycle %s (class %s, cycle %s) names rent policy %s, "
                 "which does not resolve; no new rent work is created against it",
-                cycle.id, class_id, cycle.cycle_number, cycle.policy_uuid,
+                cycle.id, class_log_ref(class_id), cycle.cycle_number, cycle.policy_uuid,
             )
     return frozen
 

@@ -46,11 +46,13 @@ class DisplayMetadata:
     teacher_last_name: str | None
     teacher_display_name: str | None
     teacher_note: str | None
+    class_public_id: str | None = None
 
     def to_class_context(self) -> dict[str, object]:
         return {
             "join_code": self.join_code,
             "class_id": self.class_id,
+            "class_public_id": self.class_public_id,
             "class_identifier": self.class_identifier,
             "class_timezone": self.class_timezone,
             "teacher_name": self.teacher_display_name,
@@ -145,6 +147,7 @@ def resolve_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata | 
         teacher_last_name=teacher_profile.last_name if teacher_profile else None,
         teacher_display_name=teacher_display_name,
         teacher_note=actor_profile.notes if actor_profile else None,
+        class_public_id=class_row.class_public_id,
     )
 
 

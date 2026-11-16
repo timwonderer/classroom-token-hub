@@ -97,6 +97,22 @@ def nl2br_filter(s):
 REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
 
 
+# Every field is public: the class appears only as its class_public_id (DOM-OPS-001 §7).
+DEFAULT_LOG_FORMAT = (
+    "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
+    "[actor=%(actor_type)s:%(actor_public_id)s class_public_id=%(class_public_id)s] "
+    "[endpoint=%(endpoint)s method=%(method)s] "
+    "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s"
+)
+JSON_LOG_FORMAT = (
+    '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
+    '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_public_id)s",'
+    '"class_public_id":"%(class_public_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
+    '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
+    '"message":"%(message)s"}'
+)
+
+
 class RequestIdFilter(logging.Filter):
     def filter(self, record):
         context = getattr(g, "correlation_context", None) if has_request_context() else None
@@ -109,8 +125,9 @@ class RequestIdFilter(logging.Filter):
             record.actor_type = context.get("actor_type", "-") if context else "-"
         if not hasattr(record, "actor_public_id"):
             record.actor_public_id = context.get("actor_public_id", "-") if context else "-"
-        if not hasattr(record, "class_id"):
-            record.class_id = context.get("class_id", "-") if context else "-"
+        if not hasattr(record, "class_public_id"):
+            # Never the internal class_id: it does not leave the database (DOM-OPS-001 §7).
+            record.class_public_id = context.get("class_public_id", "-") if context else "-"
         if not hasattr(record, "endpoint"):
             if has_request_context():
                 if request.url_rule and request.url_rule.rule:
@@ -170,7 +187,7 @@ def register_error_handlers(app):
                 "request_id": getattr(g, "request_id", None),
                 "actor_type": context.get("actor_type"),
                 "actor_public_id": context.get("actor_public_id"),
-                "class_id": context.get("class_id"),
+                "class_public_id": context.get("class_public_id"),
                 "endpoint": endpoint,
                 "error_class": e.__class__.__name__,
                 "error_message": sanitized_message,
@@ -299,6 +316,7 @@ def create_app():
         SECRET_KEY_FALLBACKS=secret_key_fallbacks,
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        CONFIGURATION_EXPORT_KEY=os.getenv("CONFIGURATION_EXPORT_KEY", "").strip(),
         SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -352,27 +370,22 @@ def create_app():
     db.init_app(app)
     init_feat_enforcement(app)
     migrate.init_app(app, db)
+    @app.before_request
+    def configuration_upload_limits():
+        # Apply before CSRF parses the form so a valid 1 MiB file remains uploadable.
+        if request.blueprint == "configuration":
+            request.max_content_length = 4 * 1024 * 1024
+            request.max_form_memory_size = 3 * 1024 * 1024
+
     csrf.init_app(app)
     limiter.init_app(app)
 
     # -------------------- LOGGING --------------------
     log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
-    log_format = os.getenv(
-        "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
-        "[actor=%(actor_type)s:%(actor_public_id)s class_id=%(class_id)s] "
-        "[endpoint=%(endpoint)s method=%(method)s] "
-        "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
-    )
+    log_format = os.getenv("LOG_FORMAT", DEFAULT_LOG_FORMAT)
     if log_format.strip().lower() == "json":
-        log_format = (
-            '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
-            '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_public_id)s",'
-            '"class_id":"%(class_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
-            '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
-            '"message":"%(message)s"}'
-        )
+        log_format = JSON_LOG_FORMAT
 
     # The handlers live on the root logger, not on app.logger. A root logger
     # with no handlers is configured implicitly by the first module-level
@@ -452,7 +465,8 @@ def create_app():
         if request.endpoint in {"main.health_check"}:
             return None
 
-        from app.models import User
+        from app.models import User, UserRole
+        from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
         from app.utils.user_ids import session_user_id
         if not session.get("user_id"):
             return None
@@ -470,6 +484,19 @@ def create_app():
         if not session_nonce or user.current_session_nonce != session_nonce:
             session.clear()
             return None
+        # A teacher sign-in is a fixed window (DOM-IDEN-003); past it the cookie
+        # is ended here, before any route, so no path accepts it. A sign-in
+        # without a window predates it and is ended the same way.
+        if user.user_role == UserRole.TEACHER:
+            expires_at = user.current_session_expires_at
+            if expires_at is None or not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                candidate=canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+                reference=expires_at,
+            ).is_earlier:
+                session.clear()
+                g.teacher_session_expired = True
         return None
 
     @app.before_request
@@ -608,7 +635,7 @@ def create_app():
                         text("SET LOCAL app.current_user_id = :user_id"),
                         {"user_id": user_id}
                     )
-                    app.logger.debug(f"RLS context set for user_id={user_id}")
+                    app.logger.debug("RLS context set")
             except Exception as e:
                 # Log but don't fail the request - RLS will just filter to empty results
                 app.logger.error(f"Failed to set RLS tenant context: {str(e)}")
@@ -961,6 +988,8 @@ def create_app():
     app.register_blueprint(sysadmin_bp)
     app.register_blueprint(student_bp)
     app.register_blueprint(admin_bp)
+    from app.routes.configuration import configuration_bp
+    app.register_blueprint(configuration_bp)
     app.register_blueprint(docs_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(recovery_bp)

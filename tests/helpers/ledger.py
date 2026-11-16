@@ -11,7 +11,6 @@ from app.services.ledger_posting_service import create_pending_transaction
 from app.services.ledger_transfer_service import create_transfer_pair
 from app.services.ledger_correction_service import reverse_transaction
 from app.services.ledger_interest_service import apply_savings_interest
-from app.services.ledger_fee_service import apply_overdraft_fee_if_needed
 from tests.helpers.classroom_initializer import (
     initialize as _initialize_classroom,
     initialize_as_student as _initialize_as_student,
@@ -141,15 +140,6 @@ def apply_ledger_savings_interest(seat, *, annual_rate: Decimal = Decimal("0.045
     return apply_savings_interest(seat, annual_rate=annual_rate)
 
 
-def apply_ledger_overdraft_fee_if_needed(seat, *, force: bool = False, idempotency_key: str | None = None):
-    from app.services.class_configuration_query_service import get_banking_directive
-    from app.services.identity_service import resolve_teacher_seat_for_class
-    return apply_overdraft_fee_if_needed(
-        seat,banking_directive=get_banking_directive(seat.class_id,include_fees=True),
-        actor_seat_id=resolve_teacher_seat_for_class(seat.class_id).id,
-        force=force,
-        idempotency_key=idempotency_key,
-    )
 
 
 def settle_ledger_balances(seat_id: int, class_id: str) -> None:

@@ -98,7 +98,7 @@ def _execute_void_transaction_impl(
     # BEFORE any compensating transaction can be created, so no ledger mutation occurs
     # on rejection. Obligation-relatedness is determined by provenance (an obligation
     # event references this ledger transaction), not by transaction representation/type.
-    if obligations_service.is_obligation_related_transaction(tx.id):
+    if obligations_service.is_obligation_related_transaction(tx.id, class_id=tx.class_id):
         raise ObligationTransactionNotVoidable(
             f"Transaction #{tx.id} is obligation-related. Under SPEC-OPS-001 "
             "(INV-OPS-008), obligation-related monetary transactions are neither "

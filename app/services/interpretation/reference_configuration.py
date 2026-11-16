@@ -12,7 +12,10 @@ The projection is explicitly:
 * **bound to the closed cycle** — from ``schema_version`` 2 the pay rate and the
   ``policy`` block name the ``payroll_settings`` row in force just before the
   cycle's closing boundary (operator ruling 2026-09-30; DOM-ITR-001 §IX), the
-  owning table's own ``policy_uuid``,
+  owning table's own ``policy_uuid``; ``expected_weekly_hours`` (and the ``cwi``
+  derived from it) are likewise read from the Economic Engine version in force
+  just before that same boundary, not whichever version is current when the
+  writer runs,
 * **not a cross-domain FK** — ``policy.policy_uuid`` / ``policy.version`` are
   informational lineage strings (INV-ARC-021 §V.7),
 * **versioned** via its own ``schema_version`` so the Economic Engine can evolve
@@ -24,7 +27,9 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from app.services.class_configuration_query_service import resolve_expected_weekly_hours
+from app.services.class_configuration_query_service import (
+    resolve_expected_weekly_hours_in_force_before,
+)
 from app.services.payroll.settings import payroll_setting_in_force_before
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
@@ -59,18 +64,23 @@ def capture_reference_configuration(class_id: str, *, cycle_completed_at=None) -
     of a materialization safe. All numeric values are canonical decimal **strings**
     (or ``None`` when the input is unconfigured — an honest absence, not zero).
     """
-    payroll = payroll_setting_in_force_before(
-        class_id,
-        cycle_completed_at or canonical_temporal_resolver(
-            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
-        ).canonical_now_utc,
-    )
+    boundary = cycle_completed_at or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
+    payroll = payroll_setting_in_force_before(class_id, boundary)
     hourly_pay_rate = None
     if payroll is not None and payroll.pay_rate is not None:
         # pay_rate is stored as $/minute; the CWI reference uses $/hour.
         hourly_pay_rate = Decimal(str(payroll.pay_rate)) * 60
 
-    expected_weekly_hours = resolve_expected_weekly_hours(class_id)
+    # Bound to the same boundary as the pay rate above. Unlike payroll_settings,
+    # an Economic Engine change is NOT deferred to the next boundary -- it governs
+    # from its own effective_at, immediately by default (DOM-CLASS-003 §VII). The
+    # boundary cutoff here is this writer's own historical-snapshot rule (DOM-ITR-001
+    # §VII, §IX): the record is self-describing for the cycle that already closed, so
+    # it must not pick up a later version saved after cycle_completed_at but before
+    # this writer actually runs.
+    expected_weekly_hours = resolve_expected_weekly_hours_in_force_before(class_id, boundary)
     cwi = None
     if hourly_pay_rate is not None and expected_weekly_hours is not None:
         cwi = hourly_pay_rate * Decimal(str(expected_weekly_hours))

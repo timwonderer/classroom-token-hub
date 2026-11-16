@@ -32,6 +32,7 @@ _FORMERLY_INTERVAL_HOURLY_IDS = frozenset({
     "collective_goal_expiry",
     "ledger_settlement",
     "savings_interest_payout",
+    "store_item_expiry",
 })
 
 # Jobs pinned to one fixed hour:minute per day (never touched by O2/O3) that

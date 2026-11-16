@@ -29,6 +29,7 @@ DEFAULT_NOISE_ENDPOINT_PREFIXES = (
     "/sw.js",
     "/favicon.ico",
     "/api/set-timezone",
+    "/api/student-status",  # the dashboard polls it every 10s
 )
 
 def _int_env(name: str, default: int) -> int:
@@ -88,6 +89,36 @@ def _is_noise_endpoint(endpoint: str | None) -> bool:
     return any(endpoint.startswith(prefix) for prefix in _noise_endpoint_prefixes())
 
 
+def _class_public_id(class_id: str | None) -> str | None:
+    """The alias a log line may carry for ``class_id`` (DOM-OPS-001 §7).
+
+    Best-effort: these lookups run inside exception handlers, where the
+    session's transaction may already be aborted. A failed lookup yields None
+    and leaves the caller's transaction and its own error handling alone.
+    """
+    if not class_id:
+        return None
+    try:
+        return db.session.query(ClassEconomy.class_public_id).filter_by(class_id=class_id).scalar()
+    except sa.exc.SQLAlchemyError:
+        return None
+
+
+def class_log_ref(class_id: str | None) -> str:
+    """A class as a log line may name it: its ``class_public_id``, never ``class_id``."""
+    return _class_public_id(class_id) or "-"
+
+
+def seat_log_ref(seat_id: int | None) -> str:
+    """A seat as a log line may name it: its ``public_id``, never ``seats.id``."""
+    if not seat_id:
+        return "-"
+    try:
+        return db.session.query(Seat.public_id).filter_by(id=seat_id).scalar() or "-"
+    except sa.exc.SQLAlchemyError:  # best-effort, as _class_public_id
+        return "-"
+
+
 def _log_invariant_violation(
     message: str,
     *,
@@ -98,19 +129,17 @@ def _log_invariant_violation(
     extra = {
         "actor_type": "-",
         "actor_public_id": "-",
-        "class_id": "-",
+        "class_public_id": "-",
         "error_class": "InvariantViolation",
         "correlation_version": CORRELATION_VERSION,
     }
     if context is not None:
-        extra.update(
-            actor_type=context.actor_role,
-            class_id=context.class_id,
-        )
+        extra["actor_type"] = context.actor_role
+        class_id = class_id or context.class_id
     if actor_type:
         extra["actor_type"] = actor_type
     if class_id:
-        extra["class_id"] = class_id
+        extra["class_public_id"] = _class_public_id(class_id) or "-"
     current_app.logger.error(f"TLCP-INVARIANT-VIOLATION: {message}", extra=extra)
 
 
@@ -417,12 +446,14 @@ def resolve_actor_context(context: CanonicalContext | None, *, observation: dict
     actor_type = seat.role
     class_id = context.class_id
     actor_public_id = seat.public_id
+    class_public_id = _class_public_id(class_id)
 
     endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
     return {
         "actor_type": actor_type,
         "actor_public_id": actor_public_id,
         "class_id": class_id,
+        "class_public_id": class_public_id,
         "endpoint": endpoint,
         "method": request.method,
     }
@@ -442,6 +473,9 @@ def persist_request_trace(
     committing (or rolling back) the provided session.
     """
     if not context or not context.get("actor_public_id") or not context.get("class_id"):
+        return
+    # Successful noise would evict real requests from the per-actor cap; failures stay.
+    if _is_noise_endpoint(context.get("endpoint")) and (status_code or 0) < 400:
         return
 
     sess = _session if _session is not None else db.session
@@ -621,11 +655,16 @@ def create_ticket_correlation_pack(
     error_window_hours = _int_env("TLCP_ERROR_WINDOW_HOURS", DEFAULT_ERROR_WINDOW_HOURS)
 
     fetch_limit = trace_limit * _int_env("TLCP_TRACE_FETCH_MULTIPLIER", DEFAULT_TRACE_FETCH_MULTIPLIER)
+    # The TTL holds here regardless of when the probabilistic cleanup last ran.
+    trace_cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=ticket_created_at, elapsed_seconds=-ttl_days * 86400,
+    ).shifted_timestamp_utc
     trace_rows = (
         ActorRequestTrace.query.filter_by(
             actor_type=actor_type,
             actor_public_id=actor_public_id,
         )
+        .filter(ActorRequestTrace.created_at >= trace_cutoff)
         .order_by(ActorRequestTrace.created_at.desc(), ActorRequestTrace.id.desc())
         .limit(fetch_limit)
         .all()

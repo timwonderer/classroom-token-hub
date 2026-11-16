@@ -30,8 +30,8 @@ class SnapshotQuery:
     def all(self):return self.rows
 
 
-def _business_snapshot(app,monkeypatch,change=None,events=None):
-    _,ctx,target,pairs,event=_paid_sources(app)
+def _business_snapshot(app,monkeypatch,change=None,events=None,**source_options):
+    _,ctx,target,pairs,event=_paid_sources(app,**source_options)
     attributes={name:getattr(event,name) for name in ('id','class_id','target_seat_id','actor_seat_id',
         'mechanism','payroll_event_type','correlation_id','idempotency_key','recorded_at','summary_json')}
     attributes['summary_json']=copy.deepcopy(attributes['summary_json'])
@@ -132,6 +132,24 @@ def test_missing_settings_and_historical_visibility_not_hidden_by_matching_cents
         target_seat_id=target,setting_inputs=(),as_of_utc=datetime(2026,10,3,tzinfo=timezone.utc))
     assert missing.events[0].replay_consistency=='UNAVAILABLE'
     assert 'MISSING_OR_AMBIGUOUS_SETTING' in missing.events[0].reasons
+
+
+def test_truncate_once_share_over_sub_second_members_is_a_match(app,monkeypatch):
+    """SPEC-TIME-001 1.3: two 120.6 s sessions freeze a 241-second share over members of 120 + 120."""
+    _,_,_,_,result=_business_snapshot(app,monkeypatch,close_after=timedelta(minutes=2,milliseconds=600))
+    share=result.events[0]
+    assert [p.credited_seconds for p in share.pricing_inputs]==[241]
+    assert share.replay_consistency=='MATCH'
+
+
+def test_naive_frozen_timestamp_is_malformed_pricing(app,monkeypatch):
+    def change(e):
+        for source in e['summary_json']['pricing'][0]['intervals']:
+            source['credited_seconds']=0  # force the truncate-once check onto the timestamps
+        e['summary_json']['pricing'][0]['intervals'][0]['opening_timestamp']='2026-08-01T18:00:00'
+    _,_,_,_,result=_business_snapshot(app,monkeypatch,change)
+    assert result.events[0].replay_consistency=='UNAVAILABLE'
+    assert 'MALFORMED_PRICING' in result.events[0].reasons
 
 
 def test_equal_seconds_wrong_frozen_membership_fails_business_replay(app,monkeypatch):

@@ -14,7 +14,6 @@ import requests
 from types import SimpleNamespace
 from datetime import datetime
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
-from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response, abort
 from flask import g
@@ -23,7 +22,7 @@ from werkzeug.exceptions import BadRequest, Unauthorized, Forbidden, NotFound, S
 import pyotp
 
 from app.extensions import db, limiter, login_account_limit_key, login_totp_replay_limit_key
-from app.feats.base import get_idempotency_key, requires_feat_context
+from app.feats.base import requires_feat_context
 from app.models import (
     Seat, PasskeyCredential,
     Transaction, HallPassLog,
@@ -33,6 +32,7 @@ from app.models import (
     Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import (
+    end_signed_in_session,
     establish_sysadmin_session,
     system_admin_required,
     _expire_system_admin_session,
@@ -46,7 +46,6 @@ from app.forms import SystemAdminLoginForm
 from app.utils.helpers import is_safe_url
 from app.utils.encryption import decrypt_totp
 from app.hash_utils import hash_username_lookup
-from app.services.ledger_posting_service import create_pending_transaction
 from app.utils.passwordless_client import get_public_api_key
 from app.utils.auth_username import normalize_auth_username
 from app.utils.ip_handler import get_real_ip
@@ -64,7 +63,7 @@ from app.services.support.builders import (
     build_issue_view,
     build_teacher_report_rows,
 )
-from app.utils.issue_helpers import record_resolution_action, update_issue_status
+from app.utils.issue_helpers import update_issue_status
 from app.services.support_operator_access import (
     escalated_clause,
     get_sysadmin_visible_issue,
@@ -139,7 +138,7 @@ def login():
     return render_template("system_admin_login.html", form=form)
 
 
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def _complete_sysadmin_login(form):
     """The validated sysadmin login submission."""
     # Ingress gate: the widget already renders here (the global
@@ -166,8 +165,7 @@ def _complete_sysadmin_login(form):
             decrypted_secret = decrypt_totp(user.totp_secret_encrypted)
         except (TypeError, ValueError):
             current_app.logger.warning(
-                "System admin login failed: invalid encrypted TOTP secret for user_id=%s",
-                user.id,
+                "System admin login failed: invalid encrypted TOTP secret",
             )
             decrypted_secret = None
         if decrypted_secret:
@@ -177,8 +175,7 @@ def _complete_sysadmin_login(form):
                 totp_valid = totp.verify(totp_code, valid_window=1)
             except (binascii.Error, TypeError, ValueError):
                 current_app.logger.warning(
-                    "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
-                    user.id,
+                    "System admin login failed: TOTP secret is not valid base32",
                 )
                 totp_valid = False
             if totp_valid:
@@ -217,12 +214,7 @@ def logout():
     image tag, a prefetch, another site) cannot end anyone's sign-in. GET
     answers 405 and changes nothing.
     """
-    session.pop("user_id", None)
-    session.pop("current_session_nonce", None)
-    session.pop("last_activity", None)
-    session.pop("sysadmin_auth_username", None)
-    session.pop("passkey_sysadmin_auth_username", None)
-    session.pop("force_sysadmin_username_migration", None)  # noqa: safety — no-op if key absent
+    end_signed_in_session()
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))
 
@@ -267,7 +259,7 @@ def passkey_register_start():
 
 @sysadmin_bp.route('/passkey/register/finish', methods=['POST'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_register_finish():
     """
@@ -350,7 +342,7 @@ def passkey_auth_start():
 
 
 @sysadmin_bp.route('/passkey/auth/finish', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("20 per minute")
 def passkey_auth_finish():
     """
@@ -377,14 +369,15 @@ def passkey_auth_finish():
             return jsonify({"error": "Authentication failed"}), 401
         now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
-        # Create session — canonical keys only
+        # Create session — canonical keys only. A new principal inherits
+        # nothing from the previous session, including a teacher's expiry.
+        auth_username = session.get("passkey_sysadmin_auth_username")
+        session.clear()
         establish_sysadmin_session(user)
         nonce = secrets.token_urlsafe(32)
         session["current_session_nonce"] = nonce
         user.current_session_nonce = nonce
-        session["sysadmin_auth_username"] = (
-            session.get("passkey_sysadmin_auth_username") or f"sysadmin_{user.id}"
-        )
+        session["sysadmin_auth_username"] = auth_username or f"sysadmin_{user.id}"
         session['last_activity'] = now.isoformat()
 
         # Determine redirect URL
@@ -406,7 +399,7 @@ def passkey_auth_finish():
 
 @sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['DELETE'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_delete(credential_id):
     """Delete a passkey."""
@@ -594,7 +587,6 @@ def _issue_to_view(issue):
         'sysadmin_reviewed_at': issue.sysadmin_reviewed_at,
         'sysadmin_resolved_at': issue.sysadmin_resolved_at,
         'sysadmin_notes': issue.sysadmin_notes,
-        'eligible_for_reward': issue.eligible_for_reward,
         'context_snapshot': disclosed_snapshot(issue),
     }
 
@@ -782,7 +774,7 @@ def view_issue(issue_ref):
 
 @sysadmin_bp.route('/issues/<issue_ref>/update', methods=['POST'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def update_issue(issue_ref):
     """Move a teacher's direct report through its lifecycle.
 
@@ -1119,9 +1111,9 @@ def start_review_escalated_issue(issue_ref):
 
 @sysadmin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def resolve_escalated_issue(issue_ref):
-    """Mark technical fix complete, optionally issue bug bounty, then return to teacher-admin final review."""
+    """Mark the technical fix complete and return the ticket to the teacher for final review."""
     issue_id = _resolve_issue_id_from_ref(issue_ref)
     if issue_id is None:
         raise NotFound("Issue not found")
@@ -1129,11 +1121,9 @@ def resolve_escalated_issue(issue_ref):
         Issue.id == issue_id,
         escalated_clause(),
         Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
-    ).first_or_404()
+    ).populate_existing().with_for_update().first_or_404()
 
     resolution_note = request.form.get('resolution_note', '').strip()
-    eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
-    reward_amount_raw = request.form.get('reward_amount', '').strip()
     sysadmin_user_id = g.canonical_context.user_id
 
     if not sysadmin_user_id:
@@ -1145,93 +1135,22 @@ def resolve_escalated_issue(issue_ref):
         return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
     try:
-        reward_amount_value = None
-        if eligible_for_reward:
-            if not reward_amount_raw:
-                flash("Reward amount is required when bug bounty is selected.", "error")
-                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
-            try:
-                from app.models import _quantize_currency
-                reward_amount_value = _quantize_currency(reward_amount_raw)
-            except (ValueError, TypeError, InvalidOperation):
-                flash("Invalid reward amount.", "error")
-                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
-            if reward_amount_value <= Decimal('0'):
-                flash("Reward amount must be greater than 0.", "error")
-                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
-
         old_status = issue.status
         issue.status = Issue.STATUS_DEV_RESOLVED
         issue.sysadmin_resolved_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
         issue.sysadmin_notes = resolution_note
-        issue.eligible_for_reward = eligible_for_reward
-
-        if reward_amount_value is not None:
-            # Resolve internal identity from external-facing public IDs, class
-            # first. The seat lookup was previously unscoped and the class was
-            # resolved afterwards and allowed to be None — so a reward could be
-            # credited to a seat in one class while the ledger row was written
-            # with `class_id=None`, money landing in an unscoped void. The class
-            # is the scope for both, and if either is unresolvable the reward
-            # does not happen.
-            reward_class = ClassEconomy.query.filter_by(class_public_id=issue.class_public_id).first()
-            reward_seat = (
-                Seat.query.filter_by(
-                    public_id=issue.actor_public_id,
-                    class_id=reward_class.class_id,
-                ).first()
-                if reward_class else None
-            )
-            if not reward_class or not reward_seat:
-                flash("Cannot issue reward: canonical class scope is unavailable.", "error")
-                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
-            reward_transaction = create_pending_transaction(
-                seat_id=reward_seat.id,
-                class_id=reward_class.class_id,
-                target_seat_id=reward_seat.id,
-                actor_seat_id=reward_seat.id,
-                mechanism="system",
-                amount=reward_amount_value,
-                account_type='checking',
-                description=f"Bug Reward (Issue #{issue.id})",
-                type='bug_reward',
-                idempotency_key=get_idempotency_key(),
-            )
-
-            record_resolution_action(
-                issue,
-                action_type='bug_reward_issued',
-                performed_by_type='sysadmin',
-                performed_by_public_id=None,
-                action_description=f"Issued bug reward while resolving issue #{issue.id}",
-                related_transaction_id=reward_transaction.id,
-                amount_changed=float(reward_amount_value),
-                before_value='0.00',
-                after_value=str(reward_amount_value),
-            )
 
         # Record status change
         from app.utils.issue_helpers import record_status_change
-        reward_note = (
-            f" | Bug reward: ${reward_amount_value:.2f}"
-            if reward_amount_value is not None
-            else ""
-        )
         record_status_change(
             issue,
             old_status,
             Issue.STATUS_DEV_RESOLVED,
             'sysadmin',
             None,  # sysadmin review records a role, not a classroom actor or principal
-            notes=f"{resolution_note}{reward_note}",
+            notes=resolution_note,
         )
-        if reward_amount_value is not None:
-            flash(
-                f"Technical fix recorded, bug reward of ${reward_amount_value:.2f} issued, and ticket returned to teacher review.",
-                "success",
-            )
-        else:
-            flash("Technical fix recorded. Ticket returned to the teacher for final review.", "success")
+        flash("Technical fix recorded. Ticket returned to the teacher for final review.", "success")
 
     except Exception as e:
         db.session.rollback()

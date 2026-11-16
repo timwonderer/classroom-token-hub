@@ -82,6 +82,21 @@ There is no early termination, no refund, and no way for you to revoke a policy 
 > [!TIP]
 > If a claims dispute turns on when coverage started, the answer is the purchase date plus that student's own waiting period — not the terms currently shown in your settings. The student's insurance page carries the contract they actually bought.
 
+## Why it works this way
+
+**What you might expect:** you can cancel a student's policy, refund a premium, or take coverage away as a consequence.
+
+**What Classroom Token Hub does instead:** once a student buys coverage, it runs to the end of the period they paid for. Only the student can cancel, and cancelling takes effect at that boundary. There are no refunds, and you cannot revoke a policy.
+
+**Why:** a purchased policy is a contract between the student and the class, and the simulation binds its designer: if the teacher is exempt from the rules, the simulation isn't telling the truth.
+
+### If this doesn't fit your class
+
+- Of the products we checked, only [Banqer](https://www.banqer.co/nz/primary/how-it-works) mentions insurance, with premiums and claims. It is built for New Zealand schools.
+- [My Classroom Economy's printable version](https://myclassroomeconomy.org/en/overview) runs on paper, so you can set up any rule you want by hand, insurance included.
+
+*Checked against each product's own website on 29 October 2026. Classroom Token Hub is not affiliated with any of them. Check their current features and pricing yourself. [More on this](../design-choices.md).*
+
 ## Related guides
 
 - [Insurance Policies](insurance-policies.md)

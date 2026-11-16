@@ -54,10 +54,24 @@ The row stays in the table, marked **VOID** and greyed out, and its amount no lo
 ## Important notes
 
 > [!WARNING]
-> **Voiding cannot be undone.** There is no un-void action. If you void the wrong entry, you will need to reissue the amount — for example through a manual payroll payment or a fine.
+> **Voiding cannot be undone.** There is no un-void action. If you void the wrong entry, you will need to reissue the amount — for example through a manual payment.
 
 > [!NOTE]
 > Voided transactions stay visible on purpose. The ledger is an audit trail, so entries are never deleted, only neutralized.
+
+## Why it works this way
+
+**What you might expect:** you can delete a wrong entry, or set a student's balance to the right number.
+
+**What Classroom Token Hub does instead:** a balance is the sum of the entries in this table and nothing else. You can void an entry, but it stays visible, marked **VOID**. You cannot delete an entry or type in a balance.
+
+**Why:** the app never allows silent balance edits or unlogged interventions. Every correction is a visible transaction that students can read back, because students can only trust an economy whose changes they can check. The rules bind you as well as them.
+
+### If this doesn't fit your class
+
+- [ClassBank](https://www.classbank.com/) lets teachers [delete transactions](https://help.classbank.com/en/articles/6583467-delete-transactions), one at a time or in bulk, and [reset student balances](https://help.classbank.com/en/articles/8135776-reset-student-balances) to zero.
+
+*Checked against each product's own website on 29 October 2026. Classroom Token Hub is not affiliated with any of them. Check their current features and pricing yourself. [More on this](../design-choices.md).*
 
 ## Related guides
 

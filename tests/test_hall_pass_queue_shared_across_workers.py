@@ -43,6 +43,7 @@ from app.services.hall_pass_request_queue import (
     list_pending_hall_pass_requests_for_class,
 )
 from tests.dom.identity.helpers import valid_destruction_gate
+from tests.helpers import temporal
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import (
     initialize,
@@ -52,7 +53,14 @@ from tests.helpers.classroom_initializer import (
 from tests.helpers.hall_pass_requests import seed_pending_hall_pass_request
 
 REPO = Path(__file__).resolve().parents[1]
-REQUESTED_AT = datetime(2026, 10, 1, 15, 30, tzinfo=timezone.utc)
+REQUESTED_AT = None
+
+
+@pytest.fixture(autouse=True)
+def _requested_today():
+    # Set per test: a request from an earlier class-local day can't be approved.
+    global REQUESTED_AT
+    REQUESTED_AT = temporal.now()
 
 # The second worker: a separate interpreter that imports the app on its own and
 # answers one JSON command per line. It shares only the database with this
@@ -276,7 +284,7 @@ def test_student_cannot_cancel_another_students_request(app, client, second_work
 
 
 def test_pending_request_survives_a_worker_restart(app, client):
-    """Persisted, no TTL: a worker that starts after the request still sees it."""
+    """Persisted: a worker that starts after the request still sees it."""
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     with app.app_context():
         _ready_class(classroom)
@@ -461,7 +469,7 @@ def test_submission_writes_a_typed_pending_action_and_replaces_the_seats_earlier
         earlier = submit_hall_pass_request(
             ctx=ctx, destination="Bathroom", requested_at_utc=REQUESTED_AT, idempotency_key="t:submit:1",
         )
-        later_at = datetime(2026, 10, 1, 15, 35, tzinfo=timezone.utc)
+        later_at = temporal.shifted(REQUESTED_AT, minutes=5)
         later = submit_hall_pass_request(
             ctx=ctx, destination="Bathroom", requested_at_utc=later_at, idempotency_key="t:submit:2",
         )

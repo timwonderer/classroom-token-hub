@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 
 from app.extensions import db
 from app.feats.base import requires_feat_context
+from app.services.tlcp import class_log_ref
+from app.utils.helpers import loggable_token
 from app.models import EntitlementEvent, StoreProduct, Transaction
 from app.services import entitlement_service
 from app.services.ledger_correction_service import reverse_transaction
@@ -160,9 +162,9 @@ def expire_lapsed_collective_goal(
             result.unresolved_correlations.append(purchase_correlation_id or "<missing>")
             logger.error(
                 "Collective goal %s in class %s: could not resolve the purchase "
-                "transaction for correlation %r; %d entitlement(s) left untouched "
+                "transaction for correlation %s; %d entitlement(s) left untouched "
                 "for manual review rather than expired unrefunded.",
-                lineage_uuid, class_id, purchase_correlation_id or "<missing>", len(grants),
+                lineage_uuid, class_log_ref(class_id), loggable_token(purchase_correlation_id), len(grants),
             )
             continue
 

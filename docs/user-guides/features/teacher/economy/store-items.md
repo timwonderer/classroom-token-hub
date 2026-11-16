@@ -78,7 +78,7 @@ Bulk discounts are available on **Delayed Use** and **Hall Pass** items only. Th
 #### Advanced Settings
 
 - **Auto-Delist Date** — the item is automatically hidden on this date.
-- **Item Expiry in Days** — for delayed-use items, how long the student has before their purchase expires.
+- **Item Expiry in Days** — for delayed-use, privilege and hall-pass items, how many days from purchase the student has to use it. At that moment the item can no longer be used and leaves the student's My Items. A redemption request the student sent before then still waits for your answer. Editing the item later does not change the expiry of items already bought. Leave it blank for an item that never expires.
 - **Redemption Prompt** — optional text shown to students when they redeem a delayed-use item, so you collect what you need up front. Example: *Please describe when and where you'd like to use this item.*
 
 Finish with **Save Item**.
@@ -96,13 +96,11 @@ Finish with **Save Item**.
 
 Before you have created anything: *No store items yet. Use the Add New Item tab to get started.*
 
-### Editing, deactivating, and deleting
+### Editing and deactivating
 
-Each card has three controls in its footer: **Edit**, **Deactivate**, and **Delete Permanently**.
+Each card has two controls in its footer: **Edit** and **Deactivate**.
 
-**Deactivate** asks for confirmation and then *removes it from the student store but preserves purchase history. You can reactivate it later.*
-
-**Delete Permanently** currently refuses to run. Confirming it does not delete anything — the class flashes an error telling you to deactivate the item instead, or to delete the class join code for a full scoped cleanup. Use **Deactivate** for anything you want gone from the store; it is the control that actually works day to day.
+**Deactivate** asks for confirmation and then *removes it from the student store but preserves purchase history.* It retires every version of the item for good — there is no way to bring that exact item back, so create a new item if you want to offer it again. It is the control to use for anything you want gone from the store; per-item hard deletion is not offered here. Delete the class join code instead for a full scoped cleanup.
 
 ### Rent-linked items
 
@@ -122,9 +120,6 @@ Two checkboxes opt an item out of that scrutiny, and they are not the same thing
 - **Bypass CWI Warnings** — a blunter override. It silences warnings *and* hides the item from Economy Health, so the item stops contributing to your economy's health picture entirely.
 
 ## Important notes
-
-> [!WARNING]
-> **Delete Permanently does not currently delete.** Per-item hard deletion is disabled; confirming it only shows an error. Deactivate is the control that removes an item from the store today, and it keeps the item's history intact.
 
 > [!IMPORTANT]
 > **Rent-linked items are ordinary store items carrying a toggle.** They are built here, not in Rent Settings. You build one like any other item and tick the rent-link option; a change to the rent-linked set takes effect on the *next* rent cycle, so adding or removing one never disturbs a cycle already open.

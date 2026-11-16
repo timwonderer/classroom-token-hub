@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.14    | 2026-10-23     | 2.13       | Constitutional  |
+| DOM-OPS-001      | 2.15    | 2026-10-27     | 2.14       | Constitutional  |
 
 > [!IMPORTANT]
+> **v2.15 (2026-10-27), owner ruling 2026-10-27.** §7: internal identifiers stay inside the database. Anything that can leave it (log lines, telemetry, operator-facing pages, URLs) names a class by `class_public_id` or `join_code` and an actor by `seats.public_id`, never by `classes.class_id`, `seats.id` or `users.id`, including inside a composed value such as an idempotency key or correlation identifier. Motivated by support ticket #13, whose log lines carried the class's internal identifier on every line and the seat's in several messages.
+
 > **v2.14 (2026-10-23), owner ruling 2026-10-23.** §Application Availability Gate: health endpoints are public and need no credential; the Access redirect is the maintenance signal, and while the gate is closed the status collector reads nothing from the application. The service token existed only to let the collector reach production during maintenance, which it no longer does.
 
 > **v2.13 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
@@ -390,6 +392,9 @@ health event.
 ## 7. Identity & Trace Model Alignment
 
 *   `seat_id`, `class_id`, and `correlation_id` preserve classroom attribution. When no class/seat context is established, omit actor identity rather than substitute an authentication principal.
+*   *Amended 2.15 (owner ruling 2026-10-27).* `classes.class_id`, `seats.id` and `users.id` are identities, and they stay inside the database. Operational tables key attribution by them (INV-OPS-003, INV-OPS-012).
+*   Anything that can leave the database names a class by `classes.class_public_id` or `classes.join_code`, and an actor by `seats.public_id`. This covers application log lines and their structured fields, telemetry, operator-facing pages such as a ticket's correlation pack, and URLs. `users.id` has no public alias, so an authentication principal is omitted, as above.
+*   An idempotency key or correlation identifier is not itself sensitive, but one composed from an internal identifier carries that identity. It leaves the database only in a form without the identity: a randomly generated identifier verbatim, any other as its leading label and a fingerprint of the whole value. A stored key is never reformatted to achieve this: a deterministic key that changes format no longer matches its earlier run, and the work it guards can repeat.
 
 ---
 

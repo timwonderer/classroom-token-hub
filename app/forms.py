@@ -2,7 +2,9 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField
 from wtforms.validators import DataRequired, ValidationError, Length
 from wtforms import HiddenField, TextAreaField, FloatField, SelectField, IntegerField, DateField, BooleanField, SelectMultipleField, RadioField
-from wtforms.validators import Optional
+from wtforms.validators import Optional, NumberRange
+from wtforms import DecimalField
+from decimal import Decimal
 
 from wtforms import SubmitField
 from wtforms.csrf.core import CSRFTokenField
@@ -278,6 +280,14 @@ class ManualPaymentForm(FlaskForm):
     ], default='checking', validators=[DataRequired()])
     # student_ids will be handled in the template with checkboxes
     submit = SubmitField('Apply')
+
+
+class TeacherFineForm(FlaskForm):
+    """A teacher-applied fine (FEAT-LED-006). Students come from checkboxes."""
+    reason = StringField('Reason', validators=[DataRequired(), Length(max=200)])
+    amount = DecimalField('Amount ($)', places=2, validators=[
+        DataRequired(), NumberRange(min=Decimal('0.01'), max=Decimal('99999999.99')),
+    ])
 
 
 

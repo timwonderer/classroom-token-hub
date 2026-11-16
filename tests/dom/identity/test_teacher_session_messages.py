@@ -18,7 +18,7 @@ def _flashes(client):
 
 def test_background_call_after_sign_out_leaves_no_message_on_login(client, app):
     initialize_as_teacher("chemistry_p1", client, app)
-    client.get("/admin/logout", headers=NAVIGATION)
+    client.post("/admin/logout", headers=NAVIGATION)
     with client.session_transaction() as session:
         session.pop("_flashes", None)  # the ordinary "Logged out." message
 

@@ -89,13 +89,13 @@ def test_failure_after_decision_insert_rolls_back_decision_and_audit(app,monkeyp
     assert AttendanceIntervalInvalidation.query.count()==0 and AuditEvent.query.count()==before
 
 
-def _paid_sources(app,posted=True):
+def _paid_sources(app,posted=True,**source_options):
     from datetime import datetime, timezone
     from app.feats.base import FEATContext
     from app.feats.prod import record_payroll_event
     from app.services.ledger_settlement_service import settle_balances
     from tests.helpers.ledger import record_ledger_fixture
-    classroom,ctx,target,pairs=_sources(app,count=2)
+    classroom,ctx,target,pairs=_sources(app,count=2,**source_options)
     with FEATContext('FEAT-LED-001',idempotency_key='correction-seed'):
         record_ledger_fixture(seat_id=target,class_id=ctx.class_id,amount=0,posted=True)
     event=record_payroll_event(ctx=ctx,target_seat_id=target,payroll_event_type='payroll',

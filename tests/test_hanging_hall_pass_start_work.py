@@ -90,7 +90,6 @@ def _put_student_out_on_a_pass(app, client, classroom, student):
         class_id=classroom.class_id,
         seat_id=student.seat.id,
         destination="Bathroom",
-        requested_at_utc=datetime(2026, 9, 21, 4, 0, tzinfo=timezone.utc),
     )
 
     ctx = _student_ctx(classroom, student)
@@ -212,17 +211,8 @@ def test_stale_prior_day_hanging_pass_does_not_block_a_new_day(app, client):
     of starting work that day -- that would be a new, worse defect traded for
     the one just fixed.
 
-    This is not a narrow timing window. DOM-PROD-001 SS318 requires the
-    scheduled day-end sweep to auto-close a hanging hall pass (synthesize an
-    active row, then inactive/done_for_day, both at the day boundary) -- but
-    ``enforce_daily_limits_job``'s own per-seat loop opens with
-    ``if latest_event.status != "active": continue``, which unconditionally
-    skips every seat whose latest event is inactive/hall_pass. SS318 is not
-    merely delayed; nothing in the codebase implements it, so a hanging pass
-    persists across any number of day boundaries until a teacher manually
-    intervenes. Recorded separately (finding 43) as its own defect -- building
-    the actual SS318 correction is a distinct, larger piece of work than the
-    guard this file tests, not a one-line fix.
+    The sweep closes the old pass whether or not this happens first
+    (tests/test_hall_pass_day_boundary.py).
     """
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     student = classroom.students[0]

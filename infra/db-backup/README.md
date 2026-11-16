@@ -105,8 +105,13 @@ bash infra/db-backup/prerelease.sh backup    # verify container, tunnel, stop th
 bash infra/db-backup/prerelease.sh counts    # every table count in the point equals live production's
 umask 077; pbpaste > ~/cth-backup/identity.txt   # owner: the age key, from the clipboard
 bash infra/db-backup/prerelease.sh restore   # restore + no-resurrection check; deletes the identity, closes the tunnel
+bash infra/db-backup/prerelease.sh evidence <sha>   # sign + upload proof of the above (infra/release-gate/)
 bash infra/db-backup/prerelease.sh close-tunnel   # only if a run is abandoned before restore
 ```
+
+`evidence` is what `release-v2.yml`'s SSH calls actually require to succeed — see
+[`infra/release-gate/README.md`](../release-gate/README.md). Without it, every one of those calls
+refuses, including the harmless transport check.
 
 The three steps share one SSH tunnel to production, owned through the control socket `~/cth-backup/tunnel.sock`:
 `backup` opens it, `counts` and `restore` reuse it (or reopen it), and `restore` closes it on exit. Until

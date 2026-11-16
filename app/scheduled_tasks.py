@@ -8,11 +8,12 @@ import logging
 import secrets
 from typing import Callable, NamedTuple
 from app.feats.base import FEATContextError, requires_feat_context
+from app.services.tlcp import class_log_ref, seat_log_ref
 # TODO (Phase 4): insurance_billing deleted; move to Obligations domain
 # from app.utils.insurance_billing import get_insurance_billing_snapshot
 
 
-@requires_feat_context("FEAT-PROD-001")
+@requires_feat_context("FEAT-PROD-001", key_per_call=True)
 def enforce_daily_limits_job():
     """
     Scheduled job that checks active seats and records an inactive PROD event
@@ -33,6 +34,7 @@ def enforce_daily_limits_job():
         canonical_temporal_resolver,
     )
     from sqlalchemy import func
+    from sqlalchemy.orm import aliased
 
     logger = logging.getLogger('scheduled_tasks')
     logger.info("Starting scheduled daily-limit enforcement job")
@@ -64,8 +66,26 @@ def enforce_daily_limits_job():
             .all()
         )
 
+        # A pass still open ends with its day (DOM-PROD-001 §XI.1): an exit that
+        # no active row names, whatever the seat has done since.
+        return_row = aliased(AttendanceSession)
+        seats_with_open_pass = (
+            db.session.query(AttendanceSession.target_seat_id, AttendanceSession.class_id)
+            .filter(
+                AttendanceSession.reason_code == AttendanceReasonCode.HALL_PASS.value,
+                ~db.session.query(return_row.id).filter(
+                    return_row.class_id == AttendanceSession.class_id,
+                    return_row.target_seat_id == AttendanceSession.target_seat_id,
+                    return_row.hall_pass_id == AttendanceSession.hall_pass_id,
+                    return_row.status == "active",
+                ).exists(),
+            )
+            .distinct()
+            .all()
+        )
+
         seat_ids_by_class_id = {}
-        for seat_id, class_id in active_seats:
+        for seat_id, class_id in {tuple(row) for row in [*active_seats, *seats_with_open_pass]}:
             seat_ids_by_class_id.setdefault(class_id, []).append(seat_id)
 
         checked_count = 0
@@ -120,6 +140,8 @@ def enforce_daily_limits_job():
                         from app.services.attendance_service import close_due_attendance_intervals
                         closures = close_due_attendance_intervals(ctx=ctx, seat_id=seat_id, as_of_utc=now_utc)
                         closed_count += len(closures)
+                        from app.services.attendance_writer_service import close_due_hanging_hall_pass
+                        closed_count += len(close_due_hanging_hall_pass(ctx=ctx, seat_id=seat_id, as_of_utc=now_utc))
                 except FEATContextError:
                     # A constitutional violation is never per-seat noise. Swallowing
                     # it here is how this job reported success while closing zero
@@ -128,8 +150,8 @@ def enforce_daily_limits_job():
                 except Exception as e:
                     logger.error(
                         "Error checking daily limit for seat %s in class %s: %s",
-                        seat_id,
-                        class_id,
+                        seat_log_ref(seat_id),
+                        class_log_ref(class_id),
                         e,
                         exc_info=True,
                     )
@@ -145,7 +167,7 @@ def enforce_daily_limits_job():
         logger.error(f"Daily-limit enforcement job failed: {e}", exc_info=True)
 
 
-@requires_feat_context("FEAT-OPS-001")
+@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 def database_maintenance_job():
     """
     Scheduled job that performs nightly database maintenance tasks.
@@ -215,12 +237,16 @@ def run_rent_reconciliation_job():
             if not is_feature_enabled(class_id, "rent"):
                 skipped += 1
                 continue
-            result = execute_reconcile_rent(class_id)
+            # Each sweep is its own command; DOM-OBL-001 §V.7 succession conflict,
+            # not this key, stops two sweeps from deriving the same cycle twice.
+            result = execute_reconcile_rent(
+                class_id, idempotency_key=f"rent-reconcile:{class_id}:{secrets.token_hex(12)}"
+            )
             reconciled += 1
             if result.cycles_created or result.perks_expired:
                 logger.info(
                     "Rent reconciliation for class %s: reason=%s cycles=%s assessments=%s perks_expired=%s",
-                    class_id,
+                    class_log_ref(class_id),
                     result.reason,
                     result.cycles_created,
                     result.assessments_created,
@@ -229,7 +255,7 @@ def run_rent_reconciliation_job():
         except Exception:
             failed += 1
             db.session.rollback()
-            logger.exception("Rent reconciliation failed for class %s", class_id)
+            logger.exception("Rent reconciliation failed for class %s", class_log_ref(class_id))
             continue
 
     logger.info(
@@ -336,12 +362,12 @@ def run_automatic_payroll_job():
             # from the occurrence, so paydays do not drift.
             skipped += 1
             db.session.rollback()
-            logger.info("Automatic payroll for class %s deferred: no payable attendance", class_id)
+            logger.info("Automatic payroll for class %s deferred: no payable attendance", class_log_ref(class_id))
             continue
         except Exception:
             failed += 1
             db.session.rollback()
-            logger.exception("Automatic payroll failed for class %s", class_id)
+            logger.exception("Automatic payroll failed for class %s", class_log_ref(class_id))
             continue
 
     logger.info(
@@ -645,7 +671,7 @@ def run_collective_goal_expiry_job():
             db.session.rollback()
             logger.exception(
                 "Collective-goal expiry failed for lineage %s in class %s",
-                lineage, class_id,
+                lineage, class_log_ref(class_id),
             )
             continue
 
@@ -740,7 +766,7 @@ def run_savings_interest_job():
         except Exception:
             failed += 1
             db.session.rollback()
-            logger.exception("Savings-interest payout failed for class %s", class_id)
+            logger.exception("Savings-interest payout failed for class %s", class_log_ref(class_id))
     logger.info(
         "Savings-interest job completed; posted %s payout(s), failed %s class(es)",
         posted, failed,
@@ -748,6 +774,111 @@ def run_savings_interest_job():
 
 
 SCHEDULED_JOB_MAX_INSTANCES = 1
+
+
+def run_store_item_expiry_job():
+    """Record EXPIRED for Store items whose ``auto_expiry_days`` boundary passed.
+
+    FEAT-STOR-002 §VIII: expiry is lawful once canonical time proves the
+    product's finite validity boundary was reached and the lineage has not
+    ended. The boundary is ``entitlement_expires_at`` (grant + the frozen
+    version's days, class-local); the event is stamped with it, not with the
+    moment this sweep ran. A lineage with a redemption request waiting is left
+    alone: that request is governed by when it was submitted (DOM-STORE-001
+    §IX), and if it is returned unused a later sweep expires it. Each expiry is
+    its own FEAT-STOR-002 transaction, keyed by lineage, so a failure is
+    isolated and a re-run is a no-op.
+    """
+    from app.extensions import db
+    from app.feats.base import FEATContext
+    from app.models import EntitlementEvent, StoreProduct
+    from app.services import entitlement_service
+    from app.services.entitlement_read_service import (
+        _STORE_EXPIRING_TYPES,
+        entitlement_expires_at,
+        entitlement_past_expiry,
+        entitlements_with_pending_action,
+        used_hall_pass_ids,
+    )
+    from app.services.identity_service import resolve_teacher_seat_for_class
+    from sqlalchemy.orm import aliased
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting scheduled store item expiry job")
+
+    ended = aliased(EntitlementEvent)
+    try:
+        # Only versions with an expiry can expire anything, in any state: a
+        # holding keeps the terms of the version it was granted under, retired
+        # by a later edit or not (FEAT-STOR-002 §VIII).
+        expiring_versions = (
+            db.session.query(StoreProduct.policy_uuid)
+            .filter(StoreProduct.auto_expiry_days > 0)
+            .scalar_subquery()
+        )
+        grants = (
+            EntitlementEvent.query
+            .filter(
+                EntitlementEvent.event_type == "GRANTED",
+                EntitlementEvent.payload["policy_uuid"].as_string().in_(expiring_versions),
+                EntitlementEvent.entitlement_type.in_(_STORE_EXPIRING_TYPES),
+                EntitlementEvent.acquisition_type != "PERK",
+                ~db.session.query(ended.event_id).filter(
+                    ended.entitlement_id == EntitlementEvent.entitlement_id,
+                    ended.class_id == EntitlementEvent.class_id,
+                    ended.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
+                ).exists(),
+            )
+            .order_by(EntitlementEvent.class_id.asc(), EntitlementEvent.timestamp.asc())
+            .all()
+        )
+        due = []
+        for grant in grants:
+            expires_at = entitlement_expires_at(grant)
+            if entitlement_past_expiry(grant, expires_at=expires_at):
+                due.append((grant, expires_at))
+    except Exception:
+        db.session.rollback()
+        logger.exception("Store item expiry job could not enumerate holdings")
+        return
+
+    expired = skipped = failed = 0
+    for grant, expires_at in due:
+        try:
+            ids = [grant.entitlement_id]
+            if (
+                entitlements_with_pending_action(grant.class_id, ids)
+                or used_hall_pass_ids(grant.class_id, ids)
+            ):
+                skipped += 1
+                continue
+            idempotency_key = f"store-expiry:{grant.entitlement_id}"
+            with FEATContext("FEAT-STOR-002", idempotency_key=idempotency_key):
+                entitlement_service.expire_entitlement(
+                    entitlement_id=grant.entitlement_id,
+                    class_id=grant.class_id,
+                    target_seat_id=grant.target_seat_id,
+                    actor_seat_id=resolve_teacher_seat_for_class(grant.class_id).id,
+                    product_id=grant.product_id,
+                    entitlement_type=grant.entitlement_type,
+                    acquisition_type=grant.acquisition_type,
+                    correlation_id=f"corr_{idempotency_key}",
+                    payload={
+                        "source": "run_store_item_expiry_job",
+                        "policy_uuid": (grant.payload or {}).get("policy_uuid"),
+                    },
+                    effective_at=expires_at,
+                )
+            expired += 1
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception("Store item expiry failed for entitlement %s", grant.entitlement_id)
+
+    logger.info(
+        "Store item expiry job completed. Expired %s, skipped %s, failed %s",
+        expired, skipped, failed,
+    )
 
 
 class ScheduledJobSpec(NamedTuple):
@@ -785,6 +916,40 @@ def purge_expired_teacher_signups_job():
         idempotency_key='teacher-signup:purge')
 
 
+def close_prior_day_hall_pass_requests_job():
+    """Close every class's hall-pass requests whose day has ended (FEAT-PROD-002 §III.A)."""
+    from app.extensions import db
+    from app.feats.base import FEATContextError, generate_correlation_id
+    from app.feats.hall_pass_request_feat import close_prior_day_hall_pass_requests
+    from app.models import ClassEconomy
+    from app.services.context_resolver import CanonicalContext
+    from app.services.hall_pass_request_queue import list_class_ids_with_pending_hall_pass_requests
+    from app.services.identity_service import resolve_teacher_seat_for_class
+
+    logger = logging.getLogger('scheduled_tasks')
+    for class_id in list_class_ids_with_pending_hall_pass_requests():
+        try:
+            class_row = db.session.get(ClassEconomy, class_id)
+            close_prior_day_hall_pass_requests(
+                ctx=CanonicalContext(
+                    user_id=class_row.teacher_user_id,
+                    class_id=class_id,
+                    seat_id=resolve_teacher_seat_for_class(class_id).id,
+                    actor_role="teacher",
+                ),
+                correlation_id=generate_correlation_id(),
+                idempotency_key=f"hall-pass-request-close:{generate_correlation_id()}",
+            )
+        except FEATContextError:
+            raise
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Error closing hall-pass requests in class %s: %s",
+                class_log_ref(class_id), e, exc_info=True,
+            )
+
+
 SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
     # The nine hourly jobs below are cron-triggered on distinct minutes of the
     # hour, not `interval, hours=1`. An interval trigger anchors to the instant
@@ -809,11 +974,25 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         trigger_kwargs={'minute': 6},
     ),
     ScheduledJobSpec(
+        id='close_prior_day_hall_pass_requests',
+        name='Close hall-pass requests whose day has ended',
+        func=close_prior_day_hall_pass_requests_job,
+        trigger='cron',
+        trigger_kwargs={'minute': 15},
+    ),
+    ScheduledJobSpec(
         id='enforce_daily_limits',
         name='Enforce daily attendance limits',
         func=enforce_daily_limits_job,
         trigger='cron',
         trigger_kwargs={'minute': 12},
+    ),
+    ScheduledJobSpec(
+        id='store_item_expiry',
+        name='Expire Store items past their expiry',
+        func=run_store_item_expiry_job,
+        trigger='cron',
+        trigger_kwargs={'minute': 3},
     ),
     ScheduledJobSpec(
         id='database_maintenance',

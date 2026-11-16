@@ -41,15 +41,17 @@
                     static, template-authored markup. Dynamic text must be
                     escaped with |e before it is passed to this parameter.
     body_class: optional extra classes on the wrapper (e.g. 'mb-3')
+    heading_tag: element for the title (default h5, always sized as .h5); pick the
+                 level that fits the page outline (INV-ARC-020 §VI.2)
 #}
-{% macro top_card(title, icon=None, header_actions='', body_class='') %}
+{% macro top_card(title, icon=None, header_actions='', body_class='', heading_tag='h5') %}
 <div class="card shadow {{ body_class }}">
   <div class="card-header bg-primary text-white py-3">
     <div class="d-flex justify-content-between align-items-center">
-      <h5 class="mb-0 fw-bold text-white">
+      <{{ heading_tag }} class="h5 mb-0 fw-bold text-white">
         {% if icon %}<span class="material-symbols-outlined icon-text-bottom me-2" aria-hidden="true">{{ icon }}</span>{% endif %}
         {{ title }}
-      </h5>
+      </{{ heading_tag }}>
       {% if header_actions %}<div class="d-flex align-items-center gap-2">{{ header_actions | safe }}</div>{% endif %}
     </div>
   </div>
@@ -66,15 +68,16 @@
     {% call cards.nested_card('Rent Amount & Frequency', icon='attach_money') %}
       <div class="card-body">...</div>
     {% endcall %}
+  heading_tag: element for the title (default h6, always sized as .h6)
 #}
-{% macro nested_card(title, icon=None, header_actions='', body_class='') %}
+{% macro nested_card(title, icon=None, header_actions='', body_class='', heading_tag='h6') %}
 <div class="card shadow-sm {{ body_class }}">
   <div class="card-header bg-white py-3">
     <div class="d-flex justify-content-between align-items-center">
-      <h6 class="mb-0 fw-semibold text-primary">
+      <{{ heading_tag }} class="h6 mb-0 fw-semibold text-primary">
         {% if icon %}<span class="material-symbols-outlined icon-text-bottom me-2 text-primary" aria-hidden="true">{{ icon }}</span>{% endif %}
         {{ title }}
-      </h6>
+      </{{ heading_tag }}>
       {% if header_actions %}<div class="d-flex align-items-center gap-2">{{ header_actions | safe }}</div>{% endif %}
     </div>
   </div>

@@ -511,6 +511,9 @@ function renderHistoryTable(records) {
             case 'left':
                 statusBadge = '<span class="badge bg-primary">Out</span>';
                 break;
+            case 'revoked':
+                statusBadge = '<span class="badge bg-secondary">Revoked</span>';
+                break;
             case 'returned':
                 statusBadge = '<span class="badge bg-success">Returned</span>';
                 break;

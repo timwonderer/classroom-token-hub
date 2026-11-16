@@ -25,7 +25,7 @@ import pytest
 
 from app import db
 from app.feats.base import FEATContext
-from app.models import User
+from app.models import ClassEconomy, User
 from app.services import tlcp
 from tests.dom.interpretation.helpers import create_sysadmin
 from tests.helpers.classroom_initializer import (
@@ -224,7 +224,8 @@ def test_INV_CORE_000__sysadmin_principal_with_class_context_is_a_violation_on_a
     assert line.levelno == logging.ERROR
     assert line.error_class == "InvariantViolation"
     assert line.actor_type == "sysadmin"
-    assert line.class_id == classroom.class_id
+    # The class is named by its public id, never class_id (DOM-OPS-001 §7).
+    assert line.class_public_id == ClassEconomy.query.get(classroom.class_id).class_public_id
     assert "sysadmin principal carries canonical class context" in line.getMessage()
     assert f"surface={surface}" in line.getMessage()
     assert _records(caplog, MISMATCH) == []
@@ -244,7 +245,8 @@ def test_INV_CORE_000__persisted_class_pointer_on_a_sysadmin_is_a_violation(clie
 
     (line,) = _records(caplog, VIOLATION)
     assert line.levelno == logging.ERROR
-    assert line.class_id == classroom.class_id
+    # The class is named by its public id, never class_id (DOM-OPS-001 §7).
+    assert line.class_public_id == ClassEconomy.query.get(classroom.class_id).class_public_id
 
 
 def test_INV_CORE_000__sysadmin_without_class_context_records_nothing(client, app, caplog):
@@ -364,7 +366,8 @@ def test_INV_CORE_000__valid_sysadmin_cookie_with_class_id_is_still_a_violation(
 
     (line,) = _records(caplog, VIOLATION)
     assert line.levelno == logging.ERROR
-    assert line.class_id == classroom.class_id
+    # The class is named by its public id, never class_id (DOM-OPS-001 §7).
+    assert line.class_public_id == ClassEconomy.query.get(classroom.class_id).class_public_id
 
 
 def test_SPEC_OPS_003__student_get_at_sysadmin_logout_is_refused_and_keeps_the_sign_in(client, app, caplog):

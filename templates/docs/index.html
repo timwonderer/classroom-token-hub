@@ -18,8 +18,8 @@
 
 {% block content %}
 {% call docs_hero(
-    "Help & Support Center" if audience == 'user' else "Technical Documentation",
-    "Find the page that matches what you are trying to do." if audience == 'user' else "Invariants, domain authority, and execution contracts."
+    "Help & Support Center",
+    "Find the page that matches what you are trying to do."
 ) %}
     <form action="{{ url_for('docs.search') }}" method="get" class="docs-hero-search">
         <div class="input-group input-group-lg">
@@ -39,7 +39,6 @@
     <!-- Documentation Categories -->
     <h2 class="visually-hidden">Documentation Categories</h2>
     <div class="row g-4 mb-5">
-        {% if audience == 'user' %}
         <!-- Student Guides -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm">
@@ -127,103 +126,6 @@
             </div>
         </div>
 
-        {% endif %}
-
-        {% if audience == 'devops' %}
-        <!-- Project Timeline -->
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-center mb-3">
-                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-primary" aria-hidden="true">timeline</span>
-                    </div>
-                    <h3 class="card-title h5 text-center">Project Timeline</h3>
-                    <p class="card-text text-muted">The interactive history of Classroom Token Hub — from classroom idea
-                        to production platform.</p>
-                    <ul>
-                        <li><a href="{{ url_for('docs.timeline') }}"
-                                class="text-decoration-none fw-semibold text-primary">Interactive Timeline →</a></li>
-                        <li><a href="https://github.com/timwonderer/classroom-token-hub/blob/main/DEVELOPMENT.md"
-                                target="_blank" rel="noopener" class="text-decoration-none">Development Roadmap <span class="visually-hidden">(opens in a new tab)</span></a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX') }}"
-                                class="text-decoration-none">Documentation Index</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History') }}"
-                                class="text-decoration-none">Design Principles &amp; Project History</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Technical Reference -->
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-center mb-3">
-                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-primary" aria-hidden="true">code</span>
-                    </div>
-                    <h3 class="card-title h5 text-center">Developer Reference</h3>
-                    <p class="card-text text-muted">Architecture, database schema, and API docs for developers and
-                        maintainers.</p>
-                    <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL') }}"
-                                class="text-decoration-none">Execution Model</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION') }}"
-                                class="text-decoration-none">Canonical Schema</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='DOMAIN/DOM-ITR-001_INTERPRETATION_DOMAIN') }}"
-                                class="text-decoration-none">Interpretation & Analytics</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY') }}"
-                                class="text-decoration-none">Economy Spec</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE') }}"
-                                class="text-decoration-none">API Reference</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Operations & Deployment -->
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-center mb-3">
-                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-warning" aria-hidden="true">cloud_upload</span>
-                    </div>
-                    <h3 class="card-title h5 text-center">Operations</h3>
-                    <p class="card-text text-muted">Deployment, maintenance, and operational procedures for maintainers.
-                    </p>
-                    <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook') }}"
-                                class="text-decoration-none">Production Transition Runbook</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE') }}"
-                                class="text-decoration-none">System Administration Console</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Legal & Licensing -->
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body">
-                    <div class="text-center mb-3">
-                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-info" aria-hidden="true">gavel</span>
-                    </div>
-                    <h3 class="card-title h5 text-center">Legal & Licensing</h3>
-                    <p class="card-text text-muted">License terms, commercial use policy, attributions, and project
-                        philosophy.</p>
-                    <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/license') }}"
-                                class="text-decoration-none">License (PolyForm Noncommercial)</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/commercial') }}"
-                                class="text-decoration-none">Commercial Use Policy</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/attribution') }}"
-                                class="text-decoration-none">Attribution & Philosophy</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/third-party-notices') }}"
-                                class="text-decoration-none">Third-Party Notices</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
 
     <!-- Quick Links -->

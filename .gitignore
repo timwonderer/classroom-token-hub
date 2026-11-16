@@ -26,9 +26,6 @@ venv
 !.codex/environments/environment.toml
 *_optimized.txt
 *.code-workspace
-docs-site/node_modules/
-docs-site/build/
-docs-site/.docusaurus/
 artifacts/adversarial/bundles/current/cross_class_report.json
 artifacts/adversarial/bundles/current/lineage_report.json
 artifacts/adversarial/bundles/current/manifest.json

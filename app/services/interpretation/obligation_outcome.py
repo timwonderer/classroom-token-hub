@@ -6,16 +6,16 @@ the authoritative ``assessment_events`` surface (DOM-OBL-001, via
 interpreted state per obligation* — one record per ``ASSESSMENT`` correlation in
 the window. Every Q3 candidate is then a pure aggregation over these records, so
 the hard parts (partial payments, mixed payment+waiver, unsatisfied-at-window-end,
-NSF-fee as an ordinary obligation type, student-originated coverage attribution)
-are decided in exactly one place.
+student-originated coverage attribution) are decided in exactly one place.
 
 Two constitutional constraints govern this module:
 
-* **NSF is observationally boring (§8.6).** An NSF fee participates in Q3 solely
-  because an ``NSF_FEE`` ``ASSESSMENT`` event exists in ``assessment_events``. This
-  module treats ``obligation_type`` as opaque data — it never special-cases a
-  string called "NSF", never falls back to a Ledger ``type`` (INV-ITR-015), and
-  never synthesizes a missing obligation (§8.6 scope boundary).
+* **Obligation type is opaque data.** This module never special-cases any
+  particular ``obligation_type`` string, never falls back to a Ledger ``type``
+  (INV-ITR-015), and never synthesizes a missing obligation. No overdraft/NSF
+  fee is assessed (owner ruling 2026-10-07; SPEC-ECON-003 §4.5.1.1); a legacy
+  ``NSF_FEE`` ``ASSESSMENT`` event from before that ruling is read the same way
+  as any other obligation type, never as a special case.
 * **Coverage attribution never infers funds lineage (§8.5).** The paid *dollars*
   of Q3-C2 count only ``PAYMENT`` events whose referenced Ledger row is
   student-originated per the §6.3 classifier (asked of the Ledger domain). Where a

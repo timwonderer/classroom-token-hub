@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-004 | 1.4 | 2026-10-07 | SPEC-OPS-004 v1.3 | Normative |
+| SPEC-OPS-004 | 1.5 | 2026-10-27 | SPEC-OPS-004 v1.4 | Normative |
 
 > [!NOTE]
 > Renumbered from `SPEC-OPS-003` on 2026-09-06. This document and
@@ -97,7 +97,7 @@ Issues are addressed by opaque reference, never by primary key, in both URLs and
 #### Actions
 
 - The **update** form (`OPEN`, `DEV_RESOLVED`, `CLOSED`, plus operator notes) acts only on a teacher-submitted ticket that has not been escalated.
-- On an escalated ticket, the console's only transition is `ESCALATED_TO_DEV` → `DEV_RESOLVED`, recorded through the resolve action, which may also issue a bug reward (DOM-SUP-001 §VIII). The teacher closes the ticket.
+- On an escalated ticket, the console's only transition is `ESCALATED_TO_DEV` → `DEV_RESOLVED`, recorded through the resolve action, which moves no money (DOM-SUP-001 §VIII). The teacher closes the ticket.
 
 Issue records carry `actor_public_id` and `class_public_id`. The console reads across tenants by design — it is the one surface exempt from class scoping — and therefore MUST NOT surface identifying student or teacher data beyond those opaque references.
 
@@ -161,6 +161,11 @@ Rationale: the user guide corpus is audience-isolated at the docs route — a re
 The prior guides at `docs/user-guides/features/sysadmin/` and `docs/user-guides/sysadmin_manual.md` are superseded by this specification.
 
 ## X. Change Notes
+
+**Version 1.5 (2026-10-27):**
+- §6.3: the resolve action no longer issues a bug reward (owner ruling 2026-10-27: retired until badges
+  are formally implemented; DOM-SUP-001 v1.10). The form loses its reward checkbox and amount, and the
+  route ignores both fields if sent.
 
 **Version 1.4 (2026-10-07):**
 - Removed log reading from the console (owner ruling 2026-10-07: logs are read in Grafana). §VI no

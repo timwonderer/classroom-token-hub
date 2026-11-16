@@ -32,7 +32,6 @@ be invented or overridden here; any change is a normative amendment to the spec.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
@@ -354,8 +353,8 @@ class InsuranceResolution:
     reimbursement_percentage: Optional[Decimal] = None
     payout_multiple: Optional[Decimal] = None
     maximum_policy_payout: Optional[Decimal] = None   # currency, period ceiling
-    claims_allowance_period: Optional[int] = None
-    claimable_days_period: Optional[int] = None
+    claims_allowance_weekly: Optional[int] = None
+    claimable_days_weekly: Optional[int] = None
     claim_window_days: Optional[int] = None
     waiting_period_days: Optional[int] = None
 
@@ -450,7 +449,7 @@ def resolve_insurance(
             reimbursement_percentage=Decimal(preset["reimbursement_pct"]),
             payout_multiple=payout_multiple,
             maximum_policy_payout=maximum_policy_payout,
-            claims_allowance_period=_scale_allowance(preset["claims_per_week"], week_equiv),
+            claims_allowance_weekly=int(preset["claims_per_week"]),
             claim_window_days=int(preset["claim_window_days"]),
             recommended_ranges={
                 "reimbursement_pct": RECOMMENDED_RANGES["reimbursement_pct"],
@@ -484,7 +483,7 @@ def resolve_insurance(
             reimbursement_percentage=Decimal(preset["reimbursement_pct"]),
             payout_multiple=payout_multiple,
             maximum_policy_payout=maximum_policy_payout,
-            claimable_days_period=_scale_allowance(preset["claimable_days_per_week"], week_equiv),
+            claimable_days_weekly=int(preset["claimable_days_per_week"]),
             recommended_ranges={
                 "reimbursement_pct": RECOMMENDED_RANGES["reimbursement_pct"],
                 "payout_multiple": RECOMMENDED_RANGES["payout_multiple"],
@@ -518,7 +517,7 @@ def resolve_insurance(
         reimbursement_percentage=None,
         payout_multiple=None,
         maximum_policy_payout=None,
-        claims_allowance_period=_scale_allowance(preset["claims_per_week"], week_equiv),
+        claims_allowance_weekly=int(preset["claims_per_week"]),
         waiting_period_days=int(preset["waiting_period_days"]),
         recommended_ranges={
             "claims_per_week": RECOMMENDED_RANGES["claims_per_week"],
@@ -535,17 +534,6 @@ def resolve_insurance(
             "premium is affordability guidance only; CTH cannot value the external benefit",
         ),
     )
-
-
-def _scale_allowance(weekly_allowance: int, week_equiv: Decimal) -> int:
-    """Scale an integer per-week-equivalent allowance to the coverage interval.
-
-    ``period_allowance = ceil(weekly_allowance × coverage_week_equivalent)`` (SPEC
-    §4.5.8). ``ceil`` governs how many separate claims may be filed, never how much
-    may be paid; total exposure stays bounded by the simultaneous weekly and period
-    payout ceilings.
-    """
-    return int(math.ceil(Decimal(weekly_allowance) * week_equiv))
 
 
 # --------------------------------------------------------------------------- #

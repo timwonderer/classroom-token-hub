@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.42 | 2026-10-27 | 3.41 | Normative |
+| SOP-DOC-001 | 3.61 | 2026-11-15 | 3.60 | Normative |
 
 ---
 
@@ -118,6 +118,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
 - [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
+- [FEAT-LED-006 — Apply Teacher Penalty](../FEATURE-EXECUTION/FEAT-LED-006_APPLY_TEACHER_PENALTY.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
 - [FEAT-OBL-003 — Satisfy Obligation](../FEATURE-EXECUTION/FEAT-OBL-003_SATISFY_OBLIGATION.md)
 - [FEAT-OBL-004 — Insurance Policy Purchase / Enrollment](../FEATURE-EXECUTION/FEAT-OBL-004_INSURANCE_POLICY_PURCHASE.md)
@@ -139,7 +140,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-SUP-002 — Class Announcement Management](../FEATURE-EXECUTION/FEAT-SUP-002_CLASS_ANNOUNCEMENT_MANAGEMENT.md)
 
 ### Specifications (SPEC)
-- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) — v2.5: the Hugo developer-docs site is a brand surface subordinate to the token layers it loads.
+- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) — v2.6: the Hugo developer-docs site is a brand surface subordinate to the token layers it loads.
 - [SPEC-DISPLAY-001 — Display Metadata Resolver](../SPEC/SPEC-DISPLAY-001_DISPLAY_IDENTITY_METADATA_RESOLVER.md)
 - [SPEC-IDEN-001 — Username Retention Verification](../SPEC/SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION.md) — incorporated by FEAT-IDEN-002; memory-only setup staging, retrieval verification and page-bound proof.
 - [SPEC-ECON-001 — Savings Interest Accrual and Disbursement Specification](../SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
@@ -176,10 +177,10 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.10: §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
-- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.0: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
-- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.0: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row.
-- [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.13: initial-host and rehearsal scope; §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
+- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.3: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens; validation is development and operations alone (§V.5).
+- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.3: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, and no check expects a teacher or student to act (the operator may use a test account of their own in a live class); the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
+- [SOP-DEP-002 — Production Release Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
 - [SOP-DEV-001 — Refactor Best Practices](DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md)
@@ -281,11 +282,69 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
-**Version 3.42 (2026-10-27):**
-- Register PRN-PHL-002 v1.1: upstream contributions are welcome but voluntary, not a commercial condition.
+**Version 3.61 (2026-11-15):**
+- Register PRN-PHL-002 v1.2: CTH's own, noncommercial definition of open source, held as a separate philosophy from the OSI definition (two non-overlapping circles); upstream contributions welcome but voluntary; informative only, grants no license, and the commercial-services permission it describes is not yet effective.
 
-**Version 3.41 (2026-10-26):**
-- Register PRN-PHL-002 v1.0: affirmative noncommercial open-source philosophy; informative only, with commercial permission pending legal review.
+**Version 3.60 (2026-11-15):**
+- Register FEAT-CORE-000 v1.2: seat scope stays the rule; §III.1.A names five exception classes (identity establishment including additional classroom creation, session boundary, principal lifecycle for manual and scheduled account deletion, system administration, out-of-band operator), each limited to listed operations with a governing citation; §III.4 records unresolved actor fields as absent; §III.5 defines workflows; §V.1 allows at most one FEAT per request. Owner ruling, 2026-11-15.
+
+**Version 3.59 (2026-11-11):**
+- Register SOP-DEP-001B v1.3 and SOP-DEP-001A v1.3: the validation-responsibility rule is that no check expects a teacher or student to act, not that no live class may be used; the operator may run a check in a live class through a test account the operator holds. Corrects the misstatement introduced in SOP-DEP-001B v1.1 and SOP-DEP-001A v1.2. Owner correction, 2026-11-11.
+
+**Version 3.58 (2026-11-10):**
+- Register DOM-ITR-001 v1.11, DOM-CORE-001 v1.4, DOM-CORE-002 v1.21, and SPEC-ITR-001 v1.7: correct the implementation-status appendices across all four documents, which described the cycle-record materialization writer (`materialize_interpretation_cycle`, invoked by `FEAT-PROD-004`) as absent from runtime; it has existed and been wired in since slice 8.3d. DOM-ITR-001's §XIII.b Historical Configuration Binding row is marked PARTIALLY RESOLVED, not fully resolved: `capture_reference_configuration` binds `hourly_pay_rate`/`policy` to the cycle boundary but reads `expected_weekly_hours`/`cwi` from the current, not boundary-scoped, Economic Engine. Status corrections only; no doctrine or invariant change.
+
+**Version 3.57 (2026-11-08):**
+- Register SOP-DEP-001A v1.2: validation is a development and operations responsibility as SOP-DEP-001B §V.A defines; teachers and students take no part, and on a host serving live classes no live class is used and live classroom activity is never orchestrated.
+
+**Version 3.56 (2026-11-08):**
+- Register SOP-DEP-002 v1.22 as the Production Release Runbook following the completed v2 launch; retain its source path and existing release safeguards.
+- Register SOP-DEP-001 v2.13: distinguish initial-host/rehearsal setup from recurring production releases and remove the stale holding-page host assumption.
+- Register SOP-DEP-001A v1.1, SOP-DB-004 v1.3, SOP-OPS-002 v1.1 and SOP-CORE-000 v1.4: update descriptions of the production release procedure without changing their operational requirements.
+- Register SPEC-SEC-001 v1.6: identify the lookup encoding cutover as historical; the pre-launch absence of data is not permission to replace live credential data.
+- Register INV-ARC-018 v1.6: §VII.2 governs what the application stores, not what a user types into a persisted free-text field; the platform attaches no PII to generated text and stays ignorant of what users enter.
+
+**Version 3.55 (2026-11-08):**
+- Register SOP-DEP-001B v1.2: the required check follows what the release changed in a feature, a browser check for what a browser observes and server-side evidence of the changed behaviour for server-only changes; classroom activity in its own course may satisfy a server-side check; a check that waits on a time boundary after the release window is *pending*, not a deviation; a release's checks are sub-issues of one parent Backlog issue, linked from the release record.
+
+**Version 3.54 (2026-11-08):**
+- Register SOP-DEP-001B v1.1: release validation is a development and operations responsibility; teachers and students take no part and live classroom activity is never orchestrated to satisfy a gate; server-side evidence establishes server behaviour only; *not exercised* is kept for a required check the operator could have run and did not.
+
+**Version 3.53 (2026-11-07):**
+- Register SPEC-PROD-001 v1.5: a payroll share's seconds truncate once over its members' exact durations (SPEC-TIME-001 v1.3), so frozen membership is consistent by the members' sum or that total.
+
+**Version 3.52 (2026-11-06):**
+- Register SOP-DEP-002 v1.21: a `new` release-notes tag; release notes gain a *New* section between Highlights and Fixed.
+
+**Version 3.51 (2026-11-05):**
+- Register SOP-DEP-002 v1.20: release records name no class by `class_id`, `join_code` or name (`DOM-OPS-001` §7); the step 8 balance baseline is one summary row with a fingerprint of the per-class table, not a row per class.
+
+**Version 3.50 (2026-11-04):**
+- Register DOM-STORE-001 v5.10, FEAT-STOR-004 v1.1, and FEAT-STOR-002 v2.5: independent teacher hall-pass adjustments limited to 100 passes per student per request, request replay protection, direct-grant-only removal, and purchased hall passes shown as available count and transaction rather than My Items.
+
+**Version 3.49 (2026-11-04):**
+- Register FEAT-LED-006 v1.0 (Apply Teacher Penalty), DOM-LED-001 v2.19, DOM-PROD-001 v1.15, DOM-OBL-001 v3.4, DOM-CORE-001 v1.3, DOM-CORE-002 v1.20, DOM-POL-001 v2.11 and DOM-ITR-001 v1.10: a teacher-applied fine is a Ledger `penalty`, not an obligation; there is no fine or reward catalog; the NSF fee was never an obligation (owner ruling 2026-11-04, issue #1701).
+
+**Version 3.48 (2026-11-03):**
+- Register DOM-STORE-001 v5.9, FEAT-STOR-003 v1.6, and SPEC-ECON-003 v2.4: weekly filing limits, rejection releases target reservations but retains allowance usage, atomic submission, and claim-level rejection of incomplete claims.
+
+**Version 3.47 (2026-11-01):**
+- Register DOM-STORE-001 v5.8 and FEAT-PROD-002 v1.2: a hall-pass request still open at the end of its class-local day closes like a rejection and consumes nothing, and an approved pass never left on reads Revoked once its day has ended, derived and never stored (owner ruling 2026-11-01).
+
+**Version 3.46 (2026-10-28):**
+- Register DOM-CORE-002 v1.19, DOM-POL-001 v2.10, DOM-POL-001A v2.6, FEAT-POL-001 v2.3, FEAT-CLASS-003 v0.4, SPEC-CLASS-001 v1.1 and SPEC-STORE-001 v1.7: configuration export includes rent-linked store products without their rent-product links; a product not directly purchasable imports HIDDEN with its terms unchanged (owner ruling 2026-10-28).
+
+**Version 3.45 (2026-10-27):**
+- Register DOM-OPS-001 v2.15: `classes.class_id`, `seats.id` and `users.id` stay inside the database; log lines, telemetry, operator-facing pages and URLs name a class by `class_public_id` or `join_code` and an actor by `seats.public_id`, including inside composed idempotency keys and correlation ids (owner ruling 2026-10-27).
+
+**Version 3.44 (2026-10-27):**
+- Register SOP-DEP-001 v2.12: `CONFIGURATION_EXPORT_KEY` joins the deployment secrets; class configuration export/import (SPEC-CLASS-001) refuses every transfer without it.
+
+**Version 3.43 (2026-10-27):**
+- Register DOM-LED-001 v2.18: `bug_reward` leaves INV-LED-017's closed `ledger_transaction.type` vocabulary with the retired sysadmin bug reward (owner ruling 2026-10-27). Migration `e3b7c1d9a2f4` re-creates `ck_ledger_transaction_type_closed_vocabulary` without it and refuses to run while any `bug_reward` row exists.
+
+**Version 3.42 (2026-10-27):**
+- Register DOM-SUP-001 v1.10 and SPEC-OPS-004 v1.5: the sysadmin bug reward is retired until badges are formally implemented (owner ruling 2026-10-27). Resolving an escalated issue returns it to the teacher and moves no money; `issues.eligible_for_reward` is no longer set, and is dropped by a later contract migration; `user_reports` loses its reward status and fields.
 
 **Version 3.40 (2026-10-24):**
 - Register SPEC-TIME-001 v1.3: `shift_calendar_days`, `localize_timestamp` and `same_instant` primitives; `elapsed_duration` truncates once; a decision may not compare timestamps directly; no private resolver wrappers; the resolver's `utc_now` is its internal clock and test seam (owner rulings 2026-10-24).
@@ -454,3 +513,10 @@ Their surviving content lives at:
 ## IX. Amendment
 
 Revisions to this document must increment the version number, update the effective date, and remain consistent with the CTH documentation standard.
+
+## Configuration portability registration (2026-10-25)
+
+- [FEAT-CLASS-010_CONFIGURATION_IMPORT](../FEATURE-EXECUTION/FEAT-CLASS-010_CONFIGURATION_IMPORT.md)
+- [FEAT-CLASS-011_CONFIGURATION_RECEIPT_CLEANUP](../FEATURE-EXECUTION/FEAT-CLASS-011_CONFIGURATION_RECEIPT_CLEANUP.md)
+- [FEAT-CLASS-009](../FEATURE-EXECUTION/FEAT-CLASS-009_CONFIGURATION_EXPORT.md)
+- [SPEC-CLASS-001](../SPEC/SPEC-CLASS-001_CONFIGURATION_PORTABILITY.md)

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.extensions import db
 from app.models import Transaction, TransactionStatus
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, TemporalResolutionError, canonical_temporal_resolver
 
 
 class AllocationIntegrityError(ValueError):
@@ -28,8 +29,19 @@ def allocate_payroll_cents(pricing, *, original_credit, allocation_version):
         cents = int((Decimal(seconds) * rate / Decimal(60)).quantize(Decimal(".01"), rounding=ROUND_HALF_EVEN) * 100)
         if any(type(i["credited_seconds"]) is not int or i["credited_seconds"] < 0 for i in sources):
             raise AllocationIntegrityError("Invalid credited seconds.")
-        if sum(i["credited_seconds"] for i in sources) != seconds:
+        credited = sum(i["credited_seconds"] for i in sources)
+        # SPEC-TIME-001 1.3: the share truncates once over exact durations, so it may
+        # exceed its separately truncated members; cents split by the members' weight.
+        try:
+            proven = credited == seconds or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=[
+                (datetime.fromisoformat(i["opening_timestamp"]), datetime.fromisoformat(i["closing_timestamp"]))
+                for i in sources]).elapsed_seconds == seconds
+        except (KeyError, TypeError, ValueError, TemporalResolutionError) as exc:
+            raise AllocationIntegrityError("Membership does not sum to its pricing share.") from exc
+        if not proven:
             raise AllocationIntegrityError("Membership does not sum to its pricing share.")
+        if cents and not credited:  # SPEC-PROD-001 §VI: nonzero C with S = 0
+            raise AllocationIntegrityError("Nonzero share has no credited membership.")
         ranked, allocated = [], 0
         for source in sources:
             key = (source["opening_event_id"], source["closing_event_id"])
@@ -37,7 +49,7 @@ def allocate_payroll_cents(pricing, *, original_credit, allocation_version):
                 raise AllocationIntegrityError("Invalid interval source identifiers.")
             if key in allocations:
                 raise AllocationIntegrityError("Duplicate interval membership.")
-            quotient = Fraction(cents * source["credited_seconds"], seconds) if seconds else Fraction(0)
+            quotient = Fraction(cents * source["credited_seconds"], credited) if credited else Fraction(0)
             floor = quotient.numerator // quotient.denominator
             allocations[key] = floor
             allocated += floor

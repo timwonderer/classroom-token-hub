@@ -20,12 +20,20 @@ related:
 
 ## Project principle
 
-**Commercial providers may sell services around CTH. They may not sell CTH itself.**
+The project's intended principle: **commercial providers may sell services around CTH. They
+may not sell CTH itself.** This states intent, not a permission in force; see
+[What applies today](#what-applies-today).
 
 Classroom Token Hub is an open-source project with a noncommercial open-source philosophy.
 Its educational purpose depends on educators being able to inspect, study, and modify the
 software under its published licensing terms. This identity does not imply unrestricted
 commercial rights.
+
+"Open source" here carries CTH's own definition, set out in
+[PRN-PHL-002](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-002_Classroom_Token_Hub_Open_Source_Philosophy.md).
+It is a separate philosophy from other definitions of the term, including the Open Source
+Initiative's, and CTH claims no other organization's approval or certification. Do not assume
+CTH's terms meet another definition's requirements; read the license text for your actual rights.
 
 The distinction is simple: **hosting with a free side of CTH, not CTH with a side of hosting.**
 The substance of an arrangement matters, including what customers receive and what payment
@@ -42,6 +50,15 @@ The intended mechanism is a separate, versioned CTH commercial-services license,
 confirmation that the relevant rights holders can grant it. It would provide **automatic,
 conditional permission** to qualifying providers. Compliant providers would not need an
 individual written agreement or discretionary approval.
+
+### What applies today
+
+Until a commercial-services instrument is published with an effective date, **no commercial
+permission beyond the license text exists.** Your rights are only those the
+[license](license.md) grants. Nothing on this page, including the principle, the lists, and
+the examples below, grants a right, waives a license condition, or is an assurance you may
+rely on to begin commercial activity. If you want to offer a commercial service before then,
+contact the project first.
 
 The following sections describe that proposed permission. They are not operative grants or
 new obligations until the legal instrument, its scope, and its effective date are settled.
@@ -126,4 +143,4 @@ its own clear treatment of compliance, breach, cure, and the relationship betwee
 Contact [dev@classroomtokenhub.com](mailto:dev@classroomtokenhub.com) with questions. Contact
 is a clarification route, not a proposed requirement for individual permission.
 
-**Draft updated:** 2026-10-27. Legal mechanism and effective terms pending review.
+**Draft updated:** 2026-11-15. Legal mechanism and effective terms pending review.

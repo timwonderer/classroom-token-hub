@@ -9,7 +9,7 @@ roles: [teacher, developer]
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| PRN-PHL-002 | 1.1 | 2026-10-27 | 1.0 | Informative |
+| PRN-PHL-002 | 1.2 | 2026-11-15 | 1.1 | Informative |
 
 ## Purpose and authority
 
@@ -93,16 +93,24 @@ CTH's principles do not require other independent developers to share its philos
 
 ## Different philosophies of software freedom
 
-The Open Source Initiative's framework includes unrestricted commercial use. CTH's framework
-places noncommercial stewardship and protection of contributed labor among its foundations.
-These priorities are incompatible on commercial-use rights. The OSI framework's requirements
-are documented in its [Open Source Definition](https://opensource.org/osd), particularly
-its provisions on redistribution and fields of endeavor.
+The Open Source Initiative's framework does not allow a license to restrict anyone from
+selling the software or from using it in any field of endeavor, including business. CTH's
+framework places noncommercial stewardship and protection of contributed labor among its
+foundations. These priorities are incompatible on commercial-use rights. The OSI framework's
+requirements are documented in its [Open Source Definition](https://opensource.org/osd),
+particularly its provisions on redistribution and fields of endeavor.
 
-CTH treats these as independently held philosophies. Neither is treated here as subordinate
-to the other. CTH does not recognize OSI as an umbrella authority over its own definition,
-seek its validation, or define its identity through opposition to it. Naming the distinction
-helps readers understand the terms; it does not establish a hierarchy of legitimacy.
+CTH pictures the two as **two separate circles that do not overlap.** Each is a complete
+definition of open source with its own philosophy of who should benefit from shared work. A
+license inside one circle is not inside the other: a license meeting the OSI definition permits
+the unrestricted sale CTH's definition excludes, and CTH's license does not meet the OSI
+definition. Neither circle contains the other, and neither is subordinate to it.
+
+CTH does not recognize OSI as an authority over what counts as open source, does not seek its
+validation, and does not define its identity through opposition to it. Accordingly, CTH does
+not describe its license as OSI-approved and does not use OSI's names or marks to describe
+itself. Naming the distinction helps readers understand the terms; it does not establish a
+hierarchy of legitimacy.
 
 ## Values and legal implementation
 
@@ -122,6 +130,11 @@ and legal terms, and accurately describe the status of any commercial permission
 here cannot create license rights or override INV, DOM, FEAT, or incorporated SPEC contracts.
 
 ## Change Notes
+
+**Version 1.2 (2026-11-15):** Stated the two-definition framing explicitly as two
+non-overlapping circles; restated the OSI definition's commercial-use requirement precisely
+(it bars field-of-endeavor restrictions, while still permitting other license conditions);
+recorded that CTH claims no OSI approval or marks.
 
 **Version 1.1 (2026-10-27):** Made upstream contributions voluntary, removing them as a proposed
 commercial condition and removing submission and monitoring expectations.

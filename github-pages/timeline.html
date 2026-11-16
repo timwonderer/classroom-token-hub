@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Classroom Token Hub - How the project got here, from a teacher's side project to v2.0.">
+    <meta name="description" content="Classroom Token Hub - How the project got here, from a teacher's side project to today.">
     <title>Project Timeline - Classroom Token Hub</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -146,7 +146,7 @@
                 </div>
                 <div class="landing-welcome">
                     <h1>Project Timeline</h1>
-                    <p>How a teacher's side project became Classroom Token Hub v2.0.</p>
+                    <p>How a teacher's side project became Classroom Token Hub.</p>
 
                     <a href="learnmore.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
@@ -821,7 +821,7 @@
                         <span class="material-symbols-outlined" aria-hidden="true">school</span>
                         In real classrooms
                     </h2>
-                    <p class="tl-era-lede">Students started using version 2 every day. The first week found problems no test had, and each one was fixed and written up.</p>
+                    <p class="tl-era-lede">Students started using version 2 every day. The first weeks found problems no test had, and each one was fixed and written up.</p>
                     <ol class="tl-track">
                     <li class="tl-entry" data-tags="security">
                         <details class="tl-card tl-card--patch">
@@ -883,6 +883,144 @@
 <li><strong>Removing a student works.</strong> Teachers can now remove a student who has already clocked in and worked.</li>
 <li><strong>A heads-up before payroll is set up.</strong> If students start working before a class has payroll set up, the teacher gets a one-time alert.</li>
 <li><strong>The September 30 outage is behind us.</strong> The cause of that outage is removed.</li>
+</ul>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="features fixes security">
+                        <details class="tl-card tl-card--patch">
+                            <summary>
+                                <span class="tl-badge tl-badge--patch">v2.1.1</span>
+                                <h3 class="tl-title">Correcting Attendance and Deciding Store Requests</h3>
+                                <span class="tl-date">October 4, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--features">Features</span><span class="tl-tag tl-tag--fixes">Fixes</span><span class="tl-tag tl-tag--security">Security</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>Two new teacher tools and a round of fixes from the first full week of class.</p>
+<ul>
+<li><strong>Attendance can be corrected.</strong> A teacher can mark a recorded work session that should not count, with a reason and a preview of what will change. If that work was already paid, the pay is taken back. The original record stays.</li>
+<li><strong>Store requests can be decided.</strong> Approving a student's request to use a store item failed every time. Teachers can now accept a request, deny it, or return the item to the student unused, all from one Redemptions tab.</li>
+<li><strong>Packs became bulk prices.</strong> Instead of a separate "bundle", a store item can offer a lower price when a student buys several at once.</li>
+<li><strong>A maintenance notice on the sign-in pages.</strong> Students and teachers see a notice about scheduled maintenance when they sign in.</li>
+<li><strong>Hall passes on the status page.</strong> The status page now reports on hall passes by themselves.</li>
+<li><strong>No student names in the server logs.</strong> Adjusting several students' hall passes at once no longer writes their names to the logs.</li>
+</ul>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="fixes">
+                        <details class="tl-card tl-card--crisis">
+                            <summary>
+                                <span class="tl-badge tl-badge--crisis">Store</span>
+                                <h3 class="tl-title">A $24,000 Purchase From an Empty Account</h3>
+                                <span class="tl-date">October 7 – 10, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--fixes">Fixes</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>A student moved all of their checking money into savings, then bought 32 shares of a $750 whole-class goal. The app accepted the $24,000 purchase, left the account deep in the negative, and added a $25 overdraft fee. That is exactly what the written rules said should happen. The rules were wrong.</p>
+<ul>
+<li>A purchase now goes through only if the student can pay for it. Otherwise it is declined before anything happens, like a declined card, with no fee.</li>
+<li>The overdraft fee is gone. No part of the app charges it.</li>
+<li>Each student can join a whole-class goal once.</li>
+<li>Teachers can reverse a goal purchase or a hall-pass purchase, and the Reverse button appears only where reversing works.</li>
+</ul>
+<div class="lesson-box"><strong>Key Learning:</strong> The code did what the rules said. When a rule produces an unfair result, the rule is rewritten first, and then the code follows it.</div>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="security">
+                        <details class="tl-card tl-card--patch">
+                            <summary>
+                                <span class="tl-badge tl-badge--patch">v2.2.2</span>
+                                <h3 class="tl-title">A Security Fix for Hall Passes</h3>
+                                <span class="tl-date">October 11, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--security">Security</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>When students request a hall pass, they type where they are going. That text was shown in the teacher's hall-pass history without being made safe, so a student could have run code in their teacher's session. Teacher announcements had a similar gap. Both were fixed within a day of being found, and there is no sign either was ever used. Read the <a href="https://github.com/timwonderer/classroom-token-hub/security/advisories/GHSA-7fxj-gpw3-23g3" target="_blank" rel="noopener">published security advisory<span class="visually-hidden"> (opens in a new tab)</span></a>.</p>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="fixes security">
+                        <details class="tl-card tl-card--patch">
+                            <summary>
+                                <span class="tl-badge tl-badge--patch">v2.2.3</span>
+                                <h3 class="tl-title">Closing Out a Security and Money Review</h3>
+                                <span class="tl-date">October 12, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--fixes">Fixes</span><span class="tl-tag tl-tag--security">Security</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>A review of the whole app looked for ways to break sign-in or move money incorrectly. Everything it found was fixed in this release.</p>
+<ul>
+<li><strong>Bills cannot overdraw an account.</strong> Rent and insurance payments now follow the same rule as the store. If a student cannot pay, the bill stays unpaid, and late fees apply as the teacher set them.</li>
+<li><strong>A double-click pays once.</strong> Retrying a payment or a manual pay credit can no longer charge or pay the same thing twice.</li>
+<li><strong>Hall-pass limits hold.</strong> Two requests at the same moment can no longer use the same pass or go over the limit on how many students are out at once.</li>
+<li><strong>Stronger teacher sign-in.</strong> Each teacher account has its own limit on sign-in attempts, and a one-time code cannot be used twice.</li>
+<li><strong>Faster under load.</strong> Clock-ins, scheduled jobs, and status checks do much less work.</li>
+</ul>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="features fixes">
+                        <details class="tl-card tl-card--patch">
+                            <summary>
+                                <span class="tl-badge tl-badge--patch">v2.2.4</span>
+                                <h3 class="tl-title">Insurance Students Can Read Before They Buy</h3>
+                                <span class="tl-date">October 16, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--features">Features</span><span class="tl-tag tl-tag--fixes">Fixes</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <ul>
+<li><strong>Terms before purchase.</strong> Every insurance plan shows the teacher's description before a student buys it, and again in the purchase confirmation. Tiered plans used to show it only after purchase.</li>
+<li><strong>A suggested premium.</strong> The insurance form suggests a premium based on what students in the class can earn, shows how the price compares to a student's pay, and applies the suggestion in one click.</li>
+<li><strong>Badges.</strong> Teachers can label a plan with one of 16 badges carried over from version 1, from "Best Value!" to "Definitely Not a Scam".</li>
+<li><strong>Changes reach current holders.</strong> When a teacher edits a plan, students who hold it move to the new version at their next renewal. They see the new price and terms ahead of time, so they can cancel first. A plan taken off sale ends when the period already paid for ends.</li>
+</ul>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="features fixes">
+                        <details class="tl-card tl-card--release">
+                            <summary>
+                                <span class="tl-badge tl-badge--release">v2.3.0</span>
+                                <h3 class="tl-title">Dialogs That Work Everywhere</h3>
+                                <span class="tl-date">October 22, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--features">Features</span><span class="tl-tag tl-tag--fixes">Fixes</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>On October 20, a student using the Google app on an iPhone tried to request a bathroom pass seven times. Each time, the box asking for their PIN came back empty, and the request never reached the teacher.</p>
+<ul>
+<li><strong>No more browser pop-ups.</strong> The PIN is now entered inside the hall-pass window, and all 20 of the app's browser pop-up boxes were replaced with the app's own dialogs. They work in in-app browsers, with keyboards, and with screen readers.</li>
+<li><strong>Deleting a class works.</strong> The Delete Class button did nothing. It now deletes the class, and the delete safety steps work with screen readers and keyboards.</li>
+<li><strong>Help that matches the app.</strong> Help drawers that described features that do not exist, or that work differently, were corrected.</li>
+<li><strong>The status page tells the truth.</strong> On October 20 the status page showed an outage while the app was working, because the app's own traffic limits were turning its checks away. They no longer do.</li>
+</ul>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="features fixes">
+                        <details class="tl-card tl-card--release">
+                            <summary>
+                                <span class="tl-badge tl-badge--release">v2.4.0</span>
+                                <h3 class="tl-title">Copy Your Setup to Another Class</h3>
+                                <span class="tl-date">October 28, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--features">Features</span><span class="tl-tag tl-tag--fixes">Fixes</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>Teachers with several classes no longer have to set each one up by hand.</p>
+<ul>
+<li><strong>Copy Configuration.</strong> Export one class's settings to a file and import it into another class you teach: economy, banking, payroll, rent, store items, insurance plans, and hall passes. You review everything before it is applied. Students, balances, and activity are never copied, and the file expires after five days.</li>
+<li><strong>Rent perks copy too.</strong> A same-night update, v2.4.1, adds store items that come with rent. You link them to rent again in the new class.</li>
+<li><strong>Store purchases work with saved passwords.</strong> Some browsers saved a student's PIN as their password and then filled it into the passphrase box, so purchases failed with "Incorrect passphrase". They no longer do.</li>
+<li><strong>Bug reports earn badges, not money.</strong> The plan to pay students for finding bugs is retired. They will be recognized with badges instead, once badges are built.</li>
+<li><strong>A new app icon.</strong> The gold store symbol now marks the app, this site, and the status page.</li>
 </ul>
                             </div>
                         </details>
@@ -981,22 +1119,16 @@
         <div class="landing-shell landing-footer-grid">
             <div class="landing-footer-links">
                 <a href="./index.html" target="_self">Home</a>
-                <a href="https://github.com/timwonderer/classroom-token-hub" target="_blank" rel="noopener">Project Repository <span class="visually-hidden">(opens in a new tab)</span></a>
-                <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog <span class="visually-hidden">(opens in a new tab)</span></a>
+                <a href="./district.html" target="_self">District Partners</a>
+                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">System Status <span class="visually-hidden">(opens in a new tab)</span></a>
             </div>
             <div class="landing-footer-links">
-                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">System Status <span class="visually-hidden">(opens in a new tab)</span></a>
                 <a href="./terms.html" target="_self">Terms of Service</a>
                 <a href="./privacy.html" target="_self">Privacy Policy</a>
-                <a href="./district.html" target="_self">District Partners</a>
-            </div>
-            <div class="landing-footer-links">
                 <a href="/docs/" target="_self">Developer Documentation</a>
-                <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing <span class="visually-hidden">(opens in a new tab)</span></a>
-                <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">License <span class="visually-hidden">(opens in a new tab)</span></a>
             </div>
             <div class="landing-footer-meta">
-                <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under PolyForm Noncommercial v1.0.0</p>
+                <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm Noncommercial v1.0.0 <span class="visually-hidden">(opens in a new tab)</span></a></p>
                 <p><em>This app is developed, operated, maintained, and self-funded by a full-time high school teacher. As such, we do not display advertisements, use third-party tracking tools, or collect information about you unless it is necessary for the operation of the platform.</em></p>
                 <p><a class="text-decoration-none text-white" href="mailto:support@classroomtokenhub.com">Need help? Reach us at support@classroomtokenhub.com</a></p>
             </div>

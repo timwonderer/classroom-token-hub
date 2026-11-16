@@ -18,9 +18,11 @@ from tests.helpers.class_domain import enable_class_feature
 
 
 def _tier(classroom, group, level):
+    from tests.helpers.insurance_domain import provision_tier_group
+    group_id = provision_tier_group(classroom.class_id, group)
     row = configure_insurance_definition(
         class_id=classroom.class_id,
-        submission=_submission(tier_group=group, tier_level=level),
+        submission=_submission(tier_group_id=group_id, tier_level=level),
         canonical_context=_teacher_ctx(classroom),
         correlation_id=f"corr_{uuid4().hex}",
         idempotency_key=f"cfg:{uuid4().hex}",
@@ -116,3 +118,43 @@ def test_tier_description_shown_before_purchase(app, client):
     modal = html[html.index(f'id="buy-{policy_uuid}"'):]
     assert html.count(terms) >= 2  # tier row + buy modal
     assert terms in modal[: modal.index("</form>")]
+
+
+def test_successor_identity_excludes_coverage_but_independent_same_label_does_not(app):
+    classroom = _setup(app)
+    original = _tier(classroom, "Coverage", 1)
+    assert _buy(classroom, original, "continuity:original").success
+    successor = configure_insurance_definition(class_id=classroom.class_id,
+        submission=_submission(tier_group="Coverage", tier_level=1),
+        canonical_context=_teacher_ctx(classroom), supersedes_policy_uuid=original,
+        idempotency_key=f"successor:{uuid4()}")
+    assert not _buy(classroom, successor.policy_uuid, "continuity:successor").success
+    independent = configure_insurance_definition(class_id=classroom.class_id,
+        submission=_submission(tier_group="Coverage", tier_level=1),
+        canonical_context=_teacher_ctx(classroom), idempotency_key=f"independent:{uuid4()}")
+    assert independent.tier_group_id != successor.tier_group_id
+    assert _buy(classroom, independent.policy_uuid, "continuity:independent").success
+
+
+def test_edit_keeps_sibling_exclusion_and_rejects_group_move(app):
+    import pytest
+    from app.models import InsurancePolicy
+    from app.services.insurance_configuration import InsuranceContractViolation
+    from tests.helpers.insurance_domain import provision_tier_group
+    classroom = _setup(app)
+    basic = _tier(classroom, "Coverage", 1)
+    mid = _tier(classroom, "Coverage", 2)
+    group_id = db.session.get(InsurancePolicy, mid).tier_group_id
+    assert _buy(classroom, basic, "sibling:held").success
+    successor = configure_insurance_definition(class_id=classroom.class_id,
+        submission=_submission(tier_group="Coverage", tier_level=2),
+        canonical_context=_teacher_ctx(classroom), supersedes_policy_uuid=mid,
+        idempotency_key=f"sibling:edit:{uuid4()}")
+    assert successor.tier_group_id == group_id
+    assert _buy(classroom, successor.policy_uuid, "sibling:denied").error_code == "POLICY_ALREADY_HELD_IN_GROUP"
+    other = provision_tier_group(classroom.class_id, "Independent")
+    with pytest.raises(InsuranceContractViolation, match="preserve"):
+        configure_insurance_definition(class_id=classroom.class_id,
+            submission=_submission(tier_group_id=other, tier_level=2),
+            canonical_context=_teacher_ctx(classroom), supersedes_policy_uuid=successor.policy_uuid,
+            idempotency_key=f"sibling:move:{uuid4()}")

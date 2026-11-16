@@ -119,7 +119,7 @@ def stage_navigation(published, titles):
     """Home, the full catalog and one page per category; the hero owns the h1 on home and catalog."""
     generated = {'type': 'docs', 'source_h1': True, 'sourceEditURL': ''}
     write_page(Path('index.md'), {'title': 'Developer documentation', 'type': 'home', 'url': '/',
-                                  'description': 'Invariants, domain authority, feature contracts, and operating procedures.'}, '')
+                                  'description': 'See how and why Classroom Token Hub was built this way.'}, '')
     catalog = [f'{len(published)} documents, generated from the published source set. '
                'This catalog is navigation; SOP-DOC-001 is the canonical index of record.\n']
     for prefix, title, description in GROUPS:
@@ -160,7 +160,7 @@ def stage_theme():
     (SITE / 'themes/hextra').symlink_to(CACHE / 'hextra', target_is_directory=True)
     static = SITE / 'static'
     (static / 'assets/css').mkdir(parents=True)
-    shutil.copytree(ROOT / 'docs-site/src/fonts', static / 'assets/fonts')
+    shutil.copytree(HERE / 'brand/fonts', static / 'assets/fonts')
     # The application's tab icon, so every CTH surface shows the same one.
     (static / 'assets/images').mkdir()
     shutil.copy2(ROOT / 'static/images/icon-192.png', static / 'assets/images/icon-192.png')
@@ -169,7 +169,7 @@ def stage_theme():
         shutil.copy2(DOCS / asset, static / asset)
     # Use current brand tokens/fonts and the existing Jinja wordmark macro.
     for name in ('tokens.css', 'fonts.css'):
-        shutil.copy2(ROOT / 'docs-site/src/css' / name, static / 'assets/css' / name)
+        shutil.copy2(HERE / 'brand/css' / name, static / 'assets/css' / name)
     # SPEC-DES-001 §XIII: consume the public stylesheet without a divergent copy.
     shutil.copy2(ROOT / 'github-pages/style.css', static / 'assets/css/public.css')
     footers = re.findall(r'<footer\b.*?</footer>', (ROOT / 'github-pages/learnmore.html').read_text(), re.S)
@@ -179,9 +179,9 @@ def stage_theme():
     (SITE / 'layouts/_partials/footer.html').write_text(footer)
     hero = Environment(loader=FileSystemLoader(ROOT / 'templates'), autoescape=True).get_template('macros/docs_hero.html').module.docs_hero
     (SITE / 'layouts/_partials/cth-hero.html').write_text(str(hero(
-        'Developer documentation', 'Invariants, domain authority, feature contracts, and operating procedures.')))
+        'Developer documentation', 'See how and why Classroom Token Hub was built this way.')))
     (SITE / 'layouts/_partials/cth-catalog-hero.html').write_text(str(hero(
-        'All documents', 'Explore the contracts, architecture, and operating procedures behind Classroom Token Hub.')))
+        'All documents', 'Explore the underlying rules, architecture, and operating procedures that power Classroom Token Hub.')))
 
 
 def prepare():

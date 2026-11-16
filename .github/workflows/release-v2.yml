@@ -52,7 +52,7 @@ jobs:
           echo "Approved lineage tip: $lineage"
 
       - name: Connect to Tailscale
-        uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
@@ -60,9 +60,15 @@ jobs:
           ping: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
 
       - name: Set up SSH
+        # A key dedicated to this workflow, not the DO_DEPLOY_KEY shared with
+        # login-notice.yml and tailscale-ssh-smoke-test.yml: infra/release-gate/
+        # forces every command sent over this key through guarded-deploy.sh's
+        # fixed classifier, which only recognizes this workflow's three
+        # command shapes. Using the shared key here would silently break the
+        # other two workflows the moment the gate is installed on it.
         uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
         with:
-          ssh-private-key: ${{ secrets.DO_DEPLOY_KEY }}
+          ssh-private-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Set up SSH host key verification
         env:

@@ -15,11 +15,12 @@ consistent:
 * **Q3-C3** — raw event counts by ``(obligation_type, event kind)`` plus per-type
   unsatisfied counts (§8.4), a ``counts`` value.
 
-All three candidates carry the per-obligation-type subject, so NSF-fee
-obligations are identified distinctly in every Q3 output and a reader can inspect
-outcomes *with and without* the NSF-fee contribution (§8.6). NSF fees enter Q3
-only because ``NSF_FEE`` ``AssessmentEvent`` rows exist — their obligation type is
-an ordinary map key, never special compute, never synthesized.
+All three candidates carry the per-obligation-type subject, so a reader can
+inspect outcomes by obligation type. No overdraft/NSF fee is assessed (owner
+ruling 2026-10-07; SPEC-ECON-003 §4.5.1.1); a legacy ``NSF_FEE``
+``AssessmentEvent`` from before that ruling would enter Q3 the same way any
+other obligation type does — an ordinary map key, never special compute, never
+synthesized.
 
 Count-based and amount-based observations are reported as separate candidates and
 waived is a distinct outcome, never merged with paid (§8.3). ``Transaction.type``
@@ -56,7 +57,7 @@ def compute_q3(class_id: str, window_start, window_end) -> list[dict[str, Any]]:
     obligations = interpret_obligations(class_id, window_start, window_end)
 
     # Q3-C1 — count-based satisfaction over the four disjoint outcomes, keyed by
-    # obligation type (§8.4 per-type subject; §8.6 NSF distinctness). Each present
+    # obligation type (§8.4 per-type subject). Each present
     # type gets the full four-outcome vector (explicit zeros); its denominator is
     # that type's obligation count.
     outcome_numerators: dict[str, dict[str, int]] = {}
@@ -102,8 +103,8 @@ def compute_q3(class_id: str, window_start, window_end) -> list[dict[str, Any]]:
     )
 
     # Q3-C3 — raw counts, per (obligation_type, event kind) + per-type unsatisfied.
-    # This is where the per-obligation-type dimension (and NSF distinctness, §8.6)
-    # lives. A window with no obligations reports an explicit zero baseline over
+    # This is where the per-obligation-type dimension lives. A window with no
+    # obligations reports an explicit zero baseline over
     # the global event kinds so the closed ``counts`` vocabulary stays non-empty.
     type_counts: dict[str, int] = {}
     for ob in obligations:

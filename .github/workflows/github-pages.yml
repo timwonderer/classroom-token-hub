@@ -4,8 +4,7 @@ name: Deploy GitHub Pages Site
 #
 #   /            github-pages/   — the static marketing + policy pages
 #   /docs/       docs-generator-proof/ — the Hugo + Hextra developer documentation
-#                                  site, built from the docs/ tree (brand fonts and
-#                                  tokens still come from docs-site/src)
+#                                  site, built from the docs/ tree
 #
 # User guides are NOT published here. They are served by the Flask app at
 # app.classroomtokenhub.com/docs/ — see app/routes/docs.py.
@@ -17,7 +16,6 @@ on:
     paths:
       - 'github-pages/**'
       - 'docs-generator-proof/**'
-      - 'docs-site/src/**'
       - 'docs/**'
       - 'templates/macros/docs_hero.html'
       - 'static/images/icon-192.png'
@@ -26,7 +24,6 @@ on:
     paths:
       - 'github-pages/**'
       - 'docs-generator-proof/**'
-      - 'docs-site/src/**'
       - 'docs/**'
       - 'templates/macros/docs_hero.html'
       - 'static/images/icon-192.png'

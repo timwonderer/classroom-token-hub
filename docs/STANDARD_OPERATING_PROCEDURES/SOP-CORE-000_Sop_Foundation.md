@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level  |
 |------------------|---------|----------------|------------|------------------|
-| SOP-CORE-000 | 1.3 | 2026-10-11 | 1.2 | Constitutional |
+| SOP-CORE-000 | 1.4 | 2026-11-04 | 1.3 | Constitutional |
 
 ---
 
@@ -29,7 +29,7 @@ Constitutional (Tier 1) within the context of human procedure, but explicitly su
 The `STANDARD_OPERATING_PROCEDURES` namespace is organized into the following subdivisions:
 
 - `DATABASE/` (SOP-DB-*): Migrations, backfills, schema-change gating, and state management.
-- `DEPLOYMENT/` (SOP-DEP-*): Live-test and production-transition procedures for releasing code.
+- `DEPLOYMENT/` (SOP-DEP-*): Live-test and production-release procedures for releasing code.
 - `DEVOPS/` (SOP-DEV-*): Refactor and domain-reconstruction procedures.
 - `OPERATIONS/` (SOP-OPS-*): Operating the systems that carry out the Operations domain's purpose, including status publication and incident communication.
 - `SECURITY/` (SOP-SEC-*): Credential, key-custody, and identity-lookup operations;

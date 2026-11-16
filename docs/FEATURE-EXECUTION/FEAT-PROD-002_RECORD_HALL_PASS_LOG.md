@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-002 | 1.1 | 2026-10-01 | 1.0 | Normative |
+| FEAT-PROD-002 | 1.2 | 2026-11-01 | 1.1 | Normative |
+
+*Revision 1.2 (2026-11-01; owner ruling 2026-11-01): §IV adds the derived Revoked state. §III.A adds the day-boundary close of a pending request, handled like a rejection, and refuses approval of one whose day has ended. §III is unchanged.*
 
 *Revision 1.1 (2026-10-01; ratified by the owner 2026-10-01): adds §III.A, resolution of a pending hall-pass request (approve, reject, student cancel) held in `pending_actions` (DOM-STORE-001 5.3 §IX). §III is unchanged.*
 
@@ -102,6 +104,8 @@ If any step is refused (for example, no pass is available, or the settings prohi
 
 **Cancel** (student): lock and delete the row only when its `seat_id` is the student's own seat in `ctx`. Any other request is not found. Nothing else is written.
 
+**Day-boundary close** (system): once the class-local day a request was submitted on has ended, lock and delete the row, the same as a rejection. Nothing else is written; no pass is consumed. Approval of such a request is refused; the row stays until this close resolves it.
+
 Reads of pending requests (teacher queue, dashboard, student status) take no lock and write nothing.
 
 ---
@@ -111,6 +115,7 @@ Reads of pending requests (teacher queue, dashboard, student status) take no loc
 - Hall-pass request timestamps MUST be recorded in class canonical time.
 - Exit and return timing remain attendance-session concerns and are not stored here.
 - Any hall-pass display or comparison logic MUST use canonical temporal evaluation.
+- A pass approved and never left on reads **Revoked** once the class-local day it was issued on has ended, and leaving on it is refused. Revoked is derived from the row's `timestamp`, never stored: nothing is written to `hall_pass_logs` or `attendance_sessions`, and the pass stays used.
 
 ---
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.17    | 2026-10-09     | 1.16       | Constitutional |
+| DOM-CORE-002 | 1.21 | 2026-11-10 | 1.20 | Constitutional |
 
 ---
 
@@ -181,7 +181,7 @@ authority in v2 and must not be treated as canonical schema surfaces.
 - `economic_engine` — class-level economic configuration and projection state; append-only versions, each with the `effective_at` from which it governs (`DOM-CLASS-003` §VII; 1.12)
 - `feature_settings` — per-class economy policy configuration that applies when a feature is enabled; enablement itself stays in `class_features` (DOM-CLASS-001 §VI; DOM-POL-001A §IV; registered in 1.10)
 
-Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `hall_pass_settings`, `store_products`, `store_item_visibility`, and `insurance_policies` — are **not** Class Configuration authority. They are stored in the Policies repository (`DOM-POL-001`) as immutable, append-only version rows. Policies does not originate mutations; the domain that initiates a change (Class Config UI submissions, insurance authoring, store curation, etc.) submits a new definition and Policies records it under a new `policy_uuid`. The consuming operational domain — `DOM-OBL-001` for rent, `DOM-PROD-001` for payroll and hall-pass, `DOM-STORE-001` for store/entitlements, the Insurance operational flow for insurance — reads the current `policy_uuid` and owns only the operational facts that result (bill cycles, payroll events, hall-pass logs, entitlement events, etc.). See `DOM-POL-001` §V and §X.
+Policy definition tables — `rent_settings`, `payroll_settings`, `hall_pass_settings`, `store_products`, `store_item_visibility`, and `insurance_policies` — are **not** Class Configuration authority. They are stored in the Policies repository (`DOM-POL-001`) as immutable, append-only version rows. Policies does not originate mutations; the domain that initiates a change (Class Config UI submissions, insurance authoring, store curation, etc.) submits a new definition and Policies records it under a new `policy_uuid`. The consuming operational domain — `DOM-OBL-001` for rent, `DOM-PROD-001` for payroll and hall-pass, `DOM-STORE-001` for store/entitlements, the Insurance operational flow for insurance — reads the current `policy_uuid` and owns only the operational facts that result (bill cycles, payroll events, hall-pass logs, entitlement events, etc.). See `DOM-POL-001` §V and §X.
 
 `banking_settings` (savings APY, overdraft fees, interest calculation, disbursement schedule) is **not** a policy repository concern. Its content is inherently Class Configuration → `economic_engine` business, governed by `DOM-CLASS-001` (schema ownership) and `DOM-CLASS-002` (economy governance: interest formulas, overdraft behavior). Class-level economic evolution is versioned by the `economic_engine` rows themselves (`DOM-CLASS-003` §V), not through the Policies repository.
 
@@ -294,7 +294,7 @@ The protected-row `lineage_event_id` linkage is mandated narrowly by `INV-ARC-01
 
 **Tables:**
 
-- `interpretation_cycle_record` — durable, immutable per-cycle materialization bound to `payroll_cycle_id`, self-describing via persisted economic reference values (`DOM-ITR-001` §IX). Materialized only as a declared side effect of `FEAT-PROD-004` at payroll completion. Table built in the runtime schema via migration `b3d7f1a9c2e4` (persistence surface implemented); the `FEAT-PROD-004` materialization writer that populates it is not yet built, so no rows exist yet.
+- `interpretation_cycle_record` — durable, immutable per-cycle materialization bound to `payroll_cycle_id`, self-describing via persisted economic reference values (`DOM-ITR-001` §IX). Materialized only as a declared side effect of `FEAT-PROD-004` at payroll completion. Table built in the runtime schema via migration `b3d7f1a9c2e4` (persistence surface implemented); the `FEAT-PROD-004` materialization writer (`materialize_interpretation_cycle`) that populates it is implemented, writing one row per `(class_id, payroll_cycle_id)` on every payroll-cycle completion.
 
 The former `interpretation_snapshots` (cache) and `interpretation_annotations` tables are retired and superseded by `interpretation_cycle_record` per `DOM-ITR-001` v1.4 §IX. Neither existed in the runtime schema.
 
@@ -337,7 +337,7 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 **Tables (per `DOM-POL-001` §X boundary attribution):**
 
 - `rent_settings` — rent policy definitions (rate, cycle length, effective boundaries) as append-only version rows; consumed by `DOM-OBL-001`
-- `payroll_settings`, `payroll_rewards`, `payroll_fines` — payroll policy definitions (wage rate, frequency, reward/fine catalog); `payroll_settings.pay_rate` stores the normalized per-minute rate as `NUMERIC(18,8)` so conversions from teacher-entered hourly or daily rates retain sub-cent precision; consumed by `DOM-PROD-001`. `payroll_settings` is append-only and effective-dated, keyed by `policy_uuid`, with exactly the columns in `DOM-POL-001A` §V.F (operator ruling 2026-09-30; 1.11). Its `rounding_mode` column is retired historical data, not a supported setting
+- `payroll_settings` — payroll policy definitions (wage rate, frequency); `payroll_settings.pay_rate` stores the normalized per-minute rate as `NUMERIC(18,8)` so conversions from teacher-entered hourly or daily rates retain sub-cent precision; consumed by `DOM-PROD-001`. `payroll_settings` is append-only and effective-dated, keyed by `policy_uuid`, with exactly the columns in `DOM-POL-001A` §V.F (operator ruling 2026-09-30; 1.11). Its `rounding_mode` column is retired historical data, not a supported setting
 - `hall_pass_settings` — hall-pass policy definitions (allowed destinations, limits); consumed by `DOM-PROD-001` at grant time
 - `store_products`, `store_item_visibility` — purchasable / rent-linked entitlement offering definitions and per-class visibility; consumed by `DOM-STORE-001`. `store_products` is the single versioned product table that replaced `store_items` and the earlier `store_products` (migration `b7c41e9a2f30`); renamed here in 1.10
 - `insurance_policies` — immutable insurance definition rows (`DOM-POL-001` §X "insurance definitions -> Policies"; `DOM-POL-001A` §D); consumed by the insurance entitlement lifecycle (`DOM-STORE-001`); named here in 1.10
@@ -378,7 +378,76 @@ No additional tables may be introduced without amendment to this document.
 
 ---
 
+## Configuration portability (owner ruling 2026-10-25)
+
+Class Configuration owns the class-scoped `configuration_import_receipts` execution
+records: `(class_id, operation_id)` primary key, actor Seat, request fingerprint,
+expiry, accepted timestamp and minimal result. Class deletion cascades receipts.
+Receipts contain no uploaded file, product definitions or principal references.
+They expire with the export and may be deleted by an explicit, logged cleanup command;
+this does not delete audit evidence. Expired confirmation authority is always rejected,
+including after cleanup. Receipts are not audit records or permanent import history.
+
+FEAT-CLASS-009 issues exports, FEAT-CLASS-010 previews/confirms imports, and
+FEAT-CLASS-011 cleans expired receipts for one class. Each owns one execution boundary
+and composes domain guards/queries/commands, never another FEAT. The referenced
+SPEC-CLASS-001 is incorporated in full. Import neither enables features nor rebalances
+prices. It cannot modify class identity, labels, timezone, membership or past activity.
+
+## Configuration export verification capability (owner ruling 2026-10-25)
+
+Identity owns `users.configuration_export_verifier` (nullable SHA-256 verifier of a
+256-bit random reference) and `configuration_export_expires_at` (nullable UTC).
+Only teacher principals use them. They hold no configuration or source-class identity.
+One reference is current per teacher; issuance replaces it and expires in five days.
+This is verification state, not cross-class economic authority. Export resolves one
+source CanonicalContext; import independently resolves one owned destination context.
+Identity exposes explicit lock, verification and rotation commands. The principal row
+lock is held through the encompassing FEAT commit/rollback. Expiry and the current
+reference are rechecked after waiting, before any receipt lookup. Account deletion
+removes this state. SPEC-CLASS-001 is incorporated for artifact and execution binding.
+
+## Configuration portability and canonical insurance groups
+
+Owner ruling 2026-10-25 incorporates SPEC-CLASS-001. Policies exposes pure portable
+projections and shared definition commands to FEAT-CLASS-009/010 without coordinating
+other domains. FEAT-POL-001 describes the definition contract; it is not an executor
+that other FEATs call. Existing exclusive-writer wording does not forbid these declared
+FEATs from composing the same domain commands.
+
+Hall-pass import replaces the complete definition with a new row and retires the old
+one; selected destinations are not merged. Store/insurance imports create independent
+products and groups with fresh identifiers, never predecessor links to destination
+products. Rent-linked products export as ordinary products; their source rent-product
+links are excluded (owner ruling 2026-10-28), so an imported product is not rent-linked
+until the teacher links it in the destination Store. One not directly purchasable is
+imported HIDDEN with its terms unchanged (SPEC-STORE-001). Destination
+rent-product links survive replacement of the other rent settings.
+
+`insurance_policies.tier_group_id` is a nullable canonical UUID scoped by class_id.
+`tier_group` and `tier_name` are presentation only. Membership and unique active ranks
+use `(class_id, tier_group_id, tier_level)`, never labels. New groups always receive a
+fresh identifier, including same-name groups. Editing a member preserves group identity.
+
+The one-time successor migration groups the existing available definitions by their
+exact stored class/label membership (the pre-cutover contract), creates new UUID groups,
+publishes identical-term successors and retires predecessors from new selection. Old
+definition payloads and operational facts are not rewritten. Existing coverage migrates
+through normal succession at its boundary. Purchase exclusion resolves predecessor
+coverage through explicit successor links to canonical group identity; it never falls
+back to labels. The migration must refuse ambiguous live coverage without a successor
+path rather than invent membership. This is a forward-only cutover, not a dual writer.
+
+
+### Canonical group storage
+
+Policies owns `insurance_tier_groups` with composite primary key `(class_id, group_id)`
+and display `name`. Class deletion cascades groups. Policies reference it through a
+class-scoped composite foreign key. This is group identity, not policy versioning.
+
 ## VIII. Amendment
+
+Version 1.20 (2026-11-04) removes `payroll_fines` and `payroll_rewards` from the canonical table set. Neither table exists (both were dropped in the v2 migration); there is no fine or reward catalog (owner ruling 2026-11-04, issue #1701). A one-time teacher credit is a PROD `manual_credit` event. A teacher-applied fine is a `ledger_transaction` row of type `penalty` (`DOM-LED-001` v2.19, `FEAT-LED-006`).
 
 Version 1.17 (2026-10-09) registers the hall-pass consumption record and its unique partial index (migration `35a9a0d3ab93`). Source authority is `FEAT-PROD-002` §III and `DOM-STORE-001` §VIII.E.6, with the owner's ruling that the hall-pass log is the only legal consumption reference.
 

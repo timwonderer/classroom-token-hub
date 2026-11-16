@@ -473,8 +473,8 @@ def generate_teacher_reset_code(
 
     # Never log the code itself (FEAT-IDEN-003 §III.B Step 3).
     logger.info(
-        "Reset code generated for seat %s in class %s by teacher seat %s",
-        seat.id, ctx.class_id, teacher_seat.id,
+        "Reset code generated for seat %s by teacher seat %s",
+        seat.public_id, teacher_seat.public_id,
     )
 
     display_name = seat.identity_profile.full_name if seat.identity_profile else None

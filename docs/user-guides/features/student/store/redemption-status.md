@@ -3,7 +3,7 @@ title: Track Redemptions
 category: features
 subcategory: student-store
 roles: [student]
-description: Read the six statuses in My Items, use what you own, and know which button appears when.
+description: Read the statuses in My Items, use what you own, and know which button appears when.
 keywords: [store, my items, redemption, status, ready to use, pending approval, processing, used, denied, expired, revoked, PIN]
 related:
   - user-guides/features/student/store/browse-buy
@@ -14,25 +14,23 @@ related:
 
 ## Overview
 
-The **My Items** tab of your **Store** page holds everything you own. Buying and using are two separate steps for most items, and this tab is the gap between them.
+The **My Items** tab of your **Store** page holds what you can still use, and anything you have asked to use that your teacher has not answered yet. Buying and using are two separate steps for most items, and this tab is the gap between them. Once an item is used, expired, denied or revoked, it leaves the tab.
 
 ## Step-by-step instructions
 
 ### Reading a status
 
-Every item carries one of six status badges:
+Every item in the tab carries one of these status badges:
 
 | Badge | What it means |
 | --- | --- |
 | **Ready to Use** | Yours. Use it whenever you want. If your teacher returns a request, the item comes back here and you can ask again. |
 | **Pending Approval** | You asked to use it. Your teacher has not answered yet. |
 | **Processing** | In progress. Nothing for you to do. |
-| **Used** | You already used it. |
-| **Expired** | Its time ran out before you used it. |
-| **Denied** | Your teacher said no to your request. Asking counts as using the item, so it is used up and nothing is refunded. |
-| **Revoked** | Your teacher voided the item before you asked to use it. |
 
-Each item also shows its type, the date you bought it, and — if it has one — an expiry date. Watch that date. **Expired** is not something your teacher did to you; it is what happens when the window closes on an unused item.
+Each item also shows its type, when you bought it, and — if it has one — when it expires. Watch that time. When it passes, an unused item can no longer be used and leaves the tab; that is not something your teacher did to you, it is what happens when the window closes. If you asked to use it before then, your request still stands and your teacher answers it as usual.
+
+An item also leaves the tab once it is used, when your teacher denies your request (asking counts as using the item, so it is used up and nothing is refunded), or when your teacher voids it before you asked to use it.
 
 ### Using what you own
 
@@ -54,7 +52,7 @@ For an immediate item you will see *You used [item].* For a delayed or hall pass
 
 ### If the tab is empty
 
-*No Purchased Items — You haven't purchased any items yet. Browse the store to get started!*
+*No items to use — You have no items to use right now. Browse the store to get started!*
 
 ## Important notes
 

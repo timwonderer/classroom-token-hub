@@ -73,7 +73,9 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
         )
     if has_exact_reversal(transaction):
         return PurchaseResolutionEligibility(False, "This transaction has already been reversed.")
-    if obligations_service.is_obligation_related_transaction(transaction.id):
+    if obligations_service.is_obligation_related_transaction(
+        transaction.id, class_id=transaction.class_id
+    ):
         return PurchaseResolutionEligibility(
             False, "An obligation-related transaction cannot be reversed or refunded."
         )

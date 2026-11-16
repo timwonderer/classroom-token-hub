@@ -38,13 +38,14 @@ def test_DOM_LED_001__idempotent_transaction_types_are_explicit():
         # FEAT-PROD-005 interval recovery and FEAT-PROD-003 residual recovery.
         "payroll_correction",
         "manual_payment",
-        "bug_reward",
         "issue_reversal",
         "issue_compensation",
         # Added by the canonical rent obligation model (564fa49a) without
         # updating this pin. A rent charge must not double-post on retry, so it
         # belongs in the set; the enumeration here is what had gone stale.
         "rent_payment",
+        # FEAT-LED-006 teacher fines (#1701): a fine must not post twice on retry.
+        "penalty",
         "Interest",
         "void_item_removed",
     })

@@ -55,7 +55,7 @@ govern wording where a term would create a barrier.
 |----------|---------|
 | Root files (`README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`, `SECURITY.md`) | Project orientation, chronology, roadmap, contributor and security policy |
 | `.claude/` | Operational guidance for AI agents. Never authoritative |
-| `docs-site/` | Docusaurus workspace that publishes the developer tree to classroomtokenhub.com/docs |
+| `docs-generator-proof/` | Hugo + Hextra build that publishes the developer tree to classroomtokenhub.com/docs |
 
 ---
 

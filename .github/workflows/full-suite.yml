@@ -64,7 +64,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-test.txt
           # tests/test_status_page.py imports the status service, which needs
           # google-auth and Firestore. Those belong to the status service, not
           # the app, so they stay out of requirements.txt; deploy-status.yml
@@ -85,6 +85,11 @@ jobs:
           # an unset secret expands to an empty string, which defeats the
           # setdefault() the suite relies on.
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+          # The unsafe-markup guard compares against a base commit's baseline,
+          # which constitutional-ci takes from the pull request. A scheduled
+          # run of main has no pull request: it checks the commit under test
+          # against its own committed baseline.
+          JINJA_GUARD_BASE_SHA: ${{ github.sha }}
         run: pytest -q
 
       - name: Upload pytest artifacts

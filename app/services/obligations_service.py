@@ -69,7 +69,6 @@ def get_seat_ids_with_self_payments(class_id: str, window_start, window_end) -> 
         db.session.query(ObligationAssessment.seat_id)
         .join(Transaction, Transaction.id == ObligationAssessment.ledger_transaction_id)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == "PAYMENT",
             ObligationAssessment.timestamp >= window_start,
             ObligationAssessment.timestamp < window_end,
@@ -133,7 +132,6 @@ def get_obligation_events_for_window(
     assessments = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == "ASSESSMENT",
             ObligationAssessment.timestamp >= start,
             ObligationAssessment.timestamp < end,
@@ -149,7 +147,6 @@ def get_obligation_events_for_window(
     withdrawn = {
         row.correlation_id
         for row in db.session.query(ObligationAssessment.correlation_id).filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == "WITHDRAWN",
             ObligationAssessment.timestamp < end,
         )
@@ -176,7 +173,6 @@ def get_obligation_events_for_window(
         db.session.query(ObligationAssessment, Transaction.amount_cents)
         .outerjoin(Transaction, Transaction.id == ObligationAssessment.ledger_transaction_id)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.correlation_id.in_(correlation_ids),
             ObligationAssessment.event_type.in_(["PAYMENT", "WAIVED"]),
             ObligationAssessment.timestamp < end,
@@ -919,7 +915,6 @@ def are_required_obligations_satisfied(
     assessments = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.bill_cycle_id.in_(cycle_ids),
             ObligationAssessment.event_type == "ASSESSMENT",
         )
@@ -998,7 +993,6 @@ def seat_has_surviving_obligations(
     assessments = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.seat_id == seat_id,
             ObligationAssessment.event_type == "ASSESSMENT",
             ObligationAssessment.obligation_type.in_(obligation_types),
@@ -1148,7 +1142,6 @@ def get_paid_rent_assessments_for_cycle(
     query = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
             ObligationAssessment.event_type == 'ASSESSMENT',
             ObligationAssessment.bill_cycle_id.in_(matching_bill_cycle_ids),
@@ -1179,7 +1172,7 @@ def get_paid_rent_assessments_for_cycle(
 NON_OBLIGATION_ASSESSMENT_TYPES = frozenset({"NSF_FEE"})
 
 
-def is_obligation_related_transaction(transaction_id: int | None) -> bool:
+def is_obligation_related_transaction(transaction_id: int | None, *, class_id: str) -> bool:
     """Return True iff a ledger transaction has obligation provenance.
 
     Per SPEC-OPS-001 §VII (INV-OPS-008), obligation-relatedness is determined by
@@ -1194,17 +1187,21 @@ def is_obligation_related_transaction(transaction_id: int | None) -> bool:
 
     Args:
         transaction_id: Ledger transaction id to test (None → False).
+        class_id: Class the transaction belongs to; obligation events are read
+            only within it (INV-ARC-002).
 
     Returns:
         True if any obligation event references this transaction, else False.
     """
     if transaction_id is None:
         return False
-    return bool(obligation_related_transaction_ids([transaction_id]))
+    return bool(obligation_related_transaction_ids([transaction_id], class_id=class_id))
 
 
-def obligation_related_transaction_ids(transaction_ids) -> frozenset[int]:
+def obligation_related_transaction_ids(transaction_ids, *, class_id: str) -> frozenset[int]:
     """``is_obligation_related_transaction`` for many transactions in one query."""
+    if not class_id:
+        raise ValueError("class_id is required to read obligation provenance")
     ids = [tid for tid in transaction_ids if tid is not None]
     if not ids:
         return frozenset()
@@ -1212,6 +1209,7 @@ def obligation_related_transaction_ids(transaction_ids) -> frozenset[int]:
         row[0]
         for row in db.session.query(ObligationAssessment.ledger_transaction_id)
         .filter(
+            ObligationAssessment.class_id == class_id,
             ObligationAssessment.ledger_transaction_id.in_(ids),
             ObligationAssessment.obligation_type.notin_(NON_OBLIGATION_ASSESSMENT_TYPES),
         )
@@ -1238,7 +1236,6 @@ def get_payment_events_for_assessment(
         db.session.query(ObligationAssessment)
         .filter(
             ObligationAssessment.correlation_id == assessment.correlation_id,
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == 'PAYMENT',
         )
         .order_by(ObligationAssessment.timestamp.asc())
@@ -1284,7 +1281,6 @@ def get_rent_payment_history(
         db.session.query(ObligationAssessment)
         .filter(
             ObligationAssessment.seat_id == seat_id,
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
         )
         .order_by(ObligationAssessment.timestamp.desc())
@@ -1302,7 +1298,6 @@ def get_rent_waivers_for_seat(
         db.session.query(ObligationAssessment)
         .filter(
             ObligationAssessment.seat_id == seat_id,
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
             ObligationAssessment.event_type == 'WAIVED',
         )
@@ -1347,7 +1342,6 @@ def get_rent_waiver_history_for_class(
         db.session.query(ObligationAssessment, BillCycle)
         .outerjoin(BillCycle, ObligationAssessment.bill_cycle_id == BillCycle.id)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
             ObligationAssessment.event_type == 'WAIVED',
         )

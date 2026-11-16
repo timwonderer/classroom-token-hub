@@ -39,7 +39,7 @@ def test_published_artifact_carries_no_theme_branding():
 
 @requires_built_site
 def test_engineering_notes_are_not_published():
-    """Engineering notes (docs-site/blog) are not authorized; neither pages nor links may ship."""
+    """Engineering notes are not authorized for publication; neither pages nor links may ship."""
     public = CACHE / 'hugo/public'
     assert not (public / 'notes').exists()
     assert not any('/docs/notes/' in p.read_text() for p in public.rglob('*.html'))

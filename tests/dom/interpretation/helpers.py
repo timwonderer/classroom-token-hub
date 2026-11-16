@@ -267,7 +267,7 @@ def issue_reverse_scope_mismatch_state(client, app):
     return classroom, submitter, other_student, issue, tx
 
 
-def sysadmin_reward_issue_state(client, app):
+def sysadmin_escalated_issue_state(client, app):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     student = classroom.students[0]
     category = IssueCategory(
@@ -275,7 +275,7 @@ def sysadmin_reward_issue_state(client, app):
         category_type="general",
         is_active=True,
     )
-    with FEATContext("FEAT-IDEN-001", idempotency_key="sysadmin_issue_reward:category"):
+    with FEATContext("FEAT-IDEN-001", idempotency_key="sysadmin_escalated_issue:category"):
         db.session.add(category)
         db.session.flush()
     # The student files the ticket and the teacher escalates it, both through
@@ -292,8 +292,8 @@ def sysadmin_reward_issue_state(client, app):
         category.id,
         "Found a reproducible bug in the app.",
         expected_outcome="Expected behavior should work.",
-        correlation_id="sysadmin_issue_reward:issue",
-        idempotency_key="sysadmin_issue_reward:issue",
+        correlation_id="sysadmin_escalated_issue:issue",
+        idempotency_key="sysadmin_escalated_issue:issue",
     )
     login_teacher(client, classroom)
     response = client.post(
@@ -317,7 +317,7 @@ def create_sysadmin(username: str = "sysadmin") -> User:
     and no TOTP round-trip required.
     """
     _salt, u_hash, u_lookup = build_hashed_username_fields(username)
-    with FEATContext("FEAT-IDEN-001", idempotency_key=f"sysadmin_issue_reward:sysadmin:{username}"):
+    with FEATContext("FEAT-IDEN-001", idempotency_key=f"sysadmin_escalated_issue:sysadmin:{username}"):
         user = User(
             user_role=UserRole.SYSADMIN,
             username_hash=u_hash,

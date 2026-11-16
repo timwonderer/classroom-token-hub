@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-002 | 2.4 | 2026-10-14 | 2.3 | Normative |
+| FEAT-STOR-002 | 2.5 | 2026-11-04 | 2.4 | Normative |
 
 ## I. Purpose
 
@@ -158,6 +158,15 @@ Revocation authority depends on provenance, entitlement type, and policy semanti
 A direct teacher grant may be revoked by a lawful teacher actor while unused.
 
 The original grant remains immutable history.
+
+Teacher hall-pass adjustments select only unused direct grants in the canonical
+class, exclude passes with pending requests, and reject the entire seat adjustment
+if too few are removable. Purchased passes and rent perks are not candidates.
+Each revocation names the teacher actor and the adjustment correlation; the
+original entitlement ID preserves grant lineage. Serialize on the target seat,
+and make the complete requested quantity replay-safe before writing any events.
+Reject teacher adjustment quantities outside 1–100 per student before mutation
+(DOM-STORE-001 §VIII.E.6); this is not a holding-balance limit.
 
 ### B. Ordinary purchase
 

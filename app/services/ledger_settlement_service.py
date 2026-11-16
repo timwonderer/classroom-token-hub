@@ -10,6 +10,7 @@ from flask import g
 from sqlalchemy.exc import IntegrityError
 from app import db
 from app.feats.base import FEATContext
+from app.services.tlcp import class_log_ref, seat_log_ref
 from app.models import Transaction, TransactionStatus, LedgerBalanceSnapshot, AccountType, ClassEconomy, Seat
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.seat_scope import transaction_scope_filter
@@ -66,8 +67,8 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
             failed_contexts += 1
             logger.exception(
                 "Settlement sweep failed for seat %s in class %s",
-                seat_id,
-                class_id,
+                seat_log_ref(seat_id),
+                class_log_ref(class_id),
             )
 
     return {

@@ -976,10 +976,6 @@
 
     updateAccordionsBadges();
 
-    // Initialize tooltips
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipTriggerList.forEach(trigger => new bootstrap.Tooltip(trigger));
-
     // Initialize Economy Balance Checker
     if (typeof EconomyBalanceChecker !== 'undefined') {
       const economyChecker = new EconomyBalanceChecker({

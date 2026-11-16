@@ -227,12 +227,10 @@
           </div>
           {% endif %}
 
-          {% if claim_type != 'PRODUCTIVITY' %}
           <div class="mb-3">
             <label class="form-label fw-semibold" for="rejection_reason">Reason for rejecting <span class="text-muted fw-normal">(required to reject; the student sees it)</span></label>
             {{ form.rejection_reason(class="form-control", rows=3) }}
           </div>
-          {% endif %}
 
           <div class="mb-3">
             <label class="form-label fw-semibold" for="teacher_notes">Your notes <span class="text-muted fw-normal">(optional; recorded with an approval)</span></label>
@@ -250,10 +248,10 @@
             <button type="submit" name="status" value="approved" class="btn btn-primary">
               <span class="material-symbols-outlined icon-sm icon-middle" aria-hidden="true">check</span> Approve claim
             </button>
-            <button type="submit" name="status" value="rejected" class="btn btn-outline-danger">
+            {% endif %}
+            <button type="submit" name="status" value="rejected" class="btn btn-outline-danger" formnovalidate>
               <span class="material-symbols-outlined icon-sm icon-middle" aria-hidden="true">close</span> Reject claim
             </button>
-            {% endif %}
             <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-outline-secondary">Back to Insurance</a>
           </div>
         </form>
@@ -283,9 +281,9 @@
           <dt>Filing window</dt>
           <dd>{{ contract.claim_window_days }} days after the purchase</dd>
           {% endif %}
-          {% if contract.period_allowance is not none %}
+          {% if contract.weekly_allowance is not none %}
           <dt>Claims used</dt>
-          <dd>{{ claim.student_first_name }} has used {{ contract.period_consumed }} of {{ contract.period_allowance }} {{ 'claimable days' if contract.allowance_unit == 'date' else 'claims' }} available this coverage period{% if claim_dates.period_first_day %} ({{ claim_dates.period_first_day }} – {{ claim_dates.period_last_day }}){% endif %}.{% if contract.allowance_per_week %}<br><span class="small text-muted">The policy allows {{ '%g'|format(contract.allowance_per_week|float) }} a week, counted across the whole period.</span>{% endif %}</dd>
+          <dd>{{ claim.student_first_name }} has used {{ contract.weekly_consumed }} of {{ contract.weekly_allowance }} {{ 'date filings' if contract.allowance_unit == 'date' else 'claims' }} available in this claim's filing week (Monday–Sunday). Rejection does not return a filing slot.</dd>
           {% endif %}
           {% if contract.maximum_policy_payout %}
           <dt>Benefits remaining</dt>

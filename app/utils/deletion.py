@@ -15,6 +15,7 @@ from app.models import (
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
 )
 from app.feats.base import InvariantViolation
+from app.services.tlcp import class_log_ref, seat_log_ref
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +76,10 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
         _assert_class_scope_integrity(class_id)
 
         logger.info(
-            "Collapsing universe for class_id=%s. Reason: %s. Actor: %s",
-            class_id,
+            "Collapsing universe for class %s. Reason: %s. Actor: %s",
+            economy.class_public_id,
             reason,
-            actor_membership_id,
+            seat_log_ref(actor_membership_id),
         )
 
         # 1. Identify affected seats and student-scoped rows for this class
@@ -171,5 +172,5 @@ def collapse_universe(class_id: str, reason: str, actor_membership_id: Optional[
         raise
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Failed to collapse universe for class_id={class_id}: {e}", exc_info=True)
+        logger.error("Failed to collapse universe for class %s: %s", class_log_ref(class_id), e, exc_info=True)
         return False

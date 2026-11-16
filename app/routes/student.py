@@ -23,7 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import hash_password, verify_password
 import pytz
 
-from app.extensions import db, limiter, student_login_identity_limit_key
+from app.extensions import db, limiter, student_login_identity_limit_key, student_seat_limit_key
 from app.services import student_setup
 from app.models import (
     Transaction, AttendanceSession, StoreItemVisibility,
@@ -34,6 +34,7 @@ from app.models import (
 )
 from app.auth import (
     admin_required,
+    end_signed_in_session,
     establish_student_session,
     get_current_class_id,
     get_current_seat,
@@ -51,7 +52,7 @@ from app.forms import (
 )
 
 # Import utility functions
-from app.utils.helpers import is_safe_url, render_template_with_fallback as render_template
+from app.utils.helpers import is_safe_url, loggable_token, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.ip_handler import get_real_ip
@@ -78,6 +79,8 @@ from app.services.entitlement_read_service import (
     get_active_entitlements,
     get_entitlement_status,
     derive_display_status,
+    ended_entitlement_ids,
+    entitlement_expires_at,
 )
 from app.services import insurance_definition_service as insurance_defs
 from app.services import insurance_coverage_service as insurance_coverage
@@ -189,7 +192,7 @@ def _student_login_hard_fail(*, student_id: int, reason: str, is_json: bool, sta
         extra={
             "actor_type": "student",
             "actor_public_id": "-",
-            "class_id": "-",
+            "class_public_id": "-",
             "error_class": "InvariantViolation",
             "correlation_version": "v1",
         },
@@ -314,7 +317,7 @@ from app.utils.display_name_session import (
     clear_teacher_display_name_cache,
 )
 from app.session_lifetime import SESSION_EXPIRES_AT_KEY
-from app.services.tlcp import has_recent_error_for_actor
+from app.services.tlcp import class_log_ref, has_recent_error_for_actor
 from app.services.context_resolver import (
     resolve_canonical_context,
     ContextResolutionError,
@@ -994,6 +997,7 @@ def setup_pin_passphrase():
 
 @student_bp.route('/add-class', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def add_class():
     """
     Allow logged-in students to add a new class by entering a join code.
@@ -1084,7 +1088,7 @@ def add_class():
             first_name=first_name,
             last_name=last_name,
             dedupe_code=dedupe_code,
-            correlation_id=f"corr_iden_bind_{context.user_id}_{uuid.uuid4().hex}",
+            correlation_id=f"corr_iden_bind_{uuid.uuid4().hex}",
             idempotency_key=f"feat:iden:bind-class:{context.user_id}:{display_join_code}",
         )
 
@@ -1155,6 +1159,7 @@ def _product_for_entitlement(
 
 @student_bp.route('/dashboard')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def dashboard():
     """Student dashboard with balance, attendance, transactions, and quick actions."""
     context = resolve_canonical_context()
@@ -1271,9 +1276,7 @@ def dashboard():
     now_utc = dashboard_time.canonical_now_utc
     # --- DASHBOARD DEBUG LOGGING ---
     current_app.logger.info(
-        "DASHBOARD DEBUG: Student %s class_id=%s active=%s done=%s seconds=%s",
-        student.id,
-        scope.class_id,
+        "DASHBOARD DEBUG: active=%s done=%s seconds=%s",
         attendance_state.get("active"),
         attendance_state.get("done"),
         attendance_state.get("duration"),
@@ -1459,6 +1462,7 @@ def dashboard():
 
 @student_bp.route('/payroll')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def payroll():
     """Student payroll page with attendance record, productivity stats, and projected pay."""
     # Check if payroll feature is enabled
@@ -1555,6 +1559,7 @@ def payroll():
 
 @student_bp.route('/transfer', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def transfer():
     """Transfer funds between checking and savings accounts."""
     # Check if banking feature is enabled
@@ -1676,7 +1681,7 @@ def transfer():
                         to_account=to_account,
                     )
                 current_app.logger.info(
-                    f"Transfer {amount} from {from_account} to {to_account} for seat {seat_id}"
+                    f"Transfer {amount} from {from_account} to {to_account}"
                 )
             except InsufficientFunds as e:
                 # The checks above ran before the seat row was locked, so a
@@ -1699,7 +1704,7 @@ def transfer():
             except SQLAlchemyError as e:
                 db.session.rollback()
                 current_app.logger.error(
-                    f"Transfer failed for student {student.id}: {e}", exc_info=True
+                    f"Transfer failed: {e}", exc_info=True
                 )
                 if is_json:
                     return jsonify(status="error", message="Transfer failed."), 500
@@ -1776,6 +1781,7 @@ def transfer():
 
 @student_bp.route('/insurance', endpoint='student_insurance')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
     # Disabled insurance stays reachable while a premium is owed (DOM-OBL-001
@@ -1820,6 +1826,7 @@ def insurance_marketplace():
                 claimable_dates_per_week_equivalent=d.claimable_dates_per_week_equivalent,
                 tier_name=d.tier_name,
                 tier_group=d.tier_group,
+                tier_group_id=d.tier_group_id,
                 tier_level=d.tier_level,
                 owned=has_active_insurance_coverage(seat_id, class_id, d.policy_uuid),
             )
@@ -1832,15 +1839,15 @@ def insurance_marketplace():
     _grouped: dict = {}
     ungrouped_policies = []
     for p in available_policies:
-        if p.tier_group:
-            _grouped.setdefault(p.tier_group, []).append(p)
+        if p.tier_group_id:
+            _grouped.setdefault(p.tier_group_id, []).append(p)
         else:
             ungrouped_policies.append(p)
     grouped_policies = []
     for name in sorted(_grouped):
         tiers = sorted(_grouped[name], key=lambda t: (t.tier_level or 0))
         grouped_policies.append(SimpleNamespace(
-            name=name,
+            name=tiers[0].tier_group,
             tiers=tiers,
             owned=has_active_coverage_in_group(seat_id, class_id, name),
         ))
@@ -1936,6 +1943,7 @@ def insurance_marketplace():
 
 @student_bp.route('/insurance/purchase/<policy_uuid>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def purchase_insurance(policy_uuid):
     """Purchase (enroll in) an insurance policy via FEAT-OBL-004."""
     context = resolve_canonical_context()
@@ -1982,6 +1990,7 @@ def purchase_insurance(policy_uuid):
 
 @student_bp.route('/insurance/cancel/<policy_uuid>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def cancel_insurance(policy_uuid):
     """Cancel (stop renewal on) the student's coverage for a policy via FEAT-OBL-005.
 
@@ -2027,6 +2036,7 @@ def cancel_insurance(policy_uuid):
 
 @student_bp.route('/insurance/policy/<policy_uuid>/pay-premium', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def pay_insurance_premium(policy_uuid):
     """Pay the oldest outstanding premium on the student's coverage for a policy.
 
@@ -2234,20 +2244,18 @@ def _active_insurance_entitlement_id(seat_id, class_id, policy_uuid):
     return None
 
 
-def _eligible_claim_transactions(seat_id, class_id, limit=25):
+def _eligible_claim_transactions(seat_id, class_id, entitlement_id, limit=25):
     """Recent money-out transactions a TRANSACTION policy might cover (FEAT validates).
 
-    Excludes a transaction that already backs a claim of any status — a source
-    transaction may back at most one claim lifecycle, ever (FEAT-STOR-003's
-    DUPLICATE_CLAIM_SUBJECT gate at submission enforces this already). Listing
-    an already-claimed transaction here just let a student pick it and be
-    refused, so this reads the same fact the submission gate checks.
+    Pending and approved claims under this coverage reserve their transaction;
+    rejected claims release it. The FEAT independently enforces weekly allowance.
     """
     from app.models import InsuranceClaim
     from app.services.insurance_eligibility_contract import (
         TRANSFER_TYPES, OBLIGATION_TYPES, DISALLOWED_TRANSACTION_TYPES,
     )
-    excluded = TRANSFER_TYPES | OBLIGATION_TYPES | DISALLOWED_TRANSACTION_TYPES | {"insurance_premium"}
+    from app.services.obligations_service import obligation_related_transaction_ids
+    excluded = TRANSFER_TYPES | OBLIGATION_TYPES | DISALLOWED_TRANSACTION_TYPES
     rows = (
         Transaction.query
         .filter(Transaction.seat_id == seat_id, Transaction.class_id == class_id,
@@ -2259,17 +2267,21 @@ def _eligible_claim_transactions(seat_id, class_id, limit=25):
     already_claimed_txn_ids = {
         (claim.claim_basis or {}).get("transaction_id")
         for claim in InsuranceClaim.query.filter_by(
-            class_id=class_id, target_seat_id=seat_id,
-        ).all()
+            class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id,
+        ).filter(InsuranceClaim.status.in_(["SUBMITTED", "APPROVED"])).all()
     }
+    obligation_related = obligation_related_transaction_ids((t.id for t in rows), class_id=class_id)
     return [
         t for t in rows
-        if (t.type or "").lower() not in excluded and t.id not in already_claimed_txn_ids
+        if (t.type or "").lower() not in excluded
+        and t.id not in obligation_related
+        and t.id not in already_claimed_txn_ids
     ][:limit]
 
 
 @student_bp.route('/insurance/claim/<policy_uuid>', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def file_claim(policy_uuid):
     """File an insurance claim against coverage the student currently holds."""
     context = resolve_canonical_context()
@@ -2300,7 +2312,7 @@ def file_claim(policy_uuid):
     claimable = is_transaction_type or is_productivity_type
     form = InsuranceClaimForm()
     if is_transaction_type:
-        eligible = _eligible_claim_transactions(seat_id, class_id)
+        eligible = _eligible_claim_transactions(seat_id, class_id, entitlement_id)
         from app.services.store.builders import build_claim_transaction_choices
         form.transaction_id.choices = [("", "Select a transaction…")] + build_claim_transaction_choices(
             g.canonical_context, eligible,
@@ -2308,16 +2320,16 @@ def file_claim(policy_uuid):
     else:
         form.transaction_id.choices = []  # SelectField requires choices even when unused
 
-    if claimable and form.validate_on_submit():
-        claim_subject = {"policy_claim_type": policy.insurance_type}
+    def _claim_subject():
+        subject = {"policy_claim_type": policy.insurance_type}
         if is_transaction_type:
             tid = form.transaction_id.data
-            claim_subject["transaction_id"] = int(tid) if tid not in (None, "") else None
+            subject["transaction_id"] = int(tid) if str(tid or "").isdigit() else None
             # The "Briefly describe what happened" field was rendered and
             # submitted but never read here, so it was silently dropped --
             # the admin review page's "Claim Description" was guaranteed blank
             # for every TRANSACTION claim regardless of what the student typed.
-            claim_subject["description"] = (form.description.data or "").strip() or None
+            subject["description"] = (form.description.data or "").strip() or None
         else:
             # PRODUCTIVITY: one or more class-local loss-dates, each with hours and
             # the student's own explanation (evidentiary; FEAT-STOR-003 validates).
@@ -2333,12 +2345,39 @@ def file_claim(policy_uuid):
                     "hours": (hours[idx] if idx < len(hours) else "").strip(),
                     "explanation": (explanations[idx] if idx < len(explanations) else "").strip(),
                 })
-            claim_subject["claimed_dates"] = claimed_dates
-            claim_subject["additional_information"] = (form.description.data or "").strip() or None
+            subject["claimed_dates"] = claimed_dates
+            subject["additional_information"] = (form.description.data or "").strip() or None
+        return subject
+
+    # One rendered form is one submission (FEAT-STOR-003 §XIII). A resubmit carries
+    # the same nonce and is answered with the claim it already filed, before form
+    # validation, which would refuse it: a claimed transaction leaves the choices.
+    # Changed evidence under the same nonce is refused, as the FEAT refuses it.
+    from app.services.insurance_claim_service import list_claims_for_entitlement
+
+    claim_nonce = (request.form.get('claim_nonce') or '').strip()[:64] or uuid.uuid4().hex
+    claim_key = f"corr_ins-claim:{entitlement_id}:{claim_nonce}"
+    filed = None
+    if request.method == 'POST' and claimable:
+        filed = next((
+            claim for claim in list_claims_for_entitlement(
+                class_id=class_id, entitlement_id=entitlement_id, target_seat_id=seat_id,
+            )
+            if claim.correlation_id == claim_key
+        ), None)
+    if filed is not None and filed.claim_basis == _claim_subject():
+        flash("Insurance claim submitted.", "success")
+        return redirect(url_for("student.student_insurance"))
+    if filed is not None:
+        flash("This form was already used for a different claim. Please start a new claim.", "error")
+    elif claimable and form.validate_on_submit():
+        claim_subject = _claim_subject()
         result = submit_insurance_claim(
             entitlement_id=entitlement_id,
             canonical_context=context,
             claim_subject=claim_subject,
+            correlation_id=claim_key,
+            idempotency_key=claim_key,
         )
         if result.success:
             flash("Insurance claim submitted.", "success")
@@ -2370,11 +2409,13 @@ def file_claim(policy_uuid):
         claimable=claimable,
         prior_claims=prior_claims,
         claim_date_max=build_claim_date_max(context),
+        claim_nonce=uuid.uuid4().hex,
     )
 
 
 @student_bp.route('/insurance/policy/<policy_uuid>')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def view_policy(policy_uuid):
     """View policy details and claims history."""
     from app.services.insurance_policy_service import normalize_insurance_type
@@ -2494,6 +2535,7 @@ def view_policy(policy_uuid):
 
 @student_bp.route('/shop')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def shop():
     """Student shop - browse and purchase items."""
     # Check if store feature is enabled
@@ -2540,25 +2582,45 @@ def shop():
         if store_service.is_product_visible_to_seat(item.product_lineage_uuid, seat.id)
     ]
 
+    # My Items lists what the student can still use or is waiting on. It read
+    # the event history, so a used item showed as two cards, finished items
+    # piled up, and anything older than the newest 100 events fell off.
     entitlements = []
+    seen_lineages = set()
     product_by_key = _resolve_entitlement_products(class_id)
-    for entry in get_entitlement_history(seat_id=seat.id, class_id=class_id):
-        # Insurance entitlements are governed by InsurancePolicy, not by the
-        # store catalog. Skip them so an insurance grant is never rendered as a
-        # store item.
-        if entry["entitlement_type"] == "INSURANCE":
+    # Insurance is governed by InsurancePolicy and hall passes have their own
+    # panel (#1705); neither is rendered as a store item here. Finished items
+    # are dropped in one query, so status is derived only for what is held.
+    grants = [
+        grant for grant in get_active_entitlements(seat_id=seat.id, class_id=class_id)
+        if grant.entitlement_type not in ("INSURANCE", "HALL_PASS")
+    ]
+    ended = ended_entitlement_ids(class_id, [grant.entitlement_id for grant in grants])
+    grants = sorted(
+        (grant for grant in grants if grant.entitlement_id not in ended),
+        key=lambda grant: grant.timestamp, reverse=True,
+    )
+    for grant in grants:
+        if grant.entitlement_id in seen_lineages:
             continue
-        item = _product_for_entitlement(product_by_key, entry)
+        seen_lineages.add(grant.entitlement_id)
+        status = derive_display_status(grant.entitlement_id)
+        if status not in ("purchased", "processing"):
+            continue
+        item = _product_for_entitlement(product_by_key, {
+            "policy_uuid": (grant.payload or {}).get("policy_uuid"),
+            "product_id": grant.product_id,
+        })
         if item is None:
             continue
         entitlements.append(SimpleNamespace(
-            id=entry["entitlement_id"],
+            id=grant.entitlement_id,
             seat_id=seat.id,
             class_id=class_id,
             store_item=item,
-            status=derive_display_status(entry["entitlement_id"]),
-            purchase_date=datetime.fromisoformat(entry["timestamp"]),
-            expiry_date=None,
+            status=status,
+            purchase_date=grant.timestamp,
+            expiry_date=entitlement_expires_at(grant),
         ))
 
     # Check if student has paid rent this month using canonical rent settings only.
@@ -2702,6 +2764,7 @@ def shop():
 
 @student_bp.route('/rent')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def rent():
     """View rent status and payment history (canonical obligation events).
 
@@ -2820,6 +2883,7 @@ def rent():
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def rent_pay(period):
     """Satisfy the student's outstanding rent obligation via the canonical FEAT.
 
@@ -2930,10 +2994,8 @@ def rent_pay(period):
             return redirect(url_for('student.rent'))
 
     current_app.logger.info(
-        "rent_pay dispatch: seat_id=%s class_id=%s correlation_id=%s",
-        seat_id,
-        class_id,
-        correlation_id,
+        "rent_pay dispatch: correlation_id=%s",
+        loggable_token(correlation_id),
     )
 
     # Delegate the whole atomic transaction to the canonical FEAT. This settles
@@ -2954,7 +3016,7 @@ def rent_pay(period):
             current_app.logger.info(
                 "rent_pay FEAT error: code=%s correlation_id=%s",
                 result.error_code,
-                correlation_id,
+                loggable_token(correlation_id),
             )
             flash(result.error_message or "Rent payment could not be completed.", "error")
         return redirect(url_for('student.rent'))
@@ -2998,7 +3060,7 @@ def login():
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
 
 
-@requires_feat_context("FEAT-IDEN-001")
+@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
 def _complete_student_login(form):
     """The validated login submission: authenticate and establish the session."""
     is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -3078,7 +3140,7 @@ def _complete_student_login(form):
     if not seat_options:
         return _student_login_hard_fail(
             student_id=linked_user.id,
-            reason=f"User {linked_user.id} login has no valid class seats.",
+            reason="login has no valid class seats.",
             is_json=is_json,
         )
 
@@ -3092,13 +3154,12 @@ def _complete_student_login(form):
         )
         if valid_persisted_selection is None:
             current_app.logger.error(
-                "TLCP-INVARIANT-VIOLATION: User %s login has invalid persisted class %s.",
-                linked_user.id,
-                persisted_class_id,
+                "TLCP-INVARIANT-VIOLATION: login has invalid persisted class %s.",
+                class_log_ref(persisted_class_id),
                 extra={
                     "actor_type": "student",
                     "actor_public_id": "-",
-                    "class_id": "-",
+                    "class_public_id": "-",
                     "error_class": "InvariantViolation",
                     "correlation_version": "v1",
                 },
@@ -3125,7 +3186,7 @@ def _complete_student_login(form):
     if target_seat is None:
         return _student_login_hard_fail(
             student_id=linked_user.id,
-            reason=f"User {linked_user.id} login failed to resolve seat for class {valid_persisted_selection['class_id']}.",
+            reason=f"login failed to resolve seat for class {class_log_ref(valid_persisted_selection['class_id'])}.",
             is_json=is_json,
         )
 
@@ -3168,8 +3229,7 @@ def select_class_context():
     seat_options = _get_identity_bound_seat_options(linked_user.id)
     if not seat_options:
         current_app.logger.critical(
-            "P0 INCIDENT: User %s has no surviving seats during class-context gate.",
-            linked_user.id,
+            "P0 INCIDENT: a signed-in student has no surviving seats during class-context gate.",
         )
         session.clear()
         flash("Account scope incident detected. Contact support immediately.", "error")
@@ -3181,7 +3241,7 @@ def select_class_context():
         if selected_class_id not in allowed_class_ids:
             return _student_login_hard_fail(
                 student_id=linked_user.id,
-                reason=f"User {linked_user.id} selected invalid class {selected_class_id} during class-context switch.",
+                reason=f"selected invalid class {class_log_ref(selected_class_id)} during class-context switch.",
                 is_json=False,
                 status_code=302,
             )
@@ -3194,7 +3254,7 @@ def select_class_context():
         if selected_seat is None:
             return _student_login_hard_fail(
                 student_id=linked_user.id,
-                reason=f"User {linked_user.id} selected class {selected_class_id} but seat context failed to resolve.",
+                reason=f"selected class {class_log_ref(selected_class_id)} but seat context failed to resolve.",
                 is_json=False,
                 status_code=302,
             )
@@ -3218,23 +3278,34 @@ def select_class_context():
     )
 
 
-@student_bp.route('/logout')
-@login_required
+@student_bp.route('/logout', methods=['POST'])
+@limiter.exempt
 def logout():
-    """Student logout."""
-    session.clear()
+    """Student logout.
+
+    POST only (CSRF-checked); a GET cannot end a sign-in (INV-ARC-007). Not
+    behind login_required: signing out is not class-scoped, so a student with
+    no active class can still do it (DOM-IDEN-006 §IX).
+    """
+    end_signed_in_session()
     flash("You've been logged out.")
     return redirect(url_for('student.login'))
 
 
-@student_bp.route('/switch-class/<class_id>', methods=['POST'])
+@student_bp.route('/switch-class/<class_public_id>', methods=['POST'])
 @login_required
-@requires_feat_context("FEAT-IDEN-001")
-def switch_class(class_id):
-    """Switch to a different class using class_id as the stable backend reference."""
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
+@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
+def switch_class(class_public_id):
+    """Switch to a different class. The URL carries the class's public id
+    (DOM-OPS-001 §7: an internal class_id never appears in a URL); it resolves
+    to class_id here, and authority is checked against that."""
     from app.models import Seat
 
     student = _get_canonical_student_from_context()
+    class_id = db.session.query(ClassEconomy.class_id).filter_by(class_public_id=class_public_id).scalar()
+    if class_id is None:
+        return jsonify(status="error", message="You don't have access to that class."), 403
     try:
         resolved_switch = resolve_student_class_switch_scope(actor=student, class_id=class_id)
         access_policy_service.assert_can_switch_class(resolved_switch.scope)
@@ -3277,6 +3348,7 @@ def switch_class(class_id):
 
 @student_bp.route('/setup-complete')
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def setup_complete():
     """Setup completion confirmation page."""
     student = _get_canonical_student_from_context()
@@ -3288,6 +3360,7 @@ def setup_complete():
 
 @student_bp.route('/help-support', methods=['GET'])
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def help_support():
     """Show the student help and support page with issue tracking."""
     class_context = resolve_canonical_context()
@@ -3314,6 +3387,7 @@ def help_support():
 
 @student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def submit_general_issue():
     """Submit a general issue or help request."""
     from app.utils.issue_categories import get_active_categories
@@ -3347,7 +3421,7 @@ def submit_general_issue():
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
                 include_recent_error=include_recent_error,
-                correlation_id=f"corr_support_issue_{class_context.class_id}_{uuid.uuid4().hex}",
+                correlation_id=f"corr_support_issue_{uuid.uuid4().hex}",
                 idempotency_key=f"feat:sup:issue:{class_context.class_id}:general:{class_context.seat_id}:{uuid.uuid4().hex}",
             )
 
@@ -3360,7 +3434,6 @@ def submit_general_issue():
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
-                         current_page='help',
                          page_title='Report an Issue',
                          form=form,
                          issue_type='general',
@@ -3369,6 +3442,7 @@ def submit_general_issue():
 
 @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def report_transaction_issue(transaction_id):
     """Report an issue with a specific transaction."""
     from app.utils.issue_categories import get_active_categories
@@ -3411,7 +3485,7 @@ def report_transaction_issue(transaction_id):
                 related_transaction_id=transaction_id,
                 related_record_type='transaction',
                 include_recent_error=include_recent_error,
-                correlation_id=f"corr_support_issue_{class_context.class_id}_{uuid.uuid4().hex}",
+                correlation_id=f"corr_support_issue_{uuid.uuid4().hex}",
                 idempotency_key=f"feat:sup:issue:{class_context.class_id}:transaction:{transaction_id}:{uuid.uuid4().hex}",
             )
 
@@ -3424,7 +3498,6 @@ def report_transaction_issue(transaction_id):
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
-                         current_page='help',
                          page_title='Report Transaction Issue',
                          form=form,
                          issue_type='transaction',
@@ -3437,6 +3510,7 @@ def report_transaction_issue(transaction_id):
 
 @student_bp.route('/help-support/attendance-session/<int:attendance_session_id>/report', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def report_attendance_session_issue(attendance_session_id):
     """Report an issue with a specific attendance session record."""
     from app.utils.issue_categories import get_active_categories
@@ -3479,7 +3553,7 @@ def report_attendance_session_issue(attendance_session_id):
                 related_record_type='attendance_session',
                 related_record_id=attendance_session_id,
                 include_recent_error=include_recent_error,
-                correlation_id=f"corr_support_issue_{class_context.class_id}_{uuid.uuid4().hex}",
+                correlation_id=f"corr_support_issue_{uuid.uuid4().hex}",
                 idempotency_key=f"feat:sup:issue:{class_context.class_id}:attendance:{attendance_session_id}:{uuid.uuid4().hex}",
             )
 
@@ -3492,7 +3566,6 @@ def report_attendance_session_issue(attendance_session_id):
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
-                         current_page='help',
                          page_title='Report Attendance Issue',
                          form=form,
                          issue_type='attendance',
@@ -3504,6 +3577,7 @@ def report_attendance_session_issue(attendance_session_id):
 
 @student_bp.route('/verify-recovery/<int:code_id>', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("60 per minute", key_func=student_seat_limit_key)
 def verify_recovery(code_id):
     """
     Student verification page for teacher account recovery.
@@ -3542,7 +3616,7 @@ def verify_recovery(code_id):
         # Verify passphrase
         user = get_current_user()
         if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
-            current_app.logger.warning(f"Recovery verification failed: incorrect passphrase for student {student.id}")
+            current_app.logger.warning("Recovery verification failed: incorrect passphrase for student %s", student.public_id)
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,

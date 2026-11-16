@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| DOM-CLASS-003 | 2.6 | 2026-10-14 | 2.5 | Constitutional |
+| DOM-CLASS-003 | 2.7 | 2026-10-25 | 2.6 | Constitutional |
 
 > [!IMPORTANT]
 > **v2.6 (2026-10-14), review correction.** v2.5's §IX example named the wrong field (`protection_enabled`, which exists only on the derived `BankingDirective` read projection) and overstated the rebalance's reach: only the flat `economic_engine.flat_overdraft_fee` is rebalance-selectable. `economic_engine.overdraft_protection_enabled` and `progressive_overdraft_fee` are changed only through the Economic Engine evolution command directly, not through the rebalance. §IX corrected accordingly.
@@ -387,6 +387,15 @@ This model establishes:
 Class economics governance therefore behaves as constitutional system law rather than mutable delayed configuration state.
 
 ---
+
+## Imported schedules
+
+SPEC-CLASS-001 schedule choices are inputs to existing domain commands, not an
+activation override. In particular, a subsequent payroll setting is effective at the
+destination's next payroll boundary computed before incorporating the new schedule.
+First settings retain their existing immediate rule. Existing issued obligations,
+claims, entitlements and historical prices are unaffected.
+
 
 ## XVI. Amendment
 
