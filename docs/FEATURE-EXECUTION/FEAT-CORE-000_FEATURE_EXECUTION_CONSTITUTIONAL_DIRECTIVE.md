@@ -77,9 +77,14 @@ directive.
    (`DOM-IDEN-003` §IX). The FEAT:
    * requires the absence of an authenticated principal wherever `DOM-IDEN-005`
      §VII requires it;
-   * resolves only what the capability token it holds names (`INV-ARC-019` §XI),
-     and acts on a `class_id` or seat only when that capability binds it, never
-     because the request supplied it;
+   * at ingress, before any capability exists, performs only the initial proof and
+     lookups its governing section defines (student claim: join code to
+     `class_id`, then the roster fingerprint within that class, `DOM-IDEN-002`
+     §VIII; teacher recovery: the single knowledge-proof precheck, `DOM-IDEN-003`
+     §IX);
+   * after ingress, resolves only what the capability token it holds names
+     (`INV-ARC-019` §XI), and acts on a `class_id` or seat the request supplies
+     only when that capability binds it;
    * performs no lookup its governing section forbids (student recovery: no seat,
      class or profile lookup, `DOM-IDEN-002` §IX).
 
@@ -94,8 +99,10 @@ directive.
    §VII; `DOM-IDEN-003` §VII; `DOM-IDEN-006`). Sign-out does not require a
    resolvable class or seat, because revoking a session removes authority and no
    principal may be held in a session because its context cannot be resolved; it
-   verifies the session's own token before revoking it. The FEAT writes only the
-   `users` session fields and nothing class-scoped.
+   verifies the session's own token before revoking it. The FEAT writes only
+   `users` fields and nothing class-scoped: the session fields, the class context
+   pointers sign-in restores, and, on a successful teacher sign-in,
+   `last_signed_in_at` under the User row lock (`DOM-IDEN-003` §IX.A).
 3. **Principal lifecycle.** Teacher account deletion only (FEAT-IDEN-007), by one
    of two authorities. Deletion is a principal-level operation; the active class or
    seat is not its authority boundary.
