@@ -1,16 +1,26 @@
 ---
-title: Self-hosting Classroom Token Hub
+title: Classroom Token Hub — Self-Hosting Handbook
 category: self-hosting
 description: Deployment boundaries and evidence required to operate a private Classroom Token Hub instance.
 roles: [operator]
 keywords: [self-hosting, deployment, configuration, backups, operations]
 ---
 
-# Self-hosting Classroom Token Hub
+# Classroom Token Hub — Self-Hosting Handbook
 
-This page is an orientation document for an operator running a private v2
-instance. It is not a substitute for the normative deployment and security
-documents linked below.
+This handbook is for the operator who controls a private CTH installation, its host, DNS, HTTPS admission policy, keys, backups and authorized accounts. The operator can be one person. CTH is distributed under the PolyForm Noncommercial License 1.0.0. Review `LICENSE` in the selected release before use or redistribution and retain the required notices. [License terms](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSE)
+
+## Start here
+
+| When | Chapter |
+| --- | --- |
+| Before creating a host | [Reference profile, prerequisites, costs and ten installation stages](reference-installation.md) |
+| Before starting services | [Configuration and secret inventory](configuration.md) |
+| When installing a new database | [Release-specific database baseline, verification and recovery](fresh-database.md) |
+| After the readiness check | [First authorized use, acceptance, maintenance, recovery and decommissioning](operations.md) |
+| When designing an isolated rehearsal | [Ephemeral staging controller inputs, evidence and teardown](staging-controller.md) |
+
+**Evidence status.** The reference-host procedure is **proposed**. **Locally tested** applies only to the checks whose results are recorded for the selected release. B1 demonstrated database equivalence, a genuine successor upgrade, protected audit verification and CLI-only sysadmin bootstrap. **Reference-host tested** requires a successful run on the specified Ubuntu host. **Independently verified** additionally requires a second operator to complete the handbook from scratch without undocumented assistance. The latter two checks are pending.
 
 ## Before you deploy
 

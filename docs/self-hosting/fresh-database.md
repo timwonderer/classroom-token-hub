@@ -26,7 +26,13 @@ Alembic installed. An alternate OS, PostgreSQL major, collation or client format
 needs separate qualification. This database check is not a completed host or
 independently verified handbook installation.
 
-## On the new host
+## Reference-host installation
+
+For a complete installation, root runs the `postgres` and `database` stages in the [reference installation procedure](reference-installation.md). Both human and automated installs use those stages. The first stage establishes the roles and enrolls the empty target. The second executes the database installer as the enrolled owner and verifies the release before assigning service-account privileges. A refusal or partial result keeps the application offline. Do not repeat the standalone preparation commands on a host already enrolled by the reference installer.
+
+## Standalone database qualification
+
+**Locally tested.** The following procedure isolates the database component on a separate disposable target. It documents its inputs and recovery for maintainers verifying a release baseline.
 
 1. Confirm the local cluster, socket, port and dedicated nonsuperuser database
    owner with the infrastructure operator. Check the host is the intended new
@@ -66,7 +72,7 @@ independently verified handbook installation.
    SQL
    ```
 
-4. From the release checkout execute the same command used by staging:
+4. From the release checkout execute the database installer called by the reference host’s database stage:
 
    ```sh
    python scripts/fresh_database.py --host "$socket" --port "$port" \
