@@ -23,7 +23,9 @@ def setup_transfer(app):
     context = CanonicalContext(user_id=classroom.teacher_user.id, class_id=classroom.class_id,
         seat_id=classroom.teacher_seat.id, actor_role="teacher")
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"setup:{uuid4()}"):
-        db.session.get(User, context.user_id).current_session_nonce = "transfer-test-session"
+        teacher = db.session.get(User, context.user_id)
+        teacher.current_session_nonce = "transfer-test-session"
+        teacher.current_session_expires_at = temporal.shifted(temporal.now(), minutes=60)
         transfer.publish_product(class_id=context.class_id, actor_seat_id=context.seat_id,
             definition={"name": "Pencil", "price": 2, "economic_role": "necessity", "item_type": "immediate"})
     return context, "transfer-test-session"
@@ -438,15 +440,17 @@ def test_changed_receiving_boundary_requires_new_preview(app, monkeypatch):
     assert ConfigurationImportReceipt.query.filter_by(class_id=context.class_id).count() == 0
 
 
-def test_execution_rechecks_http_session_deadline(app):
-    from flask import session
-    from app.auth import SESSION_TIMEOUT_MINUTES
+def test_DOM_IDEN_003__transfer_follows_the_fixed_sign_in_window(app):
+    """Transfers keep working past the old 10-minute idle cutoff and stop at the 60-minute deadline."""
     context, nonce = setup_transfer(app)
     raw, token = prepare(context, nonce)
+    expires_at = db.session.get(User, context.user_id).current_session_expires_at
     with app.test_request_context("/admin/configuration/", method="POST"):
-        session["last_activity"] = temporal.shifted(temporal.now(), minutes=-(SESSION_TIMEOUT_MINUTES + 1)).isoformat()
-        with pytest.raises(ConfigurationError, match="session expired"):
-            transfer.confirm_import(context, nonce, raw, token)
+        with temporal.pinned_clock(temporal.shifted(expires_at, minutes=-49)):
+            transfer.preview_import(context, nonce, raw)
+        with temporal.pinned_clock(expires_at):
+            with pytest.raises(ConfigurationError, match="session expired"):
+                transfer.confirm_import(context, nonce, raw, token)
     assert ConfigurationImportReceipt.query.filter_by(class_id=context.class_id).count() == 0
 
 
@@ -461,13 +465,11 @@ def test_future_rent_anchor_does_not_hide_invalid_recurrence(app):
 def test_session_expires_while_waiting_for_class_lock(app, monkeypatch):
     from threading import Event
     from sqlalchemy import text, event
-    from flask import session
-    from app.auth import SESSION_TIMEOUT_MINUTES
     import time
     context, nonce = setup_transfer(app)
     raw, token = prepare(context, nonce)
     transfer.confirm_import(context, nonce, raw, token)
-    before = temporal.now()
+    expires_at = db.session.get(User, context.user_id).current_session_expires_at
     db.session.remove()
     waiting, backend = Event(), []
     engine = db.engine
@@ -482,7 +484,6 @@ def test_session_expires_while_waiting_for_class_lock(app, monkeypatch):
             lock.execute(text("SELECT class_id FROM classes WHERE class_id=:id FOR UPDATE"), {"id": context.class_id})
             def execute():
                 with app.test_request_context("/admin/configuration/", method="POST"):
-                    session["last_activity"] = before.isoformat()
                     return transfer.confirm_import(context, nonce, raw, token)
             with ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(execute)
@@ -491,7 +492,7 @@ def test_session_expires_while_waiting_for_class_lock(app, monkeypatch):
                 while not lock.execute(text("SELECT cardinality(pg_blocking_pids(:pid)) > 0"), {"pid": backend[-1]}).scalar():
                     assert time.monotonic() < deadline
                     time.sleep(.01)
-                monkeypatch.setattr(transfer.identity, "now", lambda: temporal.shifted(before, minutes=SESSION_TIMEOUT_MINUTES + 1))
+                monkeypatch.setattr(transfer.identity, "now", lambda: expires_at)
                 transaction.commit()
                 with pytest.raises(ConfigurationError, match="session expired"):
                     future.result(timeout=15)

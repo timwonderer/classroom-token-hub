@@ -66,6 +66,7 @@ from app.models import (
 )
 from app.auth import (
     admin_required,
+    end_signed_in_session,
     establish_teacher_session,
     find_canonical_user_by_auth_username,
     get_current_user,
@@ -2535,10 +2536,11 @@ def dismiss_unpaid_work_notice():
 @admin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
 def login():
-    """Admin login with TOTP authentication."""
-    session.pop("user_id", None)
-    session.pop("current_session_nonce", None)
-    session.pop("last_activity", None)
+    """Admin login with TOTP authentication.
+
+    Opening this page changes no session (INV-ARC-007); a successful sign-in
+    replaces whatever principal the session held.
+    """
     form = AdminLoginForm()
     if form.validate_on_submit():
         # Ingress gate: username is guessable/enumerable and this is an
@@ -2582,6 +2584,7 @@ def login():
                     ):
                         from app.services.teacher_lifecycle import record_teacher_sign_in
                         user = record_teacher_sign_in(user.id)
+                        session.clear()
                         establish_teacher_session(user)
                         session["current_session_nonce"] = nonce
                         user.current_session_nonce = nonce
@@ -3126,14 +3129,15 @@ def customizations():
     )
 
 
-@admin_bp.route('/logout')
+@admin_bp.route('/logout', methods=['POST'])
 def logout():
-    """Admin logout."""
+    """Admin logout.
+
+    POST only, so the global CSRFProtect checks the token: a GET cannot end
+    anyone's sign-in (INV-ARC-007). Voids the sign-in on the users row too.
+    """
     clear_admin_display_name_cache()
-    session.pop("user_id", None)
-    session.pop("admin_auth_username", None)
-    session.pop("last_activity", None)
-    session.pop("passkey_auth_username", None)
+    end_signed_in_session()
     flash("Logged out.")
     return redirect(url_for("admin.login"))
 
@@ -9877,7 +9881,8 @@ def create_new_class():
             teacher_last_name=teacher_last_name,
         )
 
-    establish_teacher_session(db.session.get(User, user_id))
+    # The teacher is already signed in (admin_required); re-establishing the
+    # session here would restart the fixed sign-in window (DOM-IDEN-003).
     # create_class moved last_active_class_id/seat_id to the new class, so the
     # canonical context now resolves to it. The layout's teacher name, however,
     # comes from the session display-name cache (set at login/settings), which

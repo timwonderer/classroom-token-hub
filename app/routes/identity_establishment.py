@@ -47,9 +47,6 @@ _SIGN_OUT_ENDPOINTS = {
     'teacher': 'admin.logout',
     'sysadmin': 'sysadmin.logout',
 }
-# Logouts that accept only POST (with a CSRF token). The page offers a form for
-# these, and a JSON caller, which can only navigate, is sent back to this page.
-_POST_SIGN_OUT_ENDPOINTS = frozenset({'sysadmin.logout'})
 
 
 def _signed_in_user():
@@ -90,17 +87,14 @@ def refuse_authenticated_identity_establishment():
     role = getattr(user.user_role, 'value', user.user_role)
     sign_out_endpoint = _SIGN_OUT_ENDPOINTS.get(role, 'student.logout')
     return_to_login_url = url_for(sign_out_endpoint)
-    sign_out_by_post = sign_out_endpoint in _POST_SIGN_OUT_ENDPOINTS
     if request.accept_mimetypes.best == 'application/json':
-        # The client follows ``redirect`` with a GET. A POST-only logout would
-        # answer that with 405, so send it to this page, whose GET renders the
-        # sign-out form. Every establishment endpoint accepts GET.
-        redirect_url = request.path if sign_out_by_post else return_to_login_url
-        return jsonify(verified=False, message=SIGNED_IN_MESSAGE, redirect=redirect_url), 409
+        # The client follows ``redirect`` with a GET. Every logout is POST-only
+        # and would answer that with 405, so send it to this page, whose GET
+        # renders the sign-out form. Every establishment endpoint accepts GET.
+        return jsonify(verified=False, message=SIGNED_IN_MESSAGE, redirect=request.path), 409
     return render_template(
         'identity_establishment_signed_in.html',
         heading=REFUSAL_HEADING,
         cancelled=REFUSAL_CANCELLED,
         return_to_login_url=return_to_login_url,
-        sign_out_by_post=sign_out_by_post,
     ), status

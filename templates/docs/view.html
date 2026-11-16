@@ -36,9 +36,8 @@
                 <div class="position-sticky pt-3">
                     <!-- Back Navigation -->
                     {#
-                       admin.logout()/sysadmin.logout() pop user_id but leave
-                       role in the session (student.logout() calls
-                       session.clear()), so role alone is not "signed in" --
+                       A session can keep role without a user_id (a sign-in the
+                       boundary refused), so role alone is not "signed in" --
                        gate on both, or a logged-out teacher/sysadmin sees a
                        Back to Dashboard button that only bounces them to login.
                     #}

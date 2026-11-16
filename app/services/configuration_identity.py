@@ -1,6 +1,6 @@
 """Identity-owned export authority. Callers hold its lock until transaction end."""
 import secrets
-from flask import has_request_context, request, session
+from flask import has_request_context, request
 from app.extensions import db
 from app.models import User, Seat, UserRole
 from app.services.configuration_artifact import ConfigurationError, digest, instant
@@ -13,11 +13,12 @@ def execution_authority(context, session_nonce, *, lock):
     if (user is None or user.user_role != UserRole.TEACHER or context.actor_role != "teacher"
             or not session_nonce or not secrets.compare_digest(user.current_session_nonce or "", session_nonce)):
         raise ConfigurationError("Your authorization has changed. Sign in again.")
-    if has_request_context() and request.blueprint == "configuration":
-        from app.auth import _session_idle_expired, SESSION_TIMEOUT_MINUTES
-        last_activity = session.get("last_activity")
-        if not last_activity or _session_idle_expired(instant(last_activity), now(), SESSION_TIMEOUT_MINUTES):
-            raise ConfigurationError("Your session expired. Sign in again.")
+    # The teacher's fixed sign-in window (DOM-IDEN-003), re-read under the lock.
+    if has_request_context() and request.blueprint == "configuration" and (
+            user.current_session_expires_at is None
+            or not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                candidate=now(), reference=user.current_session_expires_at).is_earlier):
+        raise ConfigurationError("Your session expired. Sign in again.")
     return user
 
 
