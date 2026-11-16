@@ -8,6 +8,14 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+
+- **Signing out now ends the sign-in on the server, and only a deliberate click signs anyone out** (#1635; INV-ARC-007 §V, DOM-IDEN-002/003 §Session Establishment, DOM-IDEN-006 §IX). Teacher and student sign-out are POST forms with a CSRF token, as sysadmin sign-out already was; `GET /admin/logout` and `GET /student/logout` answer 405 and change nothing, and opening `/admin/login` no longer signs a teacher out. Every sign-out (teacher, student, sysadmin) clears `users.current_session_nonce` and the session expiry through `FEAT-IDEN-001`, so a copy of the cookie stops working; a stale cookie cannot void a newer sign-in. A student with no active class can sign out. The "Return to login" button on the signed-in refusal page is a sign-out form for every role.
+
+### Fixed
+
+- **A teacher session is a fixed 60-minute window from sign-in** (#1636; DOM-IDEN-003 §Session Establishment). Teacher sign-in (TOTP and passkey) writes `current_session_started_at` and `current_session_expires_at`. The session hook enforces that instant on every request, before any route runs (so class selection and other routes without `admin_required` refuse an expired cookie too), instead of a 10-minute idle timeout that an active teacher never reached, and the cookie expires with it. Configuration export/import uses the same deadline, rechecked under its lock, in place of the idle cutoff. Creating a class no longer re-establishes the session, and a sysadmin passkey sign-in no longer inherits a teacher's expiry from the same browser. Teachers signed in when this ships are asked to sign in again once.
+
 ## [2.4.5] - 2026-11-14 — Per-student rate limits and security fixes
 
 Released as `1d74ea8` on 2026-11-14 at 07:14 UTC by release run [43570114275](https://github.com/timwonderer/classroom-token-hub/actions/runs/43570114275). No migration. Record: [DEPLOY_2026-11-14_1d74ea8.md](docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md).

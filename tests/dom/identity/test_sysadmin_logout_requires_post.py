@@ -107,23 +107,24 @@ def test_sysadmin_sidebar_has_no_get_link_to_logout(client, sysadmin_session):
 # SOP-TEST-003 §IX.A: the detector is a pure function over template text, and
 # a companion test feeds it near-miss violations to prove it still detects.
 
-_GET_LINK_TO_SYSADMIN_LOGOUT = re.compile(
-    r"""href\s*=\s*["'][^"']*(?:url_for\(\s*["']sysadmin\.logout["']|/sysadmin/logout)""",
+# Every role's logout is POST-only since #1635 (student and teacher joined sysadmin).
+_GET_LINK_TO_LOGOUT = re.compile(
+    r"""href\s*=\s*["'][^"']*(?:url_for\(\s*["'](?:sysadmin|admin|student)\.logout["']|/(?:sysadmin|admin|student)/logout)""",
 )
 
 
-def find_get_links_to_sysadmin_logout(source: str) -> list[str]:
-    """Every ``href`` in ``source`` that points at the sysadmin logout."""
-    return [match.group(0) for match in _GET_LINK_TO_SYSADMIN_LOGOUT.finditer(source)]
+def find_get_links_to_logout(source: str) -> list[str]:
+    """Every ``href`` in ``source`` that points at a logout."""
+    return [match.group(0) for match in _GET_LINK_TO_LOGOUT.finditer(source)]
 
 
-def test_no_template_links_to_sysadmin_logout_by_get():
+def test_no_template_links_to_a_logout_by_get():
     offenders = {
         str(path.relative_to(TEMPLATES)): hits
         for path in TEMPLATES.rglob("*.html")
-        if (hits := find_get_links_to_sysadmin_logout(path.read_text(encoding="utf-8")))
+        if (hits := find_get_links_to_logout(path.read_text(encoding="utf-8")))
     }
-    assert offenders == {}, "sysadmin sign-out must be a POST form with a CSRF token"
+    assert offenders == {}, "sign-out must be a POST form with a CSRF token"
 
 
 @pytest.mark.parametrize(
@@ -134,19 +135,24 @@ def test_no_template_links_to_sysadmin_logout_by_get():
         """<a href="{{url_for( 'sysadmin.logout' )}}">Sign Out</a>""",
         """<a href="/sysadmin/logout">Sign Out</a>""",
         """<a href="/sysadmin/logout?next=/">Sign Out</a>""",
+        """<a href="{{ url_for('admin.logout') }}" class="btn btn-danger">Sign Out</a>""",
+        """<a href="{{ url_for("student.logout") }}">Sign Out</a>""",
+        """<a href="/student/logout">Return to login</a>""",
+        """<a href="/admin/logout">Return to login</a>""",
     ],
 )
 def test_guard_mutation_proof_detects_a_get_link(violation):
-    assert find_get_links_to_sysadmin_logout(violation)
+    assert find_get_links_to_logout(violation)
 
 
 @pytest.mark.parametrize(
     "allowed",
     [
         """<form method="post" action="{{ url_for('sysadmin.logout') }}"><button>Sign Out</button></form>""",
-        """<a href="{{ url_for('admin.logout') }}">Sign Out</a>""",
+        """<form method="post" action="{{ url_for('student.logout') }}"><button>Sign Out</button></form>""",
         """<a href="{{ url_for('sysadmin.login') }}">Sign in</a>""",
+        """<a href="{{ url_for('admin.login') }}">Sign in</a>""",
     ],
 )
-def test_guard_allows_a_post_form_and_other_logouts(allowed):
-    assert find_get_links_to_sysadmin_logout(allowed) == []
+def test_guard_allows_post_forms_and_sign_in_links(allowed):
+    assert find_get_links_to_logout(allowed) == []

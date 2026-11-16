@@ -162,9 +162,9 @@ def test_logout_is_exempt_rather_than_silently_uncovered(client, app, limiter_on
     anonymous = app.test_client()
 
     for _ in range(205):
-        anonymous.get("/student/logout", headers=SCHOOL_ADDRESS)
+        anonymous.post("/student/logout", headers=SCHOOL_ADDRESS)
 
-    assert first.get("/student/logout", headers=SCHOOL_ADDRESS).status_code in (200, 302)
+    assert first.post("/student/logout", headers=SCHOOL_ADDRESS).status_code in (200, 302)
 
 
 def test_student_seat_limit_key_reads_only_the_validated_context(app, monkeypatch):

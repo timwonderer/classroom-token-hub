@@ -243,11 +243,13 @@
                 </div>
             </div>
 
-            <div class="pt-3">
-                <a href="{{ url_for('admin.logout') }}" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
+            {#- Sign-out is a POST with a CSRF token: a GET cannot end the session. -#}
+            <form method="post" action="{{ url_for('admin.logout') }}" class="pt-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
                     <span class="material-symbols-outlined" aria-hidden="true">logout</span> Sign Out
-                </a>
-            </div>
+                </button>
+            </form>
         </div>
     </aside>
 

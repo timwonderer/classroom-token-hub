@@ -465,7 +465,8 @@ def create_app():
         if request.endpoint in {"main.health_check"}:
             return None
 
-        from app.models import User
+        from app.models import User, UserRole
+        from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
         from app.utils.user_ids import session_user_id
         if not session.get("user_id"):
             return None
@@ -483,6 +484,19 @@ def create_app():
         if not session_nonce or user.current_session_nonce != session_nonce:
             session.clear()
             return None
+        # A teacher sign-in is a fixed window (DOM-IDEN-003); past it the cookie
+        # is ended here, before any route, so no path accepts it. A sign-in
+        # without a window predates it and is ended the same way.
+        if user.user_role == UserRole.TEACHER:
+            expires_at = user.current_session_expires_at
+            if expires_at is None or not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                candidate=canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+                reference=expires_at,
+            ).is_earlier:
+                session.clear()
+                g.teacher_session_expired = True
         return None
 
     @app.before_request
