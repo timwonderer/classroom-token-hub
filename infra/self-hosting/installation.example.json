@@ -1,0 +1,11 @@
+{
+  "installation_id": "<new-canonical-uuid>",
+  "machine_id": "<32-hex-machine-id-of-the-new-host>",
+  "release_sha": "<40-hex-reviewed-release-commit>",
+  "database": "cth_reference",
+  "hostname": "classroom.example.invalid",
+  "runtime_env": "/etc/cth/runtime.env",
+  "admission_hostname": "admission.example.invalid",
+  "tls_cert": "/etc/cth/tls/origin.crt",
+  "tls_key": "/etc/cth/tls/origin.key"
+}
