@@ -1,66 +1,42 @@
-# Enrolling the staging coordinator
+# Owner-attended staging in GitHub Actions
 
-**Locally fixture-tested.** Complete these steps only after the owner approves Phase C. The coordinator is an existing dedicated, reachable Linux operator machine with a private path to the staging VPC. GitHub sends an authorized request over SSH. The coordinator retains the lease and the cloud token. Its systemd timer uses the same inventory even when the SSH session or GitHub runner disappears. The temporary Droplet receives no DigitalOcean token.
+**Offline-tested implementation. Live use requires separate Phase C approval.** Begin on the [Phase C checklist](../../docs/self-hosting/phase-c.md). Each manual dispatch approves one exact application SHA and asks the dedicated staging provider account for one SFO3 Premium AMD Droplet. The owner is responsible for verifying cleanup when available and before authorizing another run. The hosted runner checks out the controller from the protected workflow SHA. The approved application checkout supplies the canonical [B2 installer](../../docs/self-hosting/reference-installation.md).
 
-## Prepare the control host
+## Prepare the repository and staging account
 
-1. As host administrator, install a reviewed copy of this repository, including its Git history, at `/opt/cth-staging` on a root-owned filesystem. Check its exact full SHA out detached. All checkout files and their parent directories must be root-controlled, with no writable group/other permissions. Use Python 3.10+, Git and OpenSSH. Confirm that the dedicated operator account `cthstage` can execute the checkout and cannot edit it. Keep the SSH account's shell available only through its restricted public key below; disable password, interactive authentication and all other authorized keys for that account.
-2. Create protected control directories. In a new installation, root can use the following commands once the account/group exist. Inspect pre-existing paths separately. The service group needs read access to its own staging-only enrollment. Group members must not include other users.
-
-   ```sh
-   install -d -m 0750 -o root -g cthstage /etc/cth-staging /etc/cth-staging/runs
-   install -d -m 0700 -o cthstage -g cthstage /var/lib/cth-staging
-   for part in pending runs evidence; do
-     install -d -m 0700 -o cthstage -g cthstage "/var/lib/cth-staging/$part"
-   done
-   ```
-
-   The expected result is a private persistent filesystem with working local SQLite, POSIX locks and synchronized time. A runner's checkout, temporary directory and network share are unsuitable for this inventory. If a lease, directory or database is missing on an established coordinator, quarantine dispatch and reconcile with the provider; do not reset the ledger. Never restore an old copy while new allocation is enabled.
-
-3. As the staging infrastructure owner, enroll a dedicated DigitalOcean team, its empty default project, a separate VPC and a static tag-based firewall. The token's account boundary must exclude all production resources. Review ingress (private SSH only from the coordinator) and egress allowlists, private routing/NAT if used, and verify exclusion of production destinations. Require distinct staging DNS, edge identity, tunnel, notification destinations, and stage-specific Turnstile and Passwordless registrations. The controller creates only the temporary Droplet. Use precise endpoint scopes documented in the [provider API](https://docs.digitalocean.com/reference/api/reference/droplets/), including the read dependencies of the enrolled team, project, VPC, image, firewall/tag, size and auxiliary-resource queries.
-4. Install the token alone in `/etc/cth-staging/token` and the policy below in `/etc/cth-staging/policy.json`. Both are root-owned regular files, group `cthstage`, mode 0640. Substitute checked operator values. The firewall digest is SHA-256 of the exact provider rule object containing the keys `inbound_rules` and `outbound_rules`, serialized with sorted keys, compact JSON separators and original list order. The enrolled image ID must be the public Ubuntu 22.04 x64 image actually available in SFO3. Recheck current catalog and billing before enrollment. Image, team, SSH key and firewall identifiers below are placeholders.
+1. Use a dedicated staging DigitalOcean team/default project, VPC, SSH key and firewall. The token must have no access to production. Enroll only the resource/read scopes required by `infra/staging/digitalocean.py`; creation and deletion apply only to Droplets. Keep SSH key-based, close public database and Redis access, and allow outbound traffic only to explicitly reviewed staging and dependency destinations. A standard GitHub-hosted install runner has rotating public addresses. If the owner explicitly permits public key-only SSH for the short test window, restrict that rule to TCP port 22. Keep application ingress behind its separately protected staging tunnel and ensure all other inbound ports remain closed. No workflow modifies a firewall, provider account or production environment.
+2. Publish the reviewed workflow on the protected default branch. Set **repository variable** `CTH_STAGING_OWNER` to the authorized owner's GitHub login. Restrict both environments below to that branch and keep secrets scoped to their respective environment. A push or PR cannot start this staging workflow. An Actions re-run of a previous dispatch cannot allocate a second Droplet.
+3. In the **`cth-staging-cloud` environment**, set secret `DO_STAGING_TOKEN` and variable `DO_STAGING_POLICY` to a JSON object matching the staging enrollment. Use actual checked values; zeroes and angle brackets below are placeholders.
 
    ```json
    {
-     "controller_sha": "<full-reviewed-coordinator-commit>",
-     "provider": {
-       "team_uuid": "<staging-team-uuid>",
-       "project_uuid": "<default-staging-project-uuid>",
-       "vpc_uuid": "<dedicated-staging-vpc-uuid>",
-       "image_id": 0,
-       "firewall_id": "<staging-firewall-uuid>",
-       "firewall_rules_sha256": "<approved-rules-digest>",
-       "ssh_key_id": 0
-     }
+     "team_uuid": "<staging-team>",
+     "project_uuid": "<staging-default-project>",
+     "vpc_uuid": "<staging-vpc>",
+     "image_id": 0,
+     "ssh_key_id": 0,
+     "firewall_id": "<staging-firewall>",
+     "allow_public_ssh": true,
+     "firewall_rules_sha256": "<approved-rules-sha256>"
    }
    ```
 
-5. As root, install the reviewed `cth-staging-cleanup.service` and `cth-staging-cleanup.timer` from this directory under `/etc/systemd/system/`, mode 0644. Verify the exact paths and enrollment before the first service activation. Run `systemd-analyze verify` on both units, then `systemctl daemon-reload` and `systemctl enable --now cth-staging-cleanup.timer`. Confirm a successful execution and fresh `/var/lib/cth-staging/sweep-ok`. The timer runs every minute and catches up after reboot. Monitor failed cleanup units and absence of a successful heartbeat **from outside this host**. Assign the on-call operator an overdue-lease alert and the ability to inspect the staging account independently. Loss of the coordinator or provider can extend billing beyond the target lifetime.
-6. Install a dedicated public dispatch key in a root-controlled SSH authorized-keys file for `cthstage`. Prefix the key with these literal options:
+   Select the numeric ID of the public Ubuntu 22.04 x64 image in SFO3. Compute the firewall digest from the provider's exact `inbound_rules` and `outbound_rules` arrays in an object using compact JSON separators and sorted keys; preserve list order. Apply the firewall to the exact staging tag `cth-ephemeral-staging`. Set `allow_public_ssh` to true only when the owner has approved public key-only SSH on TCP port 22 for the standard hosted runner. Review expected staging cost and human cleanup ownership before dispatch. Enable prompt access to the cleanup job; any additional approval rule on the cloud environment also applies during cleanup.
+4. In the **`cth-staging-install` environment**, set up an owner approval hold before releasing credentials. The same owner may dispatch and approve. Leave “Prevent self-review” unchecked for this arrangement. The hold lets the owner enter the fresh, independently observed host pin after allocation. Confirm that the repository plan supports the hold before any live run.
+5. Prepare this install environment's variables and secrets. The [guest enrollment procedure](../../docs/self-hosting/staging-bootstrap.md) defines the formats and trust boundaries. Only the guest installation step receives these values. The install job receives no cloud API token.
 
-   ```text
-   restrict,command="/usr/bin/python3 -EsB /opt/cth-staging/infra/staging/controller.py forced"
-   ```
+   | GitHub type | Names |
+   | --- | --- |
+   | Variables | `STAGING_HOSTNAME`, `STAGING_ADMISSION_HOSTNAME`, `STAGING_MARKETING_URL`, `STAGING_PASSWORDLESS_URL`, `STAGING_CONNECTOR_VERSION`, `STAGING_CONNECTOR_SHA256` |
+   | Secrets | `STAGING_HOST_PIN`, `STAGING_SSH_PRIVATE_KEY`, `STAGING_TURNSTILE_SITE_KEY`, `STAGING_TURNSTILE_SECRET_KEY`, `STAGING_PASSWORDLESS_API_PUBLIC`, `STAGING_PASSWORDLESS_API_KEY`, `STAGING_ORIGIN_CERT`, `STAGING_ORIGIN_KEY`, `STAGING_TUNNEL_TOKEN` |
+   | Optional, only for explicitly authorized acceptance | Variables `STAGING_ACCEPTANCE_PATH`, `STAGING_ACCEPTANCE_SHA256` and secrets `STAGING_ACCESS_CLIENT_ID`, `STAGING_ACCESS_CLIENT_SECRET` |
 
-   Require an independent host-key pin for the coordinator. The GitHub environment `cth-ephemeral-staging` must restrict deployment to the protected default branch and provide a hold while the operator records the pending run ID. Configure required reviewer approval where supported. A sole operator can authorize their own pending dispatch; a separate reviewer is an optional local control. If your GitHub plan cannot hold environment jobs, use the owner-enrollment wait described below. Configure only `STAGING_COORDINATOR_HOST` (environment variable), `STAGING_DISPATCH_KEY` and `STAGING_COORDINATOR_KNOWN_HOST` (environment secrets). The last contains the OpenSSH host key line with the alias `cth-staging-coordinator`. Review the workflow's immutable artifact-action pin. No application checkout, cloud token, customer database or guest credential belongs on the hosted runner.
+   Use dedicated staging DNS, origin TLS, restricted tunnel/admission and authentication provider registrations. Select an application-relative acceptance script at the approved SHA and verify its hash before setting both acceptance variables. Omit that pair to install without executing synthetic scenarios.
 
-## Authorize one run
+## Run, inspect and close
 
-1. The operator selects **Ephemeral CTH staging** on the reviewed default-branch workflow and dispatches the exact approved application SHA and `sfo3-premium-amd` profile. Leave the environment job waiting at its approval gate when available. Without environment waiting rules, the coordinator allows up to five minutes for a missing per-run approval file to appear; it allocates nothing during this wait. Record the new numeric GitHub run ID, the workflow commit, the installed coordinator commit, the account/project/resource budgets and the dedicated endpoints. First attempts only; a new dispatch needs a new approval.
-2. On the coordinator, root creates `/etc/cth-staging/runs/<run-id>/` as root:cthstage 0750. Install `approval.json` root:cthstage 0640, matching the pending job. Set `dispatch_before` to the UTC epoch second by which the job must be admitted, at most 15 minutes from dispatch processing. The two-hour lease begins at reservation; cleanup begins five minutes before expiry or immediately after the last test.
-
-   ```json
-   {
-     "run_id": "<numeric-run-id-as-string>",
-     "sha": "<40-hex-application-commit>",
-     "profile": "sfo3-premium-amd",
-     "controller_sha": "<40-hex-coordinator-commit>",
-     "workflow_sha": "<40-hex-dispatched-default-branch-commit>",
-     "dispatch_before": 0
-   }
-   ```
-
-3. Enroll the independent guest inputs and staging registrations for this exact run as documented in the [guest enrollment procedure](../../docs/self-hosting/staging-bootstrap.md). Verify source, immutable executable digests, DNS/edge and egress policy, public denial and private routing. Then release the environment approval. Prepare to independently verify the guest SSH key from its DigitalOcean console and match the Droplet ID, run UUID and key to the protected lease before releasing guest secrets. SSH trust-on-first-use cannot establish this identity.
-4. Keep provider and guest raw output on the coordinator. GitHub accepts only a bounded result containing public run metadata, completed stage names and times, bounded acceptance/phase/cleanup outcomes. Its artifact expires after three days; local stage evidence has the same retention. The separate durable lease record retains IDs and terminal disposition to prevent replays.
-5. As the on-call owner, use `sudo -u cthstage /usr/bin/python3 -EsB /opt/cth-staging/infra/staging/controller.py inspect <run-id>` on the coordinator to see exact ownership and pending retirement. The dispatch key cannot run this command. Confirm the staging integrations are retired and record the independent revocation receipt. The dispatcher allows 90 seconds after verified destruction for the receipt without extending cloud lifetime. Inspect `current_cleanup` for current disposition and `evidence` for the runner’s observation. Until that receipt is verified the run remains outstanding even if the provider says the Droplet is gone. If the job reports pending receipt, see the next independent reaper result and local disposition. Runner artifacts report only what was verified before the job ended.
-6. If creation or deletion times out, consult the restricted ledger, account/project and independently authenticated guest pin. For duplicate candidates, unknown ownership, residual storage/IPs or unverified absence, preserve the lease, avoid another dispatch and have the designated operator reconcile exact IDs. Restart the timer on the same inventory after fixing connectivity or enrollment drift. Do not broaden token scopes opportunistically, delete candidates by tag, or clear the lease to start another run. Inspect provider billing and separate integration usage after cleanup.
+1. In the DigitalOcean staging console, check that there are no outstanding Droplets or unresolved billable leftovers from the previous run. Select **Owner-attended CTH staging** on the default branch, enter the exact approved 40-hex application SHA, choose the reference profile, and confirm both dispatch checkboxes. Keep the GitHub run ID and selected resource profile handy.
+2. As soon as a valid create response arrives, the allocation step records the **numeric provider ID** in job outputs and the run summary. Match it with the provider console and the run-specific label. If no numeric receipt arrives, a timeout may still have allocated a resource. Stop further dispatch and reconcile the account manually. Never use a matching name or tag by itself as deletion authority.
+3. Before releasing the install job, use the provider console to independently obtain the SSH host key and installation UUID for that exact Droplet. Update `STAGING_HOST_PIN` in the protected install environment for this run and then approve the waiting job. A previous run's host key or an unverified network scan is insufficient. Installer stdout contributes only allowlisted completed stage names to the summary. Preserve the resulting install and cleanup statuses; never paste raw secrets, logs, classroom records or audit events into the run.
+4. After install success, failure or skip, the separate cleanup job attempts exact-ID deletion whenever it has an exact create receipt. It checks provider identity and ownership again and polls for absence. Workflow cancellation, runner shutdown, an environment waiting for approval, API failure or a missing ID can interrupt cleanup at any point. A job timeout limits CI execution; it cannot end provider billing.
+5. **After every run**, the owner checks the staging console for the exact ID, remaining Droplets, volumes, snapshots, backups and reserved IPs; checks independently provisioned DNS/tunnel/provider enrollments; retires transient credentials; and confirms billing disposition. If automated deletion did not complete, inspect the run summary and provider control-plane history to establish the exact ID, project and independent evidence of creation. Delete only resources the owner can positively identify, confirm their absence and record the redacted closeout before starting another run. Uncertain ownership requires investigation in the staging account.

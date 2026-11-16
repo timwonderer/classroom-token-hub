@@ -1,90 +1,155 @@
-name: Ephemeral CTH staging
+name: Owner-attended CTH staging
 on:
   workflow_dispatch:
     inputs:
       app_sha:
-        description: Full approved application commit
+        description: Full application commit reviewed by the owner
         required: true
         type: string
       profile:
-        description: Approved reference deployment
+        description: Approved staging profile
         required: true
         type: choice
         options:
           - sfo3-premium-amd
+      previous_resources_gone:
+        description: I checked DO and confirmed the previous staging resources are gone
+        required: true
+        type: boolean
+      approve_run:
+        description: I approve this SHA, the staging compute cost, and will verify final deletion
+        required: true
+        type: boolean
 
-permissions: {}
+permissions:
+  contents: read
 concurrency:
   group: cth-ephemeral-staging
   cancel-in-progress: false
 
 jobs:
-  reference:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.run_attempt == '1'
+  allocate:
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      github.run_attempt == '1' && github.actor == vars.CTH_STAGING_OWNER &&
+      inputs.previous_resources_gone && inputs.approve_run && inputs.profile == 'sfo3-premium-amd'
     runs-on: ubuntu-24.04
-    timeout-minutes: 125
-    environment: cth-ephemeral-staging
+    timeout-minutes: 12
+    environment: cth-staging-cloud
+    outputs:
+      droplet_id: ${{ steps.create.outputs.droplet_id }}
+      marker: ${{ steps.create.outputs.marker }}
+      public_ipv4: ${{ steps.create.outputs.public_ipv4 }}
     steps:
-      - name: Dispatch approved lease
+      - name: Check SHA and record run label before creating anything
         env:
           APP_SHA: ${{ inputs.app_sha }}
-          PROFILE: ${{ inputs.profile }}
-          COORDINATOR: ${{ vars.STAGING_COORDINATOR_HOST }}
-          DISPATCH_KEY: ${{ secrets.STAGING_DISPATCH_KEY }}
-          KNOWN_HOST: ${{ secrets.STAGING_COORDINATOR_KNOWN_HOST }}
+        run: |
+          [[ $APP_SHA =~ ^[0-9a-f]{40}$ ]]
+          printf 'Attended staging run %s for SHA %s. Owner must verify final absence in DigitalOcean.\n' \
+            "$GITHUB_RUN_ID" "$APP_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Create exactly one staging Droplet
+        id: create
+        env:
+          DO_STAGING_TOKEN: ${{ secrets.DO_STAGING_TOKEN }}
+          DO_STAGING_POLICY: ${{ vars.DO_STAGING_POLICY }}
+        run: python3 infra/staging/digitalocean.py create
+
+  install:
+    needs: allocate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 115
+    environment: cth-staging-install
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out the approved application commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.app_sha }}
+          path: application
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Invoke canonical B2 stages on the pinned guest
+        env:
+          APP_SHA: ${{ inputs.app_sha }}
+          ID: ${{ needs.allocate.outputs.droplet_id }}
+          IP: ${{ needs.allocate.outputs.public_ipv4 }}
+          INSTALL_ID: ${{ needs.allocate.outputs.marker }}
+          STAGING_HOST_PIN: ${{ secrets.STAGING_HOST_PIN }}
+          STAGING_SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          STAGING_HOSTNAME: ${{ vars.STAGING_HOSTNAME }}
+          STAGING_ADMISSION_HOSTNAME: ${{ vars.STAGING_ADMISSION_HOSTNAME }}
+          STAGING_MARKETING_URL: ${{ vars.STAGING_MARKETING_URL }}
+          STAGING_PASSWORDLESS_URL: ${{ vars.STAGING_PASSWORDLESS_URL }}
+          STAGING_TURNSTILE_SITE_KEY: ${{ secrets.STAGING_TURNSTILE_SITE_KEY }}
+          STAGING_TURNSTILE_SECRET_KEY: ${{ secrets.STAGING_TURNSTILE_SECRET_KEY }}
+          STAGING_PASSWORDLESS_API_PUBLIC: ${{ secrets.STAGING_PASSWORDLESS_API_PUBLIC }}
+          STAGING_PASSWORDLESS_API_KEY: ${{ secrets.STAGING_PASSWORDLESS_API_KEY }}
+          STAGING_ORIGIN_CERT: ${{ secrets.STAGING_ORIGIN_CERT }}
+          STAGING_ORIGIN_KEY: ${{ secrets.STAGING_ORIGIN_KEY }}
+          STAGING_TUNNEL_TOKEN: ${{ secrets.STAGING_TUNNEL_TOKEN }}
+          STAGING_CONNECTOR_SHA256: ${{ vars.STAGING_CONNECTOR_SHA256 }}
+          STAGING_CONNECTOR_VERSION: ${{ vars.STAGING_CONNECTOR_VERSION }}
+          ACCEPTANCE_PATH: ${{ vars.STAGING_ACCEPTANCE_PATH }}
+          ACCEPTANCE_SHA256: ${{ vars.STAGING_ACCEPTANCE_SHA256 }}
+          STAGING_ACCESS_CLIENT_ID: ${{ secrets.STAGING_ACCESS_CLIENT_ID }}
+          STAGING_ACCESS_CLIENT_SECRET: ${{ secrets.STAGING_ACCESS_CLIENT_SECRET }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -eu
           umask 077
-          [[ $APP_SHA =~ ^[0-9a-f]{40}$ && $GITHUB_SHA =~ ^[0-9a-f]{40}$ &&
-             $GITHUB_RUN_ID =~ ^[1-9][0-9]{0,19}$ && $PROFILE == sfo3-premium-amd &&
-             $COORDINATOR =~ ^[a-z0-9][a-z0-9.-]+$ ]]
-          scratch=$(mktemp -d)
-          trap 'rm -rf -- "$scratch"' EXIT
-          printf '%s\n' "$DISPATCH_KEY" > "$scratch/id"
-          printf '%s\n' "$KNOWN_HOST" > "$scratch/hosts"
-          unset DISPATCH_KEY KNOWN_HOST
-          rc=0
-          ssh -F /dev/null -nT -i "$scratch/id" -o IdentitiesOnly=yes -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes -o HostKeyAlias=cth-staging-coordinator \
-            -o "UserKnownHostsFile=$scratch/hosts" -o GlobalKnownHostsFile=/dev/null \
-            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-            "cthstage@$COORDINATOR" "dispatch $GITHUB_RUN_ID $APP_SHA $PROFILE $GITHUB_SHA" \
-            >"$scratch/response" 2>/dev/null || rc=$?
-          # Reconstruct evidence from a closed vocabulary. Never upload SSH output.
-          python3 - "$scratch/response" <<'PY'
-          import json, os, sys, time
-          from pathlib import Path
-          stages = "host postgres redis release config database services scheduler ingress readiness".split()
-          out = dict(run_id=os.environ["GITHUB_RUN_ID"], sha=os.environ["APP_SHA"], profile=os.environ["PROFILE"],
-                     stages=[], stage_times=[], issued_at=0, phase="dispatch", acceptance="unexecuted", execution="failed", cleanup="unresolved")
-          try:
-              with open(sys.argv[1], "rb") as f:
-                  data = f.read(2049)
-              if len(data) > 2048:
-                  raise ValueError()
-              raw = json.loads(data)
-              if not (set(raw) == set(out) and all(raw[k] == out[k] for k in ("sha","profile","run_id"))
-                      and isinstance(raw["stages"],list) and raw["stages"] == stages[:len(raw["stages"])]
-                      and type(raw["issued_at"]) is int and 0 < raw["issued_at"] <= time.time()+60
-                      and raw["phase"] in ("preparation","allocation","bootstrap","completed")
-                      and isinstance(raw["stage_times"],list) and len(raw["stage_times"])==len(raw["stages"])
-                      and all(type(t) is int and raw["issued_at"]-60 <= t <= time.time()+60 for t in raw["stage_times"])
-                      and raw["acceptance"] in ("unexecuted","passed") and raw["execution"] in ("failed","passed")
-                      and raw["cleanup"] in ("unresolved","retirement_pending","verified")):
-                  raise ValueError()
-              out = raw
-          except (ValueError, TypeError, KeyError, UnicodeError):
-              pass
-          Path(os.environ["RUNNER_TEMP"], "cth-staging-result.json").write_text(json.dumps(out))
-          sys.exit(0 if out["execution"]=="passed" and out["cleanup"]=="verified" and out["stages"]==stages else 1)
-          PY
-          exit "$rc"
-      - name: Retain sanitized stage results
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+          test "$(git -C application rev-parse HEAD)" = "$APP_SHA"
+          args=()
+          if [[ -n $ACCEPTANCE_PATH || -n $ACCEPTANCE_SHA256 ]]; then
+            args+=(--acceptance-script "$ACCEPTANCE_PATH" --acceptance-sha256 "$ACCEPTANCE_SHA256")
+          else
+            echo "Functional acceptance was not selected for this installation." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python3 controller/infra/staging/bootstrap.py --release application --sha "$APP_SHA" \
+            --droplet-id "$ID" --address "$IP" --installation-id "$INSTALL_ID" \
+            --work-dir "$RUNNER_TEMP/b3-bootstrap" \
+            "${args[@]}"
+
+  cleanup:
+    needs: [allocate, install]
+    if: always() && needs.allocate.result != 'skipped' && github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    environment: cth-staging-cloud
+    steps:
+      - name: Check for exact creation receipt
+        env:
+          ID: ${{ needs.allocate.outputs.droplet_id }}
+          MARKER: ${{ needs.allocate.outputs.marker }}
+        run: |
+          if ! [[ $ID =~ ^[1-9][0-9]{0,18}$ && $MARKER =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]; then
+            echo 'No exact creation receipt. No deletion attempted. Owner must reconcile the staging account before another dispatch.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: staging-${{ github.run_id }}
-          path: ${{ runner.temp }}/cth-staging-result.json
-          retention-days: 3
-          if-no-files-found: warn
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Delete and verify exact enrolled ID
+        env:
+          DO_STAGING_TOKEN: ${{ secrets.DO_STAGING_TOKEN }}
+          DO_STAGING_POLICY: ${{ vars.DO_STAGING_POLICY }}
+          STAGING_DROPLET_ID: ${{ needs.allocate.outputs.droplet_id }}
+          STAGING_MARKER: ${{ needs.allocate.outputs.marker }}
+        run: python3 infra/staging/digitalocean.py cleanup
+      - name: Record owner closeout requirement
+        if: always()
+        env:
+          RESULT: ${{ job.status }}
+          INSTALL: ${{ needs.install.result }}
+        run: |
+          printf 'Install: %s. Cleanup job: %s. Owner must confirm the exact ID is gone, inspect residual charges/resources and retire the staging integrations.\n' \
+            "$INSTALL" "$RESULT" >> "$GITHUB_STEP_SUMMARY"

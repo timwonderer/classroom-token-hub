@@ -18,7 +18,7 @@ This handbook is for the operator who controls a private CTH installation, its h
 | Before starting services | [Configuration and secret inventory](configuration.md) |
 | When installing a new database | [Release-specific database baseline, verification and recovery](fresh-database.md) |
 | After the readiness check | [First authorized use, acceptance, maintenance, recovery and decommissioning](operations.md) |
-| When designing an isolated rehearsal | [Ephemeral staging controller inputs, evidence and teardown](staging-controller.md) |
+| When running an attended rehearsal | [Manual dispatch, exact-ID cleanup and owner confirmation](staging-controller.md) |
 | When preparing the staging guest | [Release bundle, guest identity, connector and per-run credentials](staging-bootstrap.md) |
 | When authorizing the first cloud rehearsal | [Phase C execution plan and resource ownership review](phase-c.md) |
 

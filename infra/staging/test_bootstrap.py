@@ -1,11 +1,13 @@
-"""Offline host enrollment, credential isolation, exact B2 dispatch and receipt tests."""
+"""Attended staging bootstrap tests. Local Git fixture, simulated SSH and connector download."""
+
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
-from tempfile import TemporaryDirectory
-import time
+import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -14,167 +16,178 @@ import bootstrap
 
 class GuestTests(unittest.TestCase):
     def setUp(self):
-        tmp = TemporaryDirectory()
+        tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        root = Path(tmp.name).resolve()
-        self.inputs = root/"inputs"/"123"
-        self.inputs.mkdir(parents=True)
-        self.state = root/"state"/"123"
-        self.state.parent.mkdir(mode=0o700)
-        self.repo = root/"repo"
-        self.repo.mkdir()
+        self.work = Path(tmp.name) / "private"
+        self.work.mkdir(mode=0o700)
+        root = Path(tmp.name) / "source"
+        root.mkdir()
+
         def git(*args):
-            return subprocess.check_output(["git","-C",self.repo,*args],stderr=subprocess.DEVNULL).decode().strip()
-        git("init","-q")
-        (self.repo/"fixture").write_text("offline release")
-        git("add","fixture")
-        git("-c","user.name=Fixture","-c","user.email=test@example.invalid","commit","-qm","offline")
-        self.sha = git("rev-parse","HEAD")
-        git("bundle","create",self.inputs/"release.bundle","HEAD")
-        self.iid = "6b9c12c2-13ea-4d91-9ae4-fe7e9002c363"
-        self.prepared = bootstrap.Prepared(self.inputs,self.state,self.iid,self.sha,time.time()+1800)
-        self.fixture("connector",b"synthetic connector")
-        self.fixture("acceptance.sh",b"exit 0")
-        self.fixture("origin.crt",b"fixture cert")
-        self.fixture("origin.key",b"fixture key")
-        self.fixture("tunnel.token",b"synthetic-private-connector-token")
-        self.providers = {key:"synthetic-"+key for key in bootstrap.b2_runtime.PROVIDERS}
-        self.fixture("integration.json",self.providers)
-        self.fixture("acceptance.json",{"CF-Access-Client-Id":"synthetic-client-id-0001","CF-Access-Client-Secret":"synthetic-pair-secret-0001"})
-        self.cfg = {"release_sha":self.sha,"hostname":"app.stage.invalid","admission_hostname":"gate.stage.invalid",
-                    "allowed_hosts":["app.stage.invalid","gate.stage.invalid","marketing.stage.invalid","api.stage.invalid"],
-                    "marketing_url":"https://marketing.stage.invalid","passwordless_url":"https://api.stage.invalid",
-                    "bundle_sha256":bootstrap.digest(self.inputs/"release.bundle"),
-                    "connector_sha256":bootstrap.digest(self.inputs/"connector"),
-                    "acceptance_sha256":bootstrap.digest(self.inputs/"acceptance.sh")}
-        self.fixture("authority.json",self.cfg)
-        (self.inputs/"release.bundle").chmod(0o600)
-        # Translate operator ownership only; actual file mode, inode and path checks stay active.
-        original=bootstrap.protected
-        owner=patch.object(bootstrap,"protected",side_effect=lambda p,d,u:original(p,d,os.geteuid()))
-        owner.start()
-        self.addCleanup(owner.stop)
-        self.host_key="ssh-ed25519 "+base64.b64encode(b"\0\0\0\x0bssh-ed25519\0\0\0\x20"+b"h"*32).decode()
+            return subprocess.check_output(["git", "-C", root, *args], stderr=subprocess.DEVNULL).decode().strip()
 
-    def fixture(self,name,content):
-        p=self.inputs/name
-        p.write_bytes(content if isinstance(content,bytes) else json.dumps(content).encode())
-        p.chmod(0o600)
+        git("init", "-q")
+        self.hook = b"exit 0\n"
+        (root / "check.sh").write_bytes(self.hook)
+        git("add", "check.sh")
+        git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "test")
+        self.args = SimpleNamespace(
+            sha=git("rev-parse", "HEAD"),
+            release=root,
+            droplet_id=19,
+            address="8.8.8.8",
+            installation_id="09fcea91-a937-4818-ba57-0250dd42787f",
+            acceptance_script="",
+            acceptance_sha256="",
+        )
+        self.key = "ssh-ed25519 " + base64.b64encode(b"\0\0\0\x0bssh-ed25519\0\0\0\x20" + b"p" * 32).decode()
+        self.env = {"STAGING_" + k: "synthetic-" + k for k in bootstrap.runtime.PROVIDERS}
+        self.env.update(
+            STAGING_HOST_PIN=json.dumps(
+                {"installation_id": self.args.installation_id, "droplet_id": 19, "host_key": self.key}
+            ),
+            STAGING_HOSTNAME="app.staging.invalid",
+            STAGING_ADMISSION_HOSTNAME="gate.staging.invalid",
+            STAGING_MARKETING_URL="https://marketing.staging.invalid",
+            STAGING_PASSWORDLESS_URL="https://api.staging.invalid",
+            STAGING_SSH_PRIVATE_KEY="synthetic-private-key",
+            STAGING_TUNNEL_TOKEN="synthetic-secret",
+            STAGING_ORIGIN_CERT="synthetic-cert",
+            STAGING_ORIGIN_KEY="synthetic-key",
+            STAGING_ACCESS_CLIENT_ID="approved-test-access-key",
+            STAGING_ACCESS_CLIENT_SECRET="approved-test-service-secret",
+            STAGING_CONNECTOR_VERSION="2026.5.0",
+            STAGING_CONNECTOR_SHA256=hashlib.sha256(b"fixture").hexdigest(),
+        )
 
-    def test_public_only_cloud_config_and_private_per_run_client(self):
-        cloud=self.prepared.cloud_init()
-        self.assertEqual(cloud,self.prepared.cloud_init())
-        boot=json.loads(cloud.split("\n",1)[1])
-        self.assertFalse(boot["ssh_pwauth"])
-        self.assertTrue(boot["ssh_deletekeys"])
-        self.assertIn("restrict ssh-ed25519 ",cloud)
-        for raw in [*self.providers.values(),"fixture key","synthetic-private-connector-token","PRIVATE KEY"]:
-            self.assertNotIn(raw,cloud)
-        self.assertEqual((self.state/"client").stat().st_mode & 0o777,0o600)
-        self.prepared.cleanup()
-        self.assertEqual(list(self.state.iterdir()),[])
+    def test_cloud_init_contains_only_public_enrollment(self):
+        cfg = json.loads(bootstrap.cloud_init(self.args.installation_id).split("\n", 1)[1])
+        self.assertFalse(cfg["ssh_pwauth"])
+        self.assertTrue(cfg["ssh_deletekeys"])
+        self.assertEqual(cfg["write_files"][0]["content"].strip(), self.args.installation_id)
+        self.assertIn("/etc/ssh/ssh_host_ed25519_key.pub", str(cfg["runcmd"]))
+        self.assertNotIn("authorized_keys", str(cfg))
+        self.assertNotIn("PRIVATE KEY", str(cfg))
 
-    def test_wrong_host_metadata_or_reservation_never_proves_ownership(self):
-        self.prepared.cloud_init()
-        self.assertFalse(self.prepared.prove("10.2.3.4",39))
-        self.fixture("host-pin.json",{"installation_id":self.iid,"droplet_id":39,"host_key":self.host_key})
-        with patch.object(bootstrap,"capture_ssh") as probe:
-            for text in (self.iid+" 40 "+"2"*32,"other 39 "+"2"*32,self.iid+" 39 "+"0"*32):
-                probe.return_value=text.encode()
-                self.assertFalse(self.prepared.prove("10.2.3.4",39))
-            probe.return_value=(self.iid+" 39 "+"2"*32).encode()
-            self.assertTrue(self.prepared.prove("10.2.3.4",39))
-            args,_,_=probe.call_args.args
-            self.assertIn("StrictHostKeyChecking=yes",args)
-            self.assertIn("IdentityAgent=none",args)
-            self.assertIn("root@10.2.3.4",args)
-            probe.reset_mock()
-            self.assertFalse(self.prepared.prove("198.51.100.10",39))
-            self.assertFalse(self.prepared.prove("10.2.3.4",40))
-            probe.assert_not_called()
+    def test_console_pin_and_provider_ip_are_required(self):
+        with self.assertRaises(ValueError):
+            bootstrap.host_pin(self.env["STAGING_HOST_PIN"], 20, self.args.installation_id)
+        with self.assertRaises(ValueError):
+            bootstrap.host_pin(self.env["STAGING_HOST_PIN"], 19, "old-guest")
+        original = self.args.address
+        for addr in ("127.0.0.1", "169.254.169.254", "192.168.1.5", "250.1.2.3"):
+            self.args.address = addr
+            with self.assertRaises(ValueError):
+                bootstrap.Guest(self.args, self.work, self.env)
+        self.args.address = original
+        guest = bootstrap.Guest(self.args, self.work, self.env)
+        self.assertIn("StrictHostKeyChecking=yes", guest.ssh)
+        self.assertIn("IdentityAgent=none", guest.ssh)
+        self.assertEqual((self.work / "identity").stat().st_mode & 0o777, 0o600)
+        self.assertEqual((self.work / "known_hosts").read_text(), original + " " + self.key + "\n")
 
-    def test_protected_files_and_approved_stage_only_destinations(self):
-        for changes in (
-            {"marketing_url":"https://unapproved.invalid"},
-            {"hostname":"school.classroomtokenhub.com","allowed_hosts":[*self.cfg["allowed_hosts"],"school.classroomtokenhub.com"]},
-            {"bundle_sha256":"0"*64}, {"acceptance_sha256":"1"*64}, {"release_sha":"a"*40},
+    def simulate(self, failure="", accept=False):
+        if accept:
+            self.args.acceptance_script = "check.sh"
+            self.args.acceptance_sha256 = hashlib.sha256(self.hook).hexdigest()
+        original = bootstrap.local
+        commands = []
+        uploads = {}
+        statuses = []
+
+        def local(argv):
+            if argv[0] == "curl":
+                self.assertTrue(
+                    argv[-1].startswith("https://github.com/cloudflare/cloudflared/releases/download/")
+                )
+                (self.work / "connector").write_bytes(b"bad-digest" if failure == "connector" else b"fixture")
+                return b""
+            return original(argv)
+
+        def receipt(command):
+            commands.append(command)
+            if "metadata/v1/id" in command:
+                number = "7" if failure == "identity" else "19"
+                return (self.args.installation_id + " " + number + " " + "2" * 32).encode()
+            action, stage = command.split("install.py ")[1].split()[:2]
+            result = {
+                "action": action,
+                "stage": stage,
+                "result": "ok",
+                "installation_id": self.args.installation_id,
+                "release_sha": self.args.sha,
+            }
+            if failure == "interrupt" and stage == "redis":
+                raise subprocess.TimeoutExpired("simulated", 5)
+            if failure == "unfiltered" and stage == "services":
+                result["auth"] = "sensitive fixture"
+            return json.dumps(result).encode()
+
+        with (
+            patch.object(bootstrap, "local", side_effect=local),
+            patch.object(bootstrap.Guest, "receipt", side_effect=receipt),
+            patch.object(bootstrap.Guest, "run", side_effect=commands.append),
+            patch.object(bootstrap.Guest, "upload", side_effect=lambda k, v: uploads.update({k: v})),
         ):
-            self.fixture("authority.json",{**self.cfg,**changes})
-            with self.assertRaises(bootstrap.BootstrapError):
-                self.prepared.cloud_init()
-        self.fixture("authority.json",self.cfg)
-        (self.inputs/"origin.key").chmod(0o644)
-        with self.assertRaises(bootstrap.BootstrapError):
-            self.prepared.cloud_init()
-        (self.inputs/"origin.key").chmod(0o600)
-        self.fixture("integration.json",{**self.providers,"DIGITALOCEAN_TOKEN":"should-never-be-forwarded"})
-        with self.assertRaises(bootstrap.BootstrapError):
-            self.prepared.cloud_init()
-
-    def install_fixture(self,bad_receipt=False):
-        statuses=[]
-        commands=[]
-        uploads={}
-        p=self.prepared
-        def run(argv,command,*args):
-            commands.append(command)
-        def capture(argv,command,timeout):
-            commands.append(command)
-            action,stage=command.split("install.py ")[1].split()[:2]
-            receipt={"installation_id":self.iid,"release_sha":self.sha,"stage":stage,"action":action,"result":"ok"}
-            if bad_receipt and stage=="database":
-                receipt["raw_guest_output"]="sensitive fixture"
-            return json.dumps(receipt).encode()
-        with patch.object(p,"prove",return_value=True),patch.object(p,"_identity",return_value=([],"2"*32)), \
-             patch.object(p,"_run",side_effect=run), patch.object(p,"_upload",side_effect=lambda a,k,v:uploads.update({k:v})), \
-             patch.object(bootstrap,"capture_ssh",side_effect=capture):
-            if bad_receipt:
-                with self.assertRaisesRegex(bootstrap.BootstrapError,"invalid_stage_receipt"):
-                    p.install("10.2.3.4",39,lambda s,v:statuses.append((s,v)))
+            if failure:
+                with self.assertRaises((ValueError, subprocess.TimeoutExpired)):
+                    bootstrap.install(self.args, self.work, self.env, statuses.append)
             else:
-                p.install("10.2.3.4",39,lambda s,v:statuses.append((s,v)))
-        return statuses,commands,uploads
+                bootstrap.install(self.args, self.work, self.env, statuses.append)
+        return statuses, commands, uploads
 
-    def test_exact_canonical_commands_and_scoped_acceptance(self):
-        statuses,commands,uploads=self.install_fixture()
-        self.assertEqual(statuses,[(s,"ok") for s in (*bootstrap.STAGES,"acceptance")])
-        actual=[c.split("python3 ",1)[1] for c in commands if "infra/self-hosting/install.py " in c]
-        self.assertEqual(actual,["infra/self-hosting/install.py "+a+" "+s+" --config "+bootstrap.MANIFEST
-                                 for s in bootstrap.STAGES for a in ("apply","check")])
-        manifest=json.loads(uploads[bootstrap.MANIFEST])
-        raw=uploads["/etc/cth/runtime.env"]
-        parsed=bootstrap.b2_runtime.parse_env(raw.decode(),manifest)
-        self.assertEqual(len({parsed[k] for k in bootstrap.b2_runtime.KEYS}),5)
-        self.assertEqual(manifest["installation_id"],self.iid)
-        self.assertIn("DynamicUser=yes",commands[-1])
-        self.assertIn("LoadCredential=admission.json:",commands[-1])
-        self.assertIn("CTH_PUBLIC_ORIGIN=https://app.stage.invalid",commands[-1])
-        for secret in self.providers.values():
-            self.assertNotIn(secret," ".join(commands))
+    def test_exact_b2_stages_and_optional_scoped_acceptance(self):
+        statuses, commands, uploads = self.simulate(accept=True)
+        self.assertEqual(statuses, [*bootstrap.STAGES, "acceptance"])
+        self.assertEqual(
+            [c.split("python3 ", 1)[1] for c in commands if "install.py " in c],
+            [
+                "infra/self-hosting/install.py " + action + " " + stage + " --config " + bootstrap.MANIFEST
+                for stage in bootstrap.STAGES
+                for action in ("apply", "check")
+            ],
+        )
+        self.assertIn("DynamicUser=yes", commands[-1])
+        self.assertIn("LoadCredential=access.json:", commands[-1])
+        cfg = json.loads(uploads[bootstrap.MANIFEST])
+        values = bootstrap.runtime.parse_env(uploads[cfg["runtime_env"]].decode(), cfg)
+        self.assertEqual(len({values[k] for k in bootstrap.runtime.KEYS}), 5)
+        self.assertNotIn(self.env["STAGING_TUNNEL_TOKEN"], " ".join(commands))
+        self.assertNotIn(self.env["STAGING_SSH_PRIVATE_KEY"], str(uploads))
+        self.assertEqual(
+            subprocess.check_output(["git", "bundle", "list-heads", self.work / "release.bundle"]).split()[0],
+            self.args.sha.encode(),
+        )
 
-    def test_interrupted_bootstrap_discards_untrusted_evidence_and_skips_acceptance(self):
-        statuses,commands,_=self.install_fixture(True)
-        self.assertEqual(statuses,[(s,"ok") for s in bootstrap.STAGES[:bootstrap.STAGES.index("database")]])
-        self.assertFalse(any("DynamicUser=yes" in c for c in commands))
+    def test_unfiltered_receipt_and_interruption_never_mark_stage_complete(self):
+        for failure, stage in (("unfiltered", "services"), ("interrupt", "redis")):
+            statuses, _, _ = self.simulate(failure)
+            self.assertEqual(statuses, list(bootstrap.STAGES)[: bootstrap.STAGES.index(stage)])
 
-    def test_no_harness_without_approval_and_mismatched_revocation(self):
-        self.fixture("authority.json",{**self.cfg,"acceptance_sha256":None})
-        statuses,commands,_=self.install_fixture()
-        self.assertNotIn(("acceptance","ok"),statuses)
-        self.assertFalse(any("acceptance.sh" in c for c in commands))
-        self.assertFalse(self.prepared.revoked(39))
-        self.fixture("revoked.json",{"installation_id":self.iid,"droplet_id":39,"integrations_revoked":True})
-        self.assertTrue(self.prepared.revoked(39))
-        self.assertFalse(self.prepared.revoked(40))
-        self.assertFalse(self.prepared.revoked(None))
-        self.fixture("revoked.json",{"installation_id":self.iid,"droplet_id":None,"integrations_revoked":True})
-        self.assertTrue(self.prepared.revoked(None))
+    def test_identity_or_connector_disagreement_prevents_transfer(self):
+        for failure in ("identity", "connector"):
+            statuses, _, uploads = self.simulate(failure)
+            self.assertFalse(statuses)
+            self.assertFalse(uploads)
 
-    def test_enrollment_wait_and_receipt_bounds(self):
-        self.prepared.expires=time.time()-1
-        with self.assertRaisesRegex(bootstrap.BootstrapError,"lease_expired"):
-            self.prepared.install("10.2.3.4",39,lambda *_:None)
-        with self.assertRaisesRegex(bootstrap.BootstrapError,"oversized_guest_receipt"):
-            bootstrap.capture_ssh(["/bin/sh","-c"],"printf '%05000d' 0",2)
-        with self.assertRaisesRegex(bootstrap.BootstrapError,"guest_command_failed"):
-            bootstrap.capture_ssh(["/bin/sh","-c"],"exit 3",2)
+    def test_unapproved_hook_and_production_fallback(self):
+        statuses, _, uploads = self.simulate()
+        self.assertNotIn("acceptance", statuses)
+        self.assertFalse(any("acceptance" in p for p in uploads))
+        self.env["STAGING_MARKETING_URL"] = "https://www.classroomtokenhub.com"
+        with self.assertRaises(ValueError):
+            bootstrap.checked_runtime(self.args, "2" * 32, self.env)
+
+    def test_step_summary_accepts_only_verified_stage_names(self):
+        summary = self.work / "summary"
+        with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}), patch("builtins.print"):
+            bootstrap.record_stage("database")
+            with self.assertRaises(ValueError):
+                bootstrap.record_stage("unsafe fixture content")
+        self.assertEqual(summary.read_text(), "- Verified `database`\n")
+
+    def test_oversized_ssh_output_is_rejected(self):
+        guest = bootstrap.Guest(self.args, self.work, self.env)
+        guest.ssh = ["/bin/sh", "-c"]
+        with self.assertRaises(ValueError):
+            guest.receipt("printf '%05000d' 0")
