@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- <!-- notes: internal --> **FEAT execution exceptions are named, not implied** (`FEAT-CORE-000` v1.2, owner ruling 2026-11-15). Every FEAT still resolves a seat unless its contract declares exactly one of five exception classes and cites the governing section: identity establishment (student claim, student recovery, teacher provisioning, teacher recovery), session boundary (sign-in; sign-out without a resolvable seat, after verifying the session's own token), principal lifecycle (teacher account deletion only), system administration, and the out-of-band operator command. No other teacher operation may run without a teacher seat in the active class, and owning the state an operation changes does not by itself authorize changing it. An actor field an exception does not resolve is recorded as absent, never inferred. A contract may define a workflow of single-request steps that carry authority only as a re-validated capability token, and one request executes at most one FEAT. Normative only; no runtime change. `SOP-DOC-001` v3.60.
+
 ## [2.4.5] - 2026-11-14 — Per-student rate limits and security fixes
 
 Released as `1d74ea8` on 2026-11-14 at 07:14 UTC by release run [43570114275](https://github.com/timwonderer/classroom-token-hub/actions/runs/43570114275). No migration. Record: [DEPLOY_2026-11-14_1d74ea8.md](docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md).
