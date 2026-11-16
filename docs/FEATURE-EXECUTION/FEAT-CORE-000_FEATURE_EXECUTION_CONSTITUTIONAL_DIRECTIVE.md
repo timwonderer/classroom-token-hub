@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-CORE-000 | 1.1 | 2026-09-30 | 1.0 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
+| FEAT-CORE-000 | 1.2 | 2026-11-15 | 1.1 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
 
 ---
 
@@ -54,6 +54,13 @@ A FEAT **MUST** resolve:
 * `class_id`
 
 before any domain interaction occurs.
+
+For the out-of-band operator command defined in FEAT-IDEN-008, the execution
+context is the operator's CLI invocation. The operator acts under host authority,
+and the new system principal has no class or seat.
+For this command alone, the classroom actor fields in §§III.1, III.4, VII.1
+and VIII.6 are absent. The command may test uniqueness of the requested login
+at insertion. Atomicity, replay safety and sanitized execution tracing apply.
 
 **Failure Contract:**
 If context cannot be resolved:

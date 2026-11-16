@@ -1,12 +1,36 @@
-"""Identity service — canonical User/Seat resolution helpers.
-
-Scope: resolving who an actor is. No domain logic (balances, entitlements, etc.).
-"""
+"""Identity-owned principal provisioning and canonical User/Seat resolution."""
 
 from __future__ import annotations
 
+import pyotp
+
 from app.extensions import db
-from app.models import ClassEconomy, Seat, User
+from app.feats.base import get_active_feat_name
+from app.models import ClassEconomy, Seat, User, UserRole
+from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
+from app.utils.encryption import encrypt_totp
+
+
+def create_system_principal(username: str) -> str | None:
+    """Identity-owned authentication material for the operator bootstrap."""
+    if get_active_feat_name() != "FEAT-IDEN-008":
+        raise PermissionError("System principal creation requires FEAT-IDEN-008.")
+    username = normalize_auth_username(username)
+    if not username:
+        raise ValueError("Username is required.")
+
+    _, username_hash, lookup_hash = build_hashed_username_fields(username)
+    if User.query.with_entities(User.id).filter_by(username_lookup_hash=lookup_hash).first() is not None:
+        return None
+    secret = pyotp.random_base32()
+    db.session.add(User(
+        user_role=UserRole.SYSADMIN,
+        username_hash=username_hash,
+        username_lookup_hash=lookup_hash,
+        totp_secret_encrypted=encrypt_totp(secret),
+    ))
+    db.session.flush()
+    return secret
 
 
 def resolve_teacher_seat_for_class(class_id: str) -> Seat:

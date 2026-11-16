@@ -218,6 +218,7 @@ FEAT_REGISTRY = {
     "FEAT-IDEN-005": {"domain": "Identity", "blast_radius": "MED", "desc": "Authenticated Class Binding"},
     "FEAT-IDEN-006": {"domain": "Identity", "blast_radius": "MED", "desc": "Provision Student Seat in Existing Class"},
     "FEAT-IDEN-007": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Account Destruction"},
+    "FEAT-IDEN-008": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Operator Sysadmin Bootstrap"},
     "FEAT-STOR-001": {"domain": "Store", "blast_radius": "MED", "desc": "Store Purchase and Entitlement Grant"},
     "FEAT-STOR-002": {"domain": "Store", "blast_radius": "MED", "desc": "Entitlement Terminal Lifecycle"},
     "FEAT-STOR-003": {"domain": "Store", "blast_radius": "MED", "desc": "Insurance Claim Lifecycle"},

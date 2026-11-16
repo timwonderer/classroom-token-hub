@@ -9,7 +9,6 @@ than only when a specific entrypoint module (e.g. ``wsgi.py``) is imported.
 import os
 import sys
 import time
-import uuid
 
 import click
 from flask.cli import with_appcontext
@@ -101,56 +100,31 @@ def create_sysadmin_command(username):
     """
     import pyotp
     import qrcode
+    from sqlalchemy.exc import IntegrityError
 
-    from app.extensions import db
-    from app.feats.base import FEATContext
-    from app.hash_utils import hash_username_lookup
-    from app.models import User, UserRole
-    from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
-    from app.utils.encryption import encrypt_totp
+    from app.feats.sysadmin_bootstrap import provision_sysadmin
+    from app.utils.auth_username import normalize_auth_username
 
     username = normalize_auth_username(username)
     if not username:
-        click.echo("Username is required.")
+        raise click.BadParameter("Username is required.", param_hint="--username")
+
+    try:
+        totp_secret = provision_sysadmin(username)
+    except IntegrityError as exc:
+        # Another invocation can reserve the login between the check and flush.
+        # The FEAT has rolled back. Treat only that unique collision as a replay.
+        if getattr(getattr(exc.orig, "diag", None), "constraint_name", None) != "ix_users_username_lookup_hash":
+            raise
+        totp_secret = None
+    if totp_secret is None:
+        click.echo("Username already exists.")
         return
 
-    lookup_hash = hash_username_lookup(username)
-    existing = User.query.filter_by(
-        username_lookup_hash=lookup_hash,
-        user_role=UserRole.SYSADMIN,
-    ).first()
-    if existing:
-        click.echo(f"System admin '{username}' already exists.")
-        return
-
-    # Generate the TOTP secret and its provisioning URI for the QR code.
-    totp_secret = pyotp.random_base32()
     totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(
         name=username,
         issuer_name="Classroom Token Hub",
     )
-
-    # Persist through the canonical mutation boundary. The stored secret is
-    # encrypted with encrypt_totp(), the matched pair of decrypt_totp() used by
-    # the /sysadmin/login route. The username_lookup_hash produced by
-    # build_hashed_username_fields() is identical to the lookup the login route
-    # computes, so the created account authenticates immediately.
-    _salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
-    encrypted_totp_secret = encrypt_totp(totp_secret)
-    # Security events may contain neither raw lookup inputs nor lookup digests.
-    with FEATContext("FEAT-IDEN-001", idempotency_key=f"create-sysadmin:{uuid.uuid4().hex}"):
-        user = User(
-            user_role=UserRole.SYSADMIN,
-            username_hash=username_hash,
-            username_lookup_hash=username_lookup_hash,
-            totp_secret_encrypted=encrypted_totp_secret,
-        )
-        db.session.add(user)
-        db.session.flush()
-
-    # The FEAT context owns the atomic commit boundary; the CLI only renders the
-    # generated credentials after the FEAT has completed successfully.
-
     click.echo(f"\nSystem admin '{username}' created successfully.")
     click.echo("\n" + "=" * 70)
     click.echo("SCAN THIS QR CODE WITH YOUR AUTHENTICATOR APP")

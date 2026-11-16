@@ -107,6 +107,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-IDEN-004 — Student Recovery Code Acceptance & Session Authorization](../FEATURE-EXECUTION/FEAT-IDEN-004_STUDENT_RECOVERY_CODE_VALIDATION.md)
 - [FEAT-IDEN-006 — Provision Student Seat in Existing Class](../FEATURE-EXECUTION/FEAT-IDEN-006_PROVISION_STUDENT_SEAT.md)
 - [FEAT-IDEN-007 — Teacher Account Destruction](../FEATURE-EXECUTION/FEAT-IDEN-007_TEACHER_ACCOUNT_DESTRUCTION.md)
+- [FEAT-IDEN-008 — Operator Sysadmin Bootstrap](../FEATURE-EXECUTION/FEAT-IDEN-008_OPERATOR_SYSADMIN_BOOTSTRAP.md)
 - [FEAT-IDEN-101 — Teacher TOTP Setup](../FEATURE-EXECUTION/FEAT-IDEN-101_TEACHER_TOTP_SETUP.md)
 - [FEAT-IDEN-102 — Teacher Passkey Enrollment](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
 - [FEAT-IDEN-103 — Teacher Recovery Proof and Random Recipient Selection](../FEATURE-EXECUTION/FEAT-IDEN-103_TEACHER_RECOVERY_INITIATION.md)
@@ -283,6 +284,7 @@ Their surviving content lives at:
 
 **Version 3.60 (2026-11-15):**
 
+- Registered FEAT-IDEN-008 and clarified its operator-only context in FEAT-CORE-000 v1.2.
 - Updated DOM-OPS-002 v1.12 and FEAT-OPS-001 v1.1 for audit verification evidence.
 - Updated SOP-DEP-001 v2.14 for current-release fresh database initialization and existing installation upgrades.
 
