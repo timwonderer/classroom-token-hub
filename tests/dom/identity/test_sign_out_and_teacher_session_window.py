@@ -20,8 +20,11 @@ import pytest
 
 from app import db
 from app.feats.base import FEATContext
-from app.models import ClassEconomy, User
+from app.auth import end_signed_in_session
+from app.models import ClassEconomy, PasskeyCredential, User
+from tests.dom.identity.helpers import sysadmin_passkey_auth_finish
 from tests.helpers import temporal
+from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
 from tests.helpers.operation_routes import seed_sysadmin_session
 from tests.dom.interpretation.helpers import create_sysadmin
@@ -142,6 +145,25 @@ def test_stale_cookie_logout_does_not_end_a_newer_sign_in(client, app):
     assert _row(student.user.id).current_session_nonce == "newer-sign-in-elsewhere"
 
 
+def test_end_signed_in_session_leaves_a_newer_sign_in_on_the_row(app):
+    """The helper's own nonce comparison: the route test above is answered by
+    the session hook first, so this reaches the comparison directly."""
+    _, student = initialize_as_student("chemistry_p1", app.test_client(), app)
+    with FEATContext("FEAT-IDEN-001", idempotency_key="test:helper-newer-sign-in"):
+        db.session.get(User, student.user.id).current_session_nonce = "newer-sign-in-elsewhere"
+        db.session.flush()
+    db.session.commit()
+
+    with app.test_request_context("/student/logout", method="POST"):
+        from flask import session
+        session["user_id"] = student.user.id
+        session["current_session_nonce"] = "stale-cookie-nonce"
+        end_signed_in_session()
+        assert "user_id" not in session
+
+    assert _row(student.user.id).current_session_nonce == "newer-sign-in-elsewhere"
+
+
 def test_DOM_IDEN_006__student_with_no_active_class_can_sign_out(client, app):
     _, student = initialize_as_student("chemistry_p1", client, app)
     with FEATContext("FEAT-IDEN-001", idempotency_key="test:no-active-class"):
@@ -215,3 +237,31 @@ def test_DOM_IDEN_003__creating_a_class_does_not_restart_the_window(client, app)
 
     assert ClassEconomy.query.filter_by(teacher_user_id=classroom.teacher_user_id, display_name="Window Check").count() == 1
     assert _row(classroom.teacher_user_id).current_session_expires_at == expires_before
+
+
+def test_DOM_IDEN_003__expired_teacher_cookie_is_ended_before_any_route(client, app):
+    """Routes without ``admin_required`` (class selection) refuse it too."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    expires_at = _row(classroom.teacher_user_id).current_session_expires_at
+
+    with temporal.pinned_clock(temporal.shifted(expires_at, minutes=1)):
+        client.post("/admin/select-class-context", data={"class_id": classroom.class_id})
+
+    assert "user_id" not in _session(client)
+
+
+def test_sysadmin_passkey_sign_in_does_not_inherit_a_teacher_expiry(client, app, fake_passwordless):
+    initialize_as_teacher("chemistry_p1", client, app)
+    assert "session_expires_at" in _session(client)
+    sysadmin = create_sysadmin("passkey_after_teacher")
+    with FEATContext("FEAT-IDEN-001", idempotency_key="test:passkey:sysadmin"):
+        db.session.add(PasskeyCredential(user_id=sysadmin.id, credential_id="cred-sysadmin", authenticator_name="Key"))
+        db.session.flush()
+    db.session.commit()
+    fake_passwordless.credentials["cred-sysadmin"] = f"user_{sysadmin.id}"
+
+    response = sysadmin_passkey_auth_finish(client, token=fake_passwordless.sign_in_token("cred-sysadmin"))
+
+    assert response.status_code == 200
+    state = _session(client)
+    assert state["role"] == "sysadmin" and "session_expires_at" not in state

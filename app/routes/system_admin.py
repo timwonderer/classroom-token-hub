@@ -369,14 +369,15 @@ def passkey_auth_finish():
             return jsonify({"error": "Authentication failed"}), 401
         now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
-        # Create session — canonical keys only
+        # Create session — canonical keys only. A new principal inherits
+        # nothing from the previous session, including a teacher's expiry.
+        auth_username = session.get("passkey_sysadmin_auth_username")
+        session.clear()
         establish_sysadmin_session(user)
         nonce = secrets.token_urlsafe(32)
         session["current_session_nonce"] = nonce
         user.current_session_nonce = nonce
-        session["sysadmin_auth_username"] = (
-            session.get("passkey_sysadmin_auth_username") or f"sysadmin_{user.id}"
-        )
+        session["sysadmin_auth_username"] = auth_username or f"sysadmin_{user.id}"
         session['last_activity'] = now.isoformat()
 
         # Determine redirect URL

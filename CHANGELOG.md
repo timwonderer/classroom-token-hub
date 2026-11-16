@@ -14,7 +14,7 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
-- **A teacher session is a fixed 60-minute window from sign-in** (#1636; DOM-IDEN-003 §Session Establishment). Teacher sign-in (TOTP and passkey) writes `current_session_started_at` and `current_session_expires_at`, `admin_required` enforces that instant instead of a 10-minute idle timeout that an active teacher never reached, and the cookie expires with it. Creating a class no longer re-establishes the session. Teachers signed in when this ships are asked to sign in again once.
+- **A teacher session is a fixed 60-minute window from sign-in** (#1636; DOM-IDEN-003 §Session Establishment). Teacher sign-in (TOTP and passkey) writes `current_session_started_at` and `current_session_expires_at`. The session hook enforces that instant on every request, before any route runs (so class selection and other routes without `admin_required` refuse an expired cookie too), instead of a 10-minute idle timeout that an active teacher never reached, and the cookie expires with it. Configuration export/import uses the same deadline, rechecked under its lock, in place of the idle cutoff. Creating a class no longer re-establishes the session, and a sysadmin passkey sign-in no longer inherits a teacher's expiry from the same browser. Teachers signed in when this ships are asked to sign in again once.
 
 ## [2.4.5] - 2026-11-14 — Per-student rate limits and security fixes
 

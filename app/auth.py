@@ -206,7 +206,7 @@ def admin_required(f):
     """
     Decorator to require admin authentication for a route.
 
-    Enforces the fixed session window written at sign-in.
+    The fixed session window is enforced by the session hook in create_app().
     Redirects to admin.login if not authenticated or session expired.
     """
     @wraps(f)
@@ -220,6 +220,10 @@ def admin_required(f):
             BoundaryContext
         )
 
+        # The fixed window itself is enforced for every request by the
+        # session hook in create_app(); it only marks why the session ended.
+        if g.get("teacher_session_expired"):
+            return _teacher_session_ended("Your session expired. Please log in again.")
         try:
             ctx = resolve_canonical_context(require_class=False)
         except (ContextNotEstablished, ContextMismatch, ContextForbidden, ContextInvariantViolation):
@@ -233,19 +237,6 @@ def admin_required(f):
                 return redirect(url_for('admin.onboarding'))
 
         g.canonical_context = ctx
-
-        # The fixed window written at sign-in (DOM-IDEN-003). A session without
-        # one predates it and is ended rather than given an open-ended life.
-        from app.models import User
-        user = db.session.get(User, ctx.user_id)
-        expires_at = user.current_session_expires_at if user else None
-        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-        if expires_at is None or not canonical_temporal_resolver(
-            SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=now, reference=expires_at,
-        ).is_earlier:
-            session.clear()
-            return _teacher_session_ended("Your session expired. Please log in again.")
-
         return f(*args, **kwargs)
     return decorated_function
 
