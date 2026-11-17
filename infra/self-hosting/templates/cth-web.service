@@ -1,0 +1,26 @@
+[Unit]
+Description=Classroom Token Hub web and scheduler (@INSTALL_ID@)
+Requires=postgresql@14-main.service cth-rate-limit.service cth-student-setup.service
+After=postgresql@14-main.service cth-rate-limit.service cth-student-setup.service
+
+[Service]
+User=cthapp
+Group=cthapp
+WorkingDirectory=/opt/cth/releases/@SHA@
+EnvironmentFile=@ENVFILE@
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/cth/venvs/@SHA@/bin/gunicorn --config /opt/cth/releases/@SHA@/gunicorn.conf.py --workers 2 --bind 127.0.0.1:8000 wsgi:app
+LogsDirectory=cth-web
+LogsDirectoryMode=0750
+LimitCORE=0
+MemorySwapMax=0
+UMask=0077
+Restart=on-failure
+TimeoutStopSec=90
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -8,7 +8,16 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+
+- <!-- notes: internal --> **Fresh PostgreSQL installations gain a release-specific schema baseline.** The artifact includes the migrated schema and required reference data at Alembic revision `a0faf8b2a35d`. Existing installations continue to use the migration chain.
+- <!-- notes: internal --> **Self-hosting guidance distinguishes core installation, operational integrations and hosted status services.** It identifies production destinations that an isolated installation must override before testing those integrations.
+
 ### Changed
+
+- <!-- notes: internal --> **Audit acceptance now requires a protected record and its complete class chain.** `DOM-OPS-002` v1.12 and `FEAT-OPS-001` v1.1 describe the scoped verification result and retire documentation of the obsolete integrity-status singleton writer.
+- <!-- notes: internal --> **The operator CLI attributes sysadmin creation to its own execution contract.** `FEAT-IDEN-008` governs creation of a system principal and TOTP enrollment. Duplicate logins retain their existing credentials.
+- <!-- notes: internal --> **Migration generation checks revision IDs against the active Alembic tree.** The generator retries an occupied ID and the Flask CLI refuses an explicit duplicate. The migration validator reports both filenames if independently authored revisions collide.
 
 - <!-- notes: internal --> **The commercial-use page says plainly that no commercial permission beyond the license exists yet, and CTH's own definition of open source is written down** (#1682; `PRN-PHL-002` v1.2, informative). The commercial-use page had attributed a services permission and a contribute-back duty to PolyForm Noncommercial that its text does not contain. It now separates the license in force from the intended commercial-services permission, says the intended permission grants nothing until a separate instrument is published with an effective date, and makes upstream contributions voluntary. New `PRN-PHL-002` sets out CTH's noncommercial definition of open source as a separate circle from the OSI definition, neither containing nor overlapping the other; CTH claims no OSI approval. `LICENSE` is unchanged. Open licensing questions are listed in `docs/TRACKING/COMMERCIAL_LICENSE_REVIEW_2026-10-26.md`.
 
