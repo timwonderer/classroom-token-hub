@@ -100,11 +100,14 @@ def host_stage(action,cfg):
             command('useradd','--system','--user-group','--no-create-home','--home-dir','/nonexistent',
                     '--shell','/usr/sbin/nologin','--comment','cth:'+cfg['installation_id'],name)
         command('usermod','--append','--groups',','.join(GROUPS),'cthapp')
-        BASE.mkdir(mode=0o711)
-        os.chmod(BASE,0o711)
-        for directory in ('releases','venvs'):
-            (BASE/directory).mkdir()
-            os.chmod(BASE/directory,0o711)
+        # Service users traverse known release paths without listing their contents.
+        previous = os.umask(0o066)
+        try:
+            BASE.mkdir(mode=0o711)
+            for directory in ('releases','venvs'):
+                (BASE/directory).mkdir(mode=0o711)
+        finally:
+            os.umask(previous)
     require(all(re.match(r'^14\.24[-+]', package_version(p)) for p in PG_PACKAGES),'requires PostgreSQL 14.24 packages')
     require(command('/usr/bin/python3.10','--version').startswith('Python 3.10.'),'requires Python 3.10')
     for package in PACKAGES:
@@ -157,10 +160,10 @@ def postgres_stage(action,cfg):
 
 
 def copy_exclusive(source, dest, group):
-    with dest.open('xb') as out:
+    fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+    with os.fdopen(fd, 'wb') as out:
         out.write(source.read_bytes())
-    shutil.chown(dest, group=group)
-    os.chmod(dest, 0o640)
+        os.fchown(out.fileno(), 0, grp.getgrnam(group).gr_gid)
 
 
 def redis_stage(action,cfg):
@@ -174,11 +177,14 @@ def redis_stage(action,cfg):
         target = directory/'redis.conf'
         unit = Path('/etc/systemd/system')/(name+'.service')
         if action == 'apply':
-            directory.mkdir()
-            shutil.chown(directory, group=name)
-            os.chmod(directory, 0o750)
-            copy_exclusive(source/config, target, name)
-            copy_exclusive(source/unit.name, unit, "root")
+            previous = os.umask(0o027)
+            try:
+                directory.mkdir(mode=0o750)
+                shutil.chown(directory, group=name)
+                copy_exclusive(source/config, target, name)
+                copy_exclusive(source/unit.name, unit, "root")
+            finally:
+                os.umask(previous)
         require(directory.resolve() == directory and directory.stat().st_uid == 0
                 and directory.stat().st_gid == grp.getgrnam(name).gr_gid
                 and stat.S_IMODE(directory.stat().st_mode) == 0o750, 'unsafe Redis configuration directory')
