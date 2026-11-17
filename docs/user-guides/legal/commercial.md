@@ -1,7 +1,7 @@
 ---
 title: Commercial Use Policy
 roles: [teacher, student]
-description: Project commercial-use expectations and proposed conditional services permission; pending legal review
+description: Project commercial-use expectations and proposed conditional services permission; pending project licensing review
 category: legal
 keywords: [commercial, services, monetization, prohibited, permitted, hosting, support]
 searchable: true
@@ -13,7 +13,7 @@ related:
 # Commercial Use Policy
 
 > **Proposed revision — not an effective commercial license.** This page records project
-> intent and proposed conditions for legal review. It does not grant new commercial rights,
+> intent and proposed conditions for project licensing review. It does not grant new commercial rights,
 > amend PolyForm, or establish that the earlier policy created enforceable obligations.
 > The [license text](license.md) remains the published baseline. The effect of earlier
 > commercial-policy statements and any existing permissions requires separate review.
@@ -111,7 +111,7 @@ A bundle must not make software rights conditional on buying unrelated services.
 
 Handling service nonpayment, suspension, resource limits, and customer exit requires precise
 terms so that legitimate service billing cannot conceal a software-access paywall. Those terms
-remain under legal review; these examples do not settle them.
+remain under project licensing review; these examples do not settle them.
 
 ## Voluntary contributions
 
@@ -143,4 +143,4 @@ its own clear treatment of compliance, breach, cure, and the relationship betwee
 Contact [dev@classroomtokenhub.com](mailto:dev@classroomtokenhub.com) with questions. Contact
 is a clarification route, not a proposed requirement for individual permission.
 
-**Draft updated:** 2026-11-15. Legal mechanism and effective terms pending review.
+**Draft updated:** 2026-11-15. Legal mechanism and effective terms pending project licensing review.
