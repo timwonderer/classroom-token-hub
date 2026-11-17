@@ -54,6 +54,7 @@ class DigitalOcean:
         require(re.fullmatch('[0-9a-f]{64}', policy['firewall_rules_sha256']), 'invalid_firewall_policy')
 
     def request(self, method, path, *, body=None, missing_ok=False):
+        require(method == 'GET' or (method == 'POST' and path == '/droplets'), 'unsupported_provider_operation')
         # Fixed TLS authority, no redirect handling, HTTP proxies or automatic mutation retry.
         conn = http.client.HTTPSConnection(
             'api.digitalocean.com', timeout=12, context=ssl.create_default_context()
@@ -68,7 +69,7 @@ class DigitalOcean:
             response = conn.getresponse()
             if missing_ok and response.status == 404:
                 return None
-            expected = {'GET': 200, 'POST': 202, 'DELETE': 204}[method]
+            expected = {'GET': 200, 'POST': 202}[method]
             require(response.status == expected, 'provider_http_' + str(response.status))
             raw = response.read(2_000_001)
             require(len(raw) <= 2_000_000, 'provider_response_size')
@@ -242,26 +243,6 @@ class DigitalOcean:
             sleep(5)
         raise LifecycleError('readiness_timeout')
 
-    def cleanup(self, number, run_id, marker, sleep=time.sleep):
-        name = label(run_id, marker)
-        self.identity()
-        self.membership(number)
-        obj = self.get(number)
-        require(obj is not None, 'missing_before_delete')
-        self.verify(obj, name)
-        require(
-            all(obj.get(key) == [] for key in ('snapshot_ids', 'volume_ids', 'backup_ids'))
-            and 'backups' not in obj['features'],
-            'attached_resources_require_operator',
-        )
-        self.request('DELETE', f'/droplets/{number}')
-        for _ in range(12):
-            if self.get(number) is None:
-                return
-            sleep(5)
-        raise LifecycleError('deletion_unconfirmed')
-
-
 def append(path, line):
     with open(path, 'a', encoding='utf-8') as stream:
         stream.write(line + '\n')
@@ -271,22 +252,16 @@ def main():
     from bootstrap import cloud_init
 
     env = os.environ
-    require(len(sys.argv) == 2 and sys.argv[1] in ('create', 'cleanup'), 'invalid_command')
+    require(len(sys.argv) == 2 and sys.argv[1] == 'create', 'invalid_command')
     provider = DigitalOcean(env['DO_STAGING_TOKEN'], json.loads(env['DO_STAGING_POLICY']))
     run_id = env['GITHUB_RUN_ID']
-    if sys.argv[1] == 'create':
-        require(env['GITHUB_RUN_ATTEMPT'] == '1', 'rerun_requires_manual_reconciliation')
-        provider.create(
-            run_id,
-            lambda key, val: append(env['GITHUB_OUTPUT'], f'{key}={val}'),
-            lambda run, n: append(env['GITHUB_STEP_SUMMARY'], f'Staging run {run}, Droplet ID {n}'),
-            cloud_init,
-        )
-    else:
-        number = env['STAGING_DROPLET_ID']
-        require(re.fullmatch(r'[1-9][0-9]{0,18}', number), 'missing_or_invalid_receipt')
-        provider.cleanup(int(number), run_id, env['STAGING_MARKER'])
-        append(env['GITHUB_STEP_SUMMARY'], f'Provider confirmed absence of Droplet ID {number}.')
+    require(env['GITHUB_RUN_ATTEMPT'] == '1', 'rerun_requires_manual_reconciliation')
+    provider.create(
+        run_id,
+        lambda key, val: append(env['GITHUB_OUTPUT'], f'{key}={val}'),
+        lambda run, n: append(env['GITHUB_STEP_SUMMARY'], f'Staging run {run}, Droplet ID {n}'),
+        cloud_init,
+    )
 
 
 if __name__ == '__main__':

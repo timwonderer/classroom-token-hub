@@ -31,11 +31,8 @@ class FakeDO(DigitalOcean):
         self.cost = 0.042
         self.hidden = False
         self.post_timeout = False
-        self.delete_timeout = False
-        self.get_denied = False
         self.rules = deepcopy(RULES)
         self.other_firewalls = []
-        self.removed = []
         self.is_member = True
 
     def request(self, method, path, *, body=None, missing_ok=False):
@@ -132,14 +129,6 @@ class FakeDO(DigitalOcean):
             return {'droplets': list(self.objects.values()), 'meta': {'total': len(self.objects)}}
         if path.startswith('/droplets/'):
             number = int(path.split('/')[-1])
-            if method == 'DELETE':
-                self.objects.pop(number)
-                self.removed.append(number)
-                if self.delete_timeout:
-                    raise LifecycleError('provider_communication')
-                return {}
-            if self.get_denied:
-                raise LifecycleError('provider_http_403')
             if number in self.objects and not self.hidden:
                 return {'droplet': self.objects[number]}
             if missing_ok:
@@ -162,16 +151,12 @@ class AttendedTests(unittest.TestCase):
             sleep=lambda _: None,
         )
 
-    def cleanup(self):
-        self.api.cleanup(27, '72', self.outputs['marker'], sleep=lambda _: None)
-
-    def test_receipt_and_exact_cleanup_with_unrelated_project_resource(self):
+    def test_operator_receipt_with_unrelated_project_resource(self):
         self.create()
         self.assertEqual(self.receipts, [('72', 27)])
         self.assertEqual(self.outputs['public_ipv4'], '8.8.8.8')
         self.assertEqual(self.outputs['droplet_id'], '27')
-        self.cleanup()
-        self.assertEqual(self.api.history[-2:], [('DELETE', '/droplets/27'), ('GET', '/droplets/27')])
+        self.assertIn(27, self.api.objects)
 
     def test_ambiguous_post_never_retried_or_adopted(self):
         self.api.post_timeout = True
@@ -179,15 +164,14 @@ class AttendedTests(unittest.TestCase):
             self.create()
         self.assertEqual(set(self.outputs), {'marker'})
         self.assertEqual(self.api.history.count(('POST', '/droplets')), 1)
-        self.assertEqual(self.api.removed, [])
+        self.assertIn(27, self.api.objects)
 
     def test_interrupted_readiness_retains_exact_receipt(self):
         self.api.hidden = True
         with self.assertRaisesRegex(LifecycleError, 'readiness_timeout'):
             self.create()
         self.assertEqual(self.outputs['droplet_id'], '27')
-        self.api.hidden = False
-        self.cleanup()
+        self.assertIn(27, self.api.objects)
 
     def test_existing_tag_blocks_second_create(self):
         self.create()
@@ -195,42 +179,15 @@ class AttendedTests(unittest.TestCase):
             self.create()
         self.assertEqual(self.api.history.count(('POST', '/droplets')), 1)
 
-    def test_refuse_wrong_team_project_tag_or_marker(self):
-        self.create()
+    def test_provider_refuses_destructive_requests_before_connecting(self):
+        with self.assertRaisesRegex(LifecycleError, 'unsupported_provider_operation'):
+            DigitalOcean.request(self.api, 'DELETE', '/droplets/27')
+
+    def test_wrong_team_blocks_allocation(self):
         self.api.account_team = 'f' * 40
         with self.assertRaisesRegex(LifecycleError, 'wrong_cloud_owner'):
-            self.cleanup()
-        self.api.account_team = POLICY['team_uuid']
-        self.api.is_member = False
-        with self.assertRaisesRegex(LifecycleError, 'project_membership_conflict'):
-            self.cleanup()
-        self.api.is_member = True
-        with self.assertRaisesRegex(LifecycleError, 'droplet_identity_conflict'):
-            self.api.cleanup(27, '73', self.outputs['marker'])
-        self.api.objects[27]['tags'] = []
-        with self.assertRaisesRegex(LifecycleError, 'droplet_identity_conflict'):
-            self.cleanup()
-        self.assertEqual(self.api.removed, [])
-
-    def test_delete_timeout_requires_operator(self):
-        self.create()
-        self.api.delete_timeout = True
-        with self.assertRaisesRegex(LifecycleError, 'provider_communication'):
-            self.cleanup()
-        self.assertEqual(self.api.history[-1], ('DELETE', '/droplets/27'))
-
-    def test_absence_before_confirmed_delete_never_succeeds(self):
-        self.create()
-        self.api.objects.clear()
-        with self.assertRaisesRegex(LifecycleError, 'membership_conflict'):
-            self.cleanup()
-
-    def test_attached_volume_requires_operator(self):
-        self.create()
-        self.api.objects[27]['volume_ids'].append('example')
-        with self.assertRaisesRegex(LifecycleError, 'attached_resources'):
-            self.cleanup()
-        self.assertEqual(self.api.removed, [])
+            self.create()
+        self.assertNotIn(('POST', '/droplets'), self.api.history)
 
     def test_price_and_firewall_drift_block_create(self):
         self.api.cost = 0.06
@@ -251,21 +208,6 @@ class AttendedTests(unittest.TestCase):
             self.create()
         self.api.policy['allow_public_ssh'] = True
         self.create()
-
-    def test_unconfirmed_deletion_does_not_report_absence(self):
-        self.create()
-        original = self.api.request
-
-        def request(method, path, **kwargs):
-            result = original(method, path, **kwargs)
-            if method == 'DELETE':
-                self.api.get_denied = True
-            return result
-
-        self.api.request = request
-        with self.assertRaisesRegex(LifecycleError, 'provider_http_403'):
-            self.cleanup()
-
 
 if __name__ == '__main__':
     unittest.main()

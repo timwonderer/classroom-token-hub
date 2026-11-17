@@ -17,7 +17,7 @@ on:
         required: true
         type: boolean
       approve_run:
-        description: I approve this SHA, the staging compute cost, and will verify final deletion
+        description: I approve this SHA, the staging compute cost, and will manually destroy the Droplet
         required: true
         type: boolean
 
@@ -119,7 +119,7 @@ jobs:
             "${args[@]}"
 
   first_use:
-    name: Record first-use results before releasing cleanup
+    name: Record attended first-use results
     needs: install
     environment: cth-staging-first-use
     permissions: {}
@@ -128,39 +128,22 @@ jobs:
     steps:
       - run: echo "Owner approved first-use closeout." >> "$GITHUB_STEP_SUMMARY"
 
-  cleanup:
+  closeout:
     needs: [allocate, install, first_use]
     if: always() && needs.allocate.result != 'skipped' && github.run_attempt == '1'
+    permissions: {}
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    environment: cth-staging-cloud
     steps:
-      - name: Check for exact creation receipt
+      - name: Hand off to the operator
         env:
           ID: ${{ needs.allocate.outputs.droplet_id }}
-          MARKER: ${{ needs.allocate.outputs.marker }}
-        run: |
-          if ! [[ $ID =~ ^[1-9][0-9]{0,18}$ && $MARKER =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]; then
-            echo 'No exact creation receipt. No deletion attempted. Owner must reconcile the staging account before another dispatch.' >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Delete and verify exact enrolled ID
-        env:
-          DO_STAGING_TOKEN: ${{ secrets.DO_STAGING_TOKEN }}
-          DO_STAGING_POLICY: ${{ vars.DO_STAGING_POLICY }}
-          STAGING_DROPLET_ID: ${{ needs.allocate.outputs.droplet_id }}
-          STAGING_MARKER: ${{ needs.allocate.outputs.marker }}
-        run: python3 infra/staging/digitalocean.py cleanup
-      - name: Record owner closeout requirement
-        if: always()
-        env:
-          RESULT: ${{ job.status }}
           INSTALL: ${{ needs.install.result }}
           FIRST_USE: ${{ needs.first_use.result }}
         run: |
-          printf 'Install: %s. First-use checkpoint: %s. Cleanup job: %s. Owner must confirm the exact ID is gone, inspect residual charges/resources and retire the staging integrations.\n' \
-            "$INSTALL" "$FIRST_USE" "$RESULT" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Installation %s. First use %s.\n' "$INSTALL" "$FIRST_USE" >> "$GITHUB_STEP_SUMMARY"
+          if [[ $ID =~ ^[1-9][0-9]{0,18}$ ]]; then
+            echo "Owner: match Droplet ID $ID to this run in DigitalOcean, destroy it manually, then verify absence." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Missing creation receipt. Reconcile provider activity before selecting any resource or starting another run." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
