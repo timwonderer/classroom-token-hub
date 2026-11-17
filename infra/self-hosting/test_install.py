@@ -29,6 +29,12 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             install.parse_manifest(json.dumps(cfg)[:-1]+',"release_sha":"dev"}')
 
+    def test_proxy_mode_must_be_explicit(self):
+        cfg = dict(manifest(), ingress_mode="cloudflare-proxy")
+        self.assertEqual(install.parse_manifest(json.dumps(cfg)), cfg)
+        with self.assertRaisesRegex(ValueError, "invalid ingress mode"):
+            install.parse_manifest(json.dumps(dict(cfg, ingress_mode="public")))
+
     def test_interrupted_stage_requires_verified_postconditions(self):
         with TemporaryDirectory() as tmp, patch.object(install,'trusted'), patch.object(host,'check_unused_host'), patch.object(install,'dispatch') as dispatch:
             state = Path(tmp)/'state.json'

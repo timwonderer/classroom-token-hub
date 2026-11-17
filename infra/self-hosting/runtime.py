@@ -37,7 +37,22 @@ def hostname(name):
     ) and not name.rsplit(".", 1)[1].isdigit())
 
 
+# Reviewed Cloudflare IPv4 origin peers (https://www.cloudflare.com/ips-v4).
+# This profile publishes an A record and listens on IPv4 only.
+EDGE_IPV4 = (
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+    "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+    "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+)
+
+
+def proxied(cfg):
+    return cfg.get("ingress_mode") == "cloudflare-proxy"
+
+
 def validate_config(cfg):
+    require(cfg.get("ingress_mode", "tunnel") in ("tunnel", "cloudflare-proxy"), "invalid ingress mode")
     for key in ("hostname", "admission_hostname"):
         require(hostname(cfg.get(key)), "invalid deployment DNS field: " + key)
     require(cfg["hostname"] != cfg["admission_hostname"], "public hostname and admission hostname must differ")
@@ -109,6 +124,27 @@ def command(*args, ok=(0,)):
 
 def template(name, cfg):
     data = (TEMPLATES / name).read_text()
+    if name == "ingress.conf":
+        listener = "127.0.0.1:8443"
+        policy = ("    # The enrolled loopback connector authenticates the edge and overwrites this header.\n"
+                  "    set_real_ip_from 127.0.0.1;")
+        edge_address = '""'
+        checks = ""
+        if proxied(cfg):
+            listener = "0.0.0.0:443"
+            edge_address = "$realip_remote_addr"
+            # Test the original TCP peer even after real_ip_header has resolved the visitor.
+            policy = "\n".join([
+                *(f"    set_real_ip_from {net};" for net in EDGE_IPV4),
+                "    geo $realip_remote_addr $peer {", "        default other;", "        127.0.0.1 local;",
+                *(f"        {net} edge;" for net in EDGE_IPV4), "    }",
+                '    map "$peer:$uri" $allowed {', "        default 0;", "        ~^edge: 1;",
+                "        local:/health 1;", "        local:/health/status 1;", "    }",
+            ])
+            checks = ('        if ($allowed = 0) { return 403; }\n'
+                      '        if ($ssl_server_name != "@HOST@") { return 444; }\n')
+        data = data.replace("@EDGE_ADDRESS@", edge_address)
+        data = data.replace("@LISTENER@", listener).replace("@PEER_POLICY@", policy).replace("@ORIGIN_CHECKS@", checks)
     for marker, key in (("INSTALL_ID", "installation_id"), ("SHA", "release_sha"), ("ENVFILE", "runtime_env"),
                         ("HOST", "hostname"), ("CERT", "tls_cert"), ("KEY", "tls_key")):
         data = data.replace("@" + marker + "@", cfg[key])
@@ -172,7 +208,8 @@ def local_health(cfg, tls=False):
     if tls:
         name = cfg["hostname"]
         address = "https://" + name
-        args += ["--connect-to", f"{name}:443:127.0.0.1:8443"]
+        port = 443 if proxied(cfg) else 8443
+        args += ["--connect-to", f"{name}:443:127.0.0.1:{port}"]
     require(curl(address + "/health", *args) == "ok", "database health failed")
     signals = json.loads(curl(address + "/health/status", *args))["signals"]
     known = [s for s in signals if s.get("epistemic_state") == "KNOWN"]
@@ -216,9 +253,17 @@ def storage_controls():
             "worker cgroup v2 swap limit is not effective")
 
 
-def inspect_listeners(port):
+def inspect_listeners(port, address="127.0.0.1"):
     lines = command("ss", "-H", "-ltn", "sport", "=", ":" + str(port)).splitlines()
-    require(len(lines) == 1 and lines[0].split()[3] == f"127.0.0.1:{port}", "origin must listen only on loopback")
+    require(len(lines) == 1 and lines[0].split()[3] == f"{address}:{port}",
+            f"expected single listener on {address}:{port}")
+
+
+def inspect_ingress(cfg):
+    if proxied(cfg):
+        inspect_listeners(443, "0.0.0.0")
+    else:
+        inspect_listeners(8443)
 
 
 def run(action, stage, cfg):
@@ -252,13 +297,13 @@ def run(action, stage, cfg):
         gate(cfg)
         managed(Path("/etc/cth/ingress.conf"), "ingress.conf", cfg, apply)
         unit(stage, cfg, apply)
-        await_start("cth-ingress.service", lambda: inspect_listeners(8443))
+        await_start("cth-ingress.service", lambda: inspect_ingress(cfg))
         await_start("cth-ingress.service", lambda: local_health(cfg, tls=True))
     elif stage == "readiness":
         for name in ("cth-web.service", "cth-ingress.service"):
             command("systemctl", "is-active", "--quiet", name)
         inspect_listeners(8000)
-        inspect_listeners(8443)
+        inspect_ingress(cfg)
         storage_controls()
         local_health(cfg)
         local_health(cfg, tls=True)

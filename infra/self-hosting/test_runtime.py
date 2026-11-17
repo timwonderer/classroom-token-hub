@@ -102,12 +102,30 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("listen 127.0.0.1:8443 ssl;", templates["ingress.conf"])
         self.assertIn("proxy_pass http://127.0.0.1:8000;", templates["ingress.conf"])
 
+    def test_proxy_mode_peer_identity_and_local_readiness(self):
+        cfg = dict(self.cfg, ingress_mode="cloudflare-proxy")
+        config = runtime.template("ingress.conf", cfg).decode()
+        for rule in ("listen 0.0.0.0:443 ssl;", "geo $realip_remote_addr $peer",
+                     "default other;", "default 0;", "local:/health 1;", "local:/health/status 1;",
+                     "if ($allowed = 0) { return 403; }", "proxy_set_header X-CF-Edge-IP $realip_remote_addr;",
+                     'if ($ssl_server_name != "hub.example.org")', 'if ($host != "hub.example.org")'):
+            self.assertIn(rule, config)
+        for net in runtime.EDGE_IPV4:
+            self.assertIn(f"set_real_ip_from {net};", config)
+            self.assertIn(f"{net} edge;", config)
+        self.assertNotIn("set_real_ip_from 0.0.0.0/0", config)
+        with patch.object(runtime, "command", return_value="LISTEN 0 20 0.0.0.0:443 *:*"):
+            runtime.inspect_ingress(cfg)
+        with patch.object(runtime, "curl", return_value="bad") as curl, self.assertRaises(ValueError):
+            runtime.local_health(cfg, tls=True)
+        self.assertIn("hub.example.org:443:127.0.0.1:443", curl.call_args.args)
+
     def test_ownership_and_gate_failures(self):
         with patch.object(runtime, "command", return_value="0"):
             with self.assertRaisesRegex(ValueError, "one scheduler"):
                 runtime.scheduler(self.cfg)
         with patch.object(runtime, "command", return_value="LISTEN 0 20 0.0.0.0:8000 *:*"):
-            with self.assertRaisesRegex(ValueError, "loopback"):
+            with self.assertRaisesRegex(ValueError, "127.0.0.1"):
                 runtime.inspect_listeners(8000)
 
     def test_startup_retry_only_before_failure_or_deadline(self):
