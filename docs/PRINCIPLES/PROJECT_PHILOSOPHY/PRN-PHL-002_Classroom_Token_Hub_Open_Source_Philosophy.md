@@ -22,7 +22,7 @@ obligations, and does not amend the published license or any runtime contract. P
 current license text, and proposed commercial conditions are distinct. The
 [published license](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSE)
 defines the baseline legal terms; the
-[commercial policy draft](../../user-guides/legal/commercial.md) records the intended services
+[commercial policy draft](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/legal/commercial.md) records the intended services
 permission and its unresolved legal implementation.
 
 ## Software that serves classrooms
