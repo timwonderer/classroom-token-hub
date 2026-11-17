@@ -19,7 +19,7 @@ USERS = ('cthapp', 'cthowner', 'cthrate')
 GROUPS = ('cth-rate-limit', 'cth-student-setup')
 PG_PACKAGES = ('postgresql-14', 'postgresql-client-14')
 PACKAGES = ('python3.10', 'python3.10-venv', 'python3.10-dev', 'build-essential',
-            'libpq-dev', 'git', 'ca-certificates', 'curl', 'iproute2', 'redis-server', 'redis-tools', 'nginx', 'openssl')
+            'libpq-dev', 'git', 'ca-certificates', 'curl', 'iproute2', 'redis-server', 'redis-tools', 'nginx', 'openssl', 'acl')
 UNITS = ('cth-rate-limit', 'cth-student-setup')
 
 
@@ -159,19 +159,18 @@ def postgres_stage(action,cfg):
             'database role privilege mismatch')
 
 
-def copy_exclusive(source, dest, group):
-    fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+def copy_exclusive(source, dest):
+    fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, 'wb') as out:
         out.write(source.read_bytes())
-        os.fchown(out.fileno(), 0, grp.getgrnam(group).gr_gid)
 
 
 def redis_stage(action,cfg):
     require(command('findmnt','-n','-o','FSTYPE','--target','/run')=='tmpfs' and Path('/sys/fs/cgroup/cgroup.controllers').is_file(),
             'memory-only setup requires tmpfs /run and cgroup v2')
-    for name, source, config in (
-        ('cth-rate-limit',ROOT/'infra/self-hosting','rate-limit.conf'),
-        ('cth-student-setup',ROOT/'infra/student-setup','redis.conf'),
+    for name, reader, source, config in (
+        ('cth-rate-limit','cthrate',ROOT/'infra/self-hosting','rate-limit.conf'),
+        ('cth-student-setup','redis',ROOT/'infra/student-setup','redis.conf'),
     ):
         directory = Path('/etc')/name
         target = directory/'redis.conf'
@@ -181,16 +180,21 @@ def redis_stage(action,cfg):
             try:
                 directory.mkdir(mode=0o750)
                 shutil.chown(directory, group=name)
-                copy_exclusive(source/config, target, name)
-                copy_exclusive(source/unit.name, unit, "root")
+                copy_exclusive(source/config, target)
+                command('setfacl', '-m', f'u:{reader}:r--', target)
+                copy_exclusive(source/unit.name, unit)
             finally:
                 os.umask(previous)
         require(directory.resolve() == directory and directory.stat().st_uid == 0
                 and directory.stat().st_gid == grp.getgrnam(name).gr_gid
                 and stat.S_IMODE(directory.stat().st_mode) == 0o750, 'unsafe Redis configuration directory')
-        for dest, src, group in ((target, source/config, name), (unit, source/unit.name, 'root')):
-            require(dest.resolve()==dest and dest.stat().st_uid==0 and stat.S_IMODE(dest.stat().st_mode)==0o640
-                    and dest.stat().st_gid == grp.getgrnam(group).gr_gid
+        # The config's group mode bits reflect the ACL mask, not a group grant.
+        require(command('getfacl', '-cp', target).splitlines() == [
+            'user::rw-', f'user:{reader}:r--', 'group::---', 'mask::r--', 'other::---'
+        ], 'unexpected Redis configuration access')
+        for dest, src, mode in ((target, source/config, 0o640), (unit, source/unit.name, 0o600)):
+            require(dest.resolve()==dest and dest.stat().st_uid==0 and dest.stat().st_gid==0
+                    and stat.S_IMODE(dest.stat().st_mode)==mode
                     and dest.read_bytes()==src.read_bytes(),'Redis service definition differs')
     if action == 'apply':
         command('systemctl','daemon-reload')
