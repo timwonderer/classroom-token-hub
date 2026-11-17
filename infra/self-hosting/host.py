@@ -100,11 +100,11 @@ def host_stage(action,cfg):
             command('useradd','--system','--user-group','--no-create-home','--home-dir','/nonexistent',
                     '--shell','/usr/sbin/nologin','--comment','cth:'+cfg['installation_id'],name)
         command('usermod','--append','--groups',','.join(GROUPS),'cthapp')
-        BASE.mkdir(mode=0o755)
-        os.chmod(BASE,0o755)
+        BASE.mkdir(mode=0o711)
+        os.chmod(BASE,0o711)
         for directory in ('releases','venvs'):
             (BASE/directory).mkdir()
-            os.chmod(BASE/directory,0o755)
+            os.chmod(BASE/directory,0o711)
     require(all(re.match(r'^14\.24[-+]', package_version(p)) for p in PG_PACKAGES),'requires PostgreSQL 14.24 packages')
     require(command('/usr/bin/python3.10','--version').startswith('Python 3.10.'),'requires Python 3.10')
     for package in PACKAGES:
@@ -118,7 +118,7 @@ def host_stage(action,cfg):
         require(set(grp.getgrnam(name).gr_mem)=={'cthapp'},'unexpected Redis group membership')
     for directory in (BASE,BASE/'releases',BASE/'venvs'):
         require(directory.resolve()==directory and directory.is_dir() and directory.stat().st_uid==0
-                and stat.S_IMODE(directory.stat().st_mode)==0o755,'unexpected release directory')
+                and stat.S_IMODE(directory.stat().st_mode)==0o711,'unexpected release directory')
     for unit in ('nginx.service','redis-server.service'):
         require(command('systemctl','show','--property=LoadState','--value',unit)=='masked' and
                 status('systemctl','is-active','--quiet',unit)!=0,'stock network listener must stay masked and inactive')
@@ -156,10 +156,11 @@ def postgres_stage(action,cfg):
             'database role privilege mismatch')
 
 
-def copy_exclusive(source,dest,mode=0o644):
+def copy_exclusive(source, dest, group):
     with dest.open('xb') as out:
         out.write(source.read_bytes())
-    os.chmod(dest,mode)
+    shutil.chown(dest, group=group)
+    os.chmod(dest, 0o640)
 
 
 def redis_stage(action,cfg):
@@ -174,11 +175,16 @@ def redis_stage(action,cfg):
         unit = Path('/etc/systemd/system')/(name+'.service')
         if action == 'apply':
             directory.mkdir()
-            os.chmod(directory,0o755)
-            copy_exclusive(source/config,target)
-            copy_exclusive(source/unit.name,unit)
-        for dest, src in ((target,source/config),(unit,source/unit.name)):
-            require(dest.resolve()==dest and dest.stat().st_uid==0 and stat.S_IMODE(dest.stat().st_mode)==0o644
+            shutil.chown(directory, group=name)
+            os.chmod(directory, 0o750)
+            copy_exclusive(source/config, target, name)
+            copy_exclusive(source/unit.name, unit, "root")
+        require(directory.resolve() == directory and directory.stat().st_uid == 0
+                and directory.stat().st_gid == grp.getgrnam(name).gr_gid
+                and stat.S_IMODE(directory.stat().st_mode) == 0o750, 'unsafe Redis configuration directory')
+        for dest, src, group in ((target, source/config, name), (unit, source/unit.name, 'root')):
+            require(dest.resolve()==dest and dest.stat().st_uid==0 and stat.S_IMODE(dest.stat().st_mode)==0o640
+                    and dest.stat().st_gid == grp.getgrnam(group).gr_gid
                     and dest.read_bytes()==src.read_bytes(),'Redis service definition differs')
     if action == 'apply':
         command('systemctl','daemon-reload')
