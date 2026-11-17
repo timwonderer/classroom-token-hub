@@ -71,7 +71,7 @@ The initial reference EnvironmentFile accepts the variables above. Other support
 
 ## TLS and admission prerequisites
 
-Protect the entire staging hostname with Cloudflare Access. Admit only the owner's enrolled identity. Keep the stock Nginx service masked. The installer manages `cth-ingress.service` and Gunicorn stays on loopback.
+For the CTH rehearsal, use `staging.classroomtokenhub.com` in the existing DNS zone. Protect that exact hostname and every path with a separate Cloudflare Access application. Scope the DNS record, origin certificate, browser session cookies and authentication registrations to staging. Admit only the owner's enrolled identity. Keep the stock Nginx service masked. The installer manages `cth-ingress.service` and Gunicorn stays on loopback.
 
 **Manual proxied HTTPS.** Set `"ingress_mode": "cloudflare-proxy"` in the installation manifest. Before allocation, prepare the Access application, hostname and origin certificate. On the staging firewall allow inbound TCP 443 only from the current Cloudflare IPv4 ranges and SSH only from the operator's approved source. Compare the ranges with `EDGE_IPV4` in the reviewed installer. After allocation, point a proxied A record at the verified staging IPv4 and choose Full (strict) TLS. Use an origin certificate for the staging hostname trusted by both Cloudflare and the host's local HTTPS client. Keep port 80 closed. Nginx checks the original TCP peer, TLS server name and HTTP hostname, overwrites forwarded addresses and admits host-local TLS probes only for the two health paths. Publishing the origin requires the exact staging firewall to be attached. [Cloudflare source ranges](https://www.cloudflare.com/ips-v4)
 

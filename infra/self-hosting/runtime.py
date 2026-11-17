@@ -53,8 +53,9 @@ def proxied(cfg):
 
 def validate_config(cfg):
     require(cfg.get("ingress_mode", "tunnel") in ("tunnel", "cloudflare-proxy"), "invalid ingress mode")
-    for key in ("hostname", "admission_hostname"):
-        require(hostname(cfg.get(key)), "invalid deployment DNS field: " + key)
+    app_host = cfg.get("hostname")
+    require(app_host == "staging." + HOSTED_ZONE or hostname(app_host), "invalid deployment DNS field: hostname")
+    require(hostname(cfg.get("admission_hostname")), "invalid deployment DNS field: admission_hostname")
     require(cfg["hostname"] != cfg["admission_hostname"], "public hostname and admission hostname must differ")
     paths = [cfg.get(key) for key in ("runtime_env", "tls_cert", "tls_key")]
     for path in paths:

@@ -57,6 +57,18 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 runtime.validate_config(dict(self.cfg, **{key: bad}))
 
+    def test_staging_subdomain_is_only_an_application_origin(self):
+        staging = "staging.classroomtokenhub.com"
+        runtime.validate_config(dict(self.cfg, hostname=staging))
+        for host in ("classroomtokenhub.com", "status.classroomtokenhub.com", "other." + staging):
+            with self.subTest(host=host), self.assertRaises(ValueError):
+                runtime.validate_config(dict(self.cfg, hostname=host))
+        with self.assertRaises(ValueError):
+            runtime.validate_config(dict(self.cfg, admission_hostname=staging))
+        for key in runtime.URLS:
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.parse(dict(self.env, **{key: "https://" + staging}))
+
     def test_gate_does_not_follow_redirects_or_disclose_response(self):
         for status, destination, success in (
             (302, "https://gate.example.org/cdn-cgi/access/login/hub", True),
