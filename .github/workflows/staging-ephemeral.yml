@@ -111,15 +111,25 @@ jobs:
           if [[ -n $ACCEPTANCE_PATH || -n $ACCEPTANCE_SHA256 ]]; then
             args+=(--acceptance-script "$ACCEPTANCE_PATH" --acceptance-sha256 "$ACCEPTANCE_SHA256")
           else
-            echo "Functional acceptance was not selected for this installation." >> "$GITHUB_STEP_SUMMARY"
+            echo "Automated acceptance hook skipped. Complete the attended first-use checks after installation." >> "$GITHUB_STEP_SUMMARY"
           fi
           python3 controller/infra/staging/bootstrap.py --release application --sha "$APP_SHA" \
             --droplet-id "$ID" --address "$IP" --installation-id "$INSTALL_ID" \
             --work-dir "$RUNNER_TEMP/b3-bootstrap" \
             "${args[@]}"
 
+  first_use:
+    name: Record first-use results before releasing cleanup
+    needs: install
+    environment: cth-staging-first-use
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - run: echo "Owner approved first-use closeout." >> "$GITHUB_STEP_SUMMARY"
+
   cleanup:
-    needs: [allocate, install]
+    needs: [allocate, install, first_use]
     if: always() && needs.allocate.result != 'skipped' && github.run_attempt == '1'
     runs-on: ubuntu-24.04
     timeout-minutes: 8
@@ -150,6 +160,7 @@ jobs:
         env:
           RESULT: ${{ job.status }}
           INSTALL: ${{ needs.install.result }}
+          FIRST_USE: ${{ needs.first_use.result }}
         run: |
-          printf 'Install: %s. Cleanup job: %s. Owner must confirm the exact ID is gone, inspect residual charges/resources and retire the staging integrations.\n' \
-            "$INSTALL" "$RESULT" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Install: %s. First-use checkpoint: %s. Cleanup job: %s. Owner must confirm the exact ID is gone, inspect residual charges/resources and retire the staging integrations.\n' \
+            "$INSTALL" "$FIRST_USE" "$RESULT" >> "$GITHUB_STEP_SUMMARY"

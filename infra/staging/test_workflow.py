@@ -30,7 +30,7 @@ class WorkflowTests(unittest.TestCase):
     def test_failed_install_still_selects_exact_id_cleanup_without_guest_credentials(self):
         workflow = WORKFLOW.read_text()
         install, cleanup = workflow.split("  install:\n", 1)[1].split("  cleanup:\n", 1)
-        self.assertIn("needs: [allocate, install]", cleanup)
+        self.assertIn("needs: [allocate, install, first_use]", cleanup)
         self.assertIn("if: always() && needs.allocate.result != 'skipped'", cleanup)
         self.assertNotIn("needs.install.result ==", cleanup)
         self.assertIn("STAGING_DROPLET_ID: ${{ needs.allocate.outputs.droplet_id }}", cleanup)
@@ -41,6 +41,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("controller/infra/staging/bootstrap.py", install)
         self.assertNotIn("infra/self-hosting/install.py", install)
         self.assertIn("ref: ${{ inputs.app_sha }}", install)
+
+    def test_first_use_waits_for_success_and_either_decision_releases_cleanup(self):
+        checkpoint, cleanup = WORKFLOW.read_text().split("  first_use:\n", 1)[1].split("  cleanup:\n", 1)
+        self.assertIn("    needs: install\n", checkpoint)
+        self.assertNotIn("    if:", checkpoint)  # Default success() skips the hold after install failure.
+        self.assertIn("environment: cth-staging-first-use", checkpoint)
+        self.assertIn("permissions: {}", checkpoint)
+        self.assertNotIn("secrets.", checkpoint)
+        self.assertIn("needs: [allocate, install, first_use]", cleanup)
+        self.assertIn("if: always() && needs.allocate.result != 'skipped' && github.run_attempt == '1'\n", cleanup)
 
     def test_missing_or_ambiguous_receipt_refuses_before_delete_and_writes_safe_summary(self):
         workflow = WORKFLOW.read_text().split("      - name: Check for exact creation receipt", 1)[1]

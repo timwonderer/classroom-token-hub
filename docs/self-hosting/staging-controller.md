@@ -12,7 +12,8 @@ The infrastructure owner runs a single exercise from GitHub Actions and closes i
 1. In DigitalOcean, confirm the preceding exercise has been cleared. In Actions, manually dispatch the reviewed staging workflow with the approved full release SHA and reference profile. Keep the Actions run link.
 2. Watch allocation. Record the numeric Droplet ID as soon as the provider returns it. If the response is lost, leave allocation unresolved and inspect the console before another dispatch.
 3. Verify the new guest's SSH identity through the authenticated DigitalOcean console, then release the staging installation inputs. The workflow invokes the same B2 installer as a self-hosting operator. Keep raw logs, credentials, authentication material and classroom records out of Actions evidence.
-4. On completion or failure, review the cleanup job. It can request destruction only for the recorded Droplet ID after checking ownership. Runner loss or cancellation can interrupt that job. A green job alone does not close the exercise.
+4. After successful installation, leave the first-use environment waiting while you complete the [handbook checks](operations.md). Record results privately. Approve after success or reject after failure or an early stop.
+5. After the decision or an installation failure, review the cleanup job. It can request destruction only for the recorded Droplet ID after checking ownership. Runner loss or cancellation can interrupt that job. A green job alone does not close the exercise.
 
 ## Manual recovery
 
