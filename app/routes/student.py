@@ -34,6 +34,7 @@ from app.models import (
 )
 from app.auth import (
     admin_required,
+    end_signed_in_session,
     establish_student_session,
     get_current_class_id,
     get_current_seat,
@@ -3277,12 +3278,16 @@ def select_class_context():
     )
 
 
-@student_bp.route('/logout')
-@login_required
+@student_bp.route('/logout', methods=['POST'])
 @limiter.exempt
 def logout():
-    """Student logout."""
-    session.clear()
+    """Student logout.
+
+    POST only (CSRF-checked); a GET cannot end a sign-in (INV-ARC-007). Not
+    behind login_required: signing out is not class-scoped, so a student with
+    no active class can still do it (DOM-IDEN-006 §IX).
+    """
+    end_signed_in_session()
     flash("You've been logged out.")
     return redirect(url_for('student.login'))
 

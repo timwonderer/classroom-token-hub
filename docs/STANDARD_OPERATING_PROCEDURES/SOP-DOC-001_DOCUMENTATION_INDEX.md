@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.60 | 2026-11-15 | 3.59 | Normative |
+| SOP-DOC-001 | 3.62 | 2026-11-16 | 3.61 | Normative |
 
 ---
 
@@ -214,6 +214,7 @@ Archived material is deliberately absent; see §VI.
 
 ### Principles (PRN)
 - [PRN-PHL-001 — Design Principles, Philosophy, and Memory](../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md)
+- [PRN-PHL-002 — Classroom Token Hub Open-Source Philosophy](../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-002_Classroom_Token_Hub_Open_Source_Philosophy.md)
 - [PRN-SNP-001 — Why Classroom Token Hub Does Not Implement SSO](../PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-001_Why_Classroom_Token_Hub_Does_Not_Implement_SSO.md)
 - [PRN-SNP-002 — Trust-Based Account Recovery](../PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-002_Trust_Based_Account_Recovery.md)
 
@@ -282,11 +283,17 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
-**Version 3.60 (2026-11-15):**
+**Version 3.62 (2026-11-16):**
 
-- Registered FEAT-IDEN-008 and clarified its operator-only context in FEAT-CORE-000 v1.2.
+- Registered FEAT-IDEN-008 under the operator-only context defined in FEAT-CORE-000 v1.2.
 - Updated DOM-OPS-002 v1.12 and FEAT-OPS-001 v1.1 for audit verification evidence.
 - Updated SOP-DEP-001 v2.14 for current-release fresh database initialization and existing installation upgrades.
+
+**Version 3.61 (2026-11-15):**
+- Register PRN-PHL-002 v1.2: CTH's own, noncommercial definition of open source, held as a separate philosophy from the OSI definition (two non-overlapping circles); upstream contributions welcome but voluntary; informative only, grants no license, and the commercial-services permission it describes is not yet effective.
+
+**Version 3.60 (2026-11-15):**
+- Register FEAT-CORE-000 v1.2: seat scope stays the rule; §III.1.A names five exception classes (identity establishment including additional classroom creation, session boundary, principal lifecycle for manual and scheduled account deletion, system administration, out-of-band operator), each limited to listed operations with a governing citation; §III.4 records unresolved actor fields as absent; §III.5 defines workflows; §V.1 allows at most one FEAT per request. Owner ruling, 2026-11-15.
 
 **Version 3.59 (2026-11-11):**
 - Register SOP-DEP-001B v1.3 and SOP-DEP-001A v1.3: the validation-responsibility rule is that no check expects a teacher or student to act, not that no live class may be used; the operator may run a check in a live class through a test account the operator holds. Corrects the misstatement introduced in SOP-DEP-001B v1.1 and SOP-DEP-001A v1.2. Owner correction, 2026-11-11.

@@ -38,6 +38,7 @@ def set_canonical_context(
       - session["user_id"] + session["current_session_nonce"] (nonce validated before_request)
       - session["login_time"] + session["last_activity"] (read by dashboard and timeout checks)
       - user.current_session_nonce / last_active_class_id / last_active_seat_id in DB
+      - for a teacher, the fixed session window (current_session_started_at/expires_at)
 
     Returns the nonce that was written, so callers can use it consistently.
     """
@@ -53,6 +54,16 @@ def set_canonical_context(
     with FEATContext("FEAT-IDEN-001", idempotency_key=f"canonical-session:{user_id}:{class_id}:{seat_id}"):
         user = db.session.get(User, user_id)
         if user is not None:
+            if getattr(user.user_role, "value", user.user_role) == "teacher":
+                # Teacher sign-in opens a fixed window (DOM-IDEN-003); admin_required
+                # ends a session that has none.
+                from app.auth import TEACHER_SESSION_MINUTES
+                from app.session_lifetime import SESSION_EXPIRES_AT_KEY
+                user.current_session_started_at = temporal.now()
+                user.current_session_expires_at = temporal.shifted(
+                    user.current_session_started_at, minutes=TEACHER_SESSION_MINUTES,
+                )
+                sess[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
             user.current_session_nonce = resolved_nonce
             user.last_active_class_id = class_id
             seat = db.session.get(Seat, seat_id)

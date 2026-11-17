@@ -32,6 +32,7 @@ from app.models import (
     Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import (
+    end_signed_in_session,
     establish_sysadmin_session,
     system_admin_required,
     _expire_system_admin_session,
@@ -213,12 +214,7 @@ def logout():
     image tag, a prefetch, another site) cannot end anyone's sign-in. GET
     answers 405 and changes nothing.
     """
-    session.pop("user_id", None)
-    session.pop("current_session_nonce", None)
-    session.pop("last_activity", None)
-    session.pop("sysadmin_auth_username", None)
-    session.pop("passkey_sysadmin_auth_username", None)
-    session.pop("force_sysadmin_username_migration", None)  # noqa: safety — no-op if key absent
+    end_signed_in_session()
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))
 
@@ -373,14 +369,15 @@ def passkey_auth_finish():
             return jsonify({"error": "Authentication failed"}), 401
         now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
-        # Create session — canonical keys only
+        # Create session — canonical keys only. A new principal inherits
+        # nothing from the previous session, including a teacher's expiry.
+        auth_username = session.get("passkey_sysadmin_auth_username")
+        session.clear()
         establish_sysadmin_session(user)
         nonce = secrets.token_urlsafe(32)
         session["current_session_nonce"] = nonce
         user.current_session_nonce = nonce
-        session["sysadmin_auth_username"] = (
-            session.get("passkey_sysadmin_auth_username") or f"sysadmin_{user.id}"
-        )
+        session["sysadmin_auth_username"] = auth_username or f"sysadmin_{user.id}"
         session['last_activity'] = now.isoformat()
 
         # Determine redirect URL
