@@ -7,7 +7,7 @@ roles: [operator]
 
 # Attended staging workflow
 
-The infrastructure owner runs a single exercise from GitHub Actions and closes it in DigitalOcean. Use the [Phase C approval plan](phase-c.md), [workflow configuration](../../infra/staging/README.md) and [guest preparation instructions](staging-bootstrap.md).
+The infrastructure owner runs a single exercise from GitHub Actions and closes it in DigitalOcean. Use the [Phase C approval plan](phase-c.md), [workflow configuration](https://github.com/timwonderer/classroom-token-hub/blob/main/infra/staging/README.md) and [guest preparation instructions](staging-bootstrap.md).
 
 1. In DigitalOcean, confirm the preceding exercise has been cleared. In Actions, manually dispatch the reviewed staging workflow with the approved full release SHA and reference profile. Keep the Actions run link.
 2. Watch allocation. Record the numeric Droplet ID as soon as the provider returns it. If the response is lost, leave allocation unresolved and inspect the console before another dispatch.
