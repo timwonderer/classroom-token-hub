@@ -1,4 +1,4 @@
-"""Attended staging bootstrap tests. Local Git fixture, simulated SSH and connector download."""
+"""Attended staging bootstrap tests. Local Git fixture, simulated SSH."""
 
 import base64
 import hashlib
@@ -51,13 +51,10 @@ class GuestTests(unittest.TestCase):
             STAGING_MARKETING_URL="https://marketing.staging.invalid",
             STAGING_PASSWORDLESS_URL="https://api.staging.invalid",
             STAGING_SSH_PRIVATE_KEY="synthetic-private-key",
-            STAGING_TUNNEL_TOKEN="synthetic-secret",
             STAGING_ORIGIN_CERT="synthetic-cert",
             STAGING_ORIGIN_KEY="synthetic-key",
             STAGING_ACCESS_CLIENT_ID="approved-test-access-key",
             STAGING_ACCESS_CLIENT_SECRET="approved-test-service-secret",
-            STAGING_CONNECTOR_VERSION="2026.5.0",
-            STAGING_CONNECTOR_SHA256=hashlib.sha256(b"fixture").hexdigest(),
         )
 
     def test_cloud_init_contains_only_public_enrollment(self):
@@ -90,19 +87,9 @@ class GuestTests(unittest.TestCase):
         if accept:
             self.args.acceptance_script = "check.sh"
             self.args.acceptance_sha256 = hashlib.sha256(self.hook).hexdigest()
-        original = bootstrap.local
         commands = []
         uploads = {}
         statuses = []
-
-        def local(argv):
-            if argv[0] == "curl":
-                self.assertTrue(
-                    argv[-1].startswith("https://github.com/cloudflare/cloudflared/releases/download/")
-                )
-                (self.work / "connector").write_bytes(b"bad-digest" if failure == "connector" else b"fixture")
-                return b""
-            return original(argv)
 
         def receipt(command):
             commands.append(command)
@@ -124,7 +111,6 @@ class GuestTests(unittest.TestCase):
             return json.dumps(result).encode()
 
         with (
-            patch.object(bootstrap, "local", side_effect=local),
             patch.object(bootstrap.Guest, "receipt", side_effect=receipt),
             patch.object(bootstrap.Guest, "run", side_effect=commands.append),
             patch.object(bootstrap.Guest, "upload", side_effect=lambda k, v: uploads.update({k: v})),
@@ -152,7 +138,8 @@ class GuestTests(unittest.TestCase):
         cfg = json.loads(uploads[bootstrap.MANIFEST])
         values = bootstrap.runtime.parse_env(uploads[cfg["runtime_env"]].decode(), cfg)
         self.assertEqual(len({values[k] for k in bootstrap.runtime.KEYS}), 5)
-        self.assertNotIn(self.env["STAGING_TUNNEL_TOKEN"], " ".join(commands))
+        self.assertNotIn("connector", " ".join(commands) + str(uploads))
+        self.assertNotIn("tunnel", " ".join(commands) + str(uploads))
         self.assertNotIn(self.env["STAGING_SSH_PRIVATE_KEY"], str(uploads))
         self.assertEqual(
             subprocess.check_output(["git", "bundle", "list-heads", self.work / "release.bundle"]).split()[0],
@@ -164,19 +151,23 @@ class GuestTests(unittest.TestCase):
             statuses, _, _ = self.simulate(failure)
             self.assertEqual(statuses, list(bootstrap.STAGES)[: bootstrap.STAGES.index(stage)])
 
-    def test_identity_or_connector_disagreement_prevents_transfer(self):
-        for failure in ("identity", "connector"):
+    def test_identity_disagreement_prevents_transfer(self):
+        for failure in ("identity",):
             statuses, _, uploads = self.simulate(failure)
             self.assertFalse(statuses)
             self.assertFalse(uploads)
 
-    def test_unapproved_hook_and_production_fallback(self):
+    def test_optional_hook_and_provider_url_defaults(self):
         statuses, _, uploads = self.simulate()
         self.assertNotIn("acceptance", statuses)
         self.assertFalse(any("acceptance" in p for p in uploads))
         self.env["STAGING_MARKETING_URL"] = "https://www.classroomtokenhub.com"
-        with self.assertRaises(ValueError):
-            bootstrap.checked_runtime(self.args, "2" * 32, self.env)
+        bootstrap.checked_runtime(self.args, "2" * 32, self.env)
+        del self.env["STAGING_MARKETING_URL"]
+        del self.env["STAGING_PASSWORDLESS_URL"]
+        _, raw = bootstrap.checked_runtime(self.args, "2" * 32, self.env)
+        self.assertNotIn(b"MARKETING_SITE_URL", raw)
+        self.assertNotIn(b"PASSWORDLESS_API_URL", raw)
 
     def test_step_summary_accepts_only_verified_stage_names(self):
         summary = self.work / "summary"

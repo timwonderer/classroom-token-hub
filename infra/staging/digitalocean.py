@@ -13,6 +13,8 @@ import ssl
 from urllib.parse import urlencode
 from uuid import UUID, uuid4
 
+from bootstrap import runtime
+
 REGION = 'sfo3'
 SIZE = 's-2vcpu-4gb-amd'
 TAG = 'cth-ephemeral-staging'
@@ -54,7 +56,11 @@ class DigitalOcean:
         require(re.fullmatch('[0-9a-f]{64}', policy['firewall_rules_sha256']), 'invalid_firewall_policy')
 
     def request(self, method, path, *, body=None, missing_ok=False):
-        require(method == 'GET' or (method == 'POST' and path == '/droplets'), 'unsupported_provider_operation')
+        assignment = (method == 'POST' and path == '/projects/' + self.policy['project_uuid'] + '/resources'
+                      and getattr(self, '_created_id', None) is not None
+                      and body == {'resources': ['do:droplet:' + str(self._created_id)]})
+        require(method == 'GET' or (method == 'POST' and path == '/droplets') or assignment,
+                'unsupported_provider_operation')
         # Fixed TLS authority, no redirect handling, HTTP proxies or automatic mutation retry.
         conn = http.client.HTTPSConnection(
             'api.digitalocean.com', timeout=12, context=ssl.create_default_context()
@@ -69,7 +75,7 @@ class DigitalOcean:
             response = conn.getresponse()
             if missing_ok and response.status == 404:
                 return None
-            expected = {'GET': 200, 'POST': 202}[method]
+            expected = 200 if method == 'GET' or assignment else 202
             require(response.status == expected, 'provider_http_' + str(response.status))
             raw = response.read(2_000_001)
             require(len(raw) <= 2_000_000, 'provider_response_size')
@@ -93,12 +99,11 @@ class DigitalOcean:
 
     def identity(self):
         account = self.request('GET', '/account')['account']
-        project = self.request('GET', '/projects/default')['project']
+        project = self.request('GET', '/projects/' + self.policy['project_uuid'])['project']
         require(
             account['status'] == 'active'
             and account.get('team', {}).get('uuid') == self.policy['team_uuid']
             and project['id'] == self.policy['project_uuid']
-            and project['is_default'] is True
             and project.get('environment') in ('Development', 'Staging'),
             'wrong_cloud_owner',
         )
@@ -134,13 +139,19 @@ class DigitalOcean:
                 )
                 networks = [ipaddress.ip_network(a, strict=False) for a in addresses]
                 if direction == 'inbound_rules':
-                    require(rule['protocol'] == 'tcp' and rule['ports'] == '22', 'unapproved_ingress')
-                    require(
-                        self.policy.get('allow_public_ssh') is True or all(n.num_addresses == 1 for n in networks),
-                        'public_ssh_not_approved',
-                    )
-                else:
-                    require(all(n.prefixlen > 0 for n in networks), 'unbounded_egress')
+                    require(rule['protocol'] == 'tcp' and rule['ports'] in ('22', '443'), 'unapproved_ingress')
+                    if rule['ports'] == '22':
+                        require(
+                            self.policy.get('allow_public_ssh') is True or all(n.num_addresses == 1 for n in networks),
+                            'public_ssh_not_approved',
+                        )
+                    else:
+                        approved = [ipaddress.ip_network(net) for net in runtime.EDGE_IPV4]
+                        require(all(n.version == 4 and any(n.subnet_of(a) for a in approved) for n in networks),
+                                'unapproved_https_peer')
+        https = {ipaddress.ip_network(a) for r in rules['inbound_rules'] if r['ports'] == '443'
+                 for a in r['sources']['addresses']}
+        require(https == {ipaddress.ip_network(a) for a in runtime.EDGE_IPV4}, 'missing_https_peers')
 
     def preflight(self):
         self.identity()
@@ -230,6 +241,10 @@ class DigitalOcean:
             obj = self.get(number)
             if obj and obj['status'] == 'active':
                 self.verify(obj, name)
+                self._created_id = number
+                # Move only this run's receipted resource; never change the team's default project.
+                self.request('POST', '/projects/' + self.policy['project_uuid'] + '/resources',
+                             body={'resources': ['do:droplet:' + str(number)]})
                 self.membership(number)
                 self.firewall()
                 applied = self.listing(f'/droplets/{number}/firewalls', 'firewalls')

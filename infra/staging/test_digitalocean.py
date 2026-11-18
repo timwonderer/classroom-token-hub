@@ -4,12 +4,14 @@ from copy import deepcopy
 from hashlib import sha256
 import json
 import unittest
+from unittest.mock import Mock, patch
 
-from digitalocean import DigitalOcean, LifecycleError, SIZE, TAG
+from digitalocean import DigitalOcean, LifecycleError, SIZE, TAG, runtime
 
 RULES = {
-    'inbound_rules': [{'protocol': 'tcp', 'ports': '22', 'sources': {'addresses': ['10.37.0.9/32']}}],
-    'outbound_rules': [{'protocol': 'tcp', 'ports': '443', 'destinations': {'addresses': ['192.0.2.80/32']}}],
+    'inbound_rules': [{'protocol': 'tcp', 'ports': '22', 'sources': {'addresses': ['10.37.0.9/32']}},
+                      {'protocol': 'tcp', 'ports': '443', 'sources': {'addresses': list(runtime.EDGE_IPV4)}}],
+    'outbound_rules': [{'protocol': 'tcp', 'ports': '0', 'destinations': {'addresses': ['0.0.0.0/0', '::/0']}}],
 }
 POLICY = {
     'team_uuid': '1' * 40,
@@ -34,23 +36,31 @@ class FakeDO(DigitalOcean):
         self.rules = deepcopy(RULES)
         self.other_firewalls = []
         self.is_member = True
+        self.assigned = []
+        self.assignment_timeout = False
 
     def request(self, method, path, *, body=None, missing_ok=False):
         path = path.split('?')[0]
         self.history.append((method, path))
         if path == '/account':
             return {'account': {'team': {'uuid': self.account_team}, 'status': 'active'}}
-        if path == '/projects/default':
-            return {'project': {'id': self.policy['project_uuid'], 'is_default': True, 'environment': 'Staging'}}
+        if path == '/projects/' + self.policy['project_uuid']:
+            return {'project': {'id': self.policy['project_uuid'], 'is_default': False, 'environment': 'Staging'}}
         if path == '/account/keys/981':
             return {'ssh_key': {'id': 981}}
+        if path.endswith('/resources') and method == 'POST':
+            self.assert_assignment(body)
+            self.assigned.extend(body['resources'])
+            if self.assignment_timeout:
+                raise LifecycleError('provider_communication')
+            return {'resources': [{'urn': body['resources'][0], 'status': 'assigned'}]}
         if path.endswith('/resources'):
             return {
                 'resources': [{'urn': 'do:droplet:99', 'status': 'ok'}]
                 + [
                     {'urn': 'do:droplet:' + str(i), 'status': 'ok'}
                     for i in self.objects
-                    if not self.hidden and self.is_member
+                    if not self.hidden and self.is_member and 'do:droplet:' + str(i) in self.assigned
                 ]
             }
         if path.startswith('/vpcs/'):
@@ -135,6 +145,11 @@ class FakeDO(DigitalOcean):
                 return None
         raise AssertionError((method, path))
 
+    def assert_assignment(self, body):
+        assert body == {'resources': ['do:droplet:27']}
+        assert 27 in self.objects
+
+
 
 class AttendedTests(unittest.TestCase):
     def setUp(self):
@@ -157,6 +172,27 @@ class AttendedTests(unittest.TestCase):
         self.assertEqual(self.outputs['public_ipv4'], '8.8.8.8')
         self.assertEqual(self.outputs['droplet_id'], '27')
         self.assertIn(27, self.api.objects)
+
+    def test_nondefault_project_and_unrestricted_egress(self):
+        self.create()
+        self.assertEqual(self.api.assigned, ['do:droplet:27'])
+        self.assertNotIn(('GET', '/projects/default'), self.api.history)
+
+    def test_failed_assignment_preserves_receipt_without_second_create(self):
+        self.api.assignment_timeout = True
+        with self.assertRaises(LifecycleError):
+            self.create()
+        self.assertEqual(self.receipts, [('72', 27)])
+        self.assertEqual(self.api.history.count(('POST', '/droplets')), 1)
+
+    def test_unapproved_https_source_is_rejected_even_with_matching_digest(self):
+        self.api.rules['inbound_rules'][1]['sources']['addresses'] = ['0.0.0.0/0']
+        self.api.policy['firewall_rules_sha256'] = sha256(
+            json.dumps(self.api.rules, sort_keys=True, separators=(',', ':')).encode()
+        ).hexdigest()
+        with self.assertRaisesRegex(LifecycleError, 'unapproved_https_peer'):
+            self.create()
+        self.assertNotIn(('POST', '/droplets'), self.api.history)
 
     def test_ambiguous_post_never_retried_or_adopted(self):
         self.api.post_timeout = True
@@ -182,6 +218,22 @@ class AttendedTests(unittest.TestCase):
     def test_provider_refuses_destructive_requests_before_connecting(self):
         with self.assertRaisesRegex(LifecycleError, 'unsupported_provider_operation'):
             DigitalOcean.request(self.api, 'DELETE', '/droplets/27')
+
+    def test_project_assignment_transport_accepts_only_created_id(self):
+        path = '/projects/' + POLICY['project_uuid'] + '/resources'
+        with self.assertRaisesRegex(LifecycleError, 'unsupported_provider_operation'):
+            DigitalOcean.request(self.api, 'POST', path, body={'resources': ['do:droplet:99']})
+        self.api._created_id = 27
+        for target, body in ((path, {'resources': ['do:droplet:99']}),
+                             ('/projects/default/resources', {'resources': ['do:droplet:27']})):
+            with self.assertRaisesRegex(LifecycleError, 'unsupported_provider_operation'):
+                DigitalOcean.request(self.api, 'POST', target, body=body)
+        response = Mock(status=200)
+        response.read.return_value = b'{"resources": []}'
+        with patch('digitalocean.http.client.HTTPSConnection') as connection:
+            connection.return_value.getresponse.return_value = response
+            DigitalOcean.request(self.api, 'POST', path, body={'resources': ['do:droplet:27']})
+            connection.return_value.request.assert_called_once()
 
     def test_wrong_team_blocks_allocation(self):
         self.api.account_team = 'f' * 40

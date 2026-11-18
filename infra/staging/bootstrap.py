@@ -57,14 +57,6 @@ def cloud_init(installation_id):
     )
 
 
-def digest(path):
-    h = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
 def host_pin(raw, number, installation_id):
     pin = json.loads(raw)
     require(
@@ -103,9 +95,11 @@ def checked_runtime(args, machine_id, env):
         RATELIMIT_STORAGE_URI="redis+unix://" + runtime.RATE_SOCKET,
         STUDENT_SETUP_REDIS_URL="unix://" + runtime.SETUP_SOCKET,
         LOG_FILE="/var/log/cth-web/app.log",
-        MARKETING_SITE_URL=env["STAGING_MARKETING_URL"],
-        PASSWORDLESS_API_URL=env["STAGING_PASSWORDLESS_URL"],
     )
+    for setting, variable in (("STAGING_MARKETING_URL", "MARKETING_SITE_URL"),
+                              ("STAGING_PASSWORDLESS_URL", "PASSWORDLESS_API_URL")):
+        if env.get(setting):
+            values[variable] = env[setting]
     raw = "".join(k + "=" + v + "\n" for k, v in values.items())
     require(runtime.parse_env(raw, cfg) == values)
     return cfg, raw.encode()
@@ -236,27 +230,6 @@ def install(args, work, env, record):
     )
     bundle = work / "release.bundle"
     local([*git, "bundle", "create", str(bundle), "HEAD"])
-    version, checksum = env["STAGING_CONNECTOR_VERSION"], env["STAGING_CONNECTOR_SHA256"]
-    require(re.fullmatch(r"20[0-9]{2}\.[0-9]{1,2}\.[0-9]+", version) and re.fullmatch("[a-f0-9]{64}", checksum))
-    connector = work / "connector"
-    local(
-        [
-            "curl",
-            "-qfsSL",
-            "--proto",
-            "=https",
-            "--proto-redir",
-            "=https",
-            "--max-time",
-            "90",
-            "--max-filesize",
-            "268435456",
-            "-o",
-            str(connector),
-            "https://github.com/cloudflare/cloudflared/releases/download/" + version + "/cloudflared-linux-amd64",
-        ]
-    )
-    require(digest(connector) == checksum)
     hook = None
     if args.acceptance_script or args.acceptance_sha256:
         require(
@@ -278,7 +251,7 @@ def install(args, work, env, record):
             "CF-Access-Client-Secret": env["STAGING_ACCESS_CLIENT_SECRET"],
         }
         require(all(re.fullmatch(r"[a-zA-Z0-9_.-]{16,256}", v) for v in access.values()))
-    for name in ("STAGING_ORIGIN_CERT", "STAGING_ORIGIN_KEY", "STAGING_TUNNEL_TOKEN"):
+    for name in ("STAGING_ORIGIN_CERT", "STAGING_ORIGIN_KEY"):
         require(0 < len(env[name].strip()) <= 65536)
     guest.run(
         "set -eu; umask 077; mkdir "
@@ -289,8 +262,6 @@ def install(args, work, env, record):
     )
     for dest, data in (
         (INPUTS + "/release.bundle", bundle),
-        (INPUTS + "/connector", connector),
-        (INPUTS + "/tunnel.token", env["STAGING_TUNNEL_TOKEN"].encode()),
         (cfg["tls_cert"], env["STAGING_ORIGIN_CERT"].encode()),
         (cfg["tls_key"], env["STAGING_ORIGIN_KEY"].encode()),
         (MANIFEST, json.dumps(cfg).encode()),
@@ -298,7 +269,7 @@ def install(args, work, env, record):
     ):
         guest.upload(dest, data)
     guest.run(
-        "set -eu; cd " + INPUTS + "; echo '" + checksum + "  connector' | sha256sum -c -; "
+        "set -eu; cd " + INPUTS + "; "
         "git clone --no-checkout release.bundle "
         + SOURCE
         + "; cd "
@@ -309,15 +280,6 @@ def install(args, work, env, record):
         + args.sha
     )
     for stage in STAGES:
-        if stage == "ingress":
-            guest.run(
-                "set -eu; chmod 0700 " + INPUTS + "/connector; systemd-run --unit=cth-stage-tunnel "
-                "-p NoNewPrivileges=yes -p ProtectSystem=strict -p StandardOutput=null -p StandardError=null "
-                + INPUTS
-                + "/connector tunnel --no-autoupdate run --token-file "
-                + INPUTS
-                + "/tunnel.token"
-            )
         for action in ("apply", "check"):
             result = json.loads(
                 guest.receipt(
