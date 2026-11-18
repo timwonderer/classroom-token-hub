@@ -39,7 +39,7 @@ class RuntimeTests(unittest.TestCase):
                          ("STUDENT_SETUP_REDIS_URL", self.env["RATELIMIT_STORAGE_URI"]),
                          ("SECRET_KEY", self.env["PEPPER_KEY"]), ("ENCRYPTION_KEY", "synthetic-invalid-fernet"),
                          ("TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA"),
-                         ("MARKETING_SITE_URL", "https://classroomtokenhub.com"),
+                         ("PASSWORDLESS_API_URL", "https://app.classroomtokenhub.com"),
                          ("PASSWORDLESS_API_URL", "https://provider.example.org@elsewhere.example.org"),
                          ("LD_PRELOAD", "/somewhere/lib.so"), ("TURNSTILE_SECRET_KEY", "ab$HOME"),
                          ("LOG_FILE", "/opt/cth/app.log")):
@@ -65,9 +65,19 @@ class RuntimeTests(unittest.TestCase):
                 runtime.validate_config(dict(self.cfg, hostname=host))
         with self.assertRaises(ValueError):
             runtime.validate_config(dict(self.cfg, admission_hostname=staging))
-        for key in runtime.URLS:
+        for key in ("PASSWORDLESS_API_URL",):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 self.parse(dict(self.env, **{key: "https://" + staging}))
+
+    def test_public_information_uses_app_default_or_explicit_https(self):
+        values = {k: v for k, v in self.env.items() if k != "MARKETING_SITE_URL"}
+        self.assertNotIn("MARKETING_SITE_URL", self.parse(values))
+        for key in runtime.INFORMATION_URLS:
+            configured = dict(values, **{key: "https://classroomtokenhub.com"})
+            self.assertEqual(self.parse(configured)[key], configured[key])
+        self.parse({k: v for k, v in values.items() if k != "PASSWORDLESS_API_URL"})
+        with self.assertRaises(ValueError):
+            self.parse(dict(values, MARKETING_SITE_URL="http://classroomtokenhub.com"))
 
     def test_gate_does_not_follow_redirects_or_disclose_response(self):
         for status, destination, success in (
@@ -111,14 +121,14 @@ class RuntimeTests(unittest.TestCase):
         for value in ("--bind 127.0.0.1:8000", "wsgi:app", "LimitCORE=0", "MemorySwapMax=0",
                       "/gunicorn.conf.py", "EnvironmentFile=/etc/cth/runtime.env"):
             self.assertIn(value, web)
-        self.assertIn("listen 127.0.0.1:8443 ssl;", templates["ingress.conf"])
+        self.assertIn("listen 0.0.0.0:443 ssl;", templates["ingress.conf"])
         self.assertIn("proxy_pass http://127.0.0.1:8000;", templates["ingress.conf"])
 
     def test_proxy_mode_peer_identity_and_local_readiness(self):
-        cfg = dict(self.cfg, ingress_mode="cloudflare-proxy", origin_client_ca="/etc/cth/origin-client-ca.crt")
+        cfg = dict(self.cfg, ingress_mode="cloudflare-proxy")
         config = runtime.template("ingress.conf", cfg).decode()
         for rule in ("listen 0.0.0.0:443 ssl;", "geo $realip_remote_addr $peer",
-                     "default other;", "default 0;", "local:NONE:/health 1;", "local:NONE:/health/status 1;",
+                     "default other;", "default 0;", "local:/health 1;", "local:/health/status 1;",
                      "if ($allowed = 0) { return 403; }", "proxy_set_header X-CF-Edge-IP $realip_remote_addr;",
                      'if ($ssl_server_name != "hub.example.org")', 'if ($host != "hub.example.org")'):
             self.assertIn(rule, config)

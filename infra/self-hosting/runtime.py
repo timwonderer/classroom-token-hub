@@ -20,7 +20,8 @@ HOSTED_ZONE = "classroomtokenhub.com"
 KEYS = {"SECRET_KEY", "AUDIT_HMAC_KEY", "ENCRYPTION_KEY", "PEPPER_KEY", "CONFIGURATION_EXPORT_KEY"}
 PROVIDERS = {"TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "PASSWORDLESS_API_PUBLIC", "PASSWORDLESS_API_KEY"}
 URLS = {"MARKETING_SITE_URL", "EXTERNAL_DOCS_BASE_URL", "PASSWORDLESS_API_URL"}
-OPTIONAL = {"EXTERNAL_DOCS_BASE_URL"}
+INFORMATION_URLS = {"EXTERNAL_DOCS_BASE_URL", "MARKETING_SITE_URL"}
+OPTIONAL = URLS
 REQUIRED = KEYS | PROVIDERS | (URLS - OPTIONAL) | {"FLASK_ENV", "DATABASE_URL", "STUDENT_SETUP_REDIS_URL",
                                       "RATELIMIT_STORAGE_URI", "LOG_FILE"}
 
@@ -30,8 +31,8 @@ def require(ok, message):
         raise ValueError(message)
 
 
-def hostname(name):
-    return (isinstance(name, str) and name != HOSTED_ZONE and not name.endswith("." + HOSTED_ZONE)
+def hostname(name, informational=False):
+    return (isinstance(name, str) and (informational or (name != HOSTED_ZONE and not name.endswith("." + HOSTED_ZONE)))
             and len(name) <= 253 and "." in name and all(
         re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", part) for part in name.split(".")
     ) and not name.rsplit(".", 1)[1].isdigit())
@@ -47,21 +48,13 @@ EDGE_IPV4 = (
 )
 
 
-def proxied(cfg):
-    return cfg.get("ingress_mode") == "cloudflare-proxy"
-
-
 def validate_config(cfg):
-    require(cfg.get("ingress_mode", "tunnel") in ("tunnel", "cloudflare-proxy"), "invalid ingress mode")
+    require(cfg.get("ingress_mode", "cloudflare-proxy") == "cloudflare-proxy", "invalid ingress mode")
     app_host = cfg.get("hostname")
     require(app_host == "staging." + HOSTED_ZONE or hostname(app_host), "invalid deployment DNS field: hostname")
     require(hostname(cfg.get("admission_hostname")), "invalid deployment DNS field: admission_hostname")
     require(cfg["hostname"] != cfg["admission_hostname"], "public hostname and admission hostname must differ")
     paths = [cfg.get(key) for key in ("runtime_env", "tls_cert", "tls_key")]
-    if proxied(cfg):
-        paths.append(cfg.get("origin_client_ca"))
-    else:
-        require("origin_client_ca" not in cfg, "origin client CA requires cloudflare-proxy mode")
     for path in paths:
         require(isinstance(path, str) and re.fullmatch(r"/etc/cth/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+", path)
                 and Path(path).name not in ("", ".", "..") and not path.startswith("/etc/cth/ingress.conf"),
@@ -110,7 +103,7 @@ def parse_env(raw, cfg):
     require(len({values[k] for k in KEYS | PROVIDERS}) == len(KEYS | PROVIDERS), "keys must be independent")
     for key in URLS & values.keys():
         u = urlsplit(values[key])
-        require(u.scheme == "https" and hostname(u.hostname) and u.netloc == u.hostname and
+        require(u.scheme == "https" and hostname(u.hostname, informational=key in INFORMATION_URLS) and u.netloc == u.hostname and
                 not u.query and not u.fragment, "select an explicit HTTPS deployment endpoint for " + key)
     # Published Turnstile test credentials bypass a real admission check.
     for key in PROVIDERS:
@@ -130,27 +123,18 @@ def command(*args, ok=(0,)):
 def template(name, cfg):
     data = (TEMPLATES / name).read_text()
     if name == "ingress.conf":
-        listener = "127.0.0.1:8443"
-        policy = ("    # The enrolled loopback connector authenticates the edge and overwrites this header.\n"
-                  "    set_real_ip_from 127.0.0.1;")
-        edge_address = '""'
-        checks = ""
-        if proxied(cfg):
-            listener = "0.0.0.0:443"
-            edge_address = "$realip_remote_addr"
-            # Test the original TCP peer even after real_ip_header has resolved the visitor.
-            policy = "\n".join([
-                *(f"    set_real_ip_from {net};" for net in EDGE_IPV4),
-                "    geo $realip_remote_addr $peer {", "        default other;", "        127.0.0.1 local;",
-                *(f"        {net} edge;" for net in EDGE_IPV4), "    }",
-                '    map "$peer:$ssl_client_verify:$uri" $allowed {', "        default 0;", "        ~^edge:SUCCESS: 1;",
-                "        local:NONE:/health 1;", "        local:NONE:/health/status 1;", "    }",
-            ])
-            # Optional at handshake so only loopback health paths can omit a certificate.
-            checks = (f'        ssl_client_certificate {cfg["origin_client_ca"]};\n'
-                      '        ssl_verify_client optional;\n'
-                      '        if ($allowed = 0) { return 403; }\n'
-                      '        if ($ssl_server_name != "@HOST@") { return 444; }\n')
+        listener = "0.0.0.0:443"
+        edge_address = "$realip_remote_addr"
+        # Classify the TCP peer, never the visitor-controlled forwarded address.
+        policy = "\n".join([
+            *(f"    set_real_ip_from {net};" for net in EDGE_IPV4),
+            "    geo $realip_remote_addr $peer {", "        default other;", "        127.0.0.1 local;",
+            *(f"        {net} edge;" for net in EDGE_IPV4), "    }",
+            '    map "$peer:$uri" $allowed {', "        default 0;", "        ~^edge: 1;",
+            "        local:/health 1;", "        local:/health/status 1;", "    }",
+        ])
+        checks = ('        if ($allowed = 0) { return 403; }\n'
+                  '        if ($ssl_server_name != "@HOST@") { return 444; }\n')
         data = data.replace("@EDGE_ADDRESS@", edge_address)
         data = data.replace("@LISTENER@", listener).replace("@PEER_POLICY@", policy).replace("@ORIGIN_CHECKS@", checks)
     for marker, key in (("INSTALL_ID", "installation_id"), ("SHA", "release_sha"), ("ENVFILE", "runtime_env"),
@@ -216,7 +200,7 @@ def local_health(cfg, tls=False):
     if tls:
         name = cfg["hostname"]
         address = "https://" + name
-        port = 443 if proxied(cfg) else 8443
+        port = 443
         args += ["--connect-to", f"{name}:443:127.0.0.1:{port}"]
     require(curl(address + "/health", *args) == "ok", "database health failed")
     signals = json.loads(curl(address + "/health/status", *args))["signals"]
@@ -268,10 +252,7 @@ def inspect_listeners(port, address="127.0.0.1"):
 
 
 def inspect_ingress(cfg):
-    if proxied(cfg):
-        inspect_listeners(443, "0.0.0.0")
-    else:
-        inspect_listeners(8443)
+    inspect_listeners(443, "0.0.0.0")
 
 
 def run(action, stage, cfg):
@@ -297,9 +278,6 @@ def run(action, stage, cfg):
     elif stage == "ingress":
         trusted(cfg["tls_key"], secret=True)
         trusted(cfg["tls_cert"])
-        if proxied(cfg):
-            trusted(cfg["origin_client_ca"])
-            command("openssl", "x509", "-in", cfg["origin_client_ca"], "-checkend", "0", "-noout")
         command("openssl", "x509", "-in", cfg["tls_cert"], "-checkend", "0", "-noout")
         require(command("systemctl", "is-enabled", "nginx.service", ok=(0, 1)) == "masked"
                 and command("systemctl", "is-active", "nginx.service", ok=(0, 3)) == "inactive",

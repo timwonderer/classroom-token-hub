@@ -29,22 +29,16 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             install.parse_manifest(json.dumps(cfg)[:-1]+',"release_sha":"dev"}')
 
-    def test_proxy_mode_must_be_explicit(self):
-        cfg = dict(manifest(), ingress_mode="cloudflare-proxy", origin_client_ca="/etc/cth/origin-client-ca.crt")
+    def test_proxy_is_default_and_only_supported_mode(self):
+        cfg = dict(manifest(), ingress_mode="cloudflare-proxy")
         self.assertEqual(install.parse_manifest(json.dumps(cfg)), cfg)
         with self.assertRaisesRegex(ValueError, "invalid ingress mode"):
             install.parse_manifest(json.dumps(dict(cfg, ingress_mode="public")))
 
-    def test_proxy_requires_separate_client_ca(self):
-        cfg = dict(manifest(), ingress_mode="cloudflare-proxy")
-        for ca in (None, "/tmp/ca.crt", cfg["tls_cert"], "/etc/cth/ca;injection"):
-            candidate = dict(cfg)
-            if ca is not None:
-                candidate["origin_client_ca"] = ca
-            with self.subTest(ca=ca), self.assertRaises(ValueError):
-                install.parse_manifest(json.dumps(candidate))
-        with self.assertRaises(ValueError):
-            install.parse_manifest(json.dumps(dict(manifest(), origin_client_ca="/etc/cth/ca.crt")))
+    def test_removed_origin_client_ca_and_tunnel_are_rejected(self):
+        for extra in ({"origin_client_ca": "/etc/cth/ca.crt"}, {"ingress_mode": "tunnel"}):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                install.parse_manifest(json.dumps(dict(manifest(), **extra)))
 
     def test_interrupted_stage_requires_verified_postconditions(self):
         with TemporaryDirectory() as tmp, patch.object(install,'trusted'), patch.object(host,'check_unused_host'), patch.object(install,'dispatch') as dispatch:

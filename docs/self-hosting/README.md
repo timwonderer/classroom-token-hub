@@ -19,7 +19,7 @@ This handbook is for the operator who controls a private CTH installation, its h
 | When installing a new database | [Release-specific database baseline, verification and recovery](fresh-database.md) |
 | After the readiness check | [First authorized use, acceptance, maintenance, recovery and decommissioning](operations.md) |
 | When running an attended rehearsal | [Manual dispatch, operator destruction and final verification](staging-controller.md) |
-| When preparing the staging guest | [Release bundle, guest identity, connector and per-run credentials](staging-bootstrap.md) |
+| When preparing the staging guest | [Release bundle, guest identity, proxied HTTPS and per-run credentials](staging-bootstrap.md) |
 | When authorizing the first cloud rehearsal | [Phase C execution plan and resource ownership review](phase-c.md) |
 
 **Evidence status.** The reference-host procedure is **proposed**. **Locally tested** applies only to the checks whose results are recorded for the selected release. B1 demonstrated database equivalence, a genuine successor upgrade, protected audit verification and CLI-only sysadmin bootstrap. **Reference-host tested** requires a successful run on the specified Ubuntu host. **Independently verified** additionally requires a second operator to complete the handbook from scratch without undocumented assistance. The latter two checks are pending.
@@ -78,10 +78,10 @@ be used for an isolated parity run.
   and status session secret. Check the resolved project and database before writing.
 - **Browser destinations.** The `STATUS_PAGE_URL` validator currently accepts only
   the hosted status origin and UptimeRobot. Configure an exact operator-approved
-  HTTPS origin for staging, or omit the link. Replace the hard-coded hosted links
-  on login, support, error and status pages before testing them. Set
-  `MARKETING_SITE_URL` to staging for the home, privacy, terms and district
-  redirects and review `EXTERNAL_DOCS_BASE_URL` and support destinations. Verify
+  HTTPS origin for staging, or omit the link. Reading public documentation or status
+  pages does not write production state. Do not submit synthetic support requests
+  or enable notification integrations against production destinations. The public home, privacy, terms and district pages may use the application default
+  `MARKETING_SITE_URL`; a separate marketing site is not required. Review `EXTERNAL_DOCS_BASE_URL` and support destinations. Verify
   rendered links and redirect locations, including rejection of lookalike hosts.
 - **Authentication and notifications.** Use staging-only provider accounts,
   domain registrations and callback origins. Route optional notification webhooks

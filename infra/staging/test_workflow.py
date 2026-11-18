@@ -32,6 +32,8 @@ class WorkflowTests(unittest.TestCase):
         install, rest = workflow.split("  install:\n", 1)[1].split("  first_use:\n", 1)
         checkpoint, closeout = rest.split("  closeout:\n", 1)
         self.assertIn("controller/infra/staging/bootstrap.py", install)
+        self.assertNotIn("STAGING_TUNNEL", workflow)
+        self.assertNotIn("STAGING_CONNECTOR", workflow)
         self.assertIn("    needs: install\n", checkpoint)
         self.assertIn("environment: cth-staging-first-use", checkpoint)
         self.assertIn("needs: [allocate, install, first_use]", closeout)
