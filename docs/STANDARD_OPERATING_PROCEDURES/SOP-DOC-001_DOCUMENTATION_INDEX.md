@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.61 | 2026-11-15 | 3.60 | Normative |
+| SOP-DOC-001 | 3.62 | 2026-11-16 | 3.61 | Normative |
 
 ---
 
@@ -107,6 +107,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-IDEN-004 — Student Recovery Code Acceptance & Session Authorization](../FEATURE-EXECUTION/FEAT-IDEN-004_STUDENT_RECOVERY_CODE_VALIDATION.md)
 - [FEAT-IDEN-006 — Provision Student Seat in Existing Class](../FEATURE-EXECUTION/FEAT-IDEN-006_PROVISION_STUDENT_SEAT.md)
 - [FEAT-IDEN-007 — Teacher Account Destruction](../FEATURE-EXECUTION/FEAT-IDEN-007_TEACHER_ACCOUNT_DESTRUCTION.md)
+- [FEAT-IDEN-008 — Operator Sysadmin Bootstrap](../FEATURE-EXECUTION/FEAT-IDEN-008_OPERATOR_SYSADMIN_BOOTSTRAP.md)
 - [FEAT-IDEN-101 — Teacher TOTP Setup](../FEATURE-EXECUTION/FEAT-IDEN-101_TEACHER_TOTP_SETUP.md)
 - [FEAT-IDEN-102 — Teacher Passkey Enrollment](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
 - [FEAT-IDEN-103 — Teacher Recovery Proof and Random Recipient Selection](../FEATURE-EXECUTION/FEAT-IDEN-103_TEACHER_RECOVERY_INITIATION.md)
@@ -281,6 +282,12 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.62 (2026-11-16):**
+
+- Registered FEAT-IDEN-008 under the operator-only context defined in FEAT-CORE-000 v1.2.
+- Updated DOM-OPS-002 v1.12 and FEAT-OPS-001 v1.1 for audit verification evidence.
+- Updated SOP-DEP-001 v2.14 for current-release fresh database initialization and existing installation upgrades.
 
 **Version 3.61 (2026-11-15):**
 - Register PRN-PHL-002 v1.2: CTH's own, noncommercial definition of open source, held as a separate philosophy from the OSI definition (two non-overlapping circles); upstream contributions welcome but voluntary; informative only, grants no license, and the commercial-services permission it describes is not yet effective.

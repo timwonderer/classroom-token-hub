@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.11 | 2026-10-06 | 1.10 | Constitutional |
+| DOM-OPS-002 | 1.12 | 2026-11-15 | 1.11 | Constitutional |
 
 ---
 
@@ -14,7 +14,7 @@ Define the Operations domain's authority over the tamper-evident audit lineage s
 
 ## II. Scope
 
-Governs the `audit_events`, `chain_heads`, and `integrity_status` tables and all code paths that read from or write to them.
+Governs the `audit_events` and `chain_heads` tables, their lawful write paths, and the integrity outcomes derived from their evidence.
 
 Applies to every protected table whose mutations must produce an `AuditEvent` chain entry, including constitutional economic policy lineage objects.
 
@@ -42,7 +42,7 @@ Constitutional. Subordinate to `INV-ARC-016` and `DOM-OPS-001`. Supersedes any p
 - **AuditEvent chain schema** — the structure of `audit_events` and `chain_heads`
 - **Emission protocol** — the rules governing when and how `emit_audit_event()` is called
 - **Chain verification logic** — the algorithm for walking a chain scope and detecting tampering
-- **IntegrityStatus** — the singleton operational status record consumed by the Operations status-signal pipeline
+- **IntegrityStatus** — the scoped integrity assessment derived from evidence under §7
 - **Protected fields registry** — the declaration of which fields per table are included in `payload_digest`
 - **Lawful write path enumeration** — what constitutes a valid execution context for chain emission
 
@@ -99,15 +99,9 @@ One row per chain scope. Locked with `SELECT FOR UPDATE` on every emit to provid
 | `event_count` | Integer | No | Total events in this scope |
 | `last_updated_utc` | DateTime(tz) | No | UTC timestamp of last update |
 
-### 2.3 `integrity_status` (Single-Row Singleton)
+### 2.3 Derived integrity status
 
-| Column | Type | Nullable | Notes |
-|---|---|---|---|
-| `id` | Integer | No | Primary key (always 1) |
-| `passing` | Boolean | No | `True` only when all chains are `VERIFIED` |
-| `last_checked_utc` | DateTime(tz) | Yes | UTC timestamp of last invariant check |
-| `failure_detail` | Text | Yes | JSON array of failing scopes; operator-only |
-| `degraded_since` | DateTime(tz) | Yes | When chain first entered failing state |
+`IntegrityStatus` in INV-ARC-016 §§VI and IX describes the outcome of verification. Operations derives it from evidence for the scope and records examined. Migration `7c3d4e5f6a7b` retired the recomputable `integrity_status` singleton. A fresh schema requires the lineage tables in §§2.1–2.2. Incident lifecycle and publication remain subject to DOM-OPS-001.
 
 ### 2.4 Allowlisted Write Paths
 
@@ -117,7 +111,6 @@ Only the following code paths may write to tables owned by this domain:
 |---|---|
 | `audit_events` | `app/services/audit_service.py` → `emit_audit_event()` |
 | `chain_heads` | `app/services/audit_service.py` → `emit_audit_event()` |
-| `integrity_status` | `app/utils/audit_verifier.py` → `update_integrity_status()` under `SystemAuditAuthority` |
 
 Economic policy is recorded in each owning domain's own append-only table (`DOM-CLASS-003` §V); where §5.4 registers such a table as protected, its rows SHALL emit lineage exclusively through lawful FEAT-orchestrated execution paths. *(1.2: the class-wide `policy_versions` / `policy_transitions` tables formerly named here were retired by operator ruling 2026-09-30 and dropped; no audit event was ever emitted for them.)*
 
@@ -142,14 +135,6 @@ Economic policy is recorded in each owning domain's own append-only table (`DOM-
 | `latest_hash` | Authoritative current chain tip |
 | `latest_sequence` | Authoritative current position |
 | `event_count` | Derived count |
-
-### `integrity_status`
-
-| Field | Classification |
-|---|---|
-| `passing` | Derived aggregate from nightly chain walk |
-| `degraded_since` | Authoritative incident onset timestamp |
-| `failure_detail` | Derived diagnostic snapshot |
 
 ---
 
@@ -190,7 +175,7 @@ The `PROTECTED_FIELDS_BY_TABLE` registry in `app/utils/audit_verifier.py` shall 
 
 ### INV-OPS-020: UNVERIFIED Is Not INVALID
 
-A row with `lineage_event_id IS NULL` shall return state `UNVERIFIED`, not `INVALID`. `UNVERIFIED` rows shall not cause `IntegrityStatus.passing` to be set to `False`. Code, logs, and operator-facing output shall never conflate these two states.
+A row with `lineage_event_id IS NULL` shall return state `UNVERIFIED`, not `INVALID`. `UNVERIFIED` rows represent a coverage gap and shall not by themselves degrade integrity status. Code, logs, and operator-facing output shall never conflate these two states.
 
 ---
 
@@ -272,7 +257,7 @@ class_id absent   →  "system"
 
 Per-class `ChainHead` rows are bootstrapped lazily on first emit for that class.
 
-**Economic policy tables** are class-scoped. When one is registered in §5.4, its audit chain scope is always `"class:{class_id}"`; there is no system-scoped chain for economic policy. A row of one emitted without a `class_id` is an `INVALID` chain condition and MUST be surfaced in `IntegrityStatus`.
+**Economic policy tables** are class-scoped. When one is registered in §5.4, its audit chain scope is always `"class:{class_id}"`; there is no system-scoped chain for economic policy. A row of one emitted without a `class_id` is an `INVALID` chain condition and MUST be reported as a scoped integrity failure.
 
 ---
 
@@ -324,24 +309,11 @@ Operations owns `verified_creation_evidences(items, class_id, *, required_fields
 
 Both budgets are server-owned ceilings (`CREATION_PROOF_MAX_CHAIN_EVENTS`, `CREATION_PROOF_MAX_ROWS`); callers may lower them, never raise them, and invalid budgets are rejected before any read. A chain or row count beyond its budget returns every entry unavailable; a verified chain prefix is never treated as a complete chain. The chain head is read as an independent scalar snapshot before and after the walk, never from a cached mutable ORM row. Disagreement returns unavailable `EVIDENCE_CHANGED_DURING_READ`; a missing head, missing signing key or infrastructure failure returns unavailable; a malformed head, continuity break, HMAC mismatch or head/walk disagreement returns `INVALID`. In every non-`COMPLETE` outcome all entries are unavailable. There is no persisted proof cache, mutable verification flag, caller-supplied verification result or bypass; the query runs without autoflush, locks or writes, so previews stay pure and commands keep their atomicity and existing integrity denials. The single-row §6.2 query is unchanged. FEAT-PROD-005/003/006 reconstruction and Ledger reversal-input coordination compose this query in place of one §6.2 call per record.
 
-### 6.3 Nightly Verification Flow
+### 6.3 Scheduled checks and fresh-install acceptance
 
-```
-scheduler triggers run_audit_invariant_check_job() at 03:00 UTC
-  → run_full_invariant_check()
-      → load all chain scopes from chain_heads
-      → for each scope: verify_chain(scope, limit=1000)
-          → walk AuditEvent rows ordered by sequence_number
-          → check previous_hash continuity
-          → check sequence gaps
-          → recompute event_hash (with UTC normalization)
-          → compare to stored event_hash
-          → return VerificationResult(state, failure_type, ...)
-  → update_integrity_status(results) under SystemAuditAuthority
-      → write IntegrityStatus row
-      → set degraded_since on first-failure transition
-      → clear degraded_since on recovery
-```
+The existing nightly job invokes `run_full_invariant_check()` to inspect each stored head with `verify_chain(scope, limit=1000)`. It checks sequence, continuity and HMAC for the events it walks. `record_integrity_verification()` logs failures. A bounded walk can stop before the head. An empty set of scopes supplies no evidence of business execution. DOM-OPS-001 INV-OPS-005A requires independently authorized, single-class application executions and redacted results. Enumerating all stored scope identifiers within one scheduled execution does not establish that boundary.
+
+Fresh-install acceptance requires a known class, a protected record created by its authorized FEAT and a nonempty creation proof under §6.2 or §6.2C. Check the expected record, INSERT event, protected payload and complete chain against the expected head (sequence, event count and hash). A partial walk, empty request, absent row proof or unavailable verification cannot satisfy acceptance. Operational evidence handling and class-scoped application access follow DOM-OPS-001.
 
 ---
 
@@ -349,12 +321,12 @@ scheduler triggers run_audit_invariant_check_job() at 03:00 UTC
 
 This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantics for this domain are:
 
-| State | Detection Condition | `IntegrityStatus` Effect |
+| State | Detection condition | Scoped integrity outcome |
 |---|---|---|
-| `VERIFIED` | Chain continuous; HMAC valid; payload digest matches | `passing=True` |
-| `UNVERIFIED` | `lineage_event_id IS NULL` | No effect (coverage gap, not a failure) |
-| `INVALID` | Chain broken, HMAC mismatch, or payload mismatch | `passing=False`; `degraded_since` set |
-| `DEGRADED` | Verifier infrastructure error | `passing=False`; `degraded_since` set; `failure_type=VERIFIER_ERROR` |
+| `VERIFIED` | Complete chain and HMAC verified, linked protected payload matches | Verified for the evidence examined |
+| `UNVERIFIED` | `lineage_event_id IS NULL` | Coverage gap |
+| `INVALID` | Chain broken, HMAC mismatch, or payload mismatch | Degrade status and treat as an incident |
+| `DEGRADED` | Verifier cannot establish integrity | Degrade status with reason; distinguish unavailable evidence from an integrity breach |
 
 ---
 
@@ -366,7 +338,7 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 
 3. **Per-class lazy genesis.** A `ChainHead` for `class:{class_id}` is created on first emit for that class. The `ChainHead` for `"system"` may be seeded at bootstrap.
 
-4. **`SystemAuditAuthority` is not a FEAT.** It carries no business actor fields and shall not be used inside business mutation paths. Its sole permitted uses are genesis bootstrap, nightly verifier writes, and `IntegrityStatus` updates.
+4. **`SystemAuditAuthority` is not a FEAT.** It carries no business actor fields and shall not be used inside business mutation paths. INV-ARC-016 §IX limits it to genesis bootstrap and authorized verifier operations. The derived assessment in §2.3 needs no singleton writer.
 
 5. **`SystemAuditAuthority` thread-local ownership.** The `_system_audit_ctx` thread-local lives in `app/feats/base.py` to avoid circular imports. `app/services/audit_service.py` accesses it via late import.
 
@@ -384,11 +356,13 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 
 12. **`lineage_version` tracks schema evolution.** When the HMAC schema or canonical payload format changes, `signature_version` and `signer_key_id` enable the verifier to apply the correct recomputation logic per event.
 
-13. **`IntegrityStatus.degraded_since` is set on first failure.** If a new `IntegrityStatus` row is created in a failing state, `degraded_since` shall be set to the current UTC time. If an existing passing row transitions to failing, `degraded_since` shall be set. If the row recovers, `degraded_since` shall be cleared to `None`.
+13. **Incident history.** A current verification result alone cannot establish the UTC onset or duration of a past incident. Operational incident evidence follows DOM-OPS-001.
 
 ---
 
 ## 9. Amendment
+
+Version 1.12 (2026-11-15) supersedes the singleton schema and writer with derived integrity assessments under INV-ARC-016 §§VI and IX. It distinguishes bounded scheduled diagnostics from protected-row acceptance against a complete class head. Audit emission, signature versions and scheduled execution remain governed by their existing contracts.
 
 Version 1.11 (2026-10-06) clarifies that §6.2A diagnostics are read-side interpretation of lawful historical state only, consistent with the owner's compatibility ruling in `SOP-DB-004` §VII–VIII. Supersedes no query, evidence rule or integrity outcome.
 

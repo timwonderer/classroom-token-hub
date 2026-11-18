@@ -27,84 +27,28 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 MIGRATIONS_DIR = PROJECT_ROOT / "migrations" / "versions"
 
 
-def _extract_assignment_value(content, name):
-    r"""The raw text to the right of ``name = `` on its own line, or None.
-
-    A plain ``re.search(rf'^{name}\s*=\s*(.+)$', ...)`` is what CodeQL's
-    py/polynomial-redos flags here (alert #278): the trailing ``\s*`` and
-    the capturing ``.+`` both match ordinary whitespace, so a line with many
-    spaces/tabs after ``=`` and no terminating content gives the engine
-    several ways to split the same characters between the two groups. This
-    script runs in CI (``check-migrations.yml``) against migration files
-    added by any PR, so that backtracking is attacker-reachable. Finding the
-    ``=`` with a regex that has nothing after it to backtrack against, then
-    slicing the rest of the line in plain Python, has identical behavior
-    with no quantifier adjacent to another that can consume the same
-    characters.
-    """
-    m = re.search(rf"^{re.escape(name)}\s*=", content, re.MULTILINE)
-    if not m:
-        return None
-    line_end = content.find('\n', m.end())
-    rest = content[m.end():] if line_end == -1 else content[m.end():line_end]
-    return rest.strip()
+# This script also runs directly, with scripts/ as sys.path[0].
+sys.path.insert(0, str(PROJECT_ROOT))
+from scripts.generate_revision_id import declared_value
 
 
 def extract_migration_info(filepath):
-    """Extract revision info from a migration file."""
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = f.read()
-    try:
-        tree = ast.parse(content)
-    except SyntaxError:
-        tree = None
-
-    # Extract revision
-    revision_match = re.search(r"^revision\s*=\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
-    revision = revision_match.group(1) if revision_match else None
-
-    # Extract down_revision (can be None, a string, or a tuple)
-    down_rev_raw_value = _extract_assignment_value(content, 'down_revision')
-    if down_rev_raw_value is not None:
-        down_rev_raw = down_rev_raw_value
-        if down_rev_raw == 'None':
-            down_revision = None
-        else:
-            # Use ast.literal_eval for robust parsing (consistent with other scripts)
-            try:
-                down_revision = ast.literal_eval(down_rev_raw)
-            except (ValueError, SyntaxError):
-                # Fallback to regex extraction if literal_eval fails
-                if down_rev_raw.startswith('('):
-                    # Tuple case - merge migration
-                    tuples = re.findall(r"['\"]([^'\"]+)['\"]", down_rev_raw)
-                    down_revision = tuple(tuples) if tuples else None
-                else:
-                    # Single string case
-                    single = re.search(r"['\"]([^'\"]+)['\"]", down_rev_raw)
-                    down_revision = single.group(1) if single else None
-    else:
-        down_revision = "MISSING"
-
-    if tree is not None:
-        defined_functions = {
-            node.name for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef)
-        }
-        has_upgrade = 'upgrade' in defined_functions
-        has_downgrade = 'downgrade' in defined_functions
-    else:
-        # Fallback for invalid syntax files
-        has_upgrade = bool(re.search(r"^def upgrade\s*\(\s*\)\s*:", content, re.MULTILINE))
-        has_downgrade = bool(re.search(r"^def downgrade\s*\(\s*\)\s*:", content, re.MULTILINE))
+    """Read literal Alembic declarations, including annotated assignments."""
+    tree = ast.parse(filepath.read_text(encoding='utf-8'), filename=str(filepath))
+    revision = declared_value(tree, 'revision')
+    down_revision = declared_value(tree, 'down_revision')
+    defined_functions = {
+        node.name for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
 
     return {
         'filepath': filepath,
         'filename': filepath.name,
         'revision': revision,
         'down_revision': down_revision,
-        'has_upgrade': has_upgrade,
-        'has_downgrade': has_downgrade,
+        'has_upgrade': 'upgrade' in defined_functions,
+        'has_downgrade': 'downgrade' in defined_functions,
     }
 
 
@@ -336,7 +280,14 @@ def validate_migrations():
     print(f"\n📊 Found {len(migrations)} migration files\n")
 
     # Build revision maps
-    revision_to_info = {m['revision']: m for m in migrations}
+    revision_to_info = {}
+    for migration in sorted(migrations, key=lambda item: item['filename']):
+        revision = migration['revision']
+        if revision in revision_to_info:
+            original = revision_to_info[revision]['filename']
+            errors.append(f"❌ Duplicate revision ID {revision!r}: {original} and {migration['filename']}")
+        else:
+            revision_to_info[revision] = migration
     down_to_up = defaultdict(list)
 
     for m in migrations:
@@ -346,7 +297,7 @@ def validate_migrations():
         elif isinstance(down_rev, tuple):
             for parent in down_rev:
                 down_to_up[parent].append(m['revision'])
-        elif down_rev != "MISSING":
+        else:
             down_to_up[down_rev].append(m['revision'])
 
     # Find roots
@@ -364,7 +315,7 @@ def validate_migrations():
             continue
         elif isinstance(dr, tuple):
             all_down_revisions.update(dr)
-        elif dr != "MISSING":
+        else:
             all_down_revisions.add(dr)
 
     heads = all_revisions - all_down_revisions
@@ -385,9 +336,7 @@ def validate_migrations():
     all_valid_revisions = all_revisions | {None}
     for m in migrations:
         dr = m['down_revision']
-        if dr == "MISSING":
-            errors.append(f"❌ Missing down_revision in: {m['filename']}")
-        elif isinstance(dr, tuple):
+        if isinstance(dr, tuple):
             for parent in dr:
                 if parent not in all_valid_revisions:
                     errors.append(f"❌ Orphan: {m['filename']} references missing: {parent[:12]}...")
