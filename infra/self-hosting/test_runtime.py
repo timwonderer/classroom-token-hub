@@ -115,10 +115,10 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("proxy_pass http://127.0.0.1:8000;", templates["ingress.conf"])
 
     def test_proxy_mode_peer_identity_and_local_readiness(self):
-        cfg = dict(self.cfg, ingress_mode="cloudflare-proxy")
+        cfg = dict(self.cfg, ingress_mode="cloudflare-proxy", origin_client_ca="/etc/cth/origin-client-ca.crt")
         config = runtime.template("ingress.conf", cfg).decode()
         for rule in ("listen 0.0.0.0:443 ssl;", "geo $realip_remote_addr $peer",
-                     "default other;", "default 0;", "local:/health 1;", "local:/health/status 1;",
+                     "default other;", "default 0;", "local:NONE:/health 1;", "local:NONE:/health/status 1;",
                      "if ($allowed = 0) { return 403; }", "proxy_set_header X-CF-Edge-IP $realip_remote_addr;",
                      'if ($ssl_server_name != "hub.example.org")', 'if ($host != "hub.example.org")'):
             self.assertIn(rule, config)

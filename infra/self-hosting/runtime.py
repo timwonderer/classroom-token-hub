@@ -58,11 +58,15 @@ def validate_config(cfg):
     require(hostname(cfg.get("admission_hostname")), "invalid deployment DNS field: admission_hostname")
     require(cfg["hostname"] != cfg["admission_hostname"], "public hostname and admission hostname must differ")
     paths = [cfg.get(key) for key in ("runtime_env", "tls_cert", "tls_key")]
+    if proxied(cfg):
+        paths.append(cfg.get("origin_client_ca"))
+    else:
+        require("origin_client_ca" not in cfg, "origin client CA requires cloudflare-proxy mode")
     for path in paths:
         require(isinstance(path, str) and re.fullmatch(r"/etc/cth/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+", path)
                 and Path(path).name not in ("", ".", "..") and not path.startswith("/etc/cth/ingress.conf"),
                 "select a dedicated file under /etc/cth for runtime environment, certificate and key")
-    require(len(set(paths)) == 3, "environment, certificate and key must use separate files")
+    require(len(set(paths)) == len(paths), "runtime and TLS inputs must use separate files")
 
 
 def trusted_parents(path):
@@ -139,10 +143,13 @@ def template(name, cfg):
                 *(f"    set_real_ip_from {net};" for net in EDGE_IPV4),
                 "    geo $realip_remote_addr $peer {", "        default other;", "        127.0.0.1 local;",
                 *(f"        {net} edge;" for net in EDGE_IPV4), "    }",
-                '    map "$peer:$uri" $allowed {', "        default 0;", "        ~^edge: 1;",
-                "        local:/health 1;", "        local:/health/status 1;", "    }",
+                '    map "$peer:$ssl_client_verify:$uri" $allowed {', "        default 0;", "        ~^edge:SUCCESS: 1;",
+                "        local:NONE:/health 1;", "        local:NONE:/health/status 1;", "    }",
             ])
-            checks = ('        if ($allowed = 0) { return 403; }\n'
+            # Optional at handshake so only loopback health paths can omit a certificate.
+            checks = (f'        ssl_client_certificate {cfg["origin_client_ca"]};\n'
+                      '        ssl_verify_client optional;\n'
+                      '        if ($allowed = 0) { return 403; }\n'
                       '        if ($ssl_server_name != "@HOST@") { return 444; }\n')
         data = data.replace("@EDGE_ADDRESS@", edge_address)
         data = data.replace("@LISTENER@", listener).replace("@PEER_POLICY@", policy).replace("@ORIGIN_CHECKS@", checks)
@@ -290,6 +297,9 @@ def run(action, stage, cfg):
     elif stage == "ingress":
         trusted(cfg["tls_key"], secret=True)
         trusted(cfg["tls_cert"])
+        if proxied(cfg):
+            trusted(cfg["origin_client_ca"])
+            command("openssl", "x509", "-in", cfg["origin_client_ca"], "-checkend", "0", "-noout")
         command("openssl", "x509", "-in", cfg["tls_cert"], "-checkend", "0", "-noout")
         require(command("systemctl", "is-enabled", "nginx.service", ok=(0, 1)) == "masked"
                 and command("systemctl", "is-active", "nginx.service", ok=(0, 3)) == "inactive",

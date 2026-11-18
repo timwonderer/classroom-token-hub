@@ -34,7 +34,7 @@ def parse_manifest(contents):
             result[key] = value
         return result
     cfg = json.loads(contents, object_pairs_hook=unique)
-    require(isinstance(cfg, dict) and set(cfg) in (KEYS, KEYS | {'ingress_mode'}) and all(isinstance(v, str) for v in cfg.values()),
+    require(isinstance(cfg, dict) and KEYS <= set(cfg) <= KEYS | {'ingress_mode', 'origin_client_ca'} and all(isinstance(v, str) for v in cfg.values()),
             'manifest must contain exactly the documented string fields')
     require(str(UUID(cfg['installation_id'])) == cfg['installation_id'], 'expected canonical installation UUID')
     require(re.fullmatch('[0-9a-f]{40}', cfg['release_sha']), 'expected full release SHA')
