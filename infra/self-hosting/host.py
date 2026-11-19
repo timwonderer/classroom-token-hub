@@ -98,7 +98,7 @@ def host_stage(action,cfg):
             command('groupadd','--system',name)
         for name in USERS:
             command('useradd','--system','--user-group','--no-create-home','--home-dir','/nonexistent',
-                    '--shell','/usr/sbin/nologin','--comment','cth:'+cfg['installation_id'],name)
+                    '--shell','/usr/sbin/nologin','--comment','cth-'+cfg['installation_id'],name)
         command('usermod','--append','--groups',','.join(GROUPS),'cthapp')
         # Service users traverse known release paths without listing their contents.
         previous = os.umask(0o066)
@@ -114,7 +114,7 @@ def host_stage(action,cfg):
         require(command('dpkg-query','-W','-f=${db:Status-Abbrev}',package)=='ii', 'missing installed package: '+package)
     for name in USERS:
         user = pwd.getpwnam(name)
-        require(user.pw_gecos == 'cth:'+cfg['installation_id'] and user.pw_shell == '/usr/sbin/nologin'
+        require(user.pw_gecos == 'cth-'+cfg['installation_id'] and user.pw_shell == '/usr/sbin/nologin'
                 and user.pw_gid == grp.getgrnam(name).gr_gid and 0 < user.pw_uid < 1000,
                 'unexpected service identity: '+name)
     for name in GROUPS:
