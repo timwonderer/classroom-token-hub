@@ -22,12 +22,44 @@ This handbook is for the operator who controls a private CTH installation, its h
 | When preparing the staging guest | [Release bundle, guest identity, proxied HTTPS and per-run credentials](staging-bootstrap.md) |
 | When authorizing the first cloud rehearsal | [Phase C execution plan and resource ownership review](phase-c.md) |
 
-**Evidence status.** The reference-host procedure is **proposed**. **Locally tested** applies only to the checks whose results are recorded for the selected release. B1 demonstrated database equivalence, a genuine successor upgrade, protected audit verification and CLI-only sysadmin bootstrap. **Reference-host tested** requires a successful run on the specified Ubuntu host. **Independently verified** additionally requires a second operator to complete the handbook from scratch without undocumented assistance. The latter two checks are pending.
+**Evidence status.** The owner-attended infrastructure rehearsal on Ubuntu 22.04.5 x86-64 is **reference-host tested** for release `90a635f4a8cfbd1295a877eca7bf65d30cd574d1`: all ten installation stages reported success, the Cloudflare Access boundary was exercised, and an encrypted staging database dump was restored into an isolated local PostgreSQL target. The scheduler check required a one-invocation in-memory `journalctl --reverse` workaround; this does not validate the unmodified scheduler check in that release. The rehearsal did not complete the full first-deployment classroom scenarios in SOP-DEP-001A. The published self-hosting procedure remains **proposed** until another operator completes it from scratch without undocumented assistance. B1 demonstrated database equivalence, a genuine successor upgrade, protected audit verification and CLI-only sysadmin bootstrap. The owner reports the temporary Droplet destroyed; no separate billable cloud resources were created.
+
+## Operator requirements and maintainer workflow
+
+An independent operator does not need to adopt the project's GitHub review,
+release engineering, staging phases, or evidence-management workflow to host
+CTH. Opening a PR, running GitHub Actions, maintaining a dedicated staging
+server, and waiting with a billable server for maintainer review are not
+self-hosting requirements. One person can perform the operator roles described
+in this handbook.
+
+The necessary outcomes remain: a lawful installation from a known source,
+protected credentials and HTTPS access, correct database and application
+configuration, authorized classroom operations, and a workable recovery and
+maintenance process. Application identity, class isolation, mutation and audit
+contracts still apply. Operator tooling and organizational practices are not
+application authority.
+
+The current installer has narrower implementation constraints, including an
+exact SHA, a host enrollment journal, Ubuntu 22.04 and a specific ingress
+profile. Follow those constraints when using this version; they are not a
+claim that every future supported deployment must use the same tools or
+providers. Release selection and repair should become simpler for operators,
+without losing the ability to identify what was installed. These improvements
+are not implemented yet.
+
+See the [rehearsal findings and operator usability backlog](rehearsal-findings.md)
+for observed failures, corrected assumptions, and proposed work. A successful
+maintainer workaround alone does not establish a supported public procedure.
 
 ## Before you deploy
 
-- Read the [production release runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md).
-- Use the [live-test runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) for controlled verification.
+- Follow the installation and operations chapters for your deployment. The
+  [production release runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
+  and [live-test runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md)
+  describe the project's maintainer procedures; their hosted-service workflow
+  is not an additional teacher onboarding checklist. Applicable security,
+  application and data-integrity requirements remain in force.
 - Review [SOP-SEC-001](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md) and the canonical environment/key requirements before supplying secrets.
 - Confirm the target database, service identity, revision, and backup plan before any migration or reset. For a new PostgreSQL database, use the [release-specific installation and verification procedure](fresh-database.md).
 
