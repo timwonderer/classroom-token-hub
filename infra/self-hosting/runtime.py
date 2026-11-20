@@ -230,7 +230,7 @@ def scheduler(cfg):
             "expected one scheduler advisory-lock owner in the enrolled database")
     invocation = command("systemctl", "show", "-p", "InvocationID", "--value", "cth-web.service")
     require(re.fullmatch("[0-9a-f]{32}", invocation), "missing active web service invocation")
-    lines = command("journalctl", "--quiet", "--no-pager", "-o", "cat", "_SYSTEMD_INVOCATION_ID=" + invocation,
+    lines = command("journalctl", "--quiet", "--no-pager", "--reverse", "-o", "cat", "_SYSTEMD_INVOCATION_ID=" + invocation,
                     "--grep=Scheduler started in pid", "-n", "1")
     require("this process holds the scheduler lock" in lines, "scheduler startup evidence missing")
 
