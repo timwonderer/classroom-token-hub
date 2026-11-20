@@ -146,6 +146,10 @@ class RuntimeTests(unittest.TestCase):
         with patch.object(runtime, "command", return_value="0"):
             with self.assertRaisesRegex(ValueError, "one scheduler"):
                 runtime.scheduler(self.cfg)
+        with patch.object(runtime, "command", side_effect=("1", "a" * 32,
+                "Scheduler started in pid 123: this process holds the scheduler lock.")) as command:
+            runtime.scheduler(self.cfg)
+        self.assertIn("--reverse", command.call_args.args)
         with patch.object(runtime, "command", return_value="LISTEN 0 20 0.0.0.0:8000 *:*"):
             with self.assertRaisesRegex(ValueError, "127.0.0.1"):
                 runtime.inspect_listeners(8000)
