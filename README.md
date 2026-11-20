@@ -317,10 +317,19 @@ Read the invariants first, then the domain spec for the area you're changing, th
 
 [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
-**Allowed:** classrooms, clubs, nonprofits, research and personal learning.
-**Not allowed:** commercial products, SaaS, paid services and other for-profit use.
+**Current baseline:** PolyForm Noncommercial 1.0.0 permits the noncommercial purposes and
+specific uses described in its terms. It does not itself grant the proposed permission for
+paid commercial hosting or support.
 
-See [LICENSE](LICENSE) for the full terms and the [third-party notices](docs/user-guides/legal/third-party-notices.md).
+**Project objective:** CTH intends to permit qualifying providers to charge for actual
+services such as hosting, deployment, and support, without charging for CTH software rights
+or standard features. No additional commercial-services permission is effective unless and
+until a separate instrument is published with an effective date. This statement of intent
+does not grant permission.
+
+See [LICENSE](LICENSE) for the current terms, the
+[Commercial Use Policy](docs/user-guides/legal/commercial.md) for the proposal's status, and
+the [third-party notices](docs/user-guides/legal/third-party-notices.md).
 
 ---
 
