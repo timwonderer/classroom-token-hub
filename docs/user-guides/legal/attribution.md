@@ -48,8 +48,11 @@ This platform is designed for classrooms, not commerce. Every feature prioritize
 
 ### 3. Transparency
 
-- **Open source** - All code is publicly available for inspection
-- **Clear licensing** - The PolyForm Noncommercial License ensures the software remains free
+- **Open source, as CTH defines it** - The source is available for inspection, and the project's
+  philosophy is described in [PRN-PHL-002](../../PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-002_Classroom_Token_Hub_Open_Source_Philosophy.md).
+  This is CTH's own definition; it does not claim OSI approval or certification.
+- **Published license** - PolyForm Noncommercial License 1.0.0 sets the current baseline terms.
+  The project's use of “open source” does not expand the rights that license grants.
 - **Documented architecture** - Technical documentation explains how the system works
 - **No hidden features** - What you see is what you get
 
@@ -104,27 +107,32 @@ We believe in:
 
 ## Commercial Services vs. Software Monetization
 
-This project permits commercial entities to offer **services** around the software (hosting, support, deployment) but prohibits **monetization of the software itself** (subscriptions, per-seat pricing, feature paywalls).
+The project intends to permit commercial providers to charge for actual services around CTH,
+such as hosting, support, and deployment, while keeping CTH software and its standard features
+outside paid software entitlements. This is a project objective, not a permission currently
+granted by PolyForm Noncommercial 1.0.0. No additional commercial-services permission is
+effective unless and until a separate instrument is published with an effective date.
 
 See [Commercial Use Policy](commercial.md) for the complete commercial use policy.
 
-The distinction is intentional:
+The intended distinction is:
 
-- **Services** require ongoing labor and infrastructure - fair to charge for
-- **Software access** is a one-time work product - should remain free
+- **Services** involve labor or infrastructure for which providers may charge under the
+  proposed permission
+- **Software rights and features** would not become paid entitlements under that proposal
 
 ---
 
 ## License Rationale
 
-We chose the **PolyForm Noncommercial License** because:
+CTH currently publishes the **PolyForm Noncommercial License 1.0.0** as its baseline license.
+Its text permits the purposes it specifies and does not itself grant the proposed permission
+for paid commercial hosting or support. CTH's separate objective is to permit qualifying
+service providers to charge for actual services, without charging for CTH software rights or
+features. That objective remains subject to project licensing review.
 
-1. It keeps the software free for educators and nonprofits
-2. It prevents commercial exploitation while allowing commercial services
-3. It's legally clear and internationally recognized
-4. It aligns with our educational mission
-
-See [License](license.md) for the full license text.
+See [License](license.md) for the published license text and [Commercial Use Policy](commercial.md)
+for the status of the proposed services permission.
 
 ---
 
