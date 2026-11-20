@@ -7,7 +7,7 @@ roles: [operator]
 
 # Phase C execution plan
 
-**Proposed.** The first exercise establishes the Python 3.10 installation baseline. The owner approves one dispatch and personally destroys the identified Droplet and confirms its absence in DigitalOcean. B3 offline tests do not establish cloud or independent installation success.
+**Run status.** The owner-attended reference-host run is recorded below. The repeatable procedure remains proposed until another operator completes it from scratch without undocumented assistance. B3 offline tests do not establish cloud or independent installation success.
 
 For an owner-run console installation, use the [manual project procedure](staging-controller.md#rehearsal-with-one-digitalocean-team) in place of Actions dispatch and automated allocation. The installer, first-use checks and owner teardown are the same.
 
@@ -29,6 +29,30 @@ For an owner-run console installation, use the [manual project procedure](stagin
 4. **Close the exercise personally.** Match the creation receipt with the staging project and provider activity. Personally destroy the exact temporary Droplet in the console and confirm absence, including after interrupted or failed runs. Check for separately billable volumes, snapshots, backups, reserved IPs, transfer or external services. Retire run-specific credentials and record the owner check and time. Keep the exercise open while ownership or absence is uncertain.
 5. **Record what passed.** A successful maintainer installation supports the reference profile exercised. Independent verification requires another operator to repeat the handbook unaided. Python 3.14, rollback to 3.10, monitoring parity and any separate fault-injection rehearsal require their own approved scope and evidence.
 
+## Owner-attended rehearsal result — November 19, 2026
+
+The owner completed all ten installer stages on an Ubuntu 22.04.5 x86-64
+DigitalOcean host at release `90a635f4a8cfbd1295a877eca7bf65d30cd574d1`. The
+scheduler stage required a one-invocation in-memory `journalctl --reverse`
+wrapper to work around the enrolled release's false-negative journal query; the
+release checkout was not modified. Cloudflare Access admitted the owner's
+browser session and challenged/denied a private session, per owner confirmation.
+The anonymous public request redirected to Access, and a direct-origin HTTPS
+request timed out. An age-encrypted staging database archive validated and
+restored to the isolated local PostgreSQL 14.24 target (615 archive entries,
+47 public tables, migration `a0faf8b2a35d`). Production was not used.
+
+This evidence covers installation, the tested Access boundary and database
+restore. It does not cover the full SOP-DEP-001A classroom scenarios, audit
+chain verification after a real financial transaction, restoration with
+runtime keys, renewal, rollback or an unaided second-operator run. The owner
+reports the temporary Droplet destroyed. No separate billable cloud resources
+were created, so there is no ancillary resource cleanup for this run. During
+the exercise, SSH remained open to all IPv4 sources to preserve DigitalOcean
+web-console access after an owner-IP restriction prevented console access. See
+[rehearsal findings](rehearsal-findings.md) for failure details and the
+run-specific access tradeoff.
+
 ## Preparation evidence — November 17, 2026
 
 This records checks, not approval to allocate or proof of a deployed installation.
@@ -38,9 +62,9 @@ This records checks, not approval to allocate or proof of a deployed installatio
 | Python and PostgreSQL | Read-only production package metadata reports Python 3.10.12 and PostgreSQL server/client 14.24. Both exact Ubuntu PostgreSQL `.deb` URLs returned HTTP 200. The fresh host must still verify its signed APT candidates before installation; no package changes were made to production. |
 | Staging server certificate | Local public certificate metadata confirms `staging.classroomtokenhub.com`, issued by Let's Encrypt, valid through February 16, 2027. The certificate and private key match; the dedicated staging SSH key exists. No extra client certificate is needed by this profile. |
 | Staging firewall | Provider read reports succeeded, HTTPS from the 15 reviewed Cloudflare IPv4 ranges, SSH from the enrolled owner address, unrestricted outbound, and no attached Droplet IDs. Tag visibility is not conclusive under the current scoped token; confirm actual attachment on the new guest. |
-| DNS and Access | No staging A record returned in the public DNS check. Set it only after an approved guest has an IP. Owner previously reported an owner-only Access policy; admitted/denied browser behavior remains a live acceptance check. |
+| DNS and Access | At preflight, no staging A record returned in the public DNS check and browser admission remained untested. The owner later confirmed an admitted session and private/unadmitted challenge or denial; see the owner-attended result above. |
 | Actions install inputs | Environment and repository input-name inventories contain no staging installation secrets. Actions is not prepared for dispatch. This is not a blocker for the manual rehearsal: prepare the private staging EnvironmentFile directly on the guest, as in production, and invoke the same handbook installer. Application credentials need not pass through GitHub. |
-| Authentication and recovery | Staging Turnstile/Passwordless registration and private credential custody, encrypted backup destination and empty restore target still need confirmation. These are acceptance prerequisites, not reasons to create a tunnel, new domain, marketing site or monitoring stack. |
+| Authentication and recovery | At preflight, staging Turnstile/Passwordless registration, private credential custody, encrypted backup destination and empty restore target still needed confirmation. The encrypted staging backup and isolated restore were subsequently completed; application provider workflows were not part of that restore check. |
 | Renewal parity | Production's Certbot timer is active/enabled. The temporary staging certificate was issued manually; automatic renewal is not established. Retire the temporary installation after the exercise. Long-lived operation needs verified renewal and reload before expiry. |
 
 The controller and installer changes are governed by the infrastructure boundary in
@@ -56,5 +80,8 @@ Targeted verification for this correction:
 - `python3.10 -m pytest --noconftest tests/test_self_hosting_handbook.py -q`: 2 passed.
 - `actionlint .github/workflows/staging-ephemeral.yml` and `git diff --check`: passed.
 
-These results do not establish live Access admission, a fresh Ubuntu installation,
-provider enrollment, recovery acceptance or independent reproducibility.
+The November 17 preparation evidence alone did not establish live Access
+admission, a fresh Ubuntu installation, provider enrollment, recovery acceptance
+or independent reproducibility. Later owner-attended results are bounded above;
+they do not establish the unrun application scenarios or independent
+reproducibility.
