@@ -87,22 +87,23 @@ The **licensor** is the individual or entity offering these terms, and the **sof
 
 ---
 
-## Quick Summary
+## Plain-language orientation
 
-**Permitted Uses:**
+This summary is not a substitute for the license text above. PolyForm Noncommercial 1.0.0
+permits noncommercial purposes and expressly includes certain personal uses and use by
+specified organizations, including educational institutions, regardless of the source of
+their funding. The license does not provide a general commercial-purpose permission or the
+specific permission for paid CTH hosting and support described in the project's proposal.
 
-- Use in classrooms, clubs, and nonprofit educational settings
-- Modify for school use, assignments, or personal learning
-- Share with students or other educators
-- Use for research or academic presentations (non-commercial)
+The license's terms apply to purposes and activities; this summary does not create a
+categorical rule based only on whether a user or provider is a for-profit entity. Whether a
+particular use is covered depends on the full license and the circumstances.
 
-**Prohibited Uses:**
+CTH intends to establish automatic, conditional permission for qualifying providers to charge
+for actual services around the software, while excluding charges for CTH software rights or
+standard features. That additional permission is not effective today. Until a separate
+instrument is published with an effective date, the published license is the baseline; do not
+treat the project's intention as authorization for commercial activity.
 
-- Use as part of a commercial product or SaaS platform
-- Host a paid service or subscription
-- Incorporate into revenue-generating offerings
-- Use internally within for-profit businesses
-
----
-
-**See also:** [Commercial Use Policy](commercial.md) for detailed guidance on permitted services vs prohibited software monetization.
+See the [Commercial Use Policy](commercial.md) for the proposal's current status and intended
+distinction between service fees and software monetization.
