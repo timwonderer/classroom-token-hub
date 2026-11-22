@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import host
 import install
+import runtime
 
 
 def manifest():
@@ -158,6 +159,15 @@ class ManifestTests(unittest.TestCase):
                 self.assertEqual(len(venv), 1)
                 self.assertEqual(Path(venv[0][4]), host.interpreter(cfg)[1])
                 self.assertEqual(str(host.interpreter(cfg)[1]).endswith('python3.14'), selection == '3.14')
+
+    def test_commands_run_from_root_not_the_operator_directory(self):
+        # Gunicorn run as cthapp exits with "can't chdir" from an operator directory such as /root.
+        with TemporaryDirectory() as tmp:
+            previous = os.getcwd()
+            os.chdir(tmp)
+            self.addCleanup(os.chdir, previous)
+            self.assertEqual(host.command('pwd'), str(Path('/').resolve()))
+            self.assertEqual(runtime.command('pwd'), str(Path('/').resolve()))
 
     def test_complete_manifest_and_rejections(self):
         cfg = manifest()

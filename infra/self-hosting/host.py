@@ -34,7 +34,8 @@ def require(condition, message):
 
 
 def command(*args, stdin=None):
-    return subprocess.run([str(x) for x in args], input=stdin, text=True, capture_output=True, check=True).stdout.strip()
+    # Service users cannot enter the operator's directory (e.g. /root); Gunicorn refuses to start there.
+    return subprocess.run([str(x) for x in args], input=stdin, text=True, capture_output=True, check=True, cwd='/').stdout.strip()
 
 
 def interpreter(cfg):
