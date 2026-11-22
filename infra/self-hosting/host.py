@@ -131,7 +131,9 @@ def host_stage(action,cfg):
             try:
                 (BASE/'python').mkdir(mode=0o711)
                 (BASE/'python'/version).mkdir()
-                command('tar','-xzf',archive,'-C',BASE/'python'/version,'--strip-components=1','--no-same-owner')
+                # Root tar otherwise keeps the archive's group-writable modes and ignores the umask.
+                command('tar','-xzf',archive,'-C',BASE/'python'/version,'--strip-components=1',
+                        '--no-same-owner','--no-same-permissions')
             finally:
                 os.umask(previous)
                 archive.unlink()

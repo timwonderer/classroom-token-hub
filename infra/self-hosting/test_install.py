@@ -74,9 +74,14 @@ class ManifestTests(unittest.TestCase):
             if args[0] == 'curl':
                 Path(args[args.index('--output') + 1]).write_bytes(archive)
             if args[0] == 'tar':
+                # GNU tar run as root keeps archive modes (the real build ships 0775) unless told not to.
+                mode = 0o775
+                if '--no-same-permissions' in args:
+                    umask = os.umask(0); os.umask(umask)
+                    mode &= ~umask
                 (Path(args[args.index('-C') + 1])/'bin').mkdir()
                 (Path(args[args.index('-C') + 1])/'bin/python3.14').write_text('')
-                (Path(args[args.index('-C') + 1])/'bin/python3.14').chmod(0o755)
+                (Path(args[args.index('-C') + 1])/'bin/python3.14').chmod(mode)
             if args[:2] == ('apt-cache', 'policy'):
                 return 'Candidate: 14.24-0ubuntu0.22.04.1'
             if str(args[0]).endswith('python3.10'):
