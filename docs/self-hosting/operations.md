@@ -39,7 +39,7 @@ The verifier also exercises Passwordless enrollment and sign-in, Turnstile on it
 
 ## Monitoring and troubleshooting
 
-Host root can rerun `python3 infra/self-hosting/install.py check readiness --config "$manifest"` with the verified installation manifest. An exit-zero result describes the probes the stage actually implements. Check bounded database health, service restart behavior, the single scheduler owner and scheduled execution during the intended interval. An unknown status signal remains unknown until its probe runs. Verify the host clock and time zone before interpreting payroll or rent timing. Optional status publication, notification delivery and log ingestion require their own end-to-end checks with authorized test destinations. The [integration inventory](README.md) identifies hosted defaults.
+Host root can rerun `python3 infra/self-hosting/install.py check readiness --config "$manifest"` with the verified installation manifest. An exit-zero result describes the probes the stage actually implements. Check bounded database health, service restart behavior, the single scheduler owner and scheduled execution during the intended interval. An unknown status signal remains unknown until its probe runs. Verify the host clock and time zone before interpreting payroll or rent timing. Optional status publication, notification delivery and log ingestion require their own end-to-end checks with authorized test destinations. The [integration inventory](handbook-overview.md) identifies hosted defaults.
 
 | Symptom | Authority and diagnostic action | Recovery |
 | --- | --- | --- |

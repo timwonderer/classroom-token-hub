@@ -1,144 +1,112 @@
 ---
-title: Classroom Token Hub — Self-Hosting Handbook
+title: Run your own Classroom Token Hub
 category: self-hosting
-description: Deployment boundaries and evidence required to operate a private Classroom Token Hub instance.
+description: A step-by-step tutorial for teachers who want a private Classroom Token Hub on their own server.
 roles: [operator]
-keywords: [self-hosting, deployment, configuration, backups, operations]
+keywords: [self-hosting, tutorial, getting started, install, server]
 ---
 
-# Classroom Token Hub — Self-Hosting Handbook
+# Run your own Classroom Token Hub
 
-This handbook is for the operator who controls a private CTH installation, its host, DNS, HTTPS admission policy, keys, backups and authorized accounts. The operator can be one person. CTH is distributed under the PolyForm Noncommercial License 1.0.0. Review `LICENSE` in the selected release before use or redistribution and retain the required notices. [License terms](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSE)
+This guide walks you through running your own private copy of Classroom Token
+Hub (CTH) on a server you rent. It is written for someone who can follow
+directions in a terminal and is willing to learn, but has never run a server
+before. You don't need to be a programmer.
 
-## Start here
+## What "self-hosting" means
 
-| When | Chapter |
+Normally a teacher signs up on the project's hosted site. Self-hosting means
+you rent your own server instead and install CTH on it. You become the
+**operator**: you own the server, the web address, the passwords and keys, and
+the backups. Nobody else can see your classes, and nobody else will fix the
+server if it breaks. This guide shows you how to do all of that.
+
+## What you'll have at the end
+
+- A private CTH at your own web address, for example `https://classroom.example.org`.
+- Your own teacher account, protected by an authenticator app.
+- A class with at least one student who has claimed their account.
+- A routine for backups, a tested restore, and a plan for upgrades and shutting down.
+
+## Time and cost
+
+| | Rough figure |
 | --- | --- |
-| Before creating a host | [Reference profile, prerequisites, costs and ten installation stages](reference-installation.md) |
-| Before starting services | [Configuration and secret inventory](configuration.md) |
-| When installing a new database | [Release-specific database baseline, verification and recovery](fresh-database.md) |
-| After the readiness check | [First authorized use, acceptance, maintenance, recovery and decommissioning](operations.md) |
-| When running an attended rehearsal | [Manual dispatch, operator destruction and final verification](staging-controller.md) |
-| When preparing the staging guest | [Release bundle, guest identity, proxied HTTPS and per-run credentials](staging-bootstrap.md) |
-| When authorizing the first cloud rehearsal | [Phase C execution plan and resource ownership review](phase-c.md) |
+| Your time | An afternoon for Parts 1–4, about an hour for Part 5, and an hour for Part 6. You can stop between any two steps. |
+| Server | The size the project tested (2 vCPUs, 4 GB memory, 80 GB disk) cost about **$28 a month** at DigitalOcean in November 2026. Other providers charge similar amounts. Check the current price before you create it. |
+| Domain name | Usually $10–$20 a year. |
+| Other services | Cloudflare, Turnstile and Passwordless.dev all have free plans that cover one classroom. Check their current limits. |
 
-**Evidence status.** The owner-attended infrastructure rehearsal on Ubuntu 22.04.5 x86-64 is **reference-host tested** for release `90a635f4a8cfbd1295a877eca7bf65d30cd574d1`: all ten installation stages reported success, the Cloudflare Access boundary was exercised, and an encrypted staging database dump was restored into an isolated local PostgreSQL target. The scheduler check required a one-invocation in-memory `journalctl --reverse` workaround; this does not validate the unmodified scheduler check in that release. The rehearsal did not complete the full first-deployment classroom scenarios in SOP-DEP-001A. The published self-hosting procedure remains **proposed** until another operator completes it from scratch without undocumented assistance. B1 demonstrated database equivalence, a genuine successor upgrade, protected audit verification and CLI-only sysadmin bootstrap. The owner reports the temporary Droplet destroyed; no separate billable cloud resources were created.
+> [!WARNING]
+> A rented server costs money **until you destroy it**. Turning it off does
+> not stop the bill. [Part 8](part-8-shut-down.md) shows how to shut
+> everything down.
 
-## Operator requirements and maintainer workflow
+## How the installation works
 
-An independent operator does not need to adopt the project's GitHub review,
-release engineering, staging phases, or evidence-management workflow to host
-CTH. Opening a PR, running GitHub Actions, maintaining a dedicated staging
-server, and waiting with a billable server for maintainer review are not
-self-hosting requirements. One person can perform the operator roles described
-in this handbook.
+CTH ships with an installer, `infra/self-hosting/install.py`. It sets up the
+server in ten **stages**, and you run them one at a time, in order:
 
-The necessary outcomes remain: a lawful installation from a known source,
-protected credentials and HTTPS access, correct database and application
-configuration, authorized classroom operations, and a workable recovery and
-maintenance process. Application identity, class isolation, mutation and audit
-contracts still apply. Operator tooling and organizational practices are not
-application authority.
+`host` → `postgres` → `redis` → `release` → `config` → `database` → `services` → `scheduler` → `ingress` → `readiness`
 
-The current installer has narrower implementation constraints, including an
-exact SHA, a host enrollment journal, Ubuntu 22.04 and a specific ingress
-profile. Follow those constraints when using this version; they are not a
-claim that every future supported deployment must use the same tools or
-providers. Release selection and repair should become simpler for operators,
-without losing the ability to identify what was installed. These improvements
-are not implemented yet.
+After every stage the installer checks its own work and either prints
+`"result": "ok"` or stops with a message naming what is wrong. Each finished
+stage is a **safe stop point**: you can close the terminal, go home, and carry
+on tomorrow. If a stage fails, you stop and look before doing anything else.
+The guide tells you how.
 
-See the [rehearsal findings and operator usability backlog](rehearsal-findings.md)
-for observed failures, corrected assumptions, and proposed work. A successful
-maintainer workaround alone does not establish a supported public procedure.
+There is no automatic "do everything" button for teachers. Running the stages
+yourself is slower, but you always know what just happened.
 
-## Before you deploy
+## The tutorial
 
-- Follow the installation and operations chapters for your deployment. The
-  [production release runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
-  and [live-test runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md)
-  describe the project's maintainer procedures; their hosted-service workflow
-  is not an additional teacher onboarding checklist. Applicable security,
-  application and data-integrity requirements remain in force.
-- Review [SOP-SEC-001](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md) and the canonical environment/key requirements before supplying secrets.
-- Confirm the target database, service identity, revision, and backup plan before any migration or reset. For a new PostgreSQL database, use the [release-specific installation and verification procedure](fresh-database.md).
+**Before you start**
 
-## Runtime boundaries
+1. [Before you begin](before-you-begin.md): skills, accounts, budget, and what is required versus recommended
+2. [Terms you'll see](terms.md): short definitions of every technical word in this guide
+3. [Good to learn](good-to-learn.md): optional background reading
 
-Classroom state is class-scoped and must be accessed through the canonical
-context pipeline. Do not bypass the application with ad-hoc writes to ledger,
-obligation, entitlement, or policy tables. State-changing behavior belongs to
-the owning FEAT and must carry its required idempotency and audit evidence.
+**The eight parts**
 
-The application is not an offline data store. The service worker deliberately
-keeps authenticated routes network-only so one class's live data cannot be
-served to another class from a stale cache.
+1. [Part 1: Accounts and a domain](part-1-accounts-and-domain.md)
+2. [Part 2: Create and secure the server](part-2-create-the-server.md)
+3. [Part 3: Get CTH onto the server](part-3-get-cth.md)
+4. [Part 4: Describe your installation](part-4-describe-your-installation.md)
+5. [Part 5: Install one stage at a time](part-5-install-stages.md)
+6. [Part 6: First use](part-6-first-use.md)
+7. [Part 7: Keep it running](part-7-keep-it-running.md)
+8. [Part 8: Shut it down](part-8-shut-down.md)
 
-## Configuration and secrets
+**When something goes wrong:** [Troubleshooting](troubleshooting.md)
 
-Set environment variable names from the deployment and security specifications
-for the target environment. Never copy secret values into the repository,
-documentation, logs, screenshots, or issue reports. Keep lookup peppers,
-encryption keys, session secrets, audit keys, and database credentials in
-separate secret lifecycles as specified by the security contracts.
+Every step in Parts 1–8 follows the same pattern: **What you're doing**,
+**Why**, **Steps**, **What you should see**, and **If something looks wrong**.
 
-## Installation and integration boundaries
+## Reference
 
-| What you are checking | Dependencies and evidence |
-| --- | --- |
-| Core application health | Run the selected application revision with PostgreSQL and its supported schema. Startup requires `DATABASE_URL`, `FLASK_ENV`, `SECRET_KEY`, `ENCRYPTION_KEY`, `PEPPER_KEY` and `AUDIT_HMAC_KEY`. A successful `/health` executes `SELECT 1`. On `/health/status`, only the database signal executes a check. Unregistered checks remain unknown. Neither endpoint requires a separate status publisher. |
-| Production security and functional acceptance | Serve HTTPS through restricted ingress. Production startup additionally requires a Turnstile site/secret pair registered for the deployment hostname. Configure a shared rate-limit store (`RATELIMIT_STORAGE_URI` or `REDIS_URL`) and dedicated memory-only `STUDENT_SETUP_REDIS_URL` for claiming and recovery. That Redis instance must disable snapshots, AOF, replication and slow logging. Exercise Passwordless enrollment and sign-in with the deployment's `PASSWORDLESS_API_PUBLIC` and `PASSWORDLESS_API_KEY`. Configure a separate `CONFIGURATION_EXPORT_KEY` for signed configuration export/import. Record actual browser results under the [initial deployment browser procedure](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md). |
-| Independently deployed monitoring and status | An operator can initialize and check the core without deploying the hosted status stack. Operators publishing equivalent status evidence must preserve its bounded, read-only observations, independent persistence and protected publication surface. A public status notice grants no authority over classroom data. See the [external persistence model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md) and [public request monitoring contract](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md). |
-| Full hosted-topology parity | Separately exercise restricted Cloudflare Access ingress, log ingestion into local Loki, the reduced telemetry sampler, gate-first collection, private collector invocation, Firestore persistence and the separate public and authenticated operator services. Record the target revision, observed source and timestamp for each check. A missing collector or inaccessible sample leaves that observation unknown. |
+The tutorial links to these pages when you need more detail. You don't need to
+read them first.
 
-## Isolating a future staging deployment
+**Operator reference**
 
-The following configuration work is proposed. The current hosted defaults cannot
-be used for an isolated parity run.
+- [Handbook overview](handbook-overview.md): what the application needs and which integrations are optional
+- [Configuration dictionary](configuration.md): every field in the installation manifest and runtime file
+- [Installer reference](reference-installation.md): the installer's contract, stage by stage
+- [Fresh database](fresh-database.md): how the database stage installs and verifies the schema
+- [Operations](operations.md): first-use checks, monitoring, backups, upgrades and decommissioning in full
 
-- **Collector targets.** Derive the fixed paths `/health/telemetry`, `/health/status`
-  and `/static/manifest.json` from one explicitly approved staging HTTPS origin.
-  All three currently point at the hosted application in `status_service/collector.py`.
-  Preserve the no-redirect transport and gate-first check. Reject missing, malformed
-  and production targets before any request. Check these refusals using local test
-  destinations. Configure the host sampler against staging logs only.
-- **Persistence and identity.** Set the collector and both status services to an
-  explicit staging cloud project and Firestore database. The client currently infers
-  its project from credentials and defaults the database to `cth-status-prod`.
-  The hosted deployment workflow selects `cth-production-status`. Use identities
-  scoped to staging and a separate scheduler target, operator allowlist, IAP audience
-  and status session secret. Check the resolved project and database before writing.
-- **Browser destinations.** The `STATUS_PAGE_URL` validator currently accepts only
-  the hosted status origin and UptimeRobot. Configure an exact operator-approved
-  HTTPS origin for staging, or omit the link. Reading public documentation or status
-  pages does not write production state. Do not submit synthetic support requests
-  or enable notification integrations against production destinations. The public home, privacy, terms and district pages may use the application default
-  `MARKETING_SITE_URL`; a separate marketing site is not required. Review `EXTERNAL_DOCS_BASE_URL` and support destinations. Verify
-  rendered links and redirect locations, including rejection of lookalike hosts.
-- **Authentication and notifications.** Use staging-only provider accounts,
-  domain registrations and callback origins. Route optional notification webhooks
-  and any alert delivery to staging recipients only. Until those destinations and
-  credentials have been isolated, leave the corresponding integration disabled
-  and record the parity check as outstanding.
+**Maintainers only, not the teacher path**
 
-## Operational evidence
+These pages describe how the project's maintainers rehearse releases. You
+don't need them to run your own CTH.
 
-Record the deployed revision, database initialization or upgrade result, bounded
-health observations, integration checks, backup/restore evidence and the controlled
-browser test results. Record whether the run exercised core health, browser
-acceptance or full hosted-topology parity. Independent verification additionally
-requires a different operator to repeat the installation without undocumented help.
+- [Phase C staging plan](phase-c.md)
+- [Rehearsal findings](rehearsal-findings.md)
+- [Attended staging workflow](staging-controller.md)
+- [Staging guest bootstrap](staging-bootstrap.md)
 
-## Recovery and rollback
+## License
 
-Follow the runbook for rollback and database recovery. Do not infer database
-safety from a database name, and do not delete or reset a target until its exact
-host, service relationship, revision, owner, and backup state have been
-verified.
-
-## Related normative documents
-
-- [Canonical invariants](../INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md)
-- [Domain authority summary](../DOMAIN/DOM-CORE-001_DOMAIN_AUTHORITY_SUMMARY.md)
-- [Feature execution directive](../FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md)
-- [Documentation standard](../STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md)
+CTH is distributed under the PolyForm Noncommercial License 1.0.0. Read
+`LICENSE` in the release you install before you use or share it, and keep the
+required notices. [License terms](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSE)
