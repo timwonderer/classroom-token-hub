@@ -8,7 +8,7 @@ keywords: [self-hosting, configuration, credentials, admission, Redis]
 
 # Deployment configuration and credentials
 
-**Locally tested** covers configuration parsing, required-field rejection, credential separation, template rendering and simulated checks. **Proposed** covers systemd, Ubuntu, provider registration, gate admission and deployed verification. See the [handbook](README.md), [credential contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md) and [credential operations procedure](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md).
+**Locally tested** covers configuration parsing, required-field rejection, credential separation, template rendering and simulated checks. **Proposed** covers systemd, Ubuntu, provider registration, gate admission and deployed verification. See the [handbook](handbook-overview.md), [credential contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md) and [credential operations procedure](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md).
 
 ## Installation manifest
 
@@ -67,7 +67,7 @@ The initial reference EnvironmentFile accepts the variables above. Other support
 | `LOGIN_NOTICE_PATH` | Optional root-managed sign-in notice path. Omit on the initial installation. |
 | `LOG_LEVEL`, `LOG_FORMAT`, `TLCP_NOISE_ENDPOINT_PREFIXES` | Optional logging level/format and comma-separated request-telemetry filtering inputs. Use the built-in production settings. Never add secrets/PII to log formats. |
 | `TRUSTED_PROXY_CIDRS` | Optional additional trusted proxy networks. Keep omitted. Gunicorn receives requests from the dedicated local Nginx proxy. |
-| Status collector, optional monitoring and backups | Their separately owned credentials, recipients, projects and retention are outside this EnvironmentFile. Supply them only to their own service. See [installation boundaries](README.md) and the [external status persistence contract](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md). |
+| Status collector, optional monitoring and backups | Their separately owned credentials, recipients, projects and retention are outside this EnvironmentFile. Supply them only to their own service. See [installation boundaries](handbook-overview.md) and the [external status persistence contract](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md). |
 
 ## TLS and admission prerequisites
 
