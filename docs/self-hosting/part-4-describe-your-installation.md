@@ -15,24 +15,23 @@ follow these steps.
 
 All commands run on **the server**, as root.
 
-## 4.1 Set two names for this session
+## 4.1 Set your hostname for this session
 
-**What you're doing.** Storing your two hostnames in shell variables so later
-commands can use them.
+**What you're doing.** Storing your CTH hostname in a shell variable so later
+commands can use it.
 
-**Why.** Typing a hostname once avoids typos in five places.
+**Why.** Typing a hostname once avoids typos in several places.
 
-**Steps.** Replace both values with the ones in your note:
+**Steps.** Replace the value with the one in your note:
 
 ```bash
 CTH_HOSTNAME=classroom.example.org
-CTH_ADMISSION=yourteam.cloudflareaccess.com
 ```
 
 **What you should see.** Nothing. `echo "$CTH_HOSTNAME"` prints your hostname.
 
 **If something looks wrong.** Variables only last until you log out. If you
-come back to this part in a new SSH session, run these two lines again.
+come back to this part in a new SSH session, run this line again.
 
 ## 4.2 Write the installation manifest
 
@@ -59,7 +58,6 @@ cat > /etc/cth/installation.json <<EOF
   "database": "cth_reference",
   "hostname": "$CTH_HOSTNAME",
   "runtime_env": "/etc/cth/runtime.env",
-  "admission_hostname": "$CTH_ADMISSION",
   "tls_cert": "/etc/cth/tls/origin.crt",
   "tls_key": "/etc/cth/tls/origin.key"
 }
@@ -74,7 +72,7 @@ stat -c '%a %U %G' /etc/cth/installation.json
 **What you should see.**
 
 - The manifest printed with real values: a UUID, a 32-character machine ID,
-  your 40-character release SHA, and your two hostnames. No `<…>` or
+  your 40-character release SHA, and your hostname. No `<…>` or
   `example` values remain.
 - `600 root root` from the last command.
 
@@ -86,7 +84,7 @@ stat -c '%a %U %G' /etc/cth/installation.json
   a fresh server and you haven't run any stage yet, inspect it and remove it
   with `rm /etc/cth/installation.json` before trying again. Once a stage has
   run, never change the manifest.
-- **A hostname is empty:** you skipped [4.1](#41-set-two-names-for-this-session)
+- **The hostname is empty:** you skipped [4.1](#41-set-your-hostname-for-this-session)
   in this session.
 
 ## 4.3 Write the runtime file
@@ -237,7 +235,6 @@ nothing from `git status`.
 | --- | --- |
 | `manifest must contain exactly the documented string fields` | A field is missing, misspelt or extra. Compare with [4.2](#42-write-the-installation-manifest). |
 | `invalid deployment DNS field: hostname` | The hostname is empty, uppercase, or under `classroomtokenhub.com`. |
-| `public hostname and admission hostname must differ` | You used the same name twice. |
 | `missing runtime fields: …` | The listed lines are missing from the runtime file. |
 | `provide registered deployment credentials for …` | That provider key is too short, a placeholder, or a published test key. |
 | `keys must be independent` | Two keys have the same value, usually the same thing pasted twice. |

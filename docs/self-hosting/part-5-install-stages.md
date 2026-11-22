@@ -256,8 +256,7 @@ minute and run the same `apply` again. If it keeps failing, look at
 HTTPS on port 443, only from Cloudflare, and passes it to the app.
 
 **Why.** This is the step that makes your site reachable. Before starting it,
-the stage checks your certificate and confirms that Cloudflare Access is
-protecting the teacher login.
+the stage checks your certificate.
 
 **Steps.**
 
@@ -271,7 +270,6 @@ python3 infra/self-hosting/install.py apply ingress --config "$manifest"
 
 | Message | What it means |
 | --- | --- |
-| `unauthenticated public login did not reach the selected admission gate` | An anonymous visit to `/admin/login` isn't redirected to your admission hostname. Check the Access application from [Part 2, step 2.6](part-2-create-the-server.md#26-put-cloudflare-access-in-front-of-the-site) and the admission hostname in the manifest. |
 | `runtime check failed (openssl)` | The certificate has expired. Renew it ([Part 7](part-7-keep-it-running.md#76-renew-the-certificate)). |
 | `unsafe file ownership or mode: /etc/cth/tls/…` | Fix with `chmod 644 /etc/cth/tls/origin.crt` and `chmod 600 /etc/cth/tls/origin.key`. |
 | `runtime check failed (curl)` after the service starts | The certificate doesn't match your hostname, or isn't publicly trusted. See the note in [Part 4, step 4.4](part-4-describe-your-installation.md#44-get-the-https-certificate). |
@@ -280,8 +278,8 @@ python3 infra/self-hosting/install.py apply ingress --config "$manifest"
 
 **What you're doing.** Running every check again, together.
 
-**Why.** It confirms the services, health, scheduler, HTTPS and the Access
-gate all work at the same moment, not just one after another.
+**Why.** It confirms the services, health, scheduler and HTTPS all work at
+the same moment, not just one after another.
 
 **Steps.**
 
@@ -290,8 +288,8 @@ python3 infra/self-hosting/install.py apply readiness --config "$manifest"
 ```
 
 **What you should see.** `"stage": "readiness"` … `"result": "ok"`. Then, in a
-browser, open `https://` + your CTH hostname + `/admin/login`. After the Access
-email code, you see the CTH teacher sign-in page.
+browser, open `https://` + your CTH hostname + `/admin/login`. You see the CTH
+teacher sign-in page.
 
 **If something looks wrong.** The message names the failing check; look it up
 under the stage it belongs to above.
@@ -321,6 +319,6 @@ stage is a clean server:
 
 ## Checkpoint
 
-All ten stages are finished, and your CTH is live behind the Access gate.
+All ten stages are finished, and your CTH is live.
 
 **Next:** [Part 6: First use](part-6-first-use.md)

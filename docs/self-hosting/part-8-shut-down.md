@@ -101,7 +101,7 @@ DNS name can later point at someone else's server.
 
 - **Cloudflare DNS:** delete the `A` record for your CTH hostname, and any
   leftover `_acme-challenge` TXT record.
-- **Cloudflare Access:** delete the "CTH" application.
+- **Cloudflare Access:** if you set up maintenance mode, delete the "CTH" application.
 - **Turnstile:** delete the widget.
 - **Passwordless.dev:** delete the application.
 - **Your backups:** keep or delete them, as you decided in 8.1. If you delete

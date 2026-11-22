@@ -275,8 +275,7 @@ They're written for experienced operators.
    by restoring an old backup over a live database without reading it first:
    you'd lose everything since that backup.
 
-**If something looks wrong.** Don't try
-fixes you don't understand. Ask for help with the release tag and the exact
+**If something looks wrong.** Don't try fixes you don't understand. Ask for help with the release tag and the exact
 error message, but never paste keys, logs with names, or backups.
 
 ## 7.9 Reading logs
@@ -302,5 +301,38 @@ lines with timestamps.
 private details. Read them on the server; if you share an excerpt to get
 help, remove names, usernames, IP addresses and anything that looks like a key
 first.
+
+## 7.10 Optional: maintenance mode with Cloudflare Access
+
+**What you're doing.** Closing the site to everyone but you, behind a
+Cloudflare email-code sign-in, and opening it again afterwards.
+
+**Why.** While you work on the server, nobody else can sign in or change
+data. This is optional; the installer doesn't need it.
+
+**Steps to turn maintenance mode on** *(Cloudflare Zero Trust, November 2026;
+the menus may move)*.
+
+1. In the Cloudflare dashboard, open **Zero Trust**. The first time, choose a
+   team name and the **Free** plan. Cloudflare may ask for a payment method
+   even on the free plan.
+2. Open **Access → Applications → Add an application** and choose
+   **Self-hosted**.
+3. Name it "CTH". For the domain, enter your CTH hostname with no path, so the
+   whole site is covered.
+4. Add a policy: **Action** Allow, **Include** Emails, and enter your own
+   email address. Keep the sign-in method **One-time PIN**, and save.
+
+**Steps to turn it off.** Delete the "CTH" application in **Access →
+Applications**.
+
+**What you should see.** While it's on, a private browser window opening any
+page on your site lands on a Cloudflare page asking for an email address.
+Only your address gets a code. Once you delete the application, pages load
+normally again.
+
+**If something looks wrong.** If a page loads without asking for an email
+while maintenance mode is on, check the application's domain is exactly your
+CTH hostname, with no path.
 
 **Next:** [Part 8: Shut it down](part-8-shut-down.md), for when you're finished.

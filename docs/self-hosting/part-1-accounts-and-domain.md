@@ -39,7 +39,7 @@ accounts. Wait for approval before continuing.
 
 **What you're doing.** Getting a web address and letting Cloudflare manage it.
 
-**Why.** The current installer expects Cloudflare in front of the server
+**Why.** The current installer expects the Cloudflare proxy in front of the server
 ([why](before-you-begin.md#strongly-recommended-with-alternatives)). Cloudflare
 can only do that for a domain whose DNS it manages.
 
@@ -113,31 +113,6 @@ show; the private one is not.
 **If something looks wrong.** If you lose the private secret, create a new
 one in the Passwordless.dev admin console. Don't reuse keys from another site.
 
-## 1.5 Set up Cloudflare Zero Trust and note your team domain
-
-**What you're doing.** Turning on Cloudflare's Zero Trust area, which
-contains Access.
-
-**Why.** Access puts an email-code sign-in in front of your teacher pages. In
-Part 2 you'll create the Access application; here you just turn the service on
-and learn its address.
-
-**Steps.**
-
-1. In the Cloudflare dashboard, open **Zero Trust**.
-2. Choose a **team name** when asked, and pick the **Free** plan. Cloudflare
-   may ask for a payment method even on the free plan.
-3. Your team domain is `<team name>.cloudflareaccess.com`. In Zero Trust it is
-   shown under **Settings** (the "Team domain" field).
-
-Add to your note: **Admission hostname** = `yourteam.cloudflareaccess.com`.
-
-**What you should see.** The Zero Trust overview page.
-
-**If something looks wrong.** The admission hostname must differ from your
-CTH hostname. If you already use Zero Trust for something else, you can use
-that team; just note its team domain.
-
 ## Checkpoint
 
 Your "CTH install" note now holds:
@@ -145,6 +120,5 @@ Your "CTH install" note now holds:
 - CTH hostname
 - Turnstile site key and secret key
 - Passwordless public key and private secret
-- Admission hostname
 
 **Next:** [Part 2: Create and secure the server](part-2-create-the-server.md)

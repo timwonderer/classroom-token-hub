@@ -53,8 +53,7 @@ You don't need to memorize these. Come back when a word is unfamiliar.
 | **Stage** | One of the installer's ten steps: `host`, `postgres`, `redis`, `release`, `config`, `database`, `services`, `scheduler`, `ingress`, `readiness`. |
 | **apply** / **check** | `apply` performs a stage and then checks it. `check` only checks, and changes nothing. |
 | **Stage journal** | The installer's record of which stages are finished, in `/var/lib/cth-installer/`. It stops you running stages out of order. Never edit or delete it. |
-| **Access gate** | Cloudflare Access used as **maintenance mode**: while it is up, the site is closed to everyone except you, the operator, who passes it with a one-time code sent to your email. |
-| **Admission hostname** | The address of your Access sign-in page, such as `yourteam.cloudflareaccess.com`. The installer checks that the teacher login redirects there. |
+| **Access gate** | Optional. Cloudflare Access used as **maintenance mode**: while it is up, the site is closed to everyone except you, the operator, who passes it with a one-time code sent to your email. |
 | **Release** | A published, numbered version of CTH, such as v2.4.5, pointing at one exact commit. |
 
 **Next:** [Good to learn](good-to-learn.md), or go straight to [Part 1](part-1-accounts-and-domain.md).

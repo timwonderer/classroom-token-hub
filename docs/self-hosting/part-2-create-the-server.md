@@ -3,7 +3,7 @@ title: "Part 2: Create and secure the server"
 category: self-hosting
 description: Create an Ubuntu 22.04 server, connect to it safely, restrict its firewall and point your domain at it.
 roles: [operator]
-keywords: [self-hosting, tutorial, server, SSH, firewall, DNS, Cloudflare Access]
+keywords: [self-hosting, tutorial, server, SSH, firewall, DNS]
 ---
 
 # Part 2: Create and secure the server
@@ -161,38 +161,8 @@ That's expected: nothing is installed yet.
 edit it and switch the proxy on. The installer only accepts traffic that
 comes through Cloudflare.
 
-## 2.6 Put Cloudflare Access in front of the site
-
-**What you're doing.** Making Cloudflare ask for an email code before anyone
-reaches your site.
-
-**Why.** The installer checks that an anonymous visit to the teacher login
-is sent to your Access sign-in page; the `ingress` and `readiness` stages fail
-without it. While you set up, it also hides the whole half-built site from
-everyone but you.
-
-**Steps** *(Cloudflare Zero Trust, November 2026; the menus may move)*.
-
-1. In **Zero Trust**, open **Access → Applications → Add an application**
-   and choose **Self-hosted**.
-2. Name it "CTH". For the domain, enter your **CTH hostname** with no path, so
-   the whole site is covered for now.
-3. Add a policy: **Action** Allow, **Include** Emails, and enter your own
-   email address.
-4. Keep the sign-in method **One-time PIN**, and save.
-
-**What you should see.** In a private browser window, open
-`https://` + your CTH hostname + `/admin/login`. You land on a Cloudflare page at
-your admission hostname asking for your email. After the code, you see a
-Cloudflare error page, because the server isn't installed yet. That's fine.
-
-**If something looks wrong.** If the page loads without asking for an email,
-check that the application's domain is exactly your CTH hostname and that it
-was saved.
-
 ## Checkpoint
 
-You have a running, firewalled server, a proxied DNS record and an Access
-gate. Your note now also holds the server's IP address and fingerprint.
+You have a running, firewalled server and a proxied DNS record. Your note now also holds the server's IP address and fingerprint.
 
 **Next:** [Part 3: Get CTH onto the server](part-3-get-cth.md)

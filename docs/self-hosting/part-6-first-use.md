@@ -3,12 +3,12 @@ title: "Part 6: First use"
 category: self-hosting
 description: Create your teacher account and class, claim a test student account, check health and open the site to students.
 roles: [operator]
-keywords: [self-hosting, tutorial, teacher signup, TOTP, student claim, health, Cloudflare Access]
+keywords: [self-hosting, tutorial, teacher signup, TOTP, student claim, health]
 ---
 
 # Part 6: First use
 
-Your CTH is running behind the Access gate. Now use it the way a teacher and a
+Your CTH is running. Now use it the way a teacher and a
 student will, before any real student sees it.
 
 Throughout this part, `classroom.example.org` stands for your CTH hostname.
@@ -31,13 +31,10 @@ separate window for the student shows you exactly what a student sees.
 2. Use your normal browser window as the **teacher**.
 3. Use a private window, or a different browser, as the **student**.
 
-While the whole site is behind Access, both windows ask for your email code
-first. Use your own email in both.
+**What you should see.** Both windows open `https://classroom.example.org/admin/login`.
 
-**What you should see.** Both windows reach the Access page.
-
-**If something looks wrong.** If a window skips the Access page, it's
-reusing an earlier sign-in. That's fine.
+**If something looks wrong.** If the page doesn't load, run the checks in
+[6.7](#67-check-health-from-the-server).
 
 ## 6.2 Create your teacher account and first class
 

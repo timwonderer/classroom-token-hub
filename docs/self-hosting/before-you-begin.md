@@ -26,11 +26,17 @@ background reading if you want it.
 
 ## Which release this guide matches
 
-This guide describes the installer as it is after the fixes from the
-November 2026 staging trial. Those fixes are on `main` but are **not yet in a
-published release**: the newest release, v2.4.5, predates them. Wait for the
-first release published after 22 November 2026, then use the newest release
-on the [Releases page](https://github.com/timwonderer/classroom-token-hub/releases).
+This guide describes the installer as it is after the changes from the
+November 2026 staging trial: the installer fixes in
+[#1787](https://github.com/timwonderer/classroom-token-hub/pull/1787) and
+[#1789](https://github.com/timwonderer/classroom-token-hub/pull/1789), and
+[#1795](https://github.com/timwonderer/classroom-token-hub/pull/1795), which
+stops the installer from requiring Cloudflare Access. None of them is in a
+published release yet: the newest release, v2.4.5, predates them. Use the
+first release that includes all three, from the
+[Releases page](https://github.com/timwonderer/classroom-token-hub/releases).
+An older release still checks for an Access gate during the `ingress` and
+`readiness` stages.
 [Part 3](part-3-get-cth.md) shows how to select it.
 
 ## What is required and what is recommended
@@ -46,25 +52,21 @@ today.
 | A server running **Ubuntu 22.04 LTS, x86-64** | The installer checks for exactly this and refuses anything else. | Any provider works. This guide uses DigitalOcean only as a labelled example. Use a new, empty server for CTH alone. |
 | A **domain name** you control | Your CTH needs its own web address. | A subdomain of a domain you already own is fine, for example `classroom.example.org`. |
 | **Cloudflare Turnstile** keys | CTH uses Turnstile to stop bots on sign-up and sign-in pages. It refuses to start in production without it. | Turnstile is free and works for any domain. |
-| **Cloudflare** in front of the server (proxy and Access) | The installer's only network setup is "Cloudflare proxy": it accepts web traffic only from Cloudflare, and checks that the Cloudflare Access gate (maintenance mode) is closing the site while it installs. | The project recommends Cloudflare anyway (see below). Support for other setups is tracked in [#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792). |
+| **Cloudflare proxy** in front of the server | The installer's only network setup is "Cloudflare proxy": the server accepts web traffic only from Cloudflare. | The project recommends the proxy anyway (see below). Support for other setups is tracked in [#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792). |
 | **Passwordless.dev** keys | The installer won't accept a configuration without them. | In the app itself, passkeys are optional. Making the installer match is tracked in [#1791](https://github.com/timwonderer/classroom-token-hub/issues/1791). |
 | An **authenticator app** (for example 2FAS, Aegis, Google Authenticator or 1Password) | Every teacher account uses a six-digit code (TOTP) at sign-in. | Install it on your phone before Part 6. |
 
 ### Strongly recommended, with alternatives
 
-**Cloudflare proxy and Access.** The project recommends these even once
-other options exist:
+**Cloudflare proxy.** The project recommends it even once other options exist:
 
 - Your server's address stays hidden behind Cloudflare, and the firewall
   accepts web traffic only from Cloudflare.
-- **Cloudflare Access** can put an email-code sign-in in front of the site, so
-  nobody else sees it while you set it up.
-- Cloudflare's free plan covers this.
+- Cloudflare's free plan covers it.
 
 *Alternative, not available yet:* serve traffic directly with your own
-certificate and no Access gate. You'd skip a third-party service, but lose
-the hidden origin and the extra gate in front of teacher sign-in. The current
-installer can't do this; see [#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792).
+certificate. You'd skip a third-party service, but lose the hidden origin.
+The current installer can't do this; see [#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792).
 
 **Passkeys through Passwordless.dev.** Passkeys let teachers and students sign
 in with a fingerprint, face or device PIN instead of typing a password.
@@ -79,6 +81,13 @@ in with a fingerprint, face or device PIN instead of typing a password.
   [#1791](https://github.com/timwonderer/classroom-token-hub/issues/1791).
 - **A different passkey provider,** or passkeys built into CTH itself. Not
   supported yet: [#1793](https://github.com/timwonderer/classroom-token-hub/issues/1793).
+
+### Optional
+
+**Maintenance mode with Cloudflare Access.** Access can close your site to
+everyone but you while you work on it, behind an email-code sign-in. It's not
+part of the installation. [Part 7](part-7-keep-it-running.md#710-optional-maintenance-mode-with-cloudflare-access)
+shows how to set it up if you want it.
 
 ## Your computer
 
