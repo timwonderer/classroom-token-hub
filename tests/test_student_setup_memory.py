@@ -107,7 +107,9 @@ def test_replaced_or_destroyed_attempt_cannot_be_restored(attempt):
 ])
 def test_unsafe_persistence_configuration_is_refused(attempt, monkeypatch, unsafe):
     conn = store.client()
-    config = conn.config_get('save', 'appendonly', 'slowlog-log-slower-than')
+    config = {}
+    for name in ('save', 'appendonly', 'slowlog-log-slower-than'):
+        config.update(conn.config_get(name))
     config.update(unsafe)
     with monkeypatch.context() as patch:
         patch.setattr(conn, 'config_get', lambda *args: config)
