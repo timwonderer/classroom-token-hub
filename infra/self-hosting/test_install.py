@@ -207,6 +207,15 @@ class ManifestTests(unittest.TestCase):
             with self.subTest(python=value), self.assertRaisesRegex(ValueError,'unsupported application Python'):
                 install.parse_manifest(json.dumps({**cfg,'python':value}))
 
+    def test_admission_hostname_is_optional(self):
+        cfg = manifest()
+        cfg.pop('admission_hostname', None)
+        self.assertEqual(install.parse_manifest(json.dumps(cfg)), cfg)
+        enrolled = dict(cfg, admission_hostname='admission.example.org')
+        self.assertEqual(install.parse_manifest(json.dumps(enrolled)), enrolled)
+        with self.assertRaisesRegex(ValueError, 'must differ'):
+            install.parse_manifest(json.dumps(dict(cfg, admission_hostname=cfg['hostname'])))
+
     def test_proxy_is_default_and_only_supported_mode(self):
         cfg = dict(manifest(), ingress_mode="cloudflare-proxy")
         self.assertEqual(install.parse_manifest(json.dumps(cfg)), cfg)
