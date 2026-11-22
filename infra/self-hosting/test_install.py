@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -10,6 +11,7 @@ from unittest.mock import patch
 
 import host
 import install
+import runtime
 
 
 def manifest():
@@ -74,9 +76,14 @@ class ManifestTests(unittest.TestCase):
             if args[0] == 'curl':
                 Path(args[args.index('--output') + 1]).write_bytes(archive)
             if args[0] == 'tar':
+                # GNU tar run as root keeps archive modes (the real build ships 0775) unless told not to.
+                mode = 0o775
+                if '--no-same-permissions' in args:
+                    umask = os.umask(0); os.umask(umask)
+                    mode &= ~umask
                 (Path(args[args.index('-C') + 1])/'bin').mkdir()
                 (Path(args[args.index('-C') + 1])/'bin/python3.14').write_text('')
-                (Path(args[args.index('-C') + 1])/'bin/python3.14').chmod(0o755)
+                (Path(args[args.index('-C') + 1])/'bin/python3.14').chmod(mode)
             if args[:2] == ('apt-cache', 'policy'):
                 return 'Candidate: 14.24-0ubuntu0.22.04.1'
             if str(args[0]).endswith('python3.10'):
@@ -153,6 +160,35 @@ class ManifestTests(unittest.TestCase):
                 self.assertEqual(len(venv), 1)
                 self.assertEqual(Path(venv[0][4]), host.interpreter(cfg)[1])
                 self.assertEqual(str(host.interpreter(cfg)[1]).endswith('python3.14'), selection == '3.14')
+
+    def test_commands_run_from_root_not_the_operator_directory(self):
+        # Gunicorn run as cthapp exits with "can't chdir" from an operator directory such as /root.
+        with TemporaryDirectory() as tmp:
+            previous = os.getcwd()
+            os.chdir(tmp)
+            self.addCleanup(os.chdir, previous)
+            self.assertEqual(host.command('pwd'), str(Path('/').resolve()))
+            self.assertEqual(runtime.command('pwd'), str(Path('/').resolve()))
+
+    def test_redis_ping_is_retried_until_redis_accepts_connections(self):
+        # Redis listens after systemd reports a Type=simple unit started (#1790).
+        cli = ('runuser','-u','cthapp','--','redis-cli','--raw','-s','/run/x/redis.sock')
+        replies = iter([host.subprocess.CalledProcessError(1, 'redis-cli'), 'LOADING', 'PONG'])
+        def command(*args):
+            reply = next(replies)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+        with patch.object(host, 'command', side_effect=command) as calls, patch.object(host.time, 'sleep'):
+            self.assertTrue(host.answers_ping(cli))
+            self.assertEqual(calls.call_count, 3)
+            self.assertEqual(calls.call_args.args, (*cli, 'PING'))
+        def refuse(*args):
+            raise host.subprocess.CalledProcessError(1, 'redis-cli')
+        with patch.object(host, 'command', side_effect=refuse):
+            started = time.monotonic()
+            self.assertFalse(host.answers_ping(cli, seconds=1))
+            self.assertLess(time.monotonic() - started, 3)
 
     def test_complete_manifest_and_rejections(self):
         cfg = manifest()

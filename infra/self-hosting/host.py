@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = Path('/opt/cth')
@@ -34,7 +35,8 @@ def require(condition, message):
 
 
 def command(*args, stdin=None):
-    return subprocess.run([str(x) for x in args], input=stdin, text=True, capture_output=True, check=True).stdout.strip()
+    # Service users cannot enter the operator's directory (e.g. /root); Gunicorn refuses to start there.
+    return subprocess.run([str(x) for x in args], input=stdin, text=True, capture_output=True, check=True, cwd='/').stdout.strip()
 
 
 def interpreter(cfg):
@@ -131,7 +133,9 @@ def host_stage(action,cfg):
             try:
                 (BASE/'python').mkdir(mode=0o711)
                 (BASE/'python'/version).mkdir()
-                command('tar','-xzf',archive,'-C',BASE/'python'/version,'--strip-components=1','--no-same-owner')
+                # Root tar otherwise keeps the archive's group-writable modes and ignores the umask.
+                command('tar','-xzf',archive,'-C',BASE/'python'/version,'--strip-components=1',
+                        '--no-same-owner','--no-same-permissions')
             finally:
                 os.umask(previous)
                 archive.unlink()
@@ -198,6 +202,20 @@ def copy_exclusive(source, dest):
         out.write(source.read_bytes())
 
 
+def answers_ping(cli, seconds=25):
+    # Type=simple units count as started before Redis accepts connections on its socket.
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            if command(*cli,'PING') == 'PONG':
+                return True
+        except subprocess.CalledProcessError:
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.5)
+
+
 def redis_stage(action,cfg):
     require(command('findmnt','-n','-o','FSTYPE','--target','/run')=='tmpfs' and Path('/sys/fs/cgroup/cgroup.controllers').is_file(),
             'memory-only setup requires tmpfs /run and cgroup v2')
@@ -237,7 +255,7 @@ def redis_stage(action,cfg):
                 'Redis unit must be active and enabled')
         sock = '/run/'+name+'/redis.sock'
         cli = ('runuser','-u','cthapp','--','redis-cli','--raw','-s',sock)
-        require(command(*cli,'PING')=='PONG','service account cannot reach Redis socket')
+        require(answers_ping(cli),'service account cannot reach Redis socket')
         if name=='cth-student-setup':
             for key,value in (('save',''),('appendonly','no'),('slowlog-log-slower-than','-1')):
                 require(command(*cli,'CONFIG','GET',key).splitlines()==([key,value] if value else [key]), 'unsafe setup Redis: '+key)

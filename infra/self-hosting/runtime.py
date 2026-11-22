@@ -115,7 +115,7 @@ def parse_env(raw, cfg):
 def command(*args, ok=(0,)):
     # No inherited proxy variables, libpq defaults, curl config or environment credentials.
     result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}, timeout=90)
+                            env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}, timeout=90, cwd="/")
     require(result.returncode in ok, "runtime check failed (" + Path(str(args[0])).name + ")")
     return result.stdout.decode().strip()
 
