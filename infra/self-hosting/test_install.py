@@ -169,6 +169,19 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(host.command('pwd'), str(Path('/').resolve()))
             self.assertEqual(runtime.command('pwd'), str(Path('/').resolve()))
 
+    def test_redis_stage_waits_for_sockets_created_after_start(self):
+        # Redis creates its socket after systemd reports a Type=simple unit started (#1790).
+        import threading, time
+        with TemporaryDirectory() as tmp:
+            ready, late = Path(tmp)/'ready.sock', Path(tmp)/'late.sock'
+            ready.touch()
+            threading.Timer(1.0, late.touch).start()
+            host.await_sockets((ready, late))
+            self.assertTrue(late.exists())
+            started = time.monotonic()
+            host.await_sockets((Path(tmp)/'never.sock',), seconds=1)
+            self.assertLess(time.monotonic() - started, 3)
+
     def test_complete_manifest_and_rejections(self):
         cfg = manifest()
         self.assertEqual(install.parse_manifest(json.dumps(cfg)),cfg)

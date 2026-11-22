@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = Path('/opt/cth')
@@ -201,6 +202,13 @@ def copy_exclusive(source, dest):
         out.write(source.read_bytes())
 
 
+def await_sockets(paths, seconds=25):
+    # Type=simple units count as started before Redis has created its socket.
+    deadline = time.monotonic() + seconds
+    while not all(Path(p).exists() for p in paths) and time.monotonic() < deadline:
+        time.sleep(0.5)
+
+
 def redis_stage(action,cfg):
     require(command('findmnt','-n','-o','FSTYPE','--target','/run')=='tmpfs' and Path('/sys/fs/cgroup/cgroup.controllers').is_file(),
             'memory-only setup requires tmpfs /run and cgroup v2')
@@ -235,6 +243,7 @@ def redis_stage(action,cfg):
     if action == 'apply':
         command('systemctl','daemon-reload')
         command('systemctl','enable','--now',*(n+'.service' for n in UNITS))
+        await_sockets(tuple('/run/'+n+'/redis.sock' for n in UNITS))
     for name in UNITS:
         require(command('systemctl','is-active',name)=='active' and command('systemctl','is-enabled',name)=='enabled',
                 'Redis unit must be active and enabled')
