@@ -79,20 +79,25 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.parse(dict(values, MARKETING_SITE_URL="http://classroomtokenhub.com"))
 
-    def test_gate_does_not_follow_redirects_or_disclose_response(self):
-        for status, destination, success in (
-            (302, "https://gate.example.org/cdn-cgi/access/login/hub", True),
-            (200, "", False), (302, "https://gate.example.org.evil.org/cdn-cgi/access/login/hub", False),
-            (302, "https://gate.example.org/unrelated", False), (302, "http://gate.example.org/cdn-cgi/access/login/x", False),
-        ):
-            with self.subTest(status=status, destination=destination), patch.object(runtime, "command", return_value=f"{status} {destination}") as command:
-                if success:
-                    runtime.gate(self.cfg)
-                else:
-                    with self.assertRaises(ValueError):
-                        runtime.gate(self.cfg)
-                self.assertNotIn("--location", command.call_args.args)
-                self.assertEqual(command.call_args.args[-1], "https://hub.example.org/admin/login")
+    def test_ingress_and_readiness_need_no_access_redirect(self):
+        without = {k: v for k, v in self.cfg.items() if k != "admission_hostname"}
+        def command(*args, **kwargs):
+            return "masked" if "is-enabled" in args else "inactive"
+        def curl(url, *options):
+            raise AssertionError("unexpected request to " + url)
+        stubs = ("trusted", "parse_env", "local_health", "managed", "unit", "await_start",
+                 "inspect_listeners", "inspect_ingress", "storage_controls", "scheduler")
+        for stage, cfg in (("ingress", self.cfg), ("readiness", self.cfg), ("ingress", without), ("readiness", without)):
+            with self.subTest(stage=stage, admission="admission_hostname" in cfg), patch.object(runtime, "command", side_effect=command), \
+                    patch.object(runtime, "curl", side_effect=curl), patch.object(runtime.Path, "read_text", return_value=""):
+                patches = [patch.object(runtime, name) for name in stubs]
+                for p in patches:
+                    p.start()
+                try:
+                    runtime.run("check", stage, cfg)
+                finally:
+                    for p in patches:
+                        p.stop()
 
     def test_managed_file_retries_or_refuses_drift(self):
         # Host ownership path checks have separate reference-host acceptance.
