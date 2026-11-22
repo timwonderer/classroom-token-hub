@@ -85,6 +85,9 @@ def checked_runtime(args, machine_id, env):
         "tls_cert": "/etc/cth/origin.crt",
         "tls_key": "/etc/cth/origin.key",
     }
+    # Omitted for the default so older release installers still accept the manifest.
+    if args.python != "3.10":
+        cfg["python"] = args.python
     runtime.validate_config(cfg)
     values = {k: secrets.token_hex(32) for k in runtime.KEYS}
     values.update({k: env["STAGING_" + k] for k in runtime.PROVIDERS})
@@ -343,6 +346,7 @@ def main():
     parser.add_argument("--work-dir", required=True, type=Path)
     parser.add_argument("--acceptance-script", default="")
     parser.add_argument("--acceptance-sha256", default="")
+    parser.add_argument("--python", choices=("3.10", "3.14"), default="3.10")
     args = parser.parse_args()
     try:
         # The GitHub-hosted job discards its runner. Also remove private files on ordinary failure.

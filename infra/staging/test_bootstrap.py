@@ -39,6 +39,7 @@ class GuestTests(unittest.TestCase):
             installation_id="09fcea91-a937-4818-ba57-0250dd42787f",
             acceptance_script="",
             acceptance_sha256="",
+            python="3.10",
         )
         self.key = "ssh-ed25519 " + base64.b64encode(b"\0\0\0\x0bssh-ed25519\0\0\0\x20" + b"p" * 32).decode()
         self.env = {"STAGING_" + k: "synthetic-" + k for k in bootstrap.runtime.PROVIDERS}
@@ -56,6 +57,13 @@ class GuestTests(unittest.TestCase):
             STAGING_ACCESS_CLIENT_ID="approved-test-access-key",
             STAGING_ACCESS_CLIENT_SECRET="approved-test-service-secret",
         )
+
+    def test_python_trial_is_named_only_when_not_the_default(self):
+        _, _, uploads = self.simulate()
+        self.assertNotIn("python", json.loads(uploads[bootstrap.MANIFEST]))
+        self.args.python = "3.14"
+        _, _, uploads = self.simulate()
+        self.assertEqual(json.loads(uploads[bootstrap.MANIFEST])["python"], "3.14")
 
     def test_cloud_init_contains_only_public_enrollment(self):
         cfg = json.loads(bootstrap.cloud_init(self.args.installation_id).split("\n", 1)[1])

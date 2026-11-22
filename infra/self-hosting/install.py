@@ -34,12 +34,13 @@ def parse_manifest(contents):
             result[key] = value
         return result
     cfg = json.loads(contents, object_pairs_hook=unique)
-    require(isinstance(cfg, dict) and KEYS <= set(cfg) <= KEYS | {'ingress_mode'} and all(isinstance(v, str) for v in cfg.values()),
+    require(isinstance(cfg, dict) and KEYS <= set(cfg) <= KEYS | {'ingress_mode', 'python'} and all(isinstance(v, str) for v in cfg.values()),
             'manifest must contain exactly the documented string fields')
     require(str(UUID(cfg['installation_id'])) == cfg['installation_id'], 'expected canonical installation UUID')
     require(re.fullmatch('[0-9a-f]{40}', cfg['release_sha']), 'expected full release SHA')
     require(re.fullmatch('[0-9a-f]{32}', cfg['machine_id']) and cfg['machine_id'] != '0' * 32, 'expected machine ID')
     require(re.fullmatch('[a-z][a-z0-9_]{0,62}', cfg['database']) and cfg['database'] not in ('postgres','template0','template1'), 'invalid database name')
+    require(cfg.get('python', '3.10') in ('3.10', *host.STANDALONE), 'unsupported application Python')
     runtime.validate_config(cfg)
     return cfg
 
