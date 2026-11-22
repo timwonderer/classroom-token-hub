@@ -126,9 +126,10 @@ def host_stage(action,cfg):
             archive = BASE/'python.tar.gz'
             command('curl','--fail','--silent','--show-error','--location','--proto','=https','--tlsv1.2','--output',archive,url)
             require(hashlib.sha256(archive.read_bytes()).hexdigest() == digest, 'interpreter archive checksum mismatch')
-            (BASE/'python').mkdir(mode=0o711)
+            # install.py runs under umask 077; cthapp must traverse to the interpreter.
             previous = os.umask(0o022)
             try:
+                (BASE/'python').mkdir(mode=0o711)
                 (BASE/'python'/version).mkdir()
                 command('tar','-xzf',archive,'-C',BASE/'python'/version,'--strip-components=1','--no-same-owner')
             finally:
@@ -138,9 +139,9 @@ def host_stage(action,cfg):
     require(command('/usr/bin/python3.10','--version').startswith('Python 3.10.'),'requires Python 3.10')
     version, python = interpreter(cfg)
     if version in STANDALONE:
-        for path in (BASE/'python', BASE/'python'/version, python):
-            require(path.resolve().parent == path.parent and path.stat().st_uid == 0 and not path.stat().st_mode & 0o022,
-                    'interpreter must be root-owned and protected')
+        for path, mode in ((BASE/'python', 0o711), (BASE/'python'/version, 0o755), (python, 0o755)):
+            require(path.resolve().parent == path.parent and path.stat().st_uid == 0
+                    and stat.S_IMODE(path.stat().st_mode) == mode, 'interpreter must be root-owned and traversable')
         require(command(python,'--version').startswith('Python '+version+'.'),'requires Python '+version)
     for package in PACKAGES:
         require(command('dpkg-query','-W','-f=${db:Status-Abbrev}',package)=='ii', 'missing installed package: '+package)

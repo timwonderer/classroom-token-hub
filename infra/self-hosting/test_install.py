@@ -1,6 +1,7 @@
 """Targeted portable installer checks. Run with python3 -m unittest discover -s infra/self-hosting."""
 import hashlib
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -75,6 +76,7 @@ class ManifestTests(unittest.TestCase):
             if args[0] == 'tar':
                 (Path(args[args.index('-C') + 1])/'bin').mkdir()
                 (Path(args[args.index('-C') + 1])/'bin/python3.14').write_text('')
+                (Path(args[args.index('-C') + 1])/'bin/python3.14').chmod(0o755)
             if args[:2] == ('apt-cache', 'policy'):
                 return 'Candidate: 14.24-0ubuntu0.22.04.1'
             if str(args[0]).endswith('python3.10'):
@@ -99,7 +101,10 @@ class ManifestTests(unittest.TestCase):
                     patch.object(host.grp, 'getgrnam', return_value=SimpleNamespace(gr_gid=900, gr_mem=['cthapp'])):
                 original_stat = Path.stat
                 def root_stat(path, *args, **kwargs):
-                    return SimpleNamespace(st_uid=0, st_mode=original_stat(path, *args, **kwargs).st_mode & ~0o022)
+                    return SimpleNamespace(st_uid=0, st_mode=original_stat(path, *args, **kwargs).st_mode)
+                # install.main() applies umask 077 before any stage runs.
+                previous = os.umask(0o077)
+                self.addCleanup(os.umask, previous)
                 with patch.object(Path, 'stat', root_stat):
                     if expected:
                         with self.assertRaisesRegex(ValueError, expected):
