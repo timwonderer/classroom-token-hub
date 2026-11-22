@@ -55,17 +55,26 @@ into a file on your computer.
 **Steps.** Replace `age1…` with your public key:
 
 ```bash
+set -o pipefail
+backup="cth-db-$(date +%Y-%m-%d).dump.age"
 ssh root@203.0.113.10 'cd / && runuser -u postgres -- pg_dump --format=custom cth_reference' \
-  | age -r age1… > "cth-db-$(date +%Y-%m-%d).dump.age"
-ls -lh cth-db-*.dump.age
+  | age -r age1… > "$backup.partial" \
+  && mv "$backup.partial" "$backup" && ls -lh "$backup"
 ```
 
-**What you should see.** No output from the first command, then a file of at
-least several hundred kilobytes, larger as your classes grow.
+`set -o pipefail` makes the whole command fail if *any* part fails, not just
+the last one. Without it, a dropped connection or a failed `pg_dump` still
+leaves an encrypted file that looks fine but holds nothing useful. The backup
+is written to a `.partial` file first and only gets its real name once
+everything succeeded, so a failed run never replaces a good backup.
 
-**If something looks wrong.** A file of 0 bytes means the dump failed: the
-error appears above `ls`. Check you used the right IP address and the database
-name `cth_reference`.
+**What you should see.** No output from the dump, then one line from `ls`
+showing a file of at least several hundred kilobytes, larger as your classes
+grow.
+
+**If something looks wrong.** If there's no `ls` line, the backup failed: read
+the error, and delete the leftover `.partial` file. Check you used the right IP
+address and the database name `cth_reference`.
 
 ## 7.3 Back up the keys and settings
 
@@ -79,15 +88,17 @@ sign in. They exist only on the server until you copy them.
 **Steps.**
 
 ```bash
+set -o pipefail
+backup="cth-etc-$(date +%Y-%m-%d).tar.age"
 ssh root@203.0.113.10 'tar -C /etc -cf - cth' \
-  | age -r age1… > "cth-etc-$(date +%Y-%m-%d).tar.age"
-ls -lh cth-etc-*.tar.age
+  | age -r age1… > "$backup.partial" \
+  && mv "$backup.partial" "$backup" && ls -lh "$backup"
 ```
 
-**What you should see.** A small file, a few kilobytes.
+**What you should see.** One line from `ls` showing a small file, a few kilobytes.
 
-**If something looks wrong.** As in 7.2, a 0-byte file means the command
-failed; read the error above it.
+**If something looks wrong.** As in 7.2, no `ls` line means the backup failed:
+read the error, and delete the leftover `.partial` file.
 
 > [!IMPORTANT]
 > You only need a new copy of this file when something in `/etc/cth` changes,

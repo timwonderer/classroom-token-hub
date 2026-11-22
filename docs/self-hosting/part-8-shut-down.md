@@ -28,9 +28,8 @@ delete student data by a date. Students may want their own records first.
 1. Check your school's rules on keeping and deleting student data.
 2. Tell teachers and students using the server when it will close, so they
    can note anything they need.
-3. If you must keep the data, take a final backup ([Part 7, 7.2 and 7.3](part-7-keep-it-running.md#72-back-up-the-database))
-   and test it ([7.4](part-7-keep-it-running.md#74-test-that-a-backup-restores)).
-   If you must not keep it, plan to delete your backups too (step 8.4).
+3. Decide whether you'll keep a final backup (taken in step 8.3, after the
+   site is closed) or delete your backups too (step 8.5).
 
 **What you should see.** A written decision: keep a final backup until a
 date, or delete everything.
@@ -53,7 +52,39 @@ hostname ([Part 2, 2.6](part-2-create-the-server.md#26-put-cloudflare-access-in-
 **If something looks wrong.** Check the application's destination is the
 whole hostname, with no path.
 
-## 8.3 Destroy the server
+## 8.3 Stop the app and take the final backup
+
+**What you're doing.** Stopping CTH on the server, then backing up the data
+exactly as it was left.
+
+**Why.** Closing Access stops people, not the app: its scheduler keeps running
+payroll and rent. A backup taken while it runs can miss the changes made after
+it. Stopping the app first means the final backup holds everything.
+
+**Steps.**
+
+1. On the server as root, stop the web front end and the app (which includes
+   the scheduler):
+
+   ```bash
+   systemctl stop cth-ingress.service cth-web.service
+   systemctl is-active cth-ingress.service cth-web.service
+   ```
+
+2. If you're keeping the data, take both backups
+   ([Part 7, 7.2 and 7.3](part-7-keep-it-running.md#72-back-up-the-database)).
+   The database is still running, so the backup works with the app stopped.
+3. Test the database backup restores ([7.4](part-7-keep-it-running.md#74-test-that-a-backup-restores))
+   **before** you destroy anything.
+
+**What you should see.** `inactive` twice from the `is-active` command, then
+backups that pass the restore test.
+
+**If something looks wrong.** If a backup or its restore test fails, don't
+destroy the server. Fix the backup first; the server still has the only
+complete copy of the data.
+
+## 8.4 Destroy the server
 
 **What you're doing.** Deleting the server at your provider.
 
@@ -73,7 +104,7 @@ the provider's billing page shows no running resources for it.
 **If something looks wrong.** If a snapshot or volume remains, it's still
 billed. Delete it, or keep it on purpose and note why.
 
-## 8.4 Clean up everything else
+## 8.5 Clean up everything else
 
 **What you're doing.** Removing the accounts and records that pointed at the
 server.
