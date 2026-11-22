@@ -13,6 +13,9 @@ student will, before any real student sees it.
 
 Throughout this part, `classroom.example.org` stands for your CTH hostname.
 
+The teacher and student help pages linked below are also built into your own
+CTH, under `https://classroom.example.org/docs/user-guides/`.
+
 ## 6.1 Get ready
 
 **What you're doing.** Setting up a teacher browser and a separate student
@@ -65,7 +68,7 @@ holds the code generator; keep the phone safe.
   Turnstile widget's hostname must be exactly your CTH hostname ([Part 1, 1.3](part-1-accounts-and-domain.md#13-create-the-turnstile-keys)).
 - **The six-digit code is rejected:** the phone's clock may be wrong. Turn on
   automatic date and time on your phone, then try the next code.
-- More help: [teacher login problems](../user-guides/diagnostics/teacher/login.md).
+- More help: [teacher login problems](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/diagnostics/teacher/login.md).
 
 ## 6.3 Sign out and sign in again
 
@@ -79,7 +82,7 @@ and sign in with your username and the current code from your app.
 
 **What you should see.** Your class dashboard again.
 
-**If something looks wrong.** See [teacher login problems](../user-guides/diagnostics/teacher/login.md).
+**If something looks wrong.** See [teacher login problems](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/diagnostics/teacher/login.md).
 
 ## 6.4 Add a passkey (recommended)
 
@@ -107,9 +110,9 @@ You can still sign in with your username and code.
 **Why.** A student can only claim a seat that's already on the roster. A
 made-up name lets you test without touching a real student's data.
 
-**Steps.** Follow [Adding students to the roster](../user-guides/features/teacher/classroom/class-setup.md#adding-students-to-the-roster)
+**Steps.** Follow [Adding students to the roster](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/features/teacher/classroom/class-setup.md#adding-students-to-the-roster)
 with a made-up first and last name. Then copy the class **join code**
-([Sharing the join code](../user-guides/features/teacher/classroom/class-setup.md#sharing-the-join-code)).
+([Sharing the join code](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/features/teacher/classroom/class-setup.md#sharing-the-join-code)).
 
 **What you should see.** The roster lists the test student as unclaimed.
 
@@ -125,7 +128,7 @@ student-setup Redis service, the claim checks and the PIN and passphrase setup.
 
 **Steps.** In the **student** window, open `https://classroom.example.org/student/login`,
 choose **First Time? Set Up Account**, and follow
-[Log In and First-Time Setup](../user-guides/features/student/account/login-setup.md)
+[Log In and First-Time Setup](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/features/student/account/login-setup.md)
 with the join code and the made-up name.
 
 **What you should see.** The student dashboard. In the teacher window, the
@@ -136,7 +139,7 @@ roster now shows the seat as claimed.
 - **An "unavailable" error (HTTP 503) on the claim page:** see
   [Troubleshooting](troubleshooting.md#student-claim-returns-503).
 - **The claim page can't find the student:** check the spelling against the roster and the join
-  code. More help: [students can't claim](../user-guides/diagnostics/teacher/students.md).
+  code. More help: [students can't claim](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/diagnostics/teacher/students.md).
 
 ## 6.7 Check health from the server
 
@@ -220,7 +223,7 @@ Cloudflare plan's user limit first.
 
 You have a teacher account, a class, a claimed student, and a site students
 can reach. The rest of the teacher manual is at
-[Teacher Manual](../user-guides/teacher_manual.md).
+[Teacher Manual](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/teacher_manual.md).
 
 **Next:** [Part 7: Keep it running](part-7-keep-it-running.md). Set up backups
 before real students join.
