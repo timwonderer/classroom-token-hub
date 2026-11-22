@@ -117,6 +117,43 @@ class ManifestTests(unittest.TestCase):
                     self.assertEqual(host.interpreter(cfg)[1], host.BASE/'python/3.14/bin/python3.14')
                     self.assertEqual(host.interpreter(manifest())[1], Path('/usr/bin/python3.10'))
 
+    def test_release_environment_is_built_from_the_selected_interpreter(self):
+        for selection, reported, expected in (
+                (None, 'Python 3.10.12', None), ('3.14', 'Python 3.14.10', None),
+                ('3.14', 'Python 3.10.12', 'incorrect application Python')):
+            cfg = manifest() if selection is None else dict(manifest(), python=selection)
+            calls = []
+
+            def command(*args):
+                calls.append(args)
+                if args[:2] == ('git', 'clone'):
+                    Path(args[-1]).mkdir()
+                if args[-1] == 'HEAD':
+                    return cfg['release_sha']
+                if args[-1] == '--version':
+                    return reported
+                return ''
+
+            with self.subTest(selection=selection, reported=reported), TemporaryDirectory() as tmp, \
+                    patch.object(host, 'BASE', Path(tmp).resolve()/'cth'), \
+                    patch.object(host, 'command', side_effect=command), \
+                    patch.object(host.shutil, 'chown'):
+                for directory in ('releases', 'venvs'):
+                    (host.BASE/directory).mkdir(parents=True)
+                original_stat = Path.stat
+                def root_stat(path, *args, **kwargs):
+                    return SimpleNamespace(st_uid=0, st_mode=original_stat(path, *args, **kwargs).st_mode)
+                with patch.object(Path, 'stat', root_stat):
+                    if expected:
+                        with self.assertRaisesRegex(ValueError, expected):
+                            host.release_stage('apply', cfg)
+                        continue
+                    host.release_stage('apply', cfg)
+                venv = [c for c in calls if '-m' in c and c[c.index('-m') + 1] == 'venv']
+                self.assertEqual(len(venv), 1)
+                self.assertEqual(Path(venv[0][4]), host.interpreter(cfg)[1])
+                self.assertEqual(str(host.interpreter(cfg)[1]).endswith('python3.14'), selection == '3.14')
+
     def test_complete_manifest_and_rejections(self):
         cfg = manifest()
         self.assertEqual(install.parse_manifest(json.dumps(cfg)),cfg)
