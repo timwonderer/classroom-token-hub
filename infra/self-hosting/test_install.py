@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -169,17 +170,24 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(host.command('pwd'), str(Path('/').resolve()))
             self.assertEqual(runtime.command('pwd'), str(Path('/').resolve()))
 
-    def test_redis_stage_waits_for_sockets_created_after_start(self):
-        # Redis creates its socket after systemd reports a Type=simple unit started (#1790).
-        import threading, time
-        with TemporaryDirectory() as tmp:
-            ready, late = Path(tmp)/'ready.sock', Path(tmp)/'late.sock'
-            ready.touch()
-            threading.Timer(1.0, late.touch).start()
-            host.await_sockets((ready, late))
-            self.assertTrue(late.exists())
+    def test_redis_ping_is_retried_until_redis_accepts_connections(self):
+        # Redis listens after systemd reports a Type=simple unit started (#1790).
+        cli = ('runuser','-u','cthapp','--','redis-cli','--raw','-s','/run/x/redis.sock')
+        replies = iter([host.subprocess.CalledProcessError(1, 'redis-cli'), 'LOADING', 'PONG'])
+        def command(*args):
+            reply = next(replies)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+        with patch.object(host, 'command', side_effect=command) as calls, patch.object(host.time, 'sleep'):
+            self.assertTrue(host.answers_ping(cli))
+            self.assertEqual(calls.call_count, 3)
+            self.assertEqual(calls.call_args.args, (*cli, 'PING'))
+        def refuse(*args):
+            raise host.subprocess.CalledProcessError(1, 'redis-cli')
+        with patch.object(host, 'command', side_effect=refuse):
             started = time.monotonic()
-            host.await_sockets((Path(tmp)/'never.sock',), seconds=1)
+            self.assertFalse(host.answers_ping(cli, seconds=1))
             self.assertLess(time.monotonic() - started, 3)
 
     def test_complete_manifest_and_rejections(self):

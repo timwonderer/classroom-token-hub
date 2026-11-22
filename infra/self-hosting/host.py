@@ -202,10 +202,17 @@ def copy_exclusive(source, dest):
         out.write(source.read_bytes())
 
 
-def await_sockets(paths, seconds=25):
-    # Type=simple units count as started before Redis has created its socket.
+def answers_ping(cli, seconds=25):
+    # Type=simple units count as started before Redis accepts connections on its socket.
     deadline = time.monotonic() + seconds
-    while not all(Path(p).exists() for p in paths) and time.monotonic() < deadline:
+    while True:
+        try:
+            if command(*cli,'PING') == 'PONG':
+                return True
+        except subprocess.CalledProcessError:
+            pass
+        if time.monotonic() >= deadline:
+            return False
         time.sleep(0.5)
 
 
@@ -243,13 +250,12 @@ def redis_stage(action,cfg):
     if action == 'apply':
         command('systemctl','daemon-reload')
         command('systemctl','enable','--now',*(n+'.service' for n in UNITS))
-        await_sockets(tuple('/run/'+n+'/redis.sock' for n in UNITS))
     for name in UNITS:
         require(command('systemctl','is-active',name)=='active' and command('systemctl','is-enabled',name)=='enabled',
                 'Redis unit must be active and enabled')
         sock = '/run/'+name+'/redis.sock'
         cli = ('runuser','-u','cthapp','--','redis-cli','--raw','-s',sock)
-        require(command(*cli,'PING')=='PONG','service account cannot reach Redis socket')
+        require(answers_ping(cli),'service account cannot reach Redis socket')
         if name=='cth-student-setup':
             for key,value in (('save',''),('appendonly','no'),('slowlog-log-slower-than','-1')):
                 require(command(*cli,'CONFIG','GET',key).splitlines()==([key,value] if value else [key]), 'unsafe setup Redis: '+key)
