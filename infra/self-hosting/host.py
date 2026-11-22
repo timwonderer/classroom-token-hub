@@ -1,6 +1,7 @@
 """Operator-owned host and database stages for SOP-DEP-001 §§V–IX."""
 from pathlib import Path
 import grp
+import hashlib
 import json
 import os
 import pwd
@@ -21,6 +22,10 @@ PG_PACKAGES = ('postgresql-14', 'postgresql-client-14')
 PACKAGES = ('python3.10', 'python3.10-venv', 'python3.10-dev', 'build-essential',
             'libpq-dev', 'git', 'ca-certificates', 'curl', 'iproute2', 'redis-server', 'redis-tools', 'nginx', 'openssl', 'acl')
 UNITS = ('cth-rate-limit', 'cth-student-setup')
+# Trial interpreters from python-build-standalone; the checksum is the release's SHA256SUMS entry (#1774).
+STANDALONE = {'3.14': ('https://github.com/astral-sh/python-build-standalone/releases/download/20261110/'
+                       'cpython-3.14.10%2B20261110-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz',
+                       'c2ff2e97422f5d3896a16e0317fd212ba977bbf2688d93a6f7a03d817506bd30')}
 
 
 def require(condition, message):
@@ -30,6 +35,13 @@ def require(condition, message):
 
 def command(*args, stdin=None):
     return subprocess.run([str(x) for x in args], input=stdin, text=True, capture_output=True, check=True).stdout.strip()
+
+
+def interpreter(cfg):
+    version = cfg.get('python', '3.10')
+    if version in STANDALONE:
+        return version, BASE/'python'/version/'bin'/('python'+version)
+    return version, Path('/usr/bin/python3.10')
 
 
 def status(*args):
@@ -108,8 +120,28 @@ def host_stage(action,cfg):
                 (BASE/directory).mkdir(mode=0o711)
         finally:
             os.umask(previous)
+        version = cfg.get('python', '3.10')
+        if version in STANDALONE:
+            url, digest = STANDALONE[version]
+            archive = BASE/'python.tar.gz'
+            command('curl','--fail','--silent','--show-error','--location','--proto','=https','--tlsv1.2','--output',archive,url)
+            require(hashlib.sha256(archive.read_bytes()).hexdigest() == digest, 'interpreter archive checksum mismatch')
+            (BASE/'python').mkdir(mode=0o711)
+            previous = os.umask(0o022)
+            try:
+                (BASE/'python'/version).mkdir()
+                command('tar','-xzf',archive,'-C',BASE/'python'/version,'--strip-components=1','--no-same-owner')
+            finally:
+                os.umask(previous)
+                archive.unlink()
     require(all(re.match(r'^14\.24[-+]', package_version(p)) for p in PG_PACKAGES),'requires PostgreSQL 14.24 packages')
     require(command('/usr/bin/python3.10','--version').startswith('Python 3.10.'),'requires Python 3.10')
+    version, python = interpreter(cfg)
+    if version in STANDALONE:
+        for path in (BASE/'python', BASE/'python'/version, python):
+            require(path.resolve().parent == path.parent and path.stat().st_uid == 0 and not path.stat().st_mode & 0o022,
+                    'interpreter must be root-owned and protected')
+        require(command(python,'--version').startswith('Python '+version+'.'),'requires Python '+version)
     for package in PACKAGES:
         require(command('dpkg-query','-W','-f=${db:Status-Abbrev}',package)=='ii', 'missing installed package: '+package)
     for name in USERS:
@@ -229,7 +261,7 @@ def release_stage(action,cfg):
             command('git','-C',release,'remote','remove','origin')
             venv.mkdir()
             shutil.chown(venv,'cthapp','cthapp')
-            command('runuser','-u','cthapp','--','/usr/bin/python3.10','-m','venv',venv)
+            command('runuser','-u','cthapp','--',interpreter(cfg)[1],'-m','venv',venv)
             command('runuser','-u','cthapp','--',venv/'bin/python','-m','pip','--isolated','install',
                     '--index-url','https://pypi.org/simple','--disable-pip-version-check','--no-cache-dir','-r',release/'requirements.txt')
             command('chown','-R','root:root',venv)
@@ -241,7 +273,8 @@ def release_stage(action,cfg):
             'release checkout differs')
     require(not (release/'.env').exists(),'release must not contain a dotenv file')
     py = venv/'bin/python'
-    require(command('runuser','-u','cthapp','--',py,'--version').startswith('Python 3.10.'),'incorrect application Python')
+    require(command('runuser','-u','cthapp','--',py,'--version').startswith('Python '+interpreter(cfg)[0]+'.'),
+            'incorrect application Python')
     command('runuser','-u','cthapp','--',py,'-m','pip','--isolated','check')
     # pip check alone ignores missing top-level requirements and version drift.
     command('runuser','-u','cthapp','--',py,'-c',

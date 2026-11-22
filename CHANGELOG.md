@@ -11,6 +11,7 @@ and this project follows semantic versioning principles.
 ### Added
 
 - <!-- notes: internal --> **Fresh PostgreSQL installations gain a release-specific schema baseline.** The artifact includes the migrated schema and required reference data at Alembic revision `a0faf8b2a35d`. Existing installations continue to use the migration chain.
+- <!-- notes: internal --> **Staging can install the application on Python 3.14.** The owner-attended staging workflow's new `python` input, or `"python": "3.14"` in a self-hosting manifest, installs a pinned, checksum-verified CPython 3.14.10 build and creates the release environment from it. Python 3.10 remains the default and production runtime until the staging and rollback checks in #1774 pass.
 - <!-- notes: internal --> **Self-hosting guidance distinguishes core installation, operational integrations and hosted status services.** It identifies production destinations that an isolated installation must override before testing those integrations.
 
 ### Changed

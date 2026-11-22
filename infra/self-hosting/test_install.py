@@ -1,4 +1,5 @@
 """Targeted portable installer checks. Run with python3 -m unittest discover -s infra/self-hosting."""
+import hashlib
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -59,6 +60,58 @@ class ManifestTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'unexpected service identity'):
                     host.host_stage('check', cfg)
 
+    def test_standalone_interpreter_is_checksum_verified_and_used_for_the_venv(self):
+        cfg = dict(manifest(), python='3.14')
+        archive = b'synthetic interpreter archive'
+        calls = []
+
+        def command(*args):
+            calls.append(args)
+            if args[0] == 'useradd':
+                accounts[args[-1]] = SimpleNamespace(pw_gecos=args[args.index('--comment') + 1],
+                                                     pw_shell='/usr/sbin/nologin', pw_gid=900, pw_uid=900)
+            if args[0] == 'curl':
+                Path(args[args.index('--output') + 1]).write_bytes(archive)
+            if args[0] == 'tar':
+                (Path(args[args.index('-C') + 1])/'bin').mkdir()
+                (Path(args[args.index('-C') + 1])/'bin/python3.14').write_text('')
+            if args[:2] == ('apt-cache', 'policy'):
+                return 'Candidate: 14.24-0ubuntu0.22.04.1'
+            if str(args[0]).endswith('python3.10'):
+                return 'Python 3.10.12'
+            if str(args[0]).endswith('python3.14'):
+                return 'Python 3.14.10'
+            if args[0] == 'dpkg-query':
+                return 'ii'
+            if args[:2] == ('systemctl', 'show'):
+                return 'masked'
+            return ''
+
+        for digest, expected in (('0'*64, 'checksum mismatch'), (hashlib.sha256(archive).hexdigest(), None)):
+            accounts = {}
+            with self.subTest(expected=expected), TemporaryDirectory() as tmp, \
+                    patch.object(host, 'BASE', Path(tmp).resolve()/'cth'), \
+                    patch.dict(host.STANDALONE, {'3.14': ('https://example.invalid/python.tar.gz', digest)}), \
+                    patch.object(host, 'command', side_effect=command), \
+                    patch.object(host, 'status', return_value=1), \
+                    patch.object(host, 'package_version', return_value='14.24-0ubuntu0.22.04.1'), \
+                    patch.object(host.pwd, 'getpwnam', side_effect=lambda n: accounts[n]), \
+                    patch.object(host.grp, 'getgrnam', return_value=SimpleNamespace(gr_gid=900, gr_mem=['cthapp'])):
+                original_stat = Path.stat
+                def root_stat(path, *args, **kwargs):
+                    return SimpleNamespace(st_uid=0, st_mode=original_stat(path, *args, **kwargs).st_mode & ~0o022)
+                with patch.object(Path, 'stat', root_stat):
+                    if expected:
+                        with self.assertRaisesRegex(ValueError, expected):
+                            host.host_stage('apply', cfg)
+                        self.assertFalse((host.BASE/'python').exists())
+                        continue
+                    host.host_stage('apply', cfg)
+                    host.host_stage('check', cfg)
+                    self.assertFalse((host.BASE/'python.tar.gz').exists())
+                    self.assertEqual(host.interpreter(cfg)[1], host.BASE/'python/3.14/bin/python3.14')
+                    self.assertEqual(host.interpreter(manifest())[1], Path('/usr/bin/python3.10'))
+
     def test_complete_manifest_and_rejections(self):
         cfg = manifest()
         self.assertEqual(install.parse_manifest(json.dumps(cfg)),cfg)
@@ -71,6 +124,10 @@ class ManifestTests(unittest.TestCase):
                 install.parse_manifest(json.dumps({**cfg,field:value}))
         with self.assertRaises(ValueError):
             install.parse_manifest(json.dumps(cfg)[:-1]+',"release_sha":"dev"}')
+        self.assertEqual(install.parse_manifest(json.dumps({**cfg,'python':'3.14'}))['python'],'3.14')
+        for value in ('3.12','3.13','python3.14',''):
+            with self.subTest(python=value), self.assertRaisesRegex(ValueError,'unsupported application Python'):
+                install.parse_manifest(json.dumps({**cfg,'python':value}))
 
     def test_proxy_is_default_and_only_supported_mode(self):
         cfg = dict(manifest(), ingress_mode="cloudflare-proxy")
