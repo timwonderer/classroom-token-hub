@@ -57,9 +57,8 @@ other options exist:
 
 - Your server's address stays hidden behind Cloudflare, and the firewall
   accepts web traffic only from Cloudflare.
-- **Cloudflare Access** puts an extra sign-in (an email code) in front of the
-  teacher pages. Strangers can't even reach your teacher login. While you
-  set up, it can hide the whole site.
+- **Cloudflare Access** can put an email-code sign-in in front of the site, so
+  nobody else sees it while you set it up.
 - Cloudflare's free plan covers this.
 
 *Alternative, not available yet:* serve traffic directly with your own

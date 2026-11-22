@@ -171,58 +171,9 @@ installation as a whole, separate from any class. You don't need it
 for teaching. If you want one, follow [First operator account](operations.md#first-operator-account)
 in the operations reference.
 
-## 6.9 Open the site to your students
-
-**What you're doing.** Letting students reach the student pages without an
-Access code, while keeping teacher pages behind Access.
-
-**Why.** Students don't have an approved email in your Access policy, so they
-can't get past the gate. But the teacher pages should stay behind it: Access
-stops strangers from even reaching your teacher sign-in or sign-up, and the
-installer's `ingress` and `readiness` checks expect `/admin/login` to stay
-gated.
-
-> [!WARNING]
-> Don't delete the Access application. Without it, anyone on the internet can
-> reach your teacher sign-up page, and `check readiness` fails. A setup
-> without Access isn't supported yet ([#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792)).
-
-**Steps** *(Cloudflare Zero Trust)*. Edit the "CTH" Access application you
-created in [Part 2, 2.6](part-2-create-the-server.md#26-put-cloudflare-access-in-front-of-the-site):
-
-1. Change its destination from the whole hostname to the path `admin` on your
-   CTH hostname (`classroom.example.org/admin`).
-2. Add a second destination for the path `sysadmin` (`classroom.example.org/sysadmin`).
-3. Keep the policy: only your email, plus any other teachers you invite to
-   your server.
-
-Then tell students to go to `https://classroom.example.org/student/login`.
-By default, the site's home page and its privacy and terms links point to the
-project's public site, so give students the full `/student/login` address.
-
-**What you should see.** In a fresh private window,
-`https://classroom.example.org/student/login` opens without an Access page,
-while `https://classroom.example.org/admin/login` still asks for an email code.
-On the server, `check readiness` still ends in `"result": "ok"`.
-
-**If something looks wrong.**
-
-- **Students still see the Access page:** the application still covers the
-  whole hostname. Check its destinations.
-- **`/admin/login` opens without Access, or readiness fails with
-  `unauthenticated public login did not reach the selected admission gate`:**
-  the `admin` path isn't covered. Fix the destination before anyone else
-  visits.
-
-*Alternative:* if every student has a school email address, you can instead
-leave the whole site gated and add those addresses to the Access policy.
-Students then enter an email code before every new sign-in. Check your
-Cloudflare plan's user limit first.
-
 ## Checkpoint
 
-You have a teacher account, a class, a claimed student, and a site students
-can reach. The rest of the teacher manual is at
+You have a teacher account, a class and a claimed student. The rest of the teacher manual is at
 [Teacher Manual](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/teacher_manual.md).
 
 **Next:** [Part 7: Keep it running](part-7-keep-it-running.md). Set up backups

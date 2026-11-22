@@ -169,8 +169,7 @@ reaches your site.
 **Why.** The installer checks that an anonymous visit to the teacher login
 is sent to your Access sign-in page; the `ingress` and `readiness` stages fail
 without it. While you set up, it also hides the whole half-built site from
-everyone but you. [Part 6](part-6-first-use.md#69-open-the-site-to-your-students)
-shows how to let students in later.
+everyone but you.
 
 **Steps** *(Cloudflare Zero Trust, November 2026; the menus may move)*.
 

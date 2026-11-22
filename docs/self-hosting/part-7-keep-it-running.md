@@ -167,23 +167,23 @@ before touching the old server.
 
 ## 7.5 Make backups a habit
 
-**What you're doing.** Deciding when to back up and how long to keep copies.
+**What you're doing.** Deciding when to back up and which copies to keep.
 
 **Why.** A backup only helps if it's recent.
 
 **Steps.**
 
-- Run [7.2](#72-back-up-the-database) at least **once a week** during the school
-  year, and always **before** any change to the server.
+- Run [7.2](#72-back-up-the-database) on a regular schedule, following your
+  school's or district's policy if it has one.
 - Run [7.3](#73-back-up-the-keys-and-settings) after anything in `/etc/cth` changes.
-- Keep a few weeks of database backups and delete older ones. When a student or
-  class is deleted from CTH, older backups still contain them. Follow your
-  school's rules on how long to keep student data.
-- Repeat [7.4](#74-test-that-a-backup-restores) every few months.
+- Keep only the most recent backup, unless your local policy says otherwise.
+  When a student or class is deleted from CTH, older backups still contain them.
+- Test a backup with [7.4](#74-test-that-a-backup-restores) after your first
+  backup, and again whenever your policy calls for it.
 
-**What you should see.** A folder of dated, encrypted files.
+**What you should see.** Your latest encrypted backup files, dated.
 
-**If something looks wrong.** If you miss a week, just run a backup now.
+**If something looks wrong.** If you've missed a scheduled backup, run one now.
 
 ## 7.6 Renew the certificate
 
@@ -269,15 +269,13 @@ They're written for experienced operators.
 2. Read each release's notes. Most releases don't need urgent action on a
    private server; a security fix might.
 3. Before any upgrade, take both backups ([7.2](#72-back-up-the-database),
-   [7.3](#73-back-up-the-keys-and-settings)) and switch the Access application
-   back to covering the whole site ([Part 2, 2.6](part-2-create-the-server.md#26-put-cloudflare-access-in-front-of-the-site)),
-   so nobody uses the site mid-change.
+   [7.3](#73-back-up-the-keys-and-settings)).
 4. **Rolling back** is the same procedure in reverse, and depends on whether
    the database changed. It's in the same reference section. Never "roll back"
    by restoring an old backup over a live database without reading it first:
    you'd lose everything since that backup.
 
-**If something looks wrong.** Keep the Access gate closed, and don't try
+**If something looks wrong.** Don't try
 fixes you don't understand. Ask for help with the release tag and the exact
 error message, but never paste keys, logs with names, or backups.
 

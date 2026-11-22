@@ -28,8 +28,8 @@ delete student data by a date. Students may want their own records first.
 1. Check your school's rules on keeping and deleting student data.
 2. Tell teachers and students using the server when it will close, so they
    can note anything they need.
-3. Decide whether you'll keep a final backup (taken in step 8.3, after the
-   site is closed) or delete your backups too (step 8.5).
+3. Decide whether you'll keep a final backup (taken in step 8.2, after the
+   app is stopped) or delete your backups too (step 8.4).
 
 **What you should see.** A written decision: keep a final backup until a
 date, or delete everything.
@@ -37,27 +37,12 @@ date, or delete everything.
 **If something looks wrong.** If you aren't sure who decides, ask before
 deleting anything. Nothing in this part can be undone.
 
-## 8.2 Close the site
-
-**What you're doing.** Putting the whole site back behind Access.
-
-**Why.** Nobody should be signing in or changing data while you close it.
-
-**Steps.** Switch the Access application back to covering your whole CTH
-hostname ([Part 2, 2.6](part-2-create-the-server.md#26-put-cloudflare-access-in-front-of-the-site)).
-
-**What you should see.** A private window shows the Access page on
-`/student/login` as well as `/admin/login`.
-
-**If something looks wrong.** Check the application's destination is the
-whole hostname, with no path.
-
-## 8.3 Stop the app and take the final backup
+## 8.2 Stop the app and take the final backup
 
 **What you're doing.** Stopping CTH on the server, then backing up the data
 exactly as it was left.
 
-**Why.** Closing Access stops people, not the app: its scheduler keeps running
+**Why.** While the app runs, people can sign in and its scheduler keeps running
 payroll and rent. A backup taken while it runs can miss the changes made after
 it. Stopping the app first means the final backup holds everything.
 
@@ -84,7 +69,7 @@ backups that pass the restore test.
 destroy the server. Fix the backup first; the server still has the only
 complete copy of the data.
 
-## 8.4 Destroy the server
+## 8.3 Destroy the server
 
 **What you're doing.** Deleting the server at your provider.
 
@@ -104,7 +89,7 @@ the provider's billing page shows no running resources for it.
 **If something looks wrong.** If a snapshot or volume remains, it's still
 billed. Delete it, or keep it on purpose and note why.
 
-## 8.5 Clean up everything else
+## 8.4 Clean up everything else
 
 **What you're doing.** Removing the accounts and records that pointed at the
 server.

@@ -133,15 +133,19 @@ trusted authorities. Ubuntu doesn't trust Cloudflare's Origin CA.
 **Fix.** Use a publicly trusted certificate, such as Let's Encrypt
 ([Part 4, 4.4](part-4-describe-your-installation.md#44-get-the-https-certificate)).
 
-### Readiness fails after opening the site
+### Readiness fails after changing Access
 
-**Symptom.** `check readiness` reports
+**Symptom.** `check ingress` or `check readiness` reports
 `unauthenticated public login did not reach the selected admission gate`.
 
-**Cause.** The Access application no longer covers `/admin`.
+**Cause.** These checks require an anonymous visit to `/admin/login` to be
+redirected to your Access sign-in page. If you changed or removed the Access
+application, that redirect no longer happens. The current release has no
+other setup ([#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792)).
 
-**Fix.** Put `/admin` (and `/sysadmin`) back behind Access
-([Part 6, 6.9](part-6-first-use.md#69-open-the-site-to-your-students)).
+**Fix.** Nothing is broken if you changed Access on purpose; only this check
+is affected. Check the app's health with `curl -s http://127.0.0.1:8000/health`
+(prints `ok`) and `systemctl is-active cth-web.service cth-ingress.service`.
 
 ### Locked out of SSH, or the web console won't connect
 
