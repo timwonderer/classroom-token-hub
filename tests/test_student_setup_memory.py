@@ -115,6 +115,20 @@ def test_unsafe_persistence_configuration_is_refused(attempt, monkeypatch, unsaf
             store.read(attempt[0], attempt[1])
 
 
+def test_store_check_works_on_redis_6_config_get(attempt, monkeypatch):
+    """Redis 6.0 (Ubuntu 22.04's package) refuses CONFIG GET with several names."""
+    from redis import Redis, ResponseError
+    real = Redis.config_get
+
+    def redis_6(self, pattern='*', *args, **kwargs):
+        if args:
+            raise ResponseError("Unknown subcommand or wrong number of arguments for 'GET'. Try CONFIG HELP.")
+        return real(self, pattern, **kwargs)
+
+    monkeypatch.setattr(Redis, 'config_get', redis_6)
+    assert store.read(attempt[0], attempt[1])['generation'] is not None
+
+
 def test_replication_and_store_outage_are_refused_without_sensitive_errors(attempt, monkeypatch):
     conn = store.client()
     real_info = conn.info
