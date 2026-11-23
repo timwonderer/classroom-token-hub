@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- <!-- notes: internal --> **The TLS trust-bundle test rejects all three removed emSign roots.** The test still expected C1 and C3 to be trusted after the certifi 2026.10.23 update removed them. It now checks that G3, C1 and C3 are absent and G1 remains. This corrects the sole failure in the release-candidate suite; application code and dependency pins are unchanged.
+
 - <!-- notes: internal --> **The test suite no longer leaks a developer's ambient `PASSWORDLESS_API_KEY` into teacher-destruction tests.** `tests/conftest.py` resets every other sensitive credential (`SECRET_KEY`, `PEPPER_KEY`, `ENCRYPTION_KEY`, `AUDIT_HMAC_KEY`) to safe test values at session start, but left `PASSWORDLESS_API_KEY`/`PASSWORDLESS_API_PUBLIC` untouched. A non-empty value in a local `.env` made `forget_principal_remotely()` (FEAT-IDEN-007, called at the start of every teacher account destruction) attempt a real passwordless.dev call instead of safely no-opping; a non-functional key then aborted the whole destruction FEAT before any local deletion ran, failing tests across `test_teacher_lifecycle.py`, `test_class_destruction_feat_identity.py`, `test_destruction_authority_boundary.py`, and other teacher/account-destruction tests. CI was unaffected since it never sets that variable. `conftest.py` now clears both variables unconditionally; tests that exercise the passkey path already opt in via `tests/helpers/passkey.py`'s `fake_passwordless` fixture.
 
 ## [2.5.0] - 2026-11-23 — Self-hosting and reliable sign-in sessions
