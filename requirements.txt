@@ -1,9 +1,9 @@
 
-alembic==1.20.0
+alembic==1.20.1
 bcrypt==5.0.0
 bleach==6.4.0
 blinker==1.9.0
-certifi==2026.10.19
+certifi==2026.10.23
 click==8.4.2
 exceptiongroup==1.3.1
 Flask==3.1.3
@@ -18,23 +18,24 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 Mako==1.4.3
 markdown==3.10.3
-# TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
-# - soft_str and soft_unicode removed (deprecated since 2.0)
-# - Markup.striptags() behavior may differ
-# Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
-MarkupSafe==2.1.5
+# Upgraded to 3.0.4 in PR #1796. soft_unicode was removed in 3.x; soft_str
+# is still exported and unaffected. Markup.striptags() is reached through
+# Jinja's striptags filter on templates/admin_store.html:327 (item
+# descriptions) — verified against the full admin_store render and
+# XSS/template guard test suites with no behavioral change.
+MarkupSafe==3.0.4
 packaging==26.3
-pluggy==1.6.0
+pluggy==1.7.0
 psycopg2-binary==2.9.13
 Pygments==2.21.0
 pyotp==2.10.0
-pytest==9.1.1
+pytest==9.2.0
 pytest-flask==1.3.0
 playwright==1.64.0
-pytz==2026.2
+pytz==2026.6
 PyYAML==6.0.3
-SQLAlchemy==2.0.52
-tomli==2.4.1
+SQLAlchemy==2.0.57
+tomli==2.5.0
 typing_extensions==4.16.0
 Werkzeug==3.1.9
 # TODO: [DEPENDABOT PR #847] zope.event 6.x is a major version change. Review for
