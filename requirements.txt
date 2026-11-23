@@ -18,9 +18,11 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 Mako==1.4.3
 markdown==3.10.3
-# Upgraded to 3.0.4 in PR #1796: audited for soft_str/soft_unicode and
-# Markup.striptags() usage (removed/changed in 3.x) — neither is called
-# anywhere in this codebase. Targeted XSS/template test suite verified clean.
+# Upgraded to 3.0.4 in PR #1796. soft_unicode was removed in 3.x; soft_str
+# is still exported and unaffected. Markup.striptags() is reached through
+# Jinja's striptags filter on templates/admin_store.html:327 (item
+# descriptions) — verified against the full admin_store render and
+# XSS/template guard test suites with no behavioral change.
 MarkupSafe==3.0.4
 packaging==26.3
 pluggy==1.7.0
