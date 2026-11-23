@@ -7,6 +7,12 @@ roles: [operator]
 
 # Phase C execution plan
 
+**Maintainer/rehearsal reference.** This page describes how the project
+prepares or records a temporary test installation. It isn't another task list
+for teachers to complete. For your own server, follow [the tutorial](README.md).
+**Staging** means a separate practice environment; a **rehearsal** is a trial
+run used to discover problems before relying on a procedure.
+
 **Run status.** The owner-attended reference-host run is recorded below. The repeatable procedure remains proposed until another operator completes it from scratch without undocumented assistance. B3 offline tests do not establish cloud or independent installation success.
 
 For an owner-run console installation, use the [manual project procedure](staging-controller.md#rehearsal-with-one-digitalocean-team) in place of Actions dispatch and automated allocation. The installer, first-use checks and owner teardown are the same.

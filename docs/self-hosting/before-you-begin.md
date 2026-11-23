@@ -8,6 +8,14 @@ keywords: [self-hosting, prerequisites, requirements, Cloudflare, Turnstile, pas
 
 # Before you begin
 
+Think of this page as deciding whether the project fits your time and budget.
+The learning is part of the project. You can learn the server tools while
+using them; you don't have to take a separate course before starting.
+
+**Before spending:** confirm a compatible CTH release exists, choose where to
+keep your passwords, and plan a practice installation. Real student data comes
+after you've tested both sign-in and recovery.
+
 Read this page before you spend any money. It tells you what you need and
 which choices are yours to make.
 
@@ -26,27 +34,47 @@ background reading if you want it.
 
 ## Which release this guide matches
 
-This guide describes the installer as it is after the changes from the
-November 2026 staging trial: the installer fixes in
-[#1787](https://github.com/timwonderer/classroom-token-hub/pull/1787) and
+This walkthrough targets the self-hosting installer changes prepared for
+**v2.5.0**. The version number tells you which instructions and application
+belong together; using the newest documentation with an older installer can
+produce different results.
+
+**As checked on November 23, 2026:**
+
+| Version | Status | What that means for this guide |
+| --- | --- | --- |
+| v2.5.0 | Release candidate in the project's changelog; not yet tagged or published. | This is the planned release for the installer described here. Wait for its published stable release and confirm it includes the fixes below before renting a server. |
+| v2.4.5 | Latest published stable release. | It predates the required installer fixes. Don't use it with this walkthrough. |
+
+Check the [Releases page](https://github.com/timwonderer/classroom-token-hub/releases)
+when you are ready to start. Merging a fix into `main` makes it part of the
+project's source; it does **not** publish a release or change an existing
+release tag. The planned version becomes an installation choice only when its
+stable release is published. [Part 3](part-3-get-cth.md) explains how to save
+that release's exact identifier.
+
+The release must include the installer fixes in
+[#1787](https://github.com/timwonderer/classroom-token-hub/pull/1787), the
+student-setup Redis fix in
 [#1789](https://github.com/timwonderer/classroom-token-hub/pull/1789), and
 [#1795](https://github.com/timwonderer/classroom-token-hub/pull/1795), which
-stops the installer from requiring Cloudflare Access. **As checked on November
-22, 2026, the newest published release is v2.4.5 and predates these changes.**
-The merged handbook is ahead of the published release. For this tutorial, use the
-first release that includes all three, from the
-[Releases page](https://github.com/timwonderer/classroom-token-hub/releases).
-An older release still checks for an Access gate during the `ingress` and
-`readiness` stages.
-[Part 3](part-3-get-cth.md) shows how to select it. If no release includes these
-changes, stop here before renting a server. A maintainer testing an exact
-unreleased commit is a separate rehearsal, not the published-release path.
+removes the Cloudflare Access requirement. An older installer still expects
+an Access gate during `ingress` and `readiness`. If no compatible stable
+release is available, pause here. Testing an exact unreleased commit is a
+separate maintainer rehearsal.
 
-**Plan for ongoing help.** Database backup and restore have been exercised
-in production; [Part 7](part-7-keep-it-running.md#74-test-that-a-backup-restores)
-explains which evidence applies to its manual drill. Upgrades and bringing a
-replacement server online still need experienced help. Certificate renewal
-is manual.
+**Plan for ongoing care.** You'll renew the HTTPS certificate, check security
+updates and keep usable backups. Part 7 explains those jobs. [Upgrades](upgrades.md)
+and [replacement-server recovery](recovery.md) have their own guided procedures,
+with prompts for an AI agent. They explain the work rather than assuming you
+already know the tools.
+
+Database backup and restore have been exercised in production;
+[Part 7](part-7-keep-it-running.md#74-test-that-a-backup-restores) explains which
+evidence applies to its manual drill. The expanded upgrade and replacement
+procedures still need a complete rehearsal on this installation layout. Use
+them with fictional data first; reading a procedure isn't a completed test.
+Certificate renewal in this tutorial is manual.
 
 **Database support.** This installer pins PostgreSQL 14.24 from Ubuntu
 22.04. As checked on November 22, 2026, Ubuntu publishes
@@ -63,9 +91,23 @@ applies to Homebrew, Docker or third-party packages.
 
 ## What is required and what is recommended
 
-Some services below are choices, but the current installer still requires
-them. This list keeps the two apart, so you know which choices are really open
-today.
+Here's what each service does. You will create the accounts in Part 1; this
+page helps you decide whether you want to use this arrangement.
+
+| Name you'll encounter | Its job in your installation |
+| --- | --- |
+| Ubuntu | The server's operating system, serving the role Windows or macOS serves on your computer. |
+| Flask and Python | The framework and language CTH is built with. The installer sets them up; you aren't asked to write an application. |
+| PostgreSQL, often shortened to Postgres | Stores the lasting records: classes, accounts, transactions and history. |
+| Redis | Holds short-lived setup information and request counters. It serves a different purpose from the database. |
+| nginx (pronounced “engine-x”) | Receives web connections on the server and passes them to CTH. |
+| Cloudflare proxy | Receives visitors' connections before they reach your server. |
+| Turnstile | Checks for automated abuse on sign-up and sign-in pages. This is a separate Cloudflare service. |
+| Passwordless.dev | Supplies the passkey integration. Its keys are currently required by the installer. |
+
+Some integrations are optional in the application but required by this
+installer. The tables below name those limits; they aren't choices you can
+change by leaving out a step.
 
 ### Required by the current release
 
@@ -135,6 +177,9 @@ and correct classroom access remain necessary regardless of provider.
 - **An SSH key.** You'll use it to log in to the server. If you don't have
   one, [GitHub's guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
   shows how to make one. Give it a passphrase.
+- **If SSH keys are new to you:** the public key goes into your server
+  provider's dashboard; the private key stays on your computer. This key pair
+  logs you into the server. It is separate from CTH sign-in and backup keys.
 - **For backups (Part 7):** space for encrypted archives and a restored copy
   of the database. Start with several GB for a small practice installation;
   actual needs grow with your data. You will install `age` and PostgreSQL 14

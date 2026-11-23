@@ -8,6 +8,14 @@ keywords: [self-hosting, tutorial, teacher signup, TOTP, student claim, health]
 
 # Part 6: First use
 
+**Work here: your browser, except for step 6.7.** You have checked the
+machinery; now check the experience. Use fictional information for the first
+class and student. This also gives you something recognizable to look for
+when you test a backup restore.
+
+A **seat** means one student's place on one class roster. The teacher creates
+the place; the student claims it and chooses their own sign-in credentials.
+
 Your CTH is running. Now use it the way a teacher and a
 student will, before any real student sees it.
 
@@ -21,7 +29,9 @@ CTH, under `https://classroom.example.org/docs/user-guides/`.
 **What you're doing.** Setting up a teacher browser and a separate student
 browser.
 
-**Why.** Teacher and student tests need separate cookie sessions. A second normal
+**Why.** Your browser remembers who's signed in using small records called
+**cookies**. Teacher and student tests need separate sessions so one login
+doesn't replace the other. A second normal
 window usually shares cookies; use a private window or a separate browser
 profile for the student.
 
@@ -171,6 +181,10 @@ in the operations reference.
 
 ## Before inviting students
 
+Treat these as a checklist you complete, not a list to skim. Record a short
+result next to each item. If one fails, keep working with the fictional class
+until you understand the failure.
+
 - Sign out of the test student account and sign back in with the saved
   credentials. A successful claim alone does not test the next login.
 - Using only your fictional student, make one small manual payroll payment
@@ -188,9 +202,22 @@ in the operations reference.
 These are practical first-use checks, not proof of every classroom feature or
 a completed independent installation rehearsal.
 
+**Agent prompt for checking first use:**
+
+```text
+Walk me through Part 6 of docs/self-hosting one check at a time using my
+fictional class. Keep teacher and student browser sessions separate. Have me
+enter credentials privately. Record the observed result for signup, repeat
+login, student claim, repeat student login and one manual payroll payment.
+If a request times out, inspect history before proposing a retry. Report
+untested checks as untested; a working health URL is only one check.
+```
+
 ## Checkpoint
 
-You have a teacher account, a class and a claimed student. The rest of the teacher manual is at
+You can sign back into both accounts, and your fictional student's payment
+appears once for the correct amount. Keep using practice data until the backup
+and restore drill in Part 7 passes. You have a teacher account, a class and a claimed student. The rest of the teacher manual is at
 [Teacher Manual](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/teacher_manual.md).
 
 **Next:** [Part 7: Keep it running](part-7-keep-it-running.md). Set up backups

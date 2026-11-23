@@ -8,6 +8,17 @@ keywords: [self-hosting, tutorial, release, git, verify]
 
 # Part 3: Get CTH onto the server
 
+**Work here: the server terminal, signed in as root.** Root is the server's
+administrator account. It is separate from your future CTH teacher account.
+
+A **release** is a published CTH version. **Git** downloads and keeps track of
+the code. A release's **tag** is its readable label, such as `vX.Y.Z`; its
+**SHA** is the full 40-character identifier for the exact code. You'll compare
+that identifier once here and save it for future maintenance.
+
+The version labels in this guide are examples, not a recommendation to
+install that version. Check compatibility before downloading.
+
 ## 3.1 Choose a release
 
 **What you're doing.** Picking the exact version of CTH you will install.
@@ -53,6 +64,11 @@ git clone --no-checkout https://github.com/timwonderer/classroom-token-hub.git /
 cd /root/cth-installer
 git checkout --detach vX.Y.Z
 ```
+
+`cd` changes the folder your terminal is working in. The first two commands
+refresh Ubuntu's software list and install Git. `git clone` downloads CTH;
+`git checkout` selects your chosen release. Run each command in order and
+stop if one reports an error.
 
 **What you should see.** The clone reports objects being received. The
 checkout ends with a message that you are in **"detached HEAD"** state. That's

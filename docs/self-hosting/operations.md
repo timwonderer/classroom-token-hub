@@ -7,6 +7,18 @@ roles: [operator]
 
 # First use and ongoing operation
 
+For guided procedures, use [Part 6](part-6-first-use.md) for first use,
+[Part 7](part-7-keep-it-running.md) for routine care, [Upgrades](upgrades.md)
+for changing versions and [Recovery](recovery.md) for replacing a server.
+This reference explains the underlying checks and additional operating tools.
+
+The named roles below describe responsibilities one person may carry out.
+**Acceptance** means checking the installation works for its intended use.
+**Cutover** means switching users to a different release or server.
+**Recovery point** means a saved copy you can restore. When deciding how often
+to back up, ask how much work you could tolerate losing and how long you could
+manage without the site; those are your recovery objectives.
+
 This is the advanced operator reference. For the teacher walkthrough, start
 with [Part 6](part-6-first-use.md) and [Part 7](part-7-keep-it-running.md).
 The [rehearsal record](rehearsal-findings.md) gives the bounded host results;
