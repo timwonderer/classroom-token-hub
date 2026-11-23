@@ -18,7 +18,8 @@ know which one, so you can tell later what's running and what to upgrade from.
 **Steps.**
 
 1. Open the [Releases page](https://github.com/timwonderer/classroom-token-hub/releases)
-   and pick the newest release. See
+   and pick a stable release that includes all the fixes below. Do this
+   before Part 2 if you have not yet rented a server. See
    [which release this guide matches](before-you-begin.md#which-release-this-guide-matches).
 2. Note its **tag**, such as `v2.5.0`.
 3. Click the commit link on the release (a short code like `1d74ea8`). The
@@ -30,8 +31,10 @@ Add to your note: **release tag** and **release SHA**.
 characters using only `0`–`9` and `a`–`f`.
 
 **If something looks wrong.** Don't use a branch such as `main` or a
-pre-release. A branch keeps moving, so you'd never know exactly what you
-installed.
+pre-release for this tutorial. Branch names move; an exact commit SHA can
+identify a rehearsal build, but it does not make it a supported release. If no
+compatible release is published, wait rather than installing v2.4.5 with
+instructions for newer code.
 
 ## 3.2 Download it to the server
 

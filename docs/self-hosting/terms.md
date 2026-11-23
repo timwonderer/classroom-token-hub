@@ -20,7 +20,7 @@ You don't need to memorize these. Come back when a word is unfamiliar.
 | **SSH** | "Secure shell": the way your terminal connects to the server. `ssh root@203.0.113.10` opens a terminal on the server. |
 | **SSH key** | A pair of files on your computer that proves who you are to the server, instead of a password. You give the server the *public* half. |
 | **Host key** and **fingerprint** | The server's own identity. The first time you connect, SSH shows its fingerprint. You compare it with what the server shows in your provider's web console, so you know you reached your server and not an impostor. |
-| **Web console** | A terminal in your provider's website that reaches the server without SSH. Useful when SSH doesn't work. |
+| **Web console** | A terminal in your provider's website. Some use SSH and obey its firewall rules; a separate recovery console may work when SSH does not. |
 | **root** | The all-powerful administrator account on the server. The installer must run as root. |
 | **IP address** | The server's numeric internet address, such as `203.0.113.10`. |
 | **DNS** and **A record** | DNS is the internet's address book. An *A record* says "this name, such as `classroom.example.org`, lives at this IP address". |

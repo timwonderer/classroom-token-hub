@@ -234,7 +234,8 @@ anywhere public; they can contain names and keys.
 running.
 
 **Why.** The scheduler runs timed jobs such as payroll and rent. Two copies
-could pay students twice; none would pay them never. This stage installs
+would violate the single-owner rule; without an owner, scheduled work does
+not run. This stage installs
 nothing. It checks the database to confirm one process holds the scheduler.
 
 **Steps.**
@@ -256,7 +257,10 @@ minute and run the same `apply` again. If it keeps failing, look at
 HTTPS on port 443, only from Cloudflare, and passes it to the app.
 
 **Why.** This is the step that makes your site reachable. Before starting it,
-the stage checks your certificate.
+the stage checks your certificate. Anyone who knows the hostname can then
+reach the public sign-in and signup pages unless you have restricted Access.
+If you want to keep setup private, configure the [Access maintenance gate](part-7-keep-it-running.md#710-optional-maintenance-mode-with-cloudflare-access)
+first. An unshared URL alone does not make the site private.
 
 **Steps.**
 
@@ -276,7 +280,8 @@ python3 infra/self-hosting/install.py apply ingress --config "$manifest"
 
 ## 5.10 readiness: check everything together
 
-**What you're doing.** Running every check again, together.
+**What you're doing.** Checking service state, local HTTP/HTTPS health, worker
+storage controls and scheduler ownership together.
 
 **Why.** It confirms the services, health, scheduler and HTTPS all work at
 the same moment, not just one after another.

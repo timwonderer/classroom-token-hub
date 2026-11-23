@@ -21,8 +21,9 @@ CTH, under `https://classroom.example.org/docs/user-guides/`.
 **What you're doing.** Setting up a teacher browser and a separate student
 browser.
 
-**Why.** Teacher and student sessions must not share a browser. Using a
-separate window for the student shows you exactly what a student sees.
+**Why.** Teacher and student tests need separate cookie sessions. A second normal
+window usually shares cookies; use a private window or a separate browser
+profile for the student.
 
 **Steps.**
 
@@ -86,7 +87,7 @@ and sign in with your username and the current code from your app.
 **What you're doing.** Letting your device sign you in with a fingerprint,
 face or PIN.
 
-**Why.** Passkeys can't be phished, and you won't need to type codes every
+**Why.** Passkeys resist phishing, and you won't need to type codes every
 time ([why](before-you-begin.md#strongly-recommended-with-alternatives)).
 
 **Steps.** While signed in, open `https://classroom.example.org/admin/passkey/settings`
@@ -167,6 +168,25 @@ CTH also has a separate **system administrator** account for running the
 installation as a whole, separate from any class. You don't need it
 for teaching. If you want one, follow [First operator account](operations.md#first-operator-account)
 in the operations reference.
+
+## Before inviting students
+
+- Sign out of the test student account and sign back in with the saved
+  credentials. A successful claim alone does not test the next login.
+- Using only your fictional student, make one small manual payroll payment
+  through the teacher payroll page. Confirm the amount appears once in the
+  teacher history and the student account. If a request times out, check the
+  history before submitting it again.
+- Try the site on a student device and the school network. Confirm that
+  Turnstile, sign-in and any passkey flow you plan to use work there.
+- Check home, privacy, terms, support and status links. Some still point at
+  the project's hosted services; they do not describe or monitor your server.
+  See the [configuration limitations](configuration.md#conditional-features-and-runtime-defaults).
+- Complete the backup and restore drill in Part 7. If you used Access to keep
+  setup private, deliberately open it only when these checks are complete.
+
+These are practical first-use checks, not proof of every classroom feature or
+a completed independent installation rehearsal.
 
 ## Checkpoint
 
