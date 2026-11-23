@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.62 | 2026-11-16 | 3.61 | Normative |
+| SOP-DOC-001 | 3.63 | 2026-11-23 | 3.62 | Normative |
 
 ---
 
@@ -152,11 +152,11 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-LED-001 — Ledger Verification Proof Surfaces](../SPEC/SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md)
 - [SPEC-LED-002 — Command Idempotency Reservation and Structural Enforcement](../SPEC/SPEC-LED-002_COMMAND_IDEMPOTENCY_RESERVATION_AND_ENFORCEMENT.md)
 - [SPEC-OPS-001 — Reversal, Void, and Transaction Finality Specification](../SPEC/SPEC-OPS-001_REVERSAL_AND_VOID.md)
-- [SPEC-OPS-002 — External Status Persistence Model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md) — v1.6: `AWARE` notice state.
+- [SPEC-OPS-002 — External Status Persistence Model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md) — v1.7: 30-day observed request-error rollup semantics; retains `AWARE` notice state.
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
-- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
+- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.7 (2026-11-23): 30-day 4xx/5xx error distribution, non-overlapping counts, last observation windows and explicit coverage replace historical reliability scores. v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001/DOM-LED-001 and FEAT-PROD-003/005/006 for canonical interval eligibility, exact historical reconstruction/graph attribution and atomic correction.
 - [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning PROD/Ledger/Operations/Policies contracts and FEAT-PROD-006/005/003: pure assessment, distinct immutable-source historical reconstruction and existing atomic correction; original canonical lineage remains separately reported.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
@@ -282,6 +282,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.63 (2026-11-23):**
+- Register owner-approved SPEC-OPS-002 v1.7 and SPEC-OPS-006 v1.7: 30-day overall error observations replace 90-day reliability history, with non-overlapping totals and explicit coverage.
 
 **Version 3.62 (2026-11-16):**
 

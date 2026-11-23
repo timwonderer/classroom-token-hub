@@ -79,20 +79,24 @@ class FirestoreNoticeStore:
 
         write(self.client.transaction())
 
-    def measurement_history(self, days: int = 90) -> list[dict]:
-        if not 1 <= days <= 90:
-            raise ValueError("History is bounded to 90 days.")
-        now = datetime.now(timezone.utc)
-        dates = [now.date() - timedelta(days=offset) for offset in range(days - 1, -1, -1)]
-        refs = [self.client.collection("telemetry_days").document(day.isoformat()) for day in dates]
-        records = {doc.id: doc.to_dict() for doc in self.client.get_all(refs) if doc.exists}
-        result = []
-        for day in dates:
-            item = records.get(day.isoformat(), {})
-            elapsed = 1440 if day < now.date() else now.hour * 60 + now.minute + 1
-            result.append({"date": day.isoformat(), "components": item.get("components", {}),
-                           "scheduled_minutes": elapsed})
-        return result
+    def error_history(self, *, clock=None) -> list[dict]:
+        """Bound coverage after the read, so concurrent windows remain valid."""
+        clock = clock or (lambda: datetime.now(timezone.utc))
+        while True:
+            started = clock().astimezone(timezone.utc)
+            dates = [started.date() - timedelta(days=offset) for offset in range(29, -1, -1)]
+            refs = [self.client.collection("telemetry_days").document(day.isoformat()) for day in dates]
+            records = {doc.id: doc.to_dict() for doc in self.client.get_all(refs) if doc.exists}
+            observed_at = clock().astimezone(timezone.utc)
+            if observed_at.date() != started.date():
+                # A midnight rollover changes the requested dates as well as the
+                # denominator. Re-read the new 30-date range; GET stays pure.
+                continue
+            return [{"date": day.isoformat(),
+                     "errors": records.get(day.isoformat(), {}).get("request_errors"),
+                     "scheduled_windows": 288 if day < observed_at.date() else
+                         (observed_at.hour * 60 + observed_at.minute) // 5}
+                    for day in dates]
 
     def append_snapshot(self, snapshot: dict | None, received_at: datetime,
                         diagnostic: str | None = None) -> None:
@@ -100,6 +104,7 @@ class FirestoreNoticeStore:
         from google.cloud import firestore
         from status.measurements import (DIAGNOSTICS, classify_component,
                                          parse_time, retained_activity, validate_fresh_snapshot)
+        from .request_errors import error_window, add_window, valid_error_day
         if received_at.utcoffset() is None:
             raise ValueError("Receipt time requires timezone.")
         received_at = received_at.astimezone(timezone.utc)
@@ -115,7 +120,9 @@ class FirestoreNoticeStore:
         sampled = parse_time(snapshot["sampled_at"]) if snapshot else None
         minute_id = sampled.strftime("%Y%m%dT%H%MZ") if sampled else None
         source_ref = self.client.collection("telemetry_snapshots").document(minute_id) if snapshot else None
-        day_ref = self.client.collection("telemetry_days").document(sampled.date().isoformat()) if snapshot else None
+        window = error_window(snapshot) if snapshot else None
+        day_date = (sampled - timedelta(microseconds=1)).date() if window else None
+        day_ref = self.client.collection("telemetry_days").document(day_date.isoformat()) if window else None
         failure_ref = self.client.collection("telemetry_attempts").document(uuid4().hex) if snapshot is None else None
 
         @firestore.transactional
@@ -126,20 +133,20 @@ class FirestoreNoticeStore:
             day_doc = day_ref.get(transaction=transaction) if day_ref else None
             # All reads precede writes, including duplicate-delivery reads.
             if source_ref and not source_doc.exists:
-                day = day_doc.to_dict() if day_doc.exists else {"components": {}}
-                components = day.setdefault("components", {})
-                for component in snapshot["components"]:
-                    counters = components.setdefault(component["key"], dict.fromkeys(
-                        ("sampled", "measured", "normal", "elevated_errors", "high_latency", "other"), 0))
-                    state = classify_component(component, snapshot, now=sampled)["state"]
-                    counters["sampled"] += 1
-                    eligible = state in {"NORMAL", "ELEVATED_ERRORS", "HIGH_LATENCY"}
-                    counters["measured"] += int(eligible)
-                    counters[state.lower() if eligible else "other"] += 1
-                day["expires_at"] = datetime.combine(sampled.date() + timedelta(days=90),
-                                                      datetime.min.time(), timezone.utc)
                 transaction.create(source_ref, {**wrapper, "expires_at": sampled + timedelta(days=7)})
-                transaction.set(day_ref, day)
+                if window:
+                    previous_day = day_doc.to_dict() if day_doc.exists else {}
+                    day_bounds = {"date": day_date.isoformat(), "scheduled_windows":
+                        288 if day_date < received_at.date() else
+                        (received_at.hour * 60 + received_at.minute) // 5}
+                    # A derivative must never block immutable evidence or current
+                    # status. Preserve corrupt history as unavailable, not zero.
+                    if ("request_errors" not in previous_day or
+                            valid_error_day(previous_day["request_errors"], day_bounds)):
+                        totals = add_window(previous_day.get("request_errors"), window)
+                        transaction.set(day_ref, {"request_errors": totals,
+                            "expires_at": datetime.combine(day_date + timedelta(days=30),
+                                                           datetime.min.time(), timezone.utc)})
             elif failure_ref:
                 transaction.create(failure_ref, {**wrapper, "expires_at": received_at + timedelta(days=7)})
             # Do not let delayed or duplicate source evidence erase a newer failure,

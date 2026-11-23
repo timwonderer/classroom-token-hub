@@ -97,7 +97,7 @@ def setup(monkeypatch):
     store.list_active_notices = lambda: [n for n in store.list_notices() if n["state"] != "RESOLVED"]
     store.current_platform = lambda: None
     store.current_snapshot = lambda: None
-    store.measurement_history = lambda: []
+    store.error_history = lambda **kwargs: []
     monkeypatch.setenv("STATUS_SERVICE_MODE", "operator")
     monkeypatch.setenv("STATUS_SESSION_SECRET", "test-only")
     monkeypatch.setitem(sys.modules, "status_service.identity", SimpleNamespace(

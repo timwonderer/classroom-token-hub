@@ -330,28 +330,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-.history-table-scroll { overflow-x: auto; }
-
-.history-table-scroll table {
-    border-collapse: collapse;
-    width: 100%;
-    font-variant-numeric: tabular-nums;
-}
-
-.history-table-scroll th,
-.history-table-scroll td {
-    text-align: left;
-    padding: var(--space-1) var(--space-3);
-    border-bottom: 1px solid var(--border-color);
-}
-
-.history-table-scroll caption {
-    text-align: left;
-    font-weight: var(--weight-semibold);
-    padding-bottom: var(--space-2);
-}
-
-/* ─── 90-day strip and recent incidents ─── */
+/* Request errors and recent incidents */
 
 .rail {
     min-width: 0;
@@ -371,35 +350,20 @@
     color: var(--text-secondary);
 }
 
-/* A grid of fractional columns so 90 days always fit the column they are in;
-   a per-bar minimum width once forced the strip wider than the rail. */
-.history-strip {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
-    column-gap: 1px;
-    align-items: end;
-    height: var(--space-6);
-    min-width: 0;
-    overflow: hidden;
-}
-
-.history-strip span {
-    height: 100%;
-    border-radius: var(--radius-xs);
-    background: var(--success);
-}
-
-.history-strip .bar--elevated { background: var(--warning); }
-.history-strip .bar--gap { background: var(--neutral-300); height: 40%; }
-
-.history-legend {
-    display: flex;
-    justify-content: space-between;
-    margin-top: var(--space-1);
-    color: var(--text-secondary);
-    font-size: var(--text-xs);
-}
+.error-chart { display: block; width: 180px; max-width: 100%; margin: var(--space-4) auto; }
+.error-ring { fill: none; stroke: var(--neutral-300); stroke-width: 14; }
+.error-ring--4xx { stroke: var(--warning); }
+.error-ring--5xx { stroke: var(--danger); }
+.error-chart-total { fill: var(--text-primary); font-size: 18px; font-weight: var(--weight-semibold); }
+.error-chart-label { fill: var(--text-secondary); font-size: 8px; }
+.error-counts { display: grid; gap: var(--space-4); }
+.error-counts dt { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.error-counts dd { margin: var(--space-1) 0 0; }
+.error-counts strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.error-counts small { display: block; font-size: var(--text-xs); color: var(--text-secondary); }
+.error-key { display: inline-block; width: 0.7em; height: 0.7em; margin-right: var(--space-2); }
+.error-key--4xx { background: var(--warning); }
+.error-key--5xx { background: var(--danger); }
 
 .rail-sum {
     margin: var(--space-3) 0 var(--space-2);
