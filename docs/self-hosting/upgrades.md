@@ -283,7 +283,8 @@ unknown work automatically.
 
 Before migrating, [capture the independent expected audit baseline](#save-the-expected-baseline-with-a-recovery-point)
 from this stopped source. Keep writers stopped, take the matching backups,
-then supply that saved baseline and run the `exact` audit check below. Keep
+then supply that saved baseline and run the `exact` audit check below
+(or `initial` only for a saved empty initial audit state). Keep
 the encrypted baseline with those recovery files.
 
 On **your computer**, take both backups using [Part 7, sections 7.2–7.4](part-7-keep-it-running.md#72-back-up-the-database)
@@ -672,11 +673,15 @@ its contents into chat or a public report.
 | Phase | When to use it | What must match |
 | --- | --- | --- |
 | `exact` | Restored database **before any app or scheduler starts**, or the frozen source before an upgrade. | The recorded revision and exact set of scopes, counts, final sequences and hashes must match the saved baseline. |
+| `initial` | A trusted recovery point explicitly recorded no audit heads, before any audited business activity. | Both saved and restored audit sets must be empty, with no ledger records or protected lineage references. This reports a matching initial state, not verified business-audit history. |
 | `extends` | After the app starts and may append legitimate new events. | Every saved scope and its complete saved history must remain. The event at each saved final sequence must match its saved hash; the complete current chains must also verify. New events don't erase the saved expectations. |
 
-Run `exact` first on a recovery target. A later `extends` pass does not replace
-that check. For an upgrade, verify `exact` before migration and `extends`
-after startup; check the new database revision separately in step 6.
+Run `exact` first on a recovery target whose saved baseline has audit heads.
+If the independently saved baseline explicitly contains `heads: []`, use the
+separate `initial` path described below. A missing baseline is never an empty
+baseline. A later `extends` pass does not replace the before-start check.
+For an upgrade, verify `exact` (or `initial` for a recorded initial state)
+before migration; check the new database revision separately in step 6.
 If the source is lost and no trusted expected baseline survives, record
 **audit completeness unverified** and keep the recovered service private
 while locating the evidence. Don't substitute its own restored head values.
@@ -723,12 +728,12 @@ from app.utils.audit_verifier import verify_chain, verify_row_lineage
 
 
 def compare_expected_heads(expected, current, anchors, phase):
-    assert phase in {'exact', 'extends'}, 'Choose exact or extends'
+    assert phase in {'exact', 'extends', 'initial'}, 'Choose exact, extends or initial'
     saved = {row['chain_scope']: row for row in expected}
     actual = {row['chain_scope']: row for row in current}
     assert len(saved) == len(expected), 'Duplicate scopes in expected baseline'
     assert set(saved) <= set(actual), 'An expected audit chain is missing'
-    if phase == 'exact':
+    if phase in {'exact', 'initial'}:
         assert saved == actual, 'Restored audit heads differ from expected baseline'
     for scope, row in saved.items():
         assert row['event_count'] == row['latest_sequence'] >= 0, 'Invalid expected count'
@@ -737,16 +742,23 @@ def compare_expected_heads(expected, current, anchors, phase):
         assert anchors.get(scope) == row['latest_hash'], 'Saved audit head hash no longer matches'
 
 
+def check_initial_state(expected, current, event_scopes, ledger_rows, lineage_refs):
+    assert expected == [] and current == [] and not event_scopes, 'Audit state is not empty'
+    assert ledger_rows == 0, 'Ledger records require the ordinary audit path'
+    assert lineage_refs == 0, 'Protected lineage references require audit evidence'
+
+
 phase = sys.argv[1]
 baseline = json.loads((Path(os.environ['CREDENTIALS_DIRECTORY']) /
                        'cth-audit-baseline').read_text())
 assert baseline['format'] == 1, 'Unknown expected-baseline format'
-assert baseline['heads'], 'Expected baseline contains no audit scopes'
+assert isinstance(baseline.get('heads'), list), 'Expected audit scopes are missing'
+assert baseline['heads'] or phase in {'initial', 'extends'}, 'Saved empty state requires initial verification first'
 app = create_app()
 with app.app_context():
     db.session.execute(text(
         'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
-    if phase == 'exact':
+    if phase in {'exact', 'initial'}:
         revision = db.session.execute(text('SELECT version_num FROM alembic_version')).scalar_one()
         assert revision == baseline['alembic_revision'], 'Recovery-point revision differs'
     heads = ChainHead.query.all()
@@ -781,22 +793,52 @@ with app.app_context():
             result = verify_row_lineage('ledger_transaction', row.id, row)
             assert result.state == 'VERIFIED', 'Protected ledger row check failed'
             checked_rows += 1
+    if phase == 'initial' or (phase == 'extends' and not baseline['heads'] and not current):
+        lineage_refs = 0
+        tables = db.session.execute(text("SELECT table_name FROM information_schema.columns "
+            "WHERE table_schema='public' AND column_name='lineage_event_id'")).scalars().all()
+        quote = db.engine.dialect.identifier_preparer.quote
+        for table in tables:
+            lineage_refs += db.session.execute(text(
+                f'SELECT count(*) FROM public.{quote(table)} WHERE lineage_event_id IS NOT NULL')).scalar_one()
+        check_initial_state(baseline['heads'], current, event_scopes,
+                            Transaction.query.count(), lineage_refs)
+        print('Saved empty initial audit state matched; no business-audit history was verified')
+    else:
+        assert nonempty > 0, 'No nonempty audit chain to verify; use initial only for a saved empty state'
+        print(f'Expected-baseline comparison passed: {phase}')
+        print(f'Complete nonempty chains checked: {nonempty}; protected ledger rows checked: {checked_rows} (0 means none were eligible)')
     db.session.rollback()
-    assert nonempty > 0, 'No nonempty audit chain to verify'
-    print(f'Expected-baseline comparison passed: {phase}')
-    print(f'Complete nonempty chains checked: {nonempty}; protected ledger rows checked: {checked_rows} (0 means none were eligible)')
 PYTHON
 ```
 
-Expect `Expected-baseline comparison passed:` with the chosen phase and
-a positive nonempty-chain count, with no assertion or command failure.
+For a nonempty audit history, expect `Expected-baseline comparison passed:`
+with the chosen phase and a positive nonempty-chain count, with no assertion
+or command failure.
 The ledger spot-check may cover **zero rows** when no eligible protected
 ledger row exists; that does not invalidate matching audit history. You do
 not need to create a payment just to make a backup recoverable. This checks
 all retained chains and up to one selected protected ledger row per class;
 it doesn't verify every business record or every balance calculation.
 
-After startup, set `cth_audit_phase=extends` and run the Python command again.
+**Initial-state recovery:** creating accounts and a class can legitimately
+leave no audit chain in this release. If the trusted baseline captured that
+state, set `cth_audit_phase=initial` and run the same command before starting
+services. It checks the recorded revision, empty expected/current sets, zero
+audit events, zero ledger records and zero non-null protected lineage links.
+Expect `Saved empty initial audit state matched; no business-audit history
+was verified`. Together with the ordinary restore, count, key and deletion
+eligibility checks, this allows the restored site to proceed to browser
+validation. Do not fabricate a payment or audit event to clear a check.
+Any unexpected audit head, event, ledger record or protected lineage reference
+stops this path; investigate the missing or wrong recovery evidence.
+
+After startup, use `extends`. It verifies any new nonempty history. If both
+the saved and current audit sets remain empty, it repeats the same guarded
+initial-state checks and reports the limited result. During an upgrade, the
+new schema revision is checked separately in step 6; the pre-upgrade baseline
+still records the older revision. The initial-state result must not be
+reported as a successful nonempty-chain or financial verification.
 Explain new events using actual scheduler or browser activity. A retired
 signature format or missing expected record is unresolved evidence, not a
 reason to rewrite history. Preserve the original audit key, events and heads

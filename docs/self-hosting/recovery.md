@@ -391,10 +391,20 @@ Before starting any replacement service, supply the independent expected
 baseline paired with this backup and run the `exact` phase of
 [the complete audit check](upgrades.md#check-the-complete-audit-history) on the
 replacement, using its restored SHA and original audit key. It must match the
-saved revision, full scope set, counts, final sequences and head hashes. It
-requires a nonempty audit chain, but no payment is needed: the ledger
-spot-check reports zero rows when no protected ledger row exists. A
-missing or unverified baseline keeps audit completeness unresolved; leave the
+saved revision, full scope set, counts, final sequences and head hashes.
+
+**A class with no audited activity yet:** the class/user creation paths can
+leave a legitimate empty audit state. When the independently saved baseline
+explicitly records `heads: []`, select the documented `initial` phase instead.
+It requires the restored audit heads and events to be empty and checks for
+zero ledger records and zero protected lineage references. Record the result
+as **initial state matched; no business-audit history verified**. This permits
+you to continue to service and browser checks without inventing a payment.
+A populated audit baseline still requires the nonempty-chain path; missing
+evidence or unexpected records cannot be relabeled as initial state.
+The ledger spot-check may cover zero rows in the ordinary path too.
+
+A missing or unverified baseline keeps audit completeness unresolved; leave the
 service private while recovering that evidence.
 
 ## 9. Start and check the replacement using a manual continuation
@@ -471,11 +481,14 @@ the original `AUDIT_HMAC_KEY`, including the full expected count and head hash.
 An audit chain is the tamper-evident record of protected changes. A default
 500-event sample or a matching row count is insufficient. Read-only
 verification must not create replacement audit events to obtain a pass.
-The `exact` phase must have passed before step 9 started the services. Now
-run the `extends` phase of [Check the complete audit history](upgrades.md#check-the-complete-audit-history)
+The before-start `exact` check (or the explicitly eligible `initial` check)
+must have passed before step 9 started the services. For nonempty history,
+now run the `extends` phase of [Check the complete audit history](upgrades.md#check-the-complete-audit-history)
 using the same independent baseline, restored release and runtime file. This
 checks the saved history remains intact while allowing new scheduled work.
-Run it again after a permitted test transaction and before reopening.
+Run it again after a permitted test transaction and before reopening. If
+history remains empty, `extends` repeats the initial-state safeguards and
+preserves that limited result; don't claim nonempty business-audit verification.
 
 In Cloudflare, change **only your CTH hostname's existing proxied A record**
 to the replacement server's verified IPv4 address. Keep **Proxied** enabled
