@@ -191,9 +191,20 @@ you already have. A **socket** is the private local connection used to reach
 that instance; there is no internet-facing database connection here.
 
 **Steps.** Run each block separately and stop on any error. Keep this terminal
-open until cleanup, because later commands use its variables. Record the
-expected seat count from your fictional class before starting. For example,
-one roster entry should restore as one seat, whether or not it was claimed.
+open until cleanup, because later commands use its variables. Use the
+**total seat count across all classes at the backup's recovery point** as
+your expectation—not the current roster or just one class. Every roster entry
+counts as a seat, claimed or unclaimed. For example, two classes with 10 and
+12 roster entries should restore as 22 seats.
+
+For a first practice run, record that total when taking the backup and keep
+the practice roster unchanged during capture. A manifest-backed backup from
+the [configurable backup tool](operations.md#backups-restoration-and-deletion)
+records `table_counts.seats` from the same database snapshot as its dump. If
+an older manual backup has no trustworthy recorded total, mark the seat-count
+comparison **unverified**; a difference from today's roster does not establish
+that the backup is faulty. Use a new eligible, recorded backup to complete
+that comparison.
 
 1. Install PostgreSQL **14 server and client tools**. On macOS with Homebrew:
 
@@ -256,8 +267,9 @@ one roster entry should restore as one seat, whether or not it was claimed.
    ```
 
    Compare the revision with the installed release's database baseline in
-   `migrations/fresh/<revision>/manifest.json`. Compare the seat count with what you
-   created; there is no universal expected count. The file list must include
+   `migrations/fresh/<revision>/manifest.json`. Compare the seat count with the
+   all-class total recorded for that backup's recovery point; there is no
+   universal expected count. The file list must include
    `cth/runtime.env` and `cth/installation.json`. Do not print their contents.
 
 5. After checking the results, stop the temporary instance and remove its

@@ -24,7 +24,8 @@ Read the installer and runtime source at my recorded release before adapting
 commands. Begin with a read-only inventory of old/new hosts, backup filenames,
 release identity and deletion-eligibility evidence. Tell me which terminal
 to use, what will change and what output means success. Keep the old app
-stopped, preserve original application keys and the new host's own manifest,
+disabled at boot and inactive, including after a reboot. Identify automation
+that could restart it. Preserve original application keys and the new host's own manifest,
 and never reset the installer journal. Keep secrets and identity sets out
 of chat. Distinguish static checks from a tested restore and browser recovery.
 Pause on a failed check and identify the cause before attempting a repair.
@@ -43,7 +44,7 @@ Pause on a failed check and identify the cause before attempting a repair.
 | Situation | Start with |
 | --- | --- |
 | The site stopped working, but the server and database still exist. | [Troubleshooting](troubleshooting.md). A restart or configuration repair may be enough. Preserve the existing data while investigating. |
-| You are moving to another server and the old one works. | Stop the old app, take and verify fresh database and key backups, then follow this page. |
+| You are moving to another server and the old one works. | Disable and stop the old app as in step 2, take and verify fresh database and key backups, then follow this page. |
 | The old server is lost, but you have both backups and the backup private key. | Follow this page using the last eligible recovery point. Record which work happened after that point and may be lost. |
 | You have a database archive but no matching application keys. | Find the protected settings backup or a surviving copy of the original runtime file. New keys cannot decrypt the old records. |
 | You suspect the server or its keys were compromised. | Preserve what remains and separate recovery from incident investigation. Have your agent identify exposed keys and the relevant rotation procedures before reusing them. This page assumes loss or failure, not a proven compromise. |
@@ -63,29 +64,63 @@ identifiers and keys out of a public recovery report.
 
 **Work here: the old server terminal, if it is reachable.** Close general web
 access with [Cloudflare Access](part-7-keep-it-running.md#710-optional-maintenance-mode-with-cloudflare-access),
-then stop the app and its HTTPS front end:
+then disable and stop the app and its HTTPS front end:
 
 ```bash
-systemctl stop cth-ingress.service cth-web.service
+systemctl disable --now cth-ingress.service cth-web.service
+```
+
+`--now` stops both services immediately. `disable` removes their normal
+start-at-boot links, so an ordinary reboot does not bring the old app back
+while the replacement is running. Check both settings separately:
+
+```bash
+systemctl is-enabled cth-ingress.service cth-web.service
+```
+
+Expect `disabled` twice. Then:
+
+```bash
 systemctl is-active cth-ingress.service cth-web.service
 ```
 
-Expect `inactive` twice. The second command returns a nonzero exit status
-because the services are stopped; that is expected here. The database remains
-running, so you can take the two backups in [Part 7](part-7-keep-it-running.md#72-back-up-the-database)
+Expect `inactive` twice. These checks return a nonzero exit status for
+`disabled` and `inactive`; those are the intended results here, not failures
+to clear by enabling or starting the services. The database remains running,
+so you can take the two backups in [Part 7](part-7-keep-it-running.md#72-back-up-the-database)
 from your computer. Test the database backup with Part 7.4 before continuing.
 
-**Why stop both?** Cloudflare Access controls who can enter the website. It
-doesn't stop payroll, rent or other timed jobs. Stopping `cth-web` stops that
-copy's scheduler as well. You must not let the old and replacement copies
+**Why disable both?** Cloudflare Access controls who can enter the website.
+It doesn't stop payroll, rent or other timed jobs. Stopping `cth-web` stops
+that copy's scheduler. The installer enables both services for boot, and the
+HTTPS service can start the app through its dependency, so merely stopping
+them once is insufficient. You must not let the old and replacement copies
 run their classroom jobs independently.
 
+> [!IMPORTANT]
+> **Disabled does not mean impossible to start.** A manual `start`, `restart`,
+> another unit's dependency, or deployment automation can still start a
+> disabled service. Suspend any old-host deployment or restart automation;
+> don't run the installer's service apply on it during recovery. Repeat the
+> two checks after any old-host reboot or administrative work.
+>
+> **Masking** is the stronger systemd setting that refuses service starts.
+> If another administrator or automation may start the old services, have
+> your agent prepare a reversible mask and verify `masked` and `inactive`
+> for both before the replacement starts. These units are regular files in
+> `/etc/systemd/system`, so a bare `systemctl mask` can refuse because the
+> files already exist. Preserve those exact files privately before a reviewed
+> masking change; don't delete them or assume a failed mask worked. Record
+> the restoration steps alongside the mask.
+
 If the old server is unreachable but might restart, use its provider controls
-to power it off and confirm that state. Keep it off while you recover. Do not
+to power it off and confirm that state. Disable any provider or external
+restart automation for that server and keep it off while you recover. Do not
 destroy it yet; its disk may still contain useful recovery information.
 
 **Checkpoint:** you know which backup you will restore, why it is eligible,
-and how you have prevented the old app from continuing to write. If the last
+and how you have prevented the old app from continuing to write or returning
+after a reboot or automated restart. If the last
 backup predates a deletion, select a later eligible point. If the source is
 lost and eligibility cannot be established from retained deletion and backup
 records, keep the restored copy private while investigating. An agent cannot
@@ -313,7 +348,8 @@ Do not run the app as the database owner to bypass a permission problem.
 
 ## 8. Check which records are allowed to return
 
-If the old source still exists, keep its application stopped and compare its
+If the old source still exists, keep its application disabled and inactive
+(or its server powered off except for controlled database reads) and compare its
 surviving `users`, `seats` and `classes` identifiers with the restored copy.
 Every restored identifier must still exist in the current source. Newer
 source records may be absent from an older backup; that is a separate data
@@ -325,8 +361,8 @@ Part 7's manual archives don't include that manifest. Use this prompt to have
 an agent build the equivalent **read-only** comparison for those archives:
 
 ```text
-I'm at step 8 of docs/self-hosting/recovery.md. The old app and replacement
-app are stopped. Read IDENTITY_QUERIES, identity_sets and missing_identities
+I'm at step 8 of docs/self-hosting/recovery.md. The old app and HTTPS service
+are disabled at boot and inactive; the replacement app has not started. Read IDENTITY_QUERIES, identity_sets and missing_identities
 in infra/db-backup/cth_db_backup.py at my recorded release. Prepare a read-only
 comparison of the old source and restored database for users.id, seats.id,
 and classes.class_id. Use explicit old/new SSH hosts and local PostgreSQL
@@ -348,8 +384,10 @@ you have a recorded basis for allowing those identities to return.
 
 ## 9. Start and check the replacement using a manual continuation
 
-**Before starting:** confirm again that the old app is stopped or powered off.
-Starting the replacement app also starts its timed jobs; there can be work
+**Before starting:** confirm again that both old services are disabled and
+inactive (or intentionally masked and inactive), or that the old server is
+powered off with restart automation disabled. Recheck after any intervening
+reboot. Starting the replacement app also starts its timed jobs; there can be work
 due since the backup. For a rehearsal, use a fictional-data backup and keep
 its hostname restricted.
 
@@ -449,6 +487,20 @@ on while the replacement can write. Once the replacement has accepted new
 work, sending users back to an older copy would lose that work; diagnose the
 current copy or make an explicit recovery decision with both preserved.
 
+**If you deliberately return to the old server:** first preserve the
+replacement's current data and decide how any work since recovery will be
+reconciled. On the **replacement**, disable and stop both services with
+`systemctl disable --now cth-ingress.service cth-web.service`, then verify
+`is-enabled` reports `disabled` twice and `is-active` reports `inactive`
+twice, using step 2's commands. Suspend its restart automation too. Only after
+that isolation is confirmed may you restore any saved old-host unit files
+and remove a deliberate mask, then run
+`systemctl enable --now cth-web.service cth-ingress.service` on the **old
+server**. This is a deliberate rollback after a data decision, not a general
+troubleshooting step. Check the selected server locally and through the
+browser before changing DNS or opening admission. The other app stays
+disabled and inactive.
+
 ## 11. Finish the recovery
 
 Take and test a new database backup and a new `/etc/cth` backup. The latter
@@ -469,7 +521,9 @@ snapshots and archives with the same deletion rules.
 Summarize this recovery for my private installation note: original release,
 old/new host labels, selected backup time, deletion-eligibility evidence,
 preparation stages completed, manual continuation steps and verification
-results, DNS transition, known data loss and outstanding checks. Include
+results, DNS transition, known data loss and outstanding checks. Record the
+old services' disabled/inactive or masked/inactive state, restart automation
+changes and any deliberate rollback decision. Include
 which readiness command now applies. No secrets, student identifiers or raw
 logs. Distinguish checks actually run from checks only described. Identify
 remaining billable resources without deleting them.

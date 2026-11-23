@@ -323,12 +323,22 @@ Flask's command-line tool with the private runtime settings. They don't print
 the settings. They run as `cthowner`, the database structure owner, rather
 than giving the web app permission to change tables.
 
+The web log belongs to `cthapp`, so `cthowner` must use a separate private
+log. `LogsDirectory` creates `/var/log/cth-migration` for the transient unit's
+user; mode `0700` keeps it private. `/usr/bin/env LOG_FILE=...` changes the
+value **inside that command**, after systemd has loaded the runtime file.
+This preserves the web log's permissions and the saved runtime settings.
+A systemd `Environment=LOG_FILE=...` property would not work here because
+`EnvironmentFile` takes precedence over that property.
+
 ```bash
 systemd-run --wait --pipe --collect \
   -p User=cthowner -p Group=cthowner \
   -p "WorkingDirectory=/opt/cth/releases/$new_sha" \
   -p EnvironmentFile=/etc/cth/runtime.env \
   -p Environment=PYTHONDONTWRITEBYTECODE=1 \
+  -p LogsDirectory=cth-migration -p LogsDirectoryMode=0700 -p UMask=0077 \
+  /usr/bin/env LOG_FILE=/var/log/cth-migration/app.log \
   "/opt/cth/venvs/$new_sha/bin/flask" --app app db current
 ```
 
@@ -346,6 +356,8 @@ systemd-run --wait --pipe --collect \
   -p "WorkingDirectory=/opt/cth/releases/$new_sha" \
   -p EnvironmentFile=/etc/cth/runtime.env \
   -p Environment=PYTHONDONTWRITEBYTECODE=1 \
+  -p LogsDirectory=cth-migration -p LogsDirectoryMode=0700 -p UMask=0077 \
+  /usr/bin/env LOG_FILE=/var/log/cth-migration/app.log \
   "/opt/cth/venvs/$new_sha/bin/flask" --app app db upgrade
 ```
 

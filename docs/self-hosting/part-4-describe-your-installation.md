@@ -113,12 +113,20 @@ do not need to be pasted into the terminal. Their encrypted backup will later
 travel over SSH. The provider keys are typed at hidden prompts,
 so they never appear on screen or in your shell history.
 
-**Steps.** Check that `umask 077` and `set -o noclobber` are set in this
-session, as described above. Paste the whole block. It stops four times and asks for a key;
-paste each one from your note and press Enter. Nothing appears as you paste.
-That's deliberate.
+**Steps.** Save the commands as a small script, then run that script. This
+keeps pasted command text separate from the answers to the hidden prompts.
+The script contains commands only; you'll enter the provider keys when it runs.
+
+On the server as root, paste this whole block to **save** the script. It does
+not ask for your provider keys yet. Keep the first and last lines:
 
 ```bash
+cat > /root/cth-write-runtime.sh <<'CTH_RUNTIME_SCRIPT'
+#!/bin/bash
+set -euo pipefail
+umask 077
+set -o noclobber
+test ! -e /etc/cth/runtime.env
 read -rsp 'Turnstile site key: ' turnstile_site; echo
 read -rsp 'Turnstile secret key: ' turnstile_secret; echo
 read -rsp 'Passwordless public key: ' passwordless_public; echo
@@ -144,7 +152,20 @@ fernet() { python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.uran
 unset turnstile_site turnstile_secret passwordless_public passwordless_secret
 stat -c '%a %U %G' /etc/cth/runtime.env
 cut -d= -f1 /etc/cth/runtime.env
+CTH_RUNTIME_SCRIPT
 ```
+
+When the terminal prompt returns, run **this command by itself**:
+
+```bash
+bash /root/cth-write-runtime.sh
+```
+
+It asks for four keys, one at a time. Paste only the key named by the prompt,
+then press Enter before entering the next one. Nothing appears while you
+paste; that is deliberate. Don't paste another command while a key prompt is
+waiting. The script stops if a command fails and refuses to replace an
+existing runtime file.
 
 The functions `hex()` and `fernet()` generate random keys in the formats CTH
 expects. The lines starting `printf` write settings to the file; they don't
@@ -172,11 +193,15 @@ Both use `cth_reference`.
 **If something looks wrong.**
 
 - **`cannot overwrite existing file`:** a runtime file already exists. If no
-  stage has run yet, inspect it, then remove it and try again. Otherwise keep
-  it: the existing keys belong to your data.
-- **You pasted a wrong provider key:** if no stage has run yet, remove the file
-  and run the block again. Afterwards, edit only that line with
-  `nano /etc/cth/runtime.env`. Leave the generated keys alone.
+  stage has run yet, inspect it, then remove only the confirmed new runtime
+  file and run `bash /root/cth-write-runtime.sh` again. Otherwise keep it:
+  the existing keys belong to your data.
+- **You pasted a wrong provider key:** edit only that line privately with
+  `nano /etc/cth/runtime.env`, then run the validation in 4.5. Leave the
+  generated application keys alone. You do not need to recreate the file.
+- **The script file already exists:** don't paste its creation block again.
+  Confirm it contains the commands above, then run the saved script by itself.
+  It must still refuse to replace an existing runtime file.
 
 ## 4.4 Get the HTTPS certificate
 
