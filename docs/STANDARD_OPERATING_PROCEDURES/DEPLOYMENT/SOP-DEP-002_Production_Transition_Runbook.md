@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.22 | 2026-11-08 | 1.21 | Normative |
+| SOP-DEP-002 | 1.23 | 2026-11-23 | 1.22 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -124,8 +124,17 @@ advisory and are recorded as such, never as the independent verifier.
    in the section belongs to a PR in that range (`git merge-base --is-ancestor <merge> vPREV` is false). Subsections
    appear only from this list, in this order, each once: Added, Changed, Deprecated, Removed, Fixed, Security,
    Investigated, no code change. Each entry also names its release-notes section in an invisible tag after its
-   bullet, `- <!-- notes: new|fixed|security-reliability|accessibility|internal[, highlight] --> **Headline** ...`
-   (step 13). Required checks green and review threads resolved; merge. The merge commit, now
+   bullet (step 13), followed by a blank line and a two-space-indented Markdown paragraph:
+
+   ```markdown
+   - <!-- notes: new, highlight -->
+
+     **Headline** ...
+   ```
+
+   Valid tags are `new`, `fixed`, `security-reliability`, `accessibility` and `internal`, optionally
+   followed by `, highlight`. The blank line ends the HTML comment block so GitHub renders the
+   paragraph as Markdown. Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
 2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
    Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
@@ -342,6 +351,8 @@ Record:
 ## XIII. Amendment
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.23 (2026-11-23):** §VII.A step 1: separate each release-notes metadata comment from its indented Markdown paragraph with a blank line. GitHub otherwise treats the following text as an HTML block and displays bold, code and links as raw Markdown. Tag meanings and generated release-note content are unchanged. Owner-reported rendering correction.
 
 **Version 1.22 (2026-11-08):** Reframe the title, purpose, scope and record worksheet around recurring production releases following the completed v2 launch. Distinguish initial-host validation from release validation. The existing source path remains unchanged so published links and historical release citations continue to resolve. No release safeguards or SQL procedures change.
 

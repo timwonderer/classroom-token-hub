@@ -60,22 +60,34 @@ Released as `abc1234` on 2026-10-22 at 04:38 UTC by release run [123]({RUN}). Mi
 
 ### Added
 
-- <!-- notes: new --> **Teachers can fine students** (#1706).
+- <!-- notes: new -->
+
+  **Teachers can fine students** (#1706).
 
 ### Changed
 
-- <!-- notes: internal --> **Dependencies.** gunicorn 26.2.0 (#1380), mentioned for context only.
-- <!-- notes: security-reliability --> **Ledger type vocabulary is closed** (`DOM-LED-001`). Follows #1599.
+- <!-- notes: internal -->
+
+  **Dependencies.** gunicorn 26.2.0 (#1380), mentioned for context only.
+- <!-- notes: security-reliability -->
+
+  **Ledger type vocabulary is closed** (`DOM-LED-001`). Follows #1599.
 
 ### Fixed
 
-- <!-- notes: fixed, highlight --> **Delete Class works again** (#1624). A long paragraph of detail.
+- <!-- notes: fixed, highlight -->
+
+  **Delete Class works again** (#1624). A long paragraph of detail.
   - a sub-bullet that stays with its entry
-- <!-- notes: accessibility --> **Buttons keep contrast under keyboard focus** (#1626, #1630).
+- <!-- notes: accessibility -->
+
+  **Buttons keep contrast under keyboard focus** (#1626, #1630).
 
 ### Security
 
-- <!-- notes: security-reliability, highlight --> **Operator console verifies the signed assertion** (#1618).
+- <!-- notes: security-reliability, highlight -->
+
+  **Operator console verifies the signed assertion** (#1618).
 """
 
 
@@ -120,7 +132,7 @@ def test_render_hides_the_tags_and_links_the_deployment_record_last():
 @pytest.mark.parametrize(
     "mutate, reason",
     [
-        (lambda s: s.replace("- <!-- notes: accessibility --> ", "- "), "no '<!-- notes"),
+        (lambda s: s.replace("- <!-- notes: accessibility -->\n\n  ", "- "), "no '<!-- notes"),
         (lambda s: s.replace("notes: accessibility", "notes: a11y"), "unknown notes section"),
     ],
 )

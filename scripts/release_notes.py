@@ -15,7 +15,8 @@ shape, so the notes cannot drift from release to release:
 The notes are rendered for readers, not copied: Highlights, then Fixed, Security & Reliability, Accessibility and
 Internal Changes, each a one-line-per-entry list with the full entries collapsed beneath, and the deployment record
 linked at the end. Each entry names its section in an invisible tag after its bullet:
-`- <!-- notes: fixed|security-reliability|accessibility|internal[, highlight] --> **Headline** ...`. A CHANGELOG entry is written for developers and runs to a paragraph; v2.3.0's verbatim notes were
+`- <!-- notes: fixed|security-reliability|accessibility|internal[, highlight] -->`
+followed by a blank line and a two-space-indented Markdown paragraph. A CHANGELOG entry is written for developers and runs to a paragraph; v2.3.0's verbatim notes were
 about 20,000 characters, with single bullets past 2,000 (owner, 2026-10-22: "almost unreadable").
 
 Usage:
@@ -71,7 +72,7 @@ NOTES_SECTIONS = {  # tag -> heading, in the order the notes show them (owner, 2
     "accessibility": "Accessibility",
     "internal": "Internal Changes",
 }
-TAG = re.compile(r"^- <!-- notes: ([a-z0-9-]+)(, highlight)? --> ")
+TAG = re.compile(r"^- <!-- notes: ([a-z0-9-]+)(, highlight)? -->\n  ")
 
 
 def _entries(text: str) -> list[str]:
@@ -97,7 +98,7 @@ def _headline(entry: str) -> str:
 def _prs(entry: str) -> list[str]:
     """PRs the entry cites as its own: those in the parenthesis right after the bold headline. A PR mentioned
     later in the prose is context, not the entry's source, and is not shown."""
-    own = re.match(r"- (?:<!-- [^>]* --> )?\*\*.+?\*\* \(([^)]*)\)", entry)
+    own = re.match(r"- \*\*.+?\*\* \(([^)]*)\)", TAG.sub("- ", entry))
     seen: list[str] = []
     for number in re.findall(r"#(\d{3,5})\b", own.group(1) if own else ""):
         if f"#{number}" not in seen:
@@ -113,8 +114,8 @@ def _line(entry: str) -> str:
 def render(body: str) -> str:
     """Reader-facing notes: Highlights, then New, Fixed, Security & Reliability, Accessibility and Internal Changes.
 
-    Every entry carries `<!-- notes: <section>[, highlight] -->` after its bullet; the CHANGELOG renders it
-    invisibly. A section lists one line per entry (its bold headline and cited PRs), then the entries in full,
+    Every entry carries `<!-- notes: <section>[, highlight] -->` after its bullet, followed by a blank
+    line and a two-space-indented paragraph so GitHub parses the body as Markdown. A section lists one line per entry (its bold headline and cited PRs), then the entries in full,
     collapsed. Highlights repeat their entries' headlines. The release run and deployment record close the notes.
     Raises ValueError for an untagged entry or an unknown section.
     """
