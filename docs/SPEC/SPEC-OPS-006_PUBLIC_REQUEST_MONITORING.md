@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.6 | 2026-10-23 | 1.5 | Subordinate implementation contract |
+| SPEC-OPS-006 | 1.7 | 2026-11-23 | 1.6 | Subordinate implementation contract |
+
+*Revision 1.7 (2026-11-23; owner-approved amendment): replace the 90-day reliability strip and historical threshold percentages with a 30-day overall request-error distribution. Count 4xx and 5xx without assigning fault, show last recorded observation windows, and disclose missing coverage. Current status and incident policy are unchanged.*
 
 *Revision 1.6 (2026-10-23; owner ruling 2026-10-23): the collector probes the gate first and, while the gate is closed, reads nothing from the application: no request telemetry and no health read; the endpoint and database checks are UNKNOWN under the new closed diagnostic `NOT_COLLECTED` (§VIII Independent platform checks). The collector carries no Cloudflare Access credential: the health endpoints are public, and the Access redirect is the maintenance signal. The service token existed only to reach production during maintenance.*
 
@@ -149,36 +151,51 @@ code/contract amendment. They do not diagnose user impact or create incidents.
 `telemetry_snapshots` stores append-only genuine source snapshots with a deterministic source-UTC-
 minute ID and separate `received_at`. A transaction appends each minute once,
 updates a monotonic `telemetry_current/current` pointer, and updates that source
-UTC day's `telemetry_days/YYYY-MM-DD` rollup once. All transactional reads precede
+UTC day's `telemetry_days/YYYY-MM-DD` error rollup once for selected windows
+under the attribution rule below. All transactional reads precede
 writes. Duplicate delivery cannot increase coverage; old delivery cannot move the
 current pointer backward. Reject stale source snapshots at collector ingestion.
 
-Daily per-component counters are `sampled`, `measured`, `normal`,
-`elevated_errors`, `high_latency`, and `other`. `sampled` counts unique persisted
-minute windows; `measured` counts eligible windows classified NORMAL,
-ELEVATED_ERRORS or HIGH_LATENCY. Empty and unavailable/stale windows do
-not establish a normal operating range and are excluded from that denominator.
-`normal / measured` is the share of eligible observed windows within thresholds.
-With no eligible windows this percentage is unavailable, never 100%.
+The public history is an overall request-error tracker for 30 UTC calendar dates,
+including today. Use only the `service` component: summing route groups would
+count overlapping requests more than once. Select source snapshots aligned exactly
+to UTC five-minute boundaries (minute divisible by five, zero seconds and
+microseconds), whose service collection and source freshness are usable. These
+fixed five-minute windows do not overlap. Other minute snapshots still support
+current status but MUST NOT contribute to error totals. No interpolation or
+substitution of neighboring windows is permitted for a missing boundary sample.
 
-Display 90 UTC calendar dates including today. Gaps are explicit. Coverage is
-eligible measured windows divided by scheduled elapsed minute windows for each
-UTC day, not request success or application uptime. Today's denominator stops at
-the observation time. Sampled and eligible counts remain available for explanation.
-Do not sum overlapping five-minute request counts into daily traffic totals.
-A daily single-state tally follows classification precedence while current cards
-preserve all applicable threshold reasons.
+Each selected window contributes its `request_count`, `http_4xx_count` and
+`http_5xx_count` once, in the transaction that creates its immutable source
+snapshot. Duplicate delivery contributes nothing; delayed delivery cannot move
+last-recorded times backward. Successfully observed empty windows count toward
+coverage with zero requests. Missing/stale/unavailable collection is a gap, never
+zero errors or evidence of successful uptime. Thresholds and latency do not
+filter counted responses; 4xx does not assign fault or confirm a defect.
 
-Historical rollups retain the policy applied at collection; older windows may have
-required 20 requests. `hall_pass` history starts with the first `request-telemetry-v2`
-window; days before it have no `hall_pass` counters, shown as gaps. This distinction is disclosed beside history; old counters
-are not recomputed or relabeled as uptime.
+The daily `telemetry_days` derivative contains `request_errors` with exactly
+`windows`, `requests`, `4xx`, `5xx`, `last_4xx` and `last_5xx`. The last fields
+are UTC ISO source window-end timestamps, null when the category count is zero.
+They describe the latest selected window containing the category, not an
+individual error's occurrence time. Attribute a window ending at midnight to the
+preceding UTC date. The daily denominator is 288 completed windows; today's is
+floor(elapsed UTC minutes / 5). Show observed and scheduled windows and coverage,
+plus days with missing observations. An unfinished window is excluded.
 
-Detailed snapshots expire after seven days; daily rollups after 90 days. Use
-separate Firestore TTL expiry fields/provisioning for these collections. Do not
-alter existing observation or notice retention. The current pointer is replaceable
-and still subject to read-time freshness. Old integrity observations are retained
-under their existing policy and never transformed into request history.
+Older threshold rollups have no request-error totals and remain missing evidence;
+never convert their percentages or overlapping minute counters into error counts.
+There is no fabricated historical backfill. New totals accumulate after collector
+rollout. A date with no valid derivative displays unavailable, not zero. The
+presentation MUST reject malformed counts, inconsistent category totals, and
+last-recorded timestamps outside the day's completed observation windows.
+
+Detailed snapshots expire after seven days; new daily error rollups after 30 days.
+Use the existing `expires_at` Firestore TTL field on these collections. Existing
+90-day derivatives expire under their original policy; they are not displayed as
+error evidence. Do not alter observation or notice retention. The current pointer
+is replaceable and subject to read-time freshness. Old integrity observations are
+never transformed into request history. Public GET only reads persisted records;
+it does not backfill, sample or mutate.
 
 ## VIII. Public interface and operator interpretation
 
@@ -246,13 +263,20 @@ rule, not covered by a notice, as a draft, as it does a fresh 5xx; a draft is no
 notice.
 
 Counts, 404/500/5xx percentages (and, for a component with failed-request routes,
-its failed-request percentage), p80/p95, source timing and 90-day history appear in
-the lower platform section, collapsed by default behind a visible disclosure, and
-the 90-day history may also be summarised beside the main column. Explain their
-scope and thresholds there, without long technical qualifications on every teacher
-card. The hero uses the public site's landing composition and the brand wordmark
-under SPEC-DES-001 §IX; the footer is the public site's footer. Historical bars
-expose full text and keyboard/touch disclosure, not color or hover alone.
+its failed-request percentage), p80/p95 and source timing appear in the lower
+platform section, collapsed behind a visible disclosure. Explain scope and
+thresholds there. Beside the main column, replace the reliability strip with
+`Request errors · Last 30 days`: a donut chart of 4xx (gold) and 5xx (red), visible
+text counts, total observed requests and coverage. The chart is an error
+distribution, not a success rate or reliability score. Zero errors and unavailable
+evidence use a neutral ring with different text; neither receives a green success
+signal. Each category says when its last recorded five-minute window ended, or
+that no events were recorded in the observed windows. All timestamps retain an
+explicit zone and readable UTC fallback. Missing coverage is explicit.
+
+The hero uses the public site's landing composition and brand wordmark under
+SPEC-DES-001 §IX; the footer is the public site's footer. Chart colors MUST have
+visible text equivalents; no information may require hover or color perception.
 Operator notices are independent, explicitly attributed human
 interpretation, with optional snapshot links and an investigation evidence note
 or reference when no automated snapshot is linked. They do not overwrite metrics.
@@ -323,7 +347,8 @@ Focused tests cover strict schema/redaction, query failure, malformed/multi-seri
 responses, no/low traffic, thresholds and their boundaries, 404 versus semantic
 failure, failed-request 404s on the designated routes against 404s elsewhere, both
 schema versions, every hall-pass route falling in the hall-pass group and no other, stale/future timestamps, retry idempotency, monotonic current pointer,
-UTC rollover, history denominators/gaps, independent notices, auth/CSRF and pure
+UTC rollover, non-overlapping error totals, duplicate/out-of-order delivery,
+30-day boundaries, missing/empty/malformed history and coverage, independent notices, auth/CSRF and pure
 GET. Endpoint tests cover 5xx as FAIL and a 429 or 404 as UNKNOWN `HTTP_REFUSED`,
 which leaves the hero `Unknown`, not `Mostly unavailable`. Gate tests cover an Access redirect, an open response, an application error,
 401/403, transport failure, a redirected health read with an open gate, and a closed gate that reads nothing from the application. Render

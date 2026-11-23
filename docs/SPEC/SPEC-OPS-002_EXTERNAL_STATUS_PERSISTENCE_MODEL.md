@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-002 | 1.6 | 2026-09-30 | 1.5 | Normative |
+| SPEC-OPS-002 | 1.7 | 2026-11-23 | 1.6 | Normative |
 
 ## I. Purpose
 
@@ -125,7 +125,7 @@ Contains separate current request measurements and operator notice publication e
 
 ### 5.4 Historical Rollup — optional derived state
 
-Aggregates non-tenant request snapshots for measured-window history under SPEC-OPS-006. The requested 90-day history is the concrete product need. Rollups are replaceable derivatives, never source evidence. Gaps, idle windows and monitoring failures must not be represented as successful uptime.
+Aggregates non-tenant request snapshots for the 30-day overall error tracker under SPEC-OPS-006 v1.7. Totals use non-overlapping observed windows; last-recorded times identify observation windows, not individual event timestamps. Rollups are replaceable derivatives, never source evidence. Gaps, idle windows and monitoring failures must not be represented as successful uptime.
 
 ### 5.5 Public Request Snapshot — append-only
 

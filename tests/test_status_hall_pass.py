@@ -385,7 +385,7 @@ def test_operator_drafts_a_not_found_detection():
 
 # ─── Persistence ───
 
-def test_store_rolls_up_hall_passes_and_keeps_legacy_activity(database):  # noqa: F811
+def test_store_counts_only_service_windows_and_keeps_legacy_activity(database):  # noqa: F811
     store, data = database
     legacy = sample(count=1)
     legacy["schema_version"] = "request-telemetry-v1"
@@ -403,8 +403,9 @@ def test_store_rolls_up_hall_passes_and_keeps_legacy_activity(database):  # noqa
     row(burst, "hall_pass").update(http_2xx_count=1, http_4xx_count=1, http_404_count=1,
                                    http_404_failure_count=1)
     store.append_snapshot(burst, later + timedelta(minutes=1))
-    day = data["telemetry_days"]["2026-09-21"]["components"]["hall_pass"]
-    assert day["elevated_errors"] == 1 and day["sampled"] == 2
+    day = data["telemetry_days"]["2026-09-21"]["request_errors"]
+    assert day["windows"] == 2 and day["requests"] == 1
+    assert day["4xx"] == 0  # Do not add overlapping route-group counts.
     retained = store.current_snapshot()["last_activity"]["hall_pass"]["component"]
     assert retained["http_404_failure_count"] == 1
 

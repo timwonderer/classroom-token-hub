@@ -47,8 +47,8 @@ def test_source_minute_duplicate_does_not_inflate_rollup(database):
     store.append_snapshot(sample(), NOW)
     store.append_snapshot(sample(), NOW + timedelta(seconds=15))
     assert len(data["telemetry_snapshots"]) == 1
-    day = data["telemetry_days"]["2026-09-21"]["components"]["attendance"]
-    assert day == dict(sampled=1, measured=1, normal=1, elevated_errors=0, high_latency=0, other=0)
+    day = data["telemetry_days"]["2026-09-21"]["request_errors"]
+    assert day == dict(windows=1, requests=20, **{"4xx": 0, "5xx": 0, "last_4xx": None, "last_5xx": None})
     assert store.current_snapshot()["received_at"] == NOW
 
 def test_failure_does_not_poison_valid_same_minute(database):
@@ -72,14 +72,14 @@ def test_out_of_order_source_preserves_current_and_day_attribution(database):
     prior = midnight - timedelta(minutes=1)
     store.append_snapshot(sample(prior), midnight + timedelta(seconds=1))
     assert store.current_snapshot()["snapshot"]["sampled_at"] == midnight.isoformat()
-    assert set(data["telemetry_days"]) == {"2026-09-20", "2026-09-21"}
+    assert set(data["telemetry_days"]) == {"2026-09-20"}
 
-def test_idle_windows_are_sampled_not_measured(database):
+def test_observed_empty_windows_count_toward_coverage(database):
     store, data = database
     store.append_snapshot(sample(count=0), NOW)
-    counters = data["telemetry_days"]["2026-09-21"]["components"]["service"]
-    assert counters["sampled"] == counters["other"] == 1
-    assert counters["normal"] == counters["measured"] == 0
+    counters = data["telemetry_days"]["2026-09-21"]["request_errors"]
+    assert counters["windows"] == 1
+    assert counters["requests"] == counters["4xx"] == counters["5xx"] == 0
 
 def test_stale_or_unbounded_write_rejected_without_side_effect(database):
     store, data = database
@@ -89,9 +89,9 @@ def test_stale_or_unbounded_write_rejected_without_side_effect(database):
 
 def test_history_returns_gaps_without_writes(database):
     store, data = database
-    history = store.measurement_history()
-    assert len(history) == 90
-    assert all(day["components"] == {} for day in history)
+    history = store.error_history(now=NOW)
+    assert len(history) == 30
+    assert all(day["errors"] is None for day in history)
     assert data == {}
 
 
@@ -116,7 +116,7 @@ def test_platform_check_storage_is_independent_append_only_and_monotonic(databas
     assert len(data["platform_observations"]) == 2
     assert all(value["expires_at"] == datetime.fromisoformat(value["received_at"]) + timedelta(days=7)
                for value in data["platform_observations"].values())
-    assert data["telemetry_days"]["2026-09-21"]["components"]["service"]["sampled"] == 1
+    assert data["telemetry_days"]["2026-09-21"]["request_errors"]["windows"] == 1
 
 
 def test_platform_store_rejects_unbounded_records_without_side_effects(database):
