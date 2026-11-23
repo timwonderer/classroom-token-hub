@@ -8,16 +8,28 @@ keywords: [self-hosting, deployment, configuration, backups, operations]
 
 # Self-hosting handbook overview (reference)
 
+**Looking for the teacher walkthrough?** Start at [Run your own CTH](README.md).
+This page explains the system's boundaries and what has actually been tested.
+You can return to it when deciding whether an integration or maintenance step
+belongs in your installation.
+
+In practical terms, the web app, its database and its private temporary stores
+are the core. A separate public status site and the project's automated release
+workflows are additional systems. You don't have to reproduce those systems
+to teach with your own CTH. The sections below keep that distinction explicit.
+
 This handbook is for the operator who controls a private CTH installation, its host, DNS, HTTPS admission policy, keys, backups and authorized accounts. The operator can be one person. CTH is distributed under the PolyForm Noncommercial License 1.0.0. Review `LICENSE` in the selected release before use or redistribution and retain the required notices. [License terms](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSE)
 
 ## Start here
 
 | When | Chapter |
 | --- | --- |
-| Before creating a host | [Reference profile, prerequisites, costs and ten installation stages](reference-installation.md) |
+| Before creating a host | [Before you begin](before-you-begin.md), then [Parts 1–2](part-1-accounts-and-domain.md) |
 | Before starting services | [Configuration and secret inventory](configuration.md) |
 | When installing a new database | [Release-specific database baseline, verification and recovery](fresh-database.md) |
-| After the readiness check | [First authorized use, acceptance, maintenance, recovery and decommissioning](operations.md) |
+| After the readiness check | [Part 6: First use](part-6-first-use.md), then [Part 7: Keep it running](part-7-keep-it-running.md) |
+| Updating a working installation | [Upgrade walkthrough](upgrades.md) |
+| Replacing a lost or broken server | [Recovery walkthrough](recovery.md) |
 | When running an attended rehearsal | [Manual dispatch, operator destruction and final verification](staging-controller.md) |
 | When preparing the staging guest | [Release bundle, guest identity, proxied HTTPS and per-run credentials](staging-bootstrap.md) |
 | When authorizing the first cloud rehearsal | [Phase C execution plan and resource ownership review](phase-c.md) |

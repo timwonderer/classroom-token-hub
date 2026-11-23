@@ -8,8 +8,14 @@ keywords: [self-hosting, learning, background]
 
 # Good to learn
 
-None of this is required. The tutorial explains what you need as you go.
-These links help if you want to understand *why* a step works.
+Use these when a topic catches your interest or you want more background.
+You can stay with the walkthrough and learn the tools as you use them.
+[Working with an AI agent](working-with-an-agent.md) also includes short prompts
+for explaining an unfamiliar command in the context of your installation.
+
+If you only have time for one topic before starting, understand the difference
+between your local terminal and an SSH session on the server. That distinction
+will keep the later backup and recovery steps much easier to follow.
 
 | Topic | Where to start |
 | --- | --- |

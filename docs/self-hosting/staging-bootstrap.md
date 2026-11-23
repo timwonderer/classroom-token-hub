@@ -7,6 +7,12 @@ roles: [operator]
 
 # Attended staging installation
 
+**Maintainer/rehearsal reference.** This page describes how the project
+prepares or records a temporary test installation. It isn't another task list
+for teachers to complete. For your own server, follow [the tutorial](README.md).
+**Staging** means a separate practice environment; a **rehearsal** is a trial
+run used to discover problems before relying on a procedure.
+
 **Offline tested.** The GitHub-hosted installation job uses your staging-only SSH key and application credentials. It transfers a clean Git bundle for your chosen SHA and calls the [B2 installer](reference-installation.md). Use a separate staging project, application hostname and authentication provider registrations. [Phase C plan](phase-c.md)
 
 ## Set up the staging install environment

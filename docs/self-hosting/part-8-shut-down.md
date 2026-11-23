@@ -8,6 +8,14 @@ keywords: [self-hosting, tutorial, shut down, destroy, decommission, billing]
 
 # Part 8: Shut it down
 
+**Choose the outcome first:** are you retiring an empty practice server,
+closing a classroom installation, or moving to a replacement? For a move, use
+[Recovery](recovery.md) and verify the replacement before destroying the old
+server. A classroom's last day doesn't automatically require deleting its server.
+
+Most of this part happens in your provider's dashboard. The stop command in
+8.2 happens on the server; backup commands still happen on your computer.
+
 Use this part at the end of the school year, if you move to the hosted site,
 or if you set up a test server and are done with it.
 
@@ -100,25 +108,46 @@ server.
 **Why.** Leftover keys and DNS records are a security risk, and a leftover
 DNS name can later point at someone else's server.
 
-**Steps.**
+**Steps.** First choose the matching path:
 
-- **Cloudflare DNS:** delete the `A` record for your CTH hostname, and any
-  leftover `_acme-challenge` TXT record.
-- **Cloudflare Access:** if you set up maintenance mode, delete the "CTH" application.
-- **Turnstile:** delete the widget.
-- **Passwordless.dev:** delete the application.
+- **Retiring without a replacement:** delete the CTH hostname's Cloudflare
+  `A` record, unused `_acme-challenge` TXT records, the CTH Access application
+  if present, the Turnstile widget and the Passwordless.dev application.
+  Confirm each item belongs only to the installation you're closing.
+- **Retiring the old server after a move:** keep the hostname's `A` record
+  pointing at the verified replacement. Keep the Turnstile widget,
+  Passwordless.dev application, domain and any Access policy used by the
+  replacement. Remove only resources dedicated to the old server. Check the
+  replacement's sign-in page and provider flows before finishing cleanup.
+
+For either path:
+
 - **Your backups:** keep or delete them, as you decided in 8.1. If you delete
   them, also delete any copies in synced folders or cloud storage. Keep
-  `cth-backup.agekey` exactly as long as you keep backups.
-- **Your password manager:** archive the "CTH install" note once nothing
+  `cth-backup.agekey` while any retained backup is encrypted to its public
+  key **or any backup process still uses that public key**, including on a
+  replacement server. Before retiring the key, switch every producer to a
+  new key pair and verify its new backups, then reconcile older archives.
+- **Your password manager:** when moving, update the existing “CTH install”
+  note with the replacement's details. Archive the note only once nothing
   depends on it.
-- **The domain:** keep it, or let it expire if you bought it only for CTH.
+- **The domain:** keep it while any replacement or other service uses it.
+  Let it expire only if you bought it solely for the installation now closed.
 
-**What you should see.** Nothing left in any dashboard that names your CTH
-hostname.
+**What you should see.** The retired server and its dedicated integrations
+are gone. Any deliberately retained domain, encrypted backup or storage item
+has an owner, an expiry date and a recorded cost. You can explain every item
+that remains.
 
 **If something looks wrong.** If you can't remove something now, write down
 what's left and when you'll remove it.
+
+## Checkpoint
+
+Record the server name and IP you retired, when you confirmed its absence,
+what storage you kept and any continuing charges. Check your next provider
+invoice against that note. If a resource remains unexpectedly, keep the
+cleanup task open until you've accounted for it.
 
 ## That's it
 

@@ -8,24 +8,35 @@ keywords: [self-hosting, tutorial, getting started, install, server]
 
 # Run your own Classroom Token Hub
 
-This guide walks you through running your own private copy of Classroom Token
-Hub (CTH) on a server you rent. It is written for someone who can follow
-directions in a terminal and is willing to learn, but has never run a server
-before. You don't need to be a programmer.
+You can learn to run CTH without having taught computer science or managed a
+server before. This guide assumes you're comfortable learning a new tool,
+following a sequence and checking your results. It explains the unfamiliar
+parts as you reach them. You can work with an AI agent, too.
+
+By the end, you should be able to answer three questions: **What did I just
+change? How do I know it worked? What should I do if it didn't?** Copying a
+command is one part of the work; understanding those answers is what lets you
+keep the site running.
 
 ## What "self-hosting" means
 
 Normally a teacher signs up on the project's hosted site. Self-hosting means
 you rent your own server instead and install CTH on it. You become the
-**operator**: you own the server, the web address, the passwords and keys, and
-the backups. Your installation has its own classroom data, but you still rely
+**operator**: the person responsible for the server, web address, passwords,
+keys and backups. Your installation has its own classroom data, but you still rely
 on your hosting and authentication providers. You are responsible for access,
 maintenance and recovery; the project does not administer your server for you.
 
-**Start with a practice installation using made-up students.** The installer
-is for a new server. Upgrades and recovery onto a replacement server still
-need experienced help. Check [release compatibility and current limits](before-you-begin.md#which-release-this-guide-matches)
-before renting anything.
+**Start with a practice installation using made-up students.** It gives you a
+place to learn installation, backups and recovery before classroom records
+depend on it. Check [release compatibility and current limits](before-you-begin.md#which-release-this-guide-matches)
+before renting anything. A clearer guide can't supply a missing compatible release.
+
+> [!TIP]
+> **Using an AI agent?** Start with [Working with an AI agent](working-with-an-agent.md).
+> It includes a setup prompt and prompts for troubleshooting, upgrades and
+> recovery. An agent can explain and carry out steps within the access you give
+> it. Keep the passwords and student records out of the conversation.
 
 ## What you'll have at the end
 
@@ -54,7 +65,14 @@ before renting anything.
 CTH ships with an installer, `infra/self-hosting/install.py`. It sets up the
 server in ten **stages**, and you run them one at a time, in order:
 
-`host` → `postgres` → `redis` → `release` → `config` → `database` → `services` → `scheduler` → `ingress` → `readiness`
+You don't need to learn all ten names now. Here's what the stages accomplish:
+
+| Stages | What changes | What you check |
+| --- | --- | --- |
+| `host`, `postgres`, `redis` | Prepare the server and its data storage. | The required software and private storage services are ready. |
+| `release`, `config`, `database` | Install your chosen CTH version, read its settings and create its database tables. | The version, settings and database structure agree. |
+| `services`, `scheduler` | Start CTH and its timed work, including payroll. | The app answers locally and exactly one scheduler owns the timed jobs. |
+| `ingress`, `readiness` | Enable the HTTPS connection and check the running installation. | The server checks pass; you still need the browser checks in Part 6. |
 
 After every stage the installer checks its own work and either prints
 `"result": "ok"` or stops with a message naming what is wrong. Each finished
@@ -86,8 +104,14 @@ occurred. The installer does not provide an unattended teacher setup flow.
 
 **When something goes wrong:** [Troubleshooting](troubleshooting.md)
 
-Every step in Parts 1–8 follows the same pattern: **What you're doing**,
-**Why**, **Steps**, **What you should see**, and **If something looks wrong**.
+Work through one numbered section at a time. Each explains the purpose,
+gives the action, shows what success looks like and offers a next step if the
+result differs. **Checkpoints are decisions:** continue, pause with your place
+recorded, or investigate. You don't need to finish in one sitting.
+
+A **Tip** helps you work. A **Warning** names a consequence you need before
+acting. A **Caution** marks a step that can erase data. The words carry the
+meaning even if your reader doesn't show colored callouts.
 
 ## Reference
 
@@ -100,7 +124,10 @@ read them first.
 - [Configuration dictionary](configuration.md): every field in the installation manifest and runtime file
 - [Installer reference](reference-installation.md): the installer's contract, stage by stage
 - [Fresh database](fresh-database.md): how the database stage installs and verifies the schema
-- [Operations](operations.md): first-use checks, monitoring, backups, upgrades and decommissioning in full
+- [Operations](operations.md): detailed operational checks and the boundaries behind them
+- [Working with an AI agent](working-with-an-agent.md): copyable prompts and how to evaluate its work
+- [Upgrade your CTH](upgrades.md): prepare, rehearse, switch versions and recover from a failed upgrade
+- [Recover onto a replacement server](recovery.md): restore matching data and keys, verify them and change the web address
 
 **Maintainers only, not the teacher path**
 

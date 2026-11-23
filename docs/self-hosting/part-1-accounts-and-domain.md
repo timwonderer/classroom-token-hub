@@ -8,6 +8,15 @@ keywords: [self-hosting, tutorial, domain, Cloudflare, Turnstile, Passwordless]
 
 # Part 1: Accounts and a domain
 
+**Work here: your web browser.** You are arranging services, not installing
+software yet. Keep your password manager open. Use the same CTH web address
+at each service so their settings agree.
+
+For example, if you own `example.org`, you might choose
+`classroom.example.org`. That complete name is the **hostname**. When a form
+asks for the site's **origin**, use `https://classroom.example.org`.
+Replace these examples with a name you control.
+
 Nothing in this part touches a server, and nothing here is billed by the hour.
 Do it all in your web browser. At the end you'll have five values saved in your
 password manager.
@@ -38,7 +47,10 @@ accounts. Wait for approval before continuing.
 
 ## 1.2 Put your domain on Cloudflare
 
-**What you're doing.** Getting a web address and letting Cloudflare manage it.
+**What you're doing.** Choosing your web address and arranging for Cloudflare
+to direct visitors to it. Your **registrar** is the company where you bought
+the domain. Its **nameserver** setting says which service manages the domain's
+DNS records—the entries that direct website and email traffic.
 
 **Why.** The current installer expects the Cloudflare proxy in front of the server
 ([why](before-you-begin.md#strongly-recommended-with-alternatives)). This tutorial uses
@@ -122,10 +134,25 @@ one in the Passwordless.dev admin console. Don't reuse keys from another site.
 
 ## Checkpoint
 
+Before renting a server, check that Cloudflare says **Active** and that both
+provider registrations use your chosen hostname. If either is still pending,
+pause here. Waiting now avoids paying for a server you can't finish setting up.
+
 Your "CTH install" note now holds:
 
 - CTH hostname
 - Turnstile site key and secret key
 - Passwordless public key and private secret
+
+**Agent prompt, if useful:**
+
+```text
+I'm at the Part 1 checkpoint in docs/self-hosting. Help me compare the
+hostname and origin formats across Cloudflare, Turnstile and Passwordless.dev.
+Explain which fields should contain https:// and which should not. Ask for
+setting names or redacted screenshots, not secret key values. Identify any
+pending prerequisite before I rent a server. Don't change existing domain
+or email records as a shortcut.
+```
 
 **Next:** [Part 2: Create and secure the server](part-2-create-the-server.md)

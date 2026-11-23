@@ -7,6 +7,12 @@ roles: [operator]
 
 # Attended staging workflow
 
+**Maintainer/rehearsal reference.** This page describes how the project
+prepares or records a temporary test installation. It isn't another task list
+for teachers to complete. For your own server, follow [the tutorial](README.md).
+**Staging** means a separate practice environment; a **rehearsal** is a trial
+run used to discover problems before relying on a procedure.
+
 The infrastructure owner runs a single exercise from GitHub Actions and closes it in DigitalOcean. Use the [Phase C approval plan](phase-c.md), [workflow configuration](https://github.com/timwonderer/classroom-token-hub/blob/main/infra/staging/README.md) and [guest preparation instructions](staging-bootstrap.md).
 
 1. In DigitalOcean, confirm the preceding exercise has been cleared. In Actions, manually dispatch the reviewed staging workflow with the approved full release SHA and reference profile. Keep the Actions run link.

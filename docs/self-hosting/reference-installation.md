@@ -7,6 +7,14 @@ roles: [operator]
 
 # Install the reference host
 
+This is the detailed installer reference. If you're installing for the first
+time, [Part 5](part-5-install-stages.md) presents the same ten stages with
+explanations, examples and checkpoints. Use this page to compare exact stage
+requirements or understand why the installer refused a particular action.
+
+The role labels below describe jobs, not separate employees. One teacher can
+choose the server, manage the web address and operate CTH.
+
 **Proposed reference procedure.** Review the [handbook evidence labels](handbook-overview.md). For a human installation or an automated rehearsal, run the same `infra/self-hosting/install.py` from the operator's reviewed checkout. Use the stage checks to determine what actually exists on the host. An interrupted run needs inspection before any retry.
 
 ## Choose the host and release
@@ -23,7 +31,7 @@ The first reference configuration is an x86-64 DigitalOcean SFO3 Basic Premium A
 2. **Host administrator.** Arrange trusted Ubuntu package sources carrying Jammy x86-64 packages and the exact PostgreSQL 14.24 server and client. Prepare enough disk space for the release, virtual environment, database and restore drill. If the exact versions or authentication for trusted package sources are unavailable, resolve package provenance before installing. Select another OS, PostgreSQL major or Python runtime only in a separately recorded test.
 3. **Release operator.** Obtain the CTH source from the upstream repository or an authenticated mirror. Select the full reviewed commit SHA containing the installer, pin that checkout and verify its provenance. Run the installer only from that operator-controlled tree. An untrusted checkout executed as root has the authority of root. Record the complete SHA; a moving branch or unreviewed workspace is unsuitable.
 4. **Host administrator.** From a private administrative terminal, compare the host's machine identity (command `cat /etc/machine-id`) with the instance inventoried in step 1. Prepare a root-owned, private installation manifest using the release's `infra/self-hosting/installation.example.json` and the [configuration dictionary](configuration.md). Supply separate deployment-specific runtime secrets through the prescribed private file. If the identities disagree, stop and check the connected host. Never copy a production environment file.
-5. **Ingress owner.** Prepare a deployment-specific HTTPS hostname, certificate chain, protected private key and restricted audience/admission policy. Register deployment-specific Turnstile and Passwordless credentials for that origin. For this implementation, provide an external gate whose unauthenticated response redirects to the chosen HTTPS admission host under `/cdn-cgi/access/login/`. For manual staging use the [proxied HTTPS setup](configuration.md#tls-and-admission-prerequisites). Actions uses that same proxied HTTPS profile. No tunnel or origin-pull client certificate is required. The operator owns DNS, firewall and Access settings. Other redirect protocols need separately tested support. Keep public traffic gated while the initial operator and browser checks run. For optional status, telemetry and notification services, verify every destination against the [integration inventory](handbook-overview.md) before enabling it.
+5. **Ingress owner.** Prepare a deployment-specific HTTPS hostname, certificate chain, protected private key and restricted audience/admission policy. Register deployment-specific Turnstile and Passwordless credentials for that origin. Use the [proxied HTTPS setup](configuration.md#tls-and-admission-prerequisites). Actions uses that same proxied HTTPS profile. No tunnel or origin-pull client certificate is required. The operator owns DNS and firewall settings. Cloudflare Access is optional; if you choose to keep setup behind an owner-only gate, configure and test it as described in [maintenance mode](part-7-keep-it-running.md#710-optional-maintenance-mode-with-cloudflare-access). Without that gate, the public signup and sign-in pages become reachable when ingress starts. For optional status, telemetry and notification services, verify every destination against the [integration inventory](handbook-overview.md) before enabling it.
 
 ## Prepare the operator inputs
 
