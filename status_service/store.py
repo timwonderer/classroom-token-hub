@@ -79,16 +79,24 @@ class FirestoreNoticeStore:
 
         write(self.client.transaction())
 
-    def error_history(self, *, now: datetime) -> list[dict]:
-        """Thirty UTC dates of observed request totals; missing data stays missing."""
-        now = now.astimezone(timezone.utc)
-        dates = [now.date() - timedelta(days=offset) for offset in range(29, -1, -1)]
-        refs = [self.client.collection("telemetry_days").document(day.isoformat()) for day in dates]
-        records = {doc.id: doc.to_dict() for doc in self.client.get_all(refs) if doc.exists}
-        return [{"date": day.isoformat(),
-                 "errors": records.get(day.isoformat(), {}).get("request_errors"),
-                 "scheduled_windows": 288 if day < now.date() else (now.hour * 60 + now.minute) // 5}
-                for day in dates]
+    def error_history(self, *, clock=None) -> list[dict]:
+        """Bound coverage after the read, so concurrent windows remain valid."""
+        clock = clock or (lambda: datetime.now(timezone.utc))
+        while True:
+            started = clock().astimezone(timezone.utc)
+            dates = [started.date() - timedelta(days=offset) for offset in range(29, -1, -1)]
+            refs = [self.client.collection("telemetry_days").document(day.isoformat()) for day in dates]
+            records = {doc.id: doc.to_dict() for doc in self.client.get_all(refs) if doc.exists}
+            observed_at = clock().astimezone(timezone.utc)
+            if observed_at.date() != started.date():
+                # A midnight rollover changes the requested dates as well as the
+                # denominator. Re-read the new 30-date range; GET stays pure.
+                continue
+            return [{"date": day.isoformat(),
+                     "errors": records.get(day.isoformat(), {}).get("request_errors"),
+                     "scheduled_windows": 288 if day < observed_at.date() else
+                         (observed_at.hour * 60 + observed_at.minute) // 5}
+                    for day in dates]
 
     def append_snapshot(self, snapshot: dict | None, received_at: datetime,
                         diagnostic: str | None = None) -> None:

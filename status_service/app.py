@@ -127,7 +127,7 @@ def create_app(store=None) -> Flask:
         return render_template("public_status.html", notices=[notice_view(n) for n in active_notices],
                                attempt=attempt, snapshot=attempt.get("snapshot") if attempt else None,
                                capability_cards=cards, measurements=measurements, platform_checks=checks,
-                               errors=error_summary(store.error_history(now=now)),
+                               errors=error_summary(store.error_history()),
                                recent_incidents=[notice_view(n) for n in recent],
                                overall_status=overall)
 

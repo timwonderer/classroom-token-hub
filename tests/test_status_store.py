@@ -89,7 +89,7 @@ def test_stale_or_unbounded_write_rejected_without_side_effect(database):
 
 def test_history_returns_gaps_without_writes(database):
     store, data = database
-    history = store.error_history(now=NOW)
+    history = store.error_history(clock=lambda: NOW)
     assert len(history) == 30
     assert all(day["errors"] is None for day in history)
     assert data == {}

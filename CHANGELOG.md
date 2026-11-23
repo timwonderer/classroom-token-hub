@@ -10,7 +10,9 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
-- **Status history reports observed errors.** Replaced the 90-day reliability bars and threshold-history tables with a 30-day 4xx/5xx distribution, observed request totals, last recorded five-minute windows and explicit coverage. Fixed-boundary samples prevent overlapping requests and retries from inflating counts. Older reliability rollups remain unavailable as error evidence; totals accumulate after collector rollout. The chart has visible text equivalents, a neutral empty state and timezone-labelled timestamps. Current status and incident handling are unchanged.
+- <!-- notes: fixed -->
+
+  **Status history reports observed errors.** Replaced the 90-day reliability bars and threshold-history tables with a 30-day 4xx/5xx distribution, observed request totals, last recorded five-minute windows and explicit coverage. Fixed-boundary samples prevent overlapping requests and retries from inflating counts. Older reliability rollups remain unavailable as error evidence; totals accumulate after collector rollout. The chart has visible text equivalents, a neutral empty state and timezone-labelled timestamps. Current status and incident handling are unchanged.
 
 
 - <!-- notes: internal -->
