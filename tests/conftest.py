@@ -68,8 +68,14 @@ os.environ.setdefault("AUDIT_HMAC_KEY", "test-audit-hmac-key-for-tests-only-not-
 # every test that exercises teacher/account destruction. Tests that need the
 # passkey path opt in explicitly via monkeypatch (tests/helpers/passkey.py's
 # fake_passwordless fixture), so the ambient value is never needed here.
-os.environ.pop("PASSWORDLESS_API_KEY", None)
-os.environ.pop("PASSWORDLESS_API_PUBLIC", None)
+#
+# Set to "" rather than popped: app/__init__.py's own load_dotenv(override=False)
+# runs again at `from app import app as flask_app` below, and override=False only
+# protects a key already present in os.environ — an absent one would be
+# repopulated straight from .env. An empty string stays put and is still
+# falsy to passkey_service_configured()'s bool() check.
+os.environ["PASSWORDLESS_API_KEY"] = ""
+os.environ["PASSWORDLESS_API_PUBLIC"] = ""
 
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
