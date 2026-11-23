@@ -88,7 +88,12 @@ Expect `inactive` twice. These checks return a nonzero exit status for
 `disabled` and `inactive`; those are the intended results here, not failures
 to clear by enabling or starting the services. The database remains running,
 so you can take the two backups in [Part 7](part-7-keep-it-running.md#72-back-up-the-database)
-from your computer. Test the database backup with Part 7.4 before continuing.
+from your computer. In this same stopped window,
+[save the independent audit baseline](upgrades.md#save-the-expected-baseline-with-a-recovery-point)
+and pair it with the database and key backups. Test the database backup with
+Part 7.4 before continuing. If the old source is lost, use the trusted baseline
+already saved with the chosen recovery point; don't generate it from the
+restored copy.
 
 **Why disable both?** Cloudflare Access controls who can enter the website.
 It doesn't stop payroll, rent or other timed jobs. Stopping `cth-web` stops
@@ -382,6 +387,14 @@ suspect rows by hand does not establish a lawful restored database.
 **Checkpoint:** the restore's contents, original keys and release agree, and
 you have a recorded basis for allowing those identities to return.
 
+Before starting any replacement service, supply the independent expected
+baseline paired with this backup and run the `exact` phase of
+[the complete audit check](upgrades.md#check-the-complete-audit-history) on the
+replacement, using its restored SHA and original audit key. It must match the
+saved revision, full scope set, counts, final sequences and head hashes. A
+missing or unverified baseline keeps audit completeness unresolved; leave the
+service private while recovering that evidence.
+
 ## 9. Start and check the replacement using a manual continuation
 
 **Before starting:** confirm again that both old services are disabled and
@@ -456,8 +469,11 @@ the original `AUDIT_HMAC_KEY`, including the full expected count and head hash.
 An audit chain is the tamper-evident record of protected changes. A default
 500-event sample or a matching row count is insufficient. Read-only
 verification must not create replacement audit events to obtain a pass.
-Follow [Check the complete audit history](upgrades.md#check-the-complete-audit-history)
-using the restored release and runtime file. Run that check before reopening.
+The `exact` phase must have passed before step 9 started the services. Now
+run the `extends` phase of [Check the complete audit history](upgrades.md#check-the-complete-audit-history)
+using the same independent baseline, restored release and runtime file. This
+checks the saved history remains intact while allowing new scheduled work.
+Run it again after a permitted test transaction and before reopening.
 
 In Cloudflare, change **only your CTH hostname's existing proxied A record**
 to the replacement server's verified IPv4 address. Keep **Proxied** enabled

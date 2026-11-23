@@ -124,7 +124,10 @@ For either path:
 
 - **Your backups:** keep or delete them, as you decided in 8.1. If you delete
   them, also delete any copies in synced folders or cloud storage. Keep
-  `cth-backup.agekey` exactly as long as you keep backups encrypted to it.
+  `cth-backup.agekey` while any retained backup is encrypted to its public
+  key **or any backup process still uses that public key**, including on a
+  replacement server. Before retiring the key, switch every producer to a
+  new key pair and verify its new backups, then reconcile older archives.
 - **Your password manager:** when moving, update the existing “CTH install”
   note with the replacement's details. Archive the note only once nothing
   depends on it.

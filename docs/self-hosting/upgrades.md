@@ -222,15 +222,54 @@ Arrange a time when your teachers and students won't need the site. Use
 and verify that an unadmitted browser cannot get through. This keeps new web
 requests out; it does not stop timed jobs.
 
-On the server, stop the front end and app, then verify both are stopped:
+Before stopping services, pause any automation that could restart or deploy
+CTH: a scheduled deployment, a provider watchdog, or an agent with an active
+restart task. `disable` removes normal boot startup; it does not block an
+explicit `systemctl start` from another tool. Inspect your scheduled work and
+suspend only the CTH restart/deployment jobs you identify. Record what you
+paused so you can restore it after verification. Leave unrelated jobs alone.
+
+On the server, create a private upgrade record and save the **actual boot
+settings** before changing them. Boot settings determine whether a service
+starts automatically after a reboot; they are separate from whether it is
+running right now.
 
 ```bash
-systemctl stop cth-ingress.service cth-web.service
+umask 077
+cth_upgrade_record="/root/cth-upgrade-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -m 0700 "$cth_upgrade_record" &&
+cp -p /etc/systemd/system/cth-web.service "$cth_upgrade_record/cth-web.service.before" &&
+cp -p /etc/cth/runtime.env "$cth_upgrade_record/runtime.env.before" &&
+systemctl show cth-web.service -p UnitFileState --value > "$cth_upgrade_record/cth-web.boot-before" &&
+systemctl show cth-ingress.service -p UnitFileState --value > "$cth_upgrade_record/cth-ingress.boot-before"
+```
+
+Read those two saved settings:
+
+```bash
+cat "$cth_upgrade_record/cth-web.boot-before"
+cat "$cth_upgrade_record/cth-ingress.boot-before"
+```
+
+The tutorial's normal profile has **`enabled`** for both. If either was
+`disabled`, record that deliberate difference; do not later enable it just
+because the example profile does. An unexpected value such as `masked`, or
+a missing file, needs inspection before you proceed.
+
+Now stop both services **and disable their boot startup**:
+
+```bash
+systemctl disable --now cth-ingress.service cth-web.service
+systemctl is-enabled cth-ingress.service cth-web.service
 systemctl is-active cth-ingress.service cth-web.service
 ```
 
-Expect `inactive` twice. The second command returns a nonzero exit status
-when services are inactive; here that is the expected result. Leave
+Expect `disabled` twice, then `inactive` twice. Those query commands return a
+nonzero status for disabled/inactive services; here those are the intended
+results. If the connection drops or the server reboots during maintenance,
+reconnect and run both queries again before resuming. Both services must
+still be disabled and inactive. In your practice rehearsal, include a reboot
+at this checkpoint and verify those results after reconnecting. Leave
 PostgreSQL running. Check for unexpected application connections:
 
 ```bash
@@ -242,20 +281,18 @@ With the app stopped and no other maintenance session connected, expect no
 rows. Investigate remaining connections before migrating; don't terminate
 unknown work automatically.
 
+Before migrating, [capture the independent expected audit baseline](#save-the-expected-baseline-with-a-recovery-point)
+from this stopped source. Keep writers stopped, take the matching backups,
+then supply that saved baseline and run the `exact` audit check below. Keep
+the encrypted baseline with those recovery files.
+
 On **your computer**, take both backups using [Part 7, sections 7.2–7.4](part-7-keep-it-running.md#72-back-up-the-database)
-and verify the restore. Record the old SHA and revision with them. Preserve
-a private copy of the service definition on the server too:
+and verify the restore. Record the old SHA and revision with them.
 
-```bash
-umask 077
-cth_upgrade_record="/root/cth-upgrade-$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -m 0700 "$cth_upgrade_record"
-cp -p /etc/systemd/system/cth-web.service "$cth_upgrade_record/cth-web.service.before"
-cp -p /etc/cth/runtime.env "$cth_upgrade_record/runtime.env.before"
-```
-
-Continue only when the current backup is usable. A backup from before a
-student or class deletion may contain records that must stay deleted.
+Continue only when the current backup is usable, the two boot settings are
+saved, restart automation is paused and both services remain stopped. A
+backup from before a student or class deletion may contain records that
+must stay deleted.
 
 ## 6. Check and, if necessary, migrate the database
 
@@ -385,8 +422,13 @@ particularly for an audit or policy table. `alembic_version` must remain
 read-only to the app; `audit_events` must not gain app UPDATE or DELETE
 permissions. Don't grant privileges to all future objects as a shortcut.
 
-Save the reviewed release-specific SQL in a private root-owned file, then
-apply it as the structure owner:
+**If no new grants are needed, skip creating and executing a permissions
+file.** This includes a no-migration release whose required objects and
+permissions are unchanged. Record “no new grants required” with the checked
+release comparison, then continue to step 7.
+
+If new grants are needed, save the reviewed release-specific SQL in a private
+root-owned file, then apply it as the structure owner:
 
 ```bash
 runuser -u cthowner -- psql -Xw -v ON_ERROR_STOP=1 \
@@ -499,103 +541,256 @@ In an admitted browser, repeat teacher/student sign-in and the release's
 chosen browser checks. Use a fictional practice class for test payments;
 inspect real classroom history read-only. Compare recorded balances and
 history, explaining changes due to timed jobs or the release itself. Verify
-protected audit history with [the complete-chain check below](#check-the-complete-audit-history).
+protected audit history with the `extends` phase of
+[the complete-chain check below](#check-the-complete-audit-history), using the
+baseline saved before migration.
 An `ok` health response confirms a database connection, not financial correctness.
 
 **Reopen only when** the running paths and database revision agree with the
 plan, service and scheduler checks pass, expected browser behavior works,
-and differences in records are understood. Remove maintenance mode and check
-from an ordinary student session. Record the new SHA, revision, restart time,
-backup filenames, changed settings by name, checks and any remaining issue.
-Keep the old release and protected backup until their retention decision.
+and differences in records are understood. Only now restore the intended
+boot startup settings recorded in step 5. Run these cases individually and
+stop if either reports an unexpected or missing saved setting:
+
+```bash
+case "$(cat "$cth_upgrade_record/cth-web.boot-before")" in
+  enabled) systemctl enable cth-web.service ;;
+  disabled) systemctl disable cth-web.service ;;
+  *) printf '%s\n' 'Inspect the saved web boot setting before proceeding' >&2; false ;;
+esac
+```
+
+```bash
+case "$(cat "$cth_upgrade_record/cth-ingress.boot-before")" in
+  enabled) systemctl enable cth-ingress.service ;;
+  disabled) systemctl disable cth-ingress.service ;;
+  *) printf '%s\n' 'Inspect the saved ingress boot setting before proceeding' >&2; false ;;
+esac
+```
+
+Check `systemctl is-enabled cth-web.service cth-ingress.service` against those
+two saved values, and check that both services are currently active. Restoring
+boot startup does not itself start a stopped service. Deliberately starting
+`cth-web` starts its timed jobs, so repeat runtime and browser checks after
+any intervening reboot or stop rather than assuming the earlier checks still
+apply.
+
+Restore the recorded restart/deployment automation only after it is configured
+for the verified new version. Then remove maintenance mode and check from an
+ordinary student session. Record the new SHA, revision, restart time, backup
+filenames, boot settings, restored automation, changed settings by name,
+checks and any remaining issue. Keep the old release and protected backup
+until their retention decision.
 
 ## Check the complete audit history
 
 CTH keeps a signed history of protected changes. Its **chain head** records
-where that history should end. A verifier checking the first 500 events can
-succeed while leaving later events unchecked. This check reads through the
-actual count and compares the final count, sequence and hash with the head.
-It also checks the latest protected ledger row in each surviving class.
+where a chain should end. Checking only the restored chains against their own
+restored heads can miss an entire chain that disappeared with its head, or
+history shortened consistently at both places. Recovery needs an
+**independent expected baseline**: the scopes, event counts, sequence numbers
+and head hashes recorded from the trusted source at that recovery point.
 
-Run it on the server using the **currently selected SHA**. If you are using
-this section during recovery, set `cth_audit_sha` to the restored release's SHA,
-not a later release. The transaction is read-only and uses one consistent
-database view so timed jobs cannot change the comparison halfway through.
-In this release, importing the Flask app does not start its scheduler; only
-Gunicorn's worker hook starts scheduled jobs.
+The baseline stays private and encrypted alongside your backups. It is not
+sent to the project. Never create the expected baseline from the restored
+copy you are trying to verify.
 
-`--pipe` passes the command's input and output to the temporary service, so
-the Python block reaches `python -` through standard input. `--wait` returns
-the Python command's exit status. These are documented in the
-[systemd 249 command reference](https://www.freedesktop.org/software/systemd/man/249/systemd-run.html#--pipe).
-Paste the complete block, including its final `PYTHON` line; do not add `--pty`.
+### Save the expected baseline with a recovery point
+
+Do this while **all application writers are disabled and stopped**, before
+taking the matching database backup in the same maintenance window. The
+upgrade's step 5 and recovery's step 2 explain how to stop writers safely.
+Keep them stopped until both capture and backup have succeeded; otherwise
+those files may describe different moments. Pause other administrative
+writes too. A live dump's ordinary table-count manifest does not contain
+this independent audit baseline.
+
+**Work here: your computer, Bash.** Replace the source IP and `age1…` recipient.
+This reads the trusted source over SSH and encrypts the expected metadata
+locally. It prints only the encrypted filename and size:
 
 ```bash
-cth_audit_sha=REPLACE_WITH_RUNNING_40_CHARACTER_SHA
+umask 077
+set -o pipefail
+set -o noclobber
+mkdir -p "$HOME/cth-backups"
+chmod 700 "$HOME/cth-backups"
+cd "$HOME/cth-backups"
+cth_audit_baseline="cth-audit-$(date -u +%Y%m%dT%H%M%SZ).json.age"
+if ssh root@203.0.113.10 'cd / && runuser -u postgres -- psql -XqAtw -h /var/run/postgresql -p 5432 -d cth_reference -v ON_ERROR_STOP=1' <<'SQL' \
+  | age -r age1… > "$cth_audit_baseline.partial"
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SELECT jsonb_build_object(
+  'format', 1,
+  'alembic_revision', (SELECT version_num FROM public.alembic_version),
+  'heads', COALESCE(jsonb_agg(jsonb_build_object(
+    'chain_scope', chain_scope, 'event_count', event_count,
+    'latest_sequence', latest_sequence, 'latest_hash', latest_hash
+  ) ORDER BY chain_scope), '[]'::jsonb)
+) FROM public.chain_heads;
+COMMIT;
+SQL
+then
+  mv "$cth_audit_baseline.partial" "$cth_audit_baseline"
+  ls -lh "$cth_audit_baseline"
+else
+  echo 'Audit baseline capture failed; keep writers stopped and inspect the error.' >&2
+  false
+fi
+```
+
+A `.partial` file is not a completed baseline. After success, take the
+matching database and key backups from Part 7 without restarting writers.
+Record all three filenames, the source SHA and the recovery time together.
+Keep the baseline off the server as well as on protected storage. If capture
+or a dump fails, keep the source intact and repeat the matched set while it
+is still stopped; don't label files from different points as one set.
+
+### Supply the saved baseline for verification
+
+**Work here: your computer, Bash.** Select the baseline paired with the
+particular backup or pre-upgrade state, then send it to the server being
+checked. During recovery, this is the **replacement's** IP. The file is
+plaintext only inside the protected SSH stream and on that server:
+
+```bash
+set -o pipefail
+cth_saved_audit="$HOME/cth-backups/cth-audit-REPLACE.json.age"
+age -d -i "$HOME/cth-backup.agekey" "$cth_saved_audit" \
+  | ssh root@203.0.113.20 \
+    'umask 077; set -C; cat > /etc/cth/audit-baseline.expected.json'
+```
+
+Immediately run `echo $?`; it must be **0**. A failed transfer or decryption
+can leave a partial file: do not use it as evidence. Inspect the cause before
+retrying. The remote shell refuses to overwrite an existing expected file;
+identify which recovery point it belongs to before replacing it. Never print
+its contents into chat or a public report.
+
+**Work here: server as root.** Choose the comparison you need:
+
+| Phase | When to use it | What must match |
+| --- | --- | --- |
+| `exact` | Restored database **before any app or scheduler starts**, or the frozen source before an upgrade. | The recorded revision and exact set of scopes, counts, final sequences and hashes must match the saved baseline. |
+| `extends` | After the app starts and may append legitimate new events. | Every saved scope and its complete saved history must remain. The event at each saved final sequence must match its saved hash; the complete current chains must also verify. New events don't erase the saved expectations. |
+
+Run `exact` first on a recovery target. A later `extends` pass does not replace
+that check. For an upgrade, verify `exact` before migration and `extends`
+after startup; check the new database revision separately in step 6.
+If the source is lost and no trusted expected baseline survives, record
+**audit completeness unverified** and keep the recovered service private
+while locating the evidence. Don't substitute its own restored head values.
+
+The command below uses the currently selected release and original audit key.
+`LoadCredential` lets systemd supply the root-owned expected file privately
+to this one command. Its separate private log also works on a replacement
+where the web service has not yet created its own log directory. The
+transaction is read-only and sees one consistent database view.
+
+`--pipe` passes the Python block through standard input; `--wait` returns its
+exit status. Paste the complete block including `PYTHON`; do not add `--pty`.
+See the [systemd 249 command reference](https://www.freedesktop.org/software/systemd/man/249/systemd-run.html#--pipe).
+Importing this release's Flask app does not start its scheduler.
+
+```bash
+cth_audit_sha=REPLACE_WITH_SELECTED_40_CHARACTER_SHA
+cth_audit_phase=exact
 systemd-run --wait --pipe --collect \
   -p User=cthapp -p Group=cthapp \
   -p "WorkingDirectory=/opt/cth/releases/$cth_audit_sha" \
   -p EnvironmentFile=/etc/cth/runtime.env \
   -p Environment=PYTHONDONTWRITEBYTECODE=1 \
-  "/opt/cth/venvs/$cth_audit_sha/bin/python" - <<'PYTHON'
+  -p LoadCredential=cth-audit-baseline:/etc/cth/audit-baseline.expected.json \
+  -p LogsDirectory=cth-audit-check -p LogsDirectoryMode=0700 -p UMask=0077 \
+  /usr/bin/env LOG_FILE=/var/log/cth-audit-check/app.log \
+  "/opt/cth/venvs/$cth_audit_sha/bin/python" - "$cth_audit_phase" <<'PYTHON'
+import json, os, sys
+from pathlib import Path
 from sqlalchemy import text
 from app import create_app
 from app.extensions import db
 from app.models import AuditEvent, ChainHead, ClassEconomy, Transaction
 from app.utils.audit_verifier import verify_chain, verify_row_lineage
 
+
+def compare_expected_heads(expected, current, anchors, phase):
+    assert phase in {'exact', 'extends'}, 'Choose exact or extends'
+    saved = {row['chain_scope']: row for row in expected}
+    actual = {row['chain_scope']: row for row in current}
+    assert len(saved) == len(expected), 'Duplicate scopes in expected baseline'
+    assert set(saved) <= set(actual), 'An expected audit chain is missing'
+    if phase == 'exact':
+        assert saved == actual, 'Restored audit heads differ from expected baseline'
+    for scope, row in saved.items():
+        assert row['event_count'] == row['latest_sequence'] >= 0, 'Invalid expected count'
+        assert actual[scope]['event_count'] >= row['event_count'], 'Audit history is shorter than expected'
+        assert actual[scope]['latest_sequence'] >= row['latest_sequence'], 'Audit sequence is shorter than expected'
+        assert anchors.get(scope) == row['latest_hash'], 'Saved audit head hash no longer matches'
+
+
+phase = sys.argv[1]
+baseline = json.loads((Path(os.environ['CREDENTIALS_DIRECTORY']) /
+                       'cth-audit-baseline').read_text())
+assert baseline['format'] == 1, 'Unknown expected-baseline format'
+assert baseline['heads'], 'Expected baseline contains no audit scopes'
 app = create_app()
 with app.app_context():
     db.session.execute(text(
         'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
+    if phase == 'exact':
+        revision = db.session.execute(text('SELECT version_num FROM alembic_version')).scalar_one()
+        assert revision == baseline['alembic_revision'], 'Recovery-point revision differs'
     heads = ChainHead.query.all()
-    scopes = {head.chain_scope for head in heads}
-    event_scopes = {scope for scope, in db.session.query(
-        AuditEvent.chain_scope).distinct().all()}
-    assert event_scopes <= scopes, 'Audit events have a missing chain head'
+    current = [dict(chain_scope=h.chain_scope, event_count=h.event_count,
+                    latest_sequence=h.latest_sequence, latest_hash=h.latest_hash)
+               for h in heads]
+    event_scopes = {scope for scope, in db.session.query(AuditEvent.chain_scope).distinct().all()}
+    assert event_scopes <= {h.chain_scope for h in heads}, 'Events have a missing head'
+    anchors = {}
+    for saved in baseline['heads']:
+        if saved['latest_sequence'] == 0:
+            anchors[saved['chain_scope']] = 'genesis'
+        else:
+            event = AuditEvent.query.filter_by(chain_scope=saved['chain_scope'],
+                sequence_number=saved['latest_sequence']).one_or_none()
+            anchors[saved['chain_scope']] = event.event_hash if event else None
+    compare_expected_heads(baseline['heads'], current, anchors, phase)
     nonempty = 0
     for head in heads:
         count = AuditEvent.query.filter_by(chain_scope=head.chain_scope).count()
         result = verify_chain(head.chain_scope, limit=count + 1)
         assert result.state == 'VERIFIED', 'Audit chain verification failed'
         assert result.event_count == count == head.event_count == head.latest_sequence, \
-            'Audit count or final sequence differs from its recorded head'
-        assert result.last_good_hash == head.latest_hash, \
-            'Audit final hash differs from its recorded head'
+            'Audit count or final sequence differs'
+        assert result.last_good_hash == head.latest_hash, 'Audit final hash differs'
         nonempty += bool(count)
     checked_rows = 0
     for classroom in ClassEconomy.query.all():
         row = Transaction.query.filter_by(class_id=classroom.class_id).filter(
-            Transaction.lineage_event_id.isnot(None)).order_by(
-            Transaction.id.desc()).first()
+            Transaction.lineage_event_id.isnot(None)).order_by(Transaction.id.desc()).first()
         if row is not None:
             result = verify_row_lineage('ledger_transaction', row.id, row)
             assert result.state == 'VERIFIED', 'Protected ledger row check failed'
             checked_rows += 1
     db.session.rollback()
-    print(f'Complete nonempty chains checked: {nonempty}')
-    print(f'Latest protected ledger rows checked: {checked_rows}')
-    assert nonempty > 0 and checked_rows > 0, \
-        'No protected financial activity was available to verify'
-    print('Audit checks passed for the stated chain and row scope')
+    assert nonempty > 0 and checked_rows > 0, 'No protected financial activity to verify'
+    print(f'Expected-baseline comparison passed: {phase}')
+    print(f'Complete nonempty chains checked: {nonempty}; protected ledger rows checked: {checked_rows}')
 PYTHON
 ```
 
-**Expected:** positive counts, then `Audit checks passed...`, with no assertion
-or command failure. This verifies all retained chains and one selected
-protected ledger row per class; it does not verify every business record or
-prove every balance calculation correct. A new empty installation needs a
-real payment in its fictional practice class before it can pass this check.
-Historical rows with a retired signature format may not be covered by the
-current verifier. Treat unavailable coverage as unresolved, not as proof of
-tampering or a reason to rewrite history.
+Expect `Expected-baseline comparison passed:` with the chosen phase and
+positive verification counts, with no assertion or command failure. This
+checks all retained chains and one selected protected ledger row per class;
+it doesn't verify every business record or every balance calculation. Use a
+real permitted payment in your fictional practice class before the first
+backup so there is protected financial activity to verify.
 
-If the command fails, keep the error private and note which assertion failed.
-Ask an agent to inspect the verifier in this exact release and explain the
-failure. A wrong restored audit key, incomplete data and an unavailable
-historical verifier need different repairs. Never regenerate the audit key,
-create replacement events or modify the recorded head to get a green result.
-For the governing boundary, see [audit lineage integrity](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md).
+After startup, set `cth_audit_phase=extends` and run the Python command again.
+Explain new events using actual scheduler or browser activity. A retired
+signature format or missing expected record is unresolved evidence, not a
+reason to rewrite history. Preserve the original audit key, events and heads
+on any failure. See [audit lineage integrity](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md).
 
 ## If the upgrade fails: choose the way back
 
@@ -613,17 +808,26 @@ mean running the migrations backward.
 For an application-only return, after confirming database compatibility:
 
 ```bash
-systemctl stop cth-ingress.service cth-web.service
-install -m 0600 "$cth_upgrade_record/runtime.env.before" /etc/cth/runtime.env
-install -m 0644 "$cth_upgrade_record/cth-web.service.before" /etc/systemd/system/cth-web.service
-systemctl daemon-reload
-systemctl start cth-web.service
+systemctl disable --now cth-ingress.service cth-web.service &&
+install -m 0600 "$cth_upgrade_record/runtime.env.before" /etc/cth/runtime.env &&
+install -m 0644 "$cth_upgrade_record/cth-web.service.before" /etc/systemd/system/cth-web.service &&
+systemctl daemon-reload &&
+systemctl start cth-web.service &&
 curl --fail --show-error --silent http://127.0.0.1:8000/health
 ```
 
-Verify the old runtime and database together, restart ingress, repeat browser
-checks behind the gate and reopen deliberately. Restoring the file does not
-roll back a database or recover a deleted key.
+Keep restart/deployment automation paused during this return. The explicit
+`start` above starts the old version's scheduler too; note the time and check
+any timed activity. The services remain disabled for boot startup while you
+verify the old runtime and database together. Restart ingress, then repeat
+readiness, audit and browser checks behind the gate.
+
+Only after that deliberate return passes, follow step 8's boot-setting
+restoration cases using the same saved settings. Restore automation for the
+verified **old** version, then reopen. If verification fails, disable and stop
+both services again; after any reboot, confirm disabled/inactive state before
+resuming investigation. Restoring the files does not roll back a database
+or recover a deleted key.
 
 For a database return, follow [replacement-server recovery](recovery.md) using
 the eligible backup and its matching old code and keys. Do not restore over

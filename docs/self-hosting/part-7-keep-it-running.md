@@ -136,6 +136,14 @@ is complete; the restore test in 7.4 does that check. Save the release SHA
 with your backup record. Avoid class or account deletions during a backup;
 if one occurs, retire that archive and take a new one afterwards.
 
+For a recovery point you will use to reopen the site, also
+[save an independent audit baseline](upgrades.md#save-the-expected-baseline-with-a-recovery-point)
+while all writers are paused, and take the matching dump in that same stopped
+window. The baseline lets recovery detect a completely missing or shortened
+audit chain. A live database dump remains useful, but by itself supplies no
+independent expected head values. Keep the baseline, database archive and key
+archive paired in your private backup record.
+
 **If something looks wrong.** If there's no `ls` line, the backup failed: read
 the error, and delete the leftover `.partial` file. Check you used the right IP
 address and the database name `cth_reference`.
