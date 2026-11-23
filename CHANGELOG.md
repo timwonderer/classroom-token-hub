@@ -10,7 +10,7 @@ and this project follows semantic versioning principles.
 
 ## [2.5.0] - 2026-11-23 — Self-hosting and reliable sign-in sessions
 
-Release candidate; not yet tagged, deployed or published. No database migration.
+Released as `6251659` on 2026-11-23 at 22:19 UTC by release run [45278550540](https://github.com/timwonderer/classroom-token-hub/actions/runs/45278550540). No migration. Record: [DEPLOY_2026-11-23_6251659.md](docs/ops/audits/DEPLOY_2026-11-23_6251659.md).
 
 ### Added
 
