@@ -91,8 +91,8 @@ identify a computer.
 | `CTH_HOSTNAME=classroom.example.org` | Stores a value in this terminal session. Replace the example once; later `$CTH_HOSTNAME` uses that value. It disappears when the session closes. |
 | `cd /root/cth-installer` | Changes the working folder. Relative paths in the next command start there. |
 | A line ending in `\` | The command continues on the next line. Copy the whole command, including the continuation lines. |
-| `A | B` | Sends A's output into B. The backup steps send the database directly into encryption this way. |
-| `A && B` | Runs B only if A succeeds. Keep this connection intact; it often prevents the next action after a failure. |
+| `printf 'hello\n' \| wc -l` | Prints one line containing hello, then sends that line to a command that counts lines; the result is `1`. The `\|` symbol is called a **pipe**. The backup steps use a pipe to send the database copy straight into encryption. |
+| `cd /root/cth-installer && pwd` | Opens the installer folder, then prints its location **only if opening the folder succeeded**. The `&&` connects those actions. Keep it intact so a later action doesn't run after an earlier failure. |
 | `> filename` | Writes output into a file. It can replace that file unless overwrite protection is enabled. |
 | `<<EOF` through a later `EOF` | One block that writes several lines into a file. Copy both boundary lines and everything between them. |
 | A prompt ending in `#` or `$` outside a code block | A sign the terminal is waiting. Don't add a prompt character to a command you copy. |

@@ -34,21 +34,34 @@ background reading if you want it.
 
 ## Which release this guide matches
 
-This guide describes the installer as it is after the changes from the
-November 2026 staging trial: the installer fixes in
-[#1787](https://github.com/timwonderer/classroom-token-hub/pull/1787) and
+This walkthrough targets the self-hosting installer changes prepared for
+**v2.5.0**. The version number tells you which instructions and application
+belong together; using the newest documentation with an older installer can
+produce different results.
+
+**As checked on November 23, 2026:**
+
+| Version | Status | What that means for this guide |
+| --- | --- | --- |
+| v2.5.0 | Release candidate in the project's changelog; not yet tagged or published. | This is the planned release for the installer described here. Wait for its published stable release and confirm it includes the fixes below before renting a server. |
+| v2.4.5 | Latest published stable release. | It predates the required installer fixes. Don't use it with this walkthrough. |
+
+Check the [Releases page](https://github.com/timwonderer/classroom-token-hub/releases)
+when you are ready to start. Merging a fix into `main` makes it part of the
+project's source; it does **not** publish a release or change an existing
+release tag. The planned version becomes an installation choice only when its
+stable release is published. [Part 3](part-3-get-cth.md) explains how to save
+that release's exact identifier.
+
+The release must include the installer fixes in
+[#1787](https://github.com/timwonderer/classroom-token-hub/pull/1787), the
+student-setup Redis fix in
 [#1789](https://github.com/timwonderer/classroom-token-hub/pull/1789), and
 [#1795](https://github.com/timwonderer/classroom-token-hub/pull/1795), which
-stops the installer from requiring Cloudflare Access. **As checked on November
-22, 2026, the newest published release is v2.4.5 and predates these changes.**
-The merged handbook is ahead of the published release. For this tutorial, use the
-first release that includes all three, from the
-[Releases page](https://github.com/timwonderer/classroom-token-hub/releases).
-An older release still checks for an Access gate during the `ingress` and
-`readiness` stages.
-[Part 3](part-3-get-cth.md) shows how to select it. If no release includes these
-changes, stop here before renting a server. A maintainer testing an exact
-unreleased commit is a separate rehearsal, not the published-release path.
+removes the Cloudflare Access requirement. An older installer still expects
+an Access gate during `ingress` and `readiness`. If no compatible stable
+release is available, pause here. Testing an exact unreleased commit is a
+separate maintainer rehearsal.
 
 **Plan for ongoing care.** You'll renew the HTTPS certificate, check security
 updates and keep usable backups. Part 7 explains those jobs. [Upgrades](upgrades.md)
