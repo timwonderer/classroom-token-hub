@@ -59,6 +59,18 @@ os.environ.setdefault("ENCRYPTION_KEY", "jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sD
 os.environ.setdefault("PEPPER_KEY", "tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk=")
 os.environ.setdefault("AUDIT_HMAC_KEY", "test-audit-hmac-key-for-tests-only-not-for-production")
 
+# A developer's own .env (needed to run the dev server locally) can carry a
+# real PASSWORDLESS_API_KEY. Left ambient, it makes passkey_service_configured()
+# return True for the whole suite, so forget_principal_remotely() (called at
+# the start of every teacher account destruction, FEAT-IDEN-007) attempts a
+# real outbound call instead of safely no-opping. A non-functional key then
+# raises PasskeyServiceUnavailable before any local deletion happens, failing
+# every test that exercises teacher/account destruction. Tests that need the
+# passkey path opt in explicitly via monkeypatch (tests/helpers/passkey.py's
+# fake_passwordless fixture), so the ambient value is never needed here.
+os.environ.pop("PASSWORDLESS_API_KEY", None)
+os.environ.pop("PASSWORDLESS_API_PUBLIC", None)
+
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
