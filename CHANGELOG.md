@@ -8,12 +8,6 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-### Fixed
-
-- <!-- notes: internal --> **The TLS trust-bundle test rejects all three removed emSign roots.** The test still expected C1 and C3 to be trusted after the certifi 2026.10.23 update removed them. It now checks that G3, C1 and C3 are absent and G1 remains. This corrects the sole failure in the release-candidate suite; application code and dependency pins are unchanged.
-
-- <!-- notes: internal --> **The test suite no longer leaks a developer's ambient `PASSWORDLESS_API_KEY` into teacher-destruction tests.** `tests/conftest.py` resets every other sensitive credential (`SECRET_KEY`, `PEPPER_KEY`, `ENCRYPTION_KEY`, `AUDIT_HMAC_KEY`) to safe test values at session start, but left `PASSWORDLESS_API_KEY`/`PASSWORDLESS_API_PUBLIC` untouched. A non-empty value in a local `.env` made `forget_principal_remotely()` (FEAT-IDEN-007, called at the start of every teacher account destruction) attempt a real passwordless.dev call instead of safely no-opping; a non-functional key then aborted the whole destruction FEAT before any local deletion ran, failing tests across `test_teacher_lifecycle.py`, `test_class_destruction_feat_identity.py`, `test_destruction_authority_boundary.py`, and other teacher/account-destruction tests. CI was unaffected since it never sets that variable. `conftest.py` now clears both variables unconditionally; tests that exercise the passkey path already opt in via `tests/helpers/passkey.py`'s `fake_passwordless` fixture.
-
 ## [2.5.0] - 2026-11-23 — Self-hosting and reliable sign-in sessions
 
 Release candidate; not yet tagged, deployed or published. No database migration.
@@ -44,6 +38,10 @@ Release candidate; not yet tagged, deployed or published. No database migration.
 - <!-- notes: internal --> **HTML test-parser packages are no longer installed with the production application** (#1775). Beautiful Soup and Soup Sieve move out of `requirements.txt` into the test dependency set. Test workflows install `requirements-test.txt`; the application did not use these packages.
 
 ### Fixed
+
+- <!-- notes: internal --> **The TLS trust-bundle test rejects all three removed emSign roots.** The test still expected C1 and C3 to be trusted after the certifi 2026.10.23 update removed them. It now checks that G3, C1 and C3 are absent and G1 remains. This corrects the sole failure in the release-candidate suite; application code and dependency pins are unchanged.
+
+- <!-- notes: internal --> **The test suite no longer leaks a developer's ambient `PASSWORDLESS_API_KEY` into teacher-destruction tests.** `tests/conftest.py` resets every other sensitive credential (`SECRET_KEY`, `PEPPER_KEY`, `ENCRYPTION_KEY`, `AUDIT_HMAC_KEY`) to safe test values at session start, but left `PASSWORDLESS_API_KEY`/`PASSWORDLESS_API_PUBLIC` untouched. A non-empty value in a local `.env` made `forget_principal_remotely()` (FEAT-IDEN-007, called at the start of every teacher account destruction) attempt a real passwordless.dev call instead of safely no-opping; a non-functional key then aborted the whole destruction FEAT before any local deletion ran, failing tests across `test_teacher_lifecycle.py`, `test_class_destruction_feat_identity.py`, `test_destruction_authority_boundary.py`, and other teacher/account-destruction tests. CI was unaffected since it never sets that variable. `conftest.py` now clears both variables unconditionally; tests that exercise the passkey path already opt in via `tests/helpers/passkey.py`'s `fake_passwordless` fixture.
 
 - <!-- notes: internal --> **Reference-host account creation and scheduler verification work with the rehearsed Ubuntu profile** (#1784, #1785). The service-account ownership marker uses a valid GECOS value and rejects foreign ownership. The scheduler journal query reads newest-first so its bounded lookup finds the verified owner message.
 - <!-- notes: internal --> **The Python 3.14 trial interpreter installs with safe permissions.** The pinned build ships group-writable files, and `tar` running as root kept those modes, so the host stage refused the interpreter on the first staging run. Extraction now uses umask 022, so files land as 0755/0644 (#1774).
