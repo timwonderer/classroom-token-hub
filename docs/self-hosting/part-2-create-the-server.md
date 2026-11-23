@@ -8,6 +8,14 @@ keywords: [self-hosting, tutorial, server, SSH, firewall, DNS]
 
 # Part 2: Create and secure the server
 
+You are renting the computer that will stay on when your laptop is closed.
+**Ubuntu** is its operating system. **x86-64** is its processor type; providers
+may call it x64 or AMD64 even when the processor is made by Intel.
+
+You'll use two different terminals in this part: the provider's web console,
+and a terminal on your own computer. Each step says which one. After SSH
+connects, your local terminal window sends its commands to the server.
+
 From this part on, **billing has started**. If you stop for more than a few
 days, read [Part 8](part-8-shut-down.md) first.
 
@@ -114,7 +122,13 @@ you, and HTTPS from Cloudflare.
 
 **Why.** Nothing else should be able to reach the server. The installer also
 configures the web server to answer only Cloudflare, and the firewall
-enforces the same rule a layer earlier.
+enforces the same rule before a connection reaches the web server.
+
+A **port** is a numbered connection point. Port **22** is for your SSH login;
+port **443** is for HTTPS web connections. An **inbound** rule controls what
+can enter the server. **Outbound** controls what the server can contact.
+A Cloudflare **range**, such as `173.245.48.0/20`, represents many addresses;
+paste the whole entry, including the slash and number.
 
 **Steps.** Create a firewall at your provider with these **inbound** rules,
 and attach it to the server:
@@ -171,6 +185,15 @@ comes through Cloudflare.
 
 ## Checkpoint
 
-You have a running, firewalled server and a proxied DNS record. Your note now also holds the server's IP address and fingerprint.
+Continue when all four are true:
+
+- The server is Ubuntu **22.04 x86-64**.
+- Its fingerprint matched the value in your authenticated provider console.
+- A **new** SSH connection works after the firewall change.
+- Cloudflare lists your hostname with **Proxied** enabled.
+
+Save the server IP and fingerprint in your note. If you're pausing, you can
+close SSH with `exit`; the server keeps running and billing continues. An
+error page at the new web address is expected at this point.
 
 **Next:** [Part 3: Get CTH onto the server](part-3-get-cth.md)

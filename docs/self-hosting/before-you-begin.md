@@ -8,6 +8,14 @@ keywords: [self-hosting, prerequisites, requirements, Cloudflare, Turnstile, pas
 
 # Before you begin
 
+Think of this page as deciding whether the project fits your time and budget.
+The learning is part of the project. You can learn the server tools while
+using them; you don't have to take a separate course before starting.
+
+**Before spending:** confirm a compatible CTH release exists, choose where to
+keep your passwords, and plan a practice installation. Real student data comes
+after you've tested both sign-in and recovery.
+
 Read this page before you spend any money. It tells you what you need and
 which choices are yours to make.
 
@@ -42,11 +50,18 @@ An older release still checks for an Access gate during the `ingress` and
 changes, stop here before renting a server. A maintainer testing an exact
 unreleased commit is a separate rehearsal, not the published-release path.
 
-**Plan for ongoing help.** Database backup and restore have been exercised
-in production; [Part 7](part-7-keep-it-running.md#74-test-that-a-backup-restores)
-explains which evidence applies to its manual drill. Upgrades and bringing a
-replacement server online still need experienced help. Certificate renewal
-is manual.
+**Plan for ongoing care.** You'll renew the HTTPS certificate, check security
+updates and keep usable backups. Part 7 explains those jobs. [Upgrades](upgrades.md)
+and [replacement-server recovery](recovery.md) have their own guided procedures,
+with prompts for an AI agent. They explain the work rather than assuming you
+already know the tools.
+
+Database backup and restore have been exercised in production;
+[Part 7](part-7-keep-it-running.md#74-test-that-a-backup-restores) explains which
+evidence applies to its manual drill. The expanded upgrade and replacement
+procedures still need a complete rehearsal on this installation layout. Use
+them with fictional data first; reading a procedure isn't a completed test.
+Certificate renewal in this tutorial is manual.
 
 **Database support.** This installer pins PostgreSQL 14.24 from Ubuntu
 22.04. As checked on November 22, 2026, Ubuntu publishes
@@ -63,9 +78,23 @@ applies to Homebrew, Docker or third-party packages.
 
 ## What is required and what is recommended
 
-Some services below are choices, but the current installer still requires
-them. This list keeps the two apart, so you know which choices are really open
-today.
+Here's what each service does. You will create the accounts in Part 1; this
+page helps you decide whether you want to use this arrangement.
+
+| Name you'll encounter | Its job in your installation |
+| --- | --- |
+| Ubuntu | The server's operating system, serving the role Windows or macOS serves on your computer. |
+| Flask and Python | The framework and language CTH is built with. The installer sets them up; you aren't asked to write an application. |
+| PostgreSQL, often shortened to Postgres | Stores the lasting records: classes, accounts, transactions and history. |
+| Redis | Holds short-lived setup information and request counters. It serves a different purpose from the database. |
+| nginx (pronounced “engine-x”) | Receives web connections on the server and passes them to CTH. |
+| Cloudflare proxy | Receives visitors' connections before they reach your server. |
+| Turnstile | Checks for automated abuse on sign-up and sign-in pages. This is a separate Cloudflare service. |
+| Passwordless.dev | Supplies the passkey integration. Its keys are currently required by the installer. |
+
+Some integrations are optional in the application but required by this
+installer. The tables below name those limits; they aren't choices you can
+change by leaving out a step.
 
 ### Required by the current release
 
@@ -135,6 +164,9 @@ and correct classroom access remain necessary regardless of provider.
 - **An SSH key.** You'll use it to log in to the server. If you don't have
   one, [GitHub's guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
   shows how to make one. Give it a passphrase.
+- **If SSH keys are new to you:** the public key goes into your server
+  provider's dashboard; the private key stays on your computer. This key pair
+  logs you into the server. It is separate from CTH sign-in and backup keys.
 - **For backups (Part 7):** space for encrypted archives and a restored copy
   of the database. Start with several GB for a small practice installation;
   actual needs grow with your data. You will install `age` and PostgreSQL 14

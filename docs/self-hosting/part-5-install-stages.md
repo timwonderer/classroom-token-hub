@@ -8,9 +8,19 @@ keywords: [self-hosting, tutorial, install, stages, installer]
 
 # Part 5: Install one stage at a time
 
+**Work here: the server terminal, as root.** You are now turning the files
+from Part 4 into a running application. The stage names are the installer's
+labels; the explanation beside each tells you what it actually accomplishes.
+
+Keep a short progress note, such as **“Last passed: redis; next: release.”**
+After a break, reset the two session values below and resume at the next
+unfinished stage. A completed stage's `apply` checks its work; it doesn't
+start a second installation.
+
 The installer has ten stages. You run them **one at a time, in order**. Each
-one takes from a few seconds to a few minutes. The whole part takes about an
-hour, most of it waiting.
+one may take from a few seconds to several minutes. Allow a session for this
+part and leave time to investigate differences. The elapsed time depends on
+package downloads and your server; an estimate isn't a deadline to skip checks.
 
 ## 5.0 How every stage works
 
@@ -27,7 +37,8 @@ you open a new SSH session.
 **Running a stage.** `apply` performs the stage and then checks its own work.
 `check` only checks, and changes nothing. You can run
 `python3 infra/self-hosting/install.py check STAGE --config "$manifest"` for any
-finished stage, at any time.
+finished stage, at any time. Replace `STAGE` with a name such as `redis`.
+The word `STAGE` itself isn't a valid stage name.
 
 **A stage succeeded** when it prints one line ending in `"result": "ok"`:
 
@@ -53,8 +64,12 @@ as `redis: service account cannot reach Redis socket`. Then:
 > missing. So a second `apply` is safe, but it won't repair anything by
 > itself. Repeating it in the hope that it works only wastes time.
 
-If you can't work out how to fix a stage, you can always start again on a
-clean server: see [Starting over](#starting-over).
+If the message still doesn't tell you what to do, use the
+[troubleshooting agent prompt](working-with-an-agent.md#when-something-fails).
+An agent can trace the check in your release's source and explain what's
+missing. A partly completed stage may need an installer correction rather
+than another attempt. Preserve the error before choosing a fresh practice
+server; [Starting over](#starting-over) explains that option and its data loss.
 
 ## 5.1 host: system packages and accounts
 
@@ -62,7 +77,9 @@ clean server: see [Starting over](#starting-over).
 its service accounts.
 
 **Why.** It installs PostgreSQL 14, Python 3.10, two Redis services and nginx,
-all from Ubuntu's own package archive, plus three locked-down accounts
+all from Ubuntu's software sources. PostgreSQL stores the lasting records;
+Redis holds temporary information; nginx handles incoming web connections;
+Python runs CTH's code. It also creates three locked-down accounts
 (`cthapp`, `cthowner`, `cthrate`) that run CTH without root powers. It also
 creates `/opt/cth`, where releases will live. It first checks this really is
 the empty Ubuntu 22.04 server named in your manifest.
@@ -140,6 +157,10 @@ waits up to 25 seconds for each Redis service to answer.
 `/opt/cth/releases/<SHA>` and installing its Python libraries into
 `/opt/cth/venvs/<SHA>`.
 
+The Python libraries are supporting software CTH needs. Its **virtual
+environment**, or **venv**, keeps those libraries in a separate folder so a
+future release can use different versions.
+
 **Why.** Each release gets its own folders named by its SHA. A later upgrade
 can then sit beside the old one rather than overwrite it.
 
@@ -180,7 +201,9 @@ fix it with `chmod 600 /etc/cth/runtime.env`.
 
 ## 5.6 database: install the schema
 
-**What you're doing.** Creating all of CTH's tables in the empty database.
+**What you're doing.** Creating CTH's tables—the organized records it uses
+for accounts, classes and transactions—in the empty database. Their structure
+is called the **schema**. No student accounts are being created yet.
 
 **Why.** Each release ships a verified copy of its database structure. This
 stage installs it, checks it matches, and then gives `cthapp` exactly the
@@ -234,8 +257,9 @@ anywhere public; they can contain names and keys.
 running.
 
 **Why.** The scheduler runs timed jobs such as payroll and rent. Two copies
-would violate the single-owner rule; without an owner, scheduled work does
-not run. This stage installs
+must not run the same timed work independently; without one, scheduled work
+does not run. A **lock** is the database's way of recording which process has
+that responsibility. This stage installs
 nothing. It checks the database to confirm one process holds the scheduler.
 
 **Steps.**
@@ -280,8 +304,9 @@ python3 infra/self-hosting/install.py apply ingress --config "$manifest"
 
 ## 5.10 readiness: check everything together
 
-**What you're doing.** Checking service state, local HTTP/HTTPS health, worker
-storage controls and scheduler ownership together.
+**What you're doing.** Checking that the running programs, local web
+connections, protection against writing temporary worker memory to disk, and
+ownership of timed jobs all agree at the same moment.
 
 **Why.** It confirms the services, health, scheduler and HTTPS all work at
 the same moment, not just one after another.
@@ -324,6 +349,12 @@ stage is a clean server:
 
 ## Checkpoint
 
-All ten stages are finished, and your CTH is live.
+Continue when all ten stages reported `"result": "ok"` and an external browser
+opens your teacher sign-in page. Record **“Last passed: readiness.”**
+
+That means the installation is running. It doesn't yet show that a teacher can
+sign in or a student can claim an account. Test those in Part 6 before inviting
+students. If the server passes but the browser fails, start with the
+[Cloudflare error guidance](troubleshooting.md#cloudflare-shows-an-error-page-520526).
 
 **Next:** [Part 6: First use](part-6-first-use.md)

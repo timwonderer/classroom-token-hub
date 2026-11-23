@@ -8,6 +8,18 @@ keywords: [self-hosting, tutorial, manifest, runtime file, keys, certificate]
 
 # Part 4: Describe your installation
 
+You are preparing three things CTH needs before it can start:
+
+| Item | What it tells CTH | Keep in mind |
+| --- | --- | --- |
+| Installation manifest | “This server, this release, this web address.” | Created once for this installation. |
+| Runtime file | “Use these settings and these secret keys.” | Preserve its keys when restoring data. |
+| HTTPS certificate and private key | “This server can answer securely for this hostname.” | The certificate expires and needs renewal. |
+
+You will create the first two files by copying blocks, not writing Python.
+Read the replacement instructions before pasting. A block that generates keys
+is for a new installation; rerunning it is not a general repair method.
+
 In this part you write the files the installer reads. Everything goes in
 `/etc/cth/`, a folder only root can open. The full meaning of every field is
 in the [configuration dictionary](configuration.md); you don't need it to
@@ -101,7 +113,8 @@ do not need to be pasted into the terminal. Their encrypted backup will later
 travel over SSH. The provider keys are typed at hidden prompts,
 so they never appear on screen or in your shell history.
 
-**Steps.** Paste the whole block. It stops four times and asks for a key;
+**Steps.** Check that `umask 077` and `set -o noclobber` are set in this
+session, as described above. Paste the whole block. It stops four times and asks for a key;
 paste each one from your note and press Enter. Nothing appears as you paste.
 That's deliberate.
 
@@ -132,6 +145,11 @@ unset turnstile_site turnstile_secret passwordless_public passwordless_secret
 stat -c '%a %U %G' /etc/cth/runtime.env
 cut -d= -f1 /etc/cth/runtime.env
 ```
+
+The functions `hex()` and `fernet()` generate random keys in the formats CTH
+expects. The lines starting `printf` write settings to the file; they don't
+print those settings on your screen because the block redirects them into
+`runtime.env`. You do not need to invent values for the generated keys.
 
 The database name in `DATABASE_URL` must match `"database"` in the manifest.
 Both use `cth_reference`.
@@ -173,6 +191,11 @@ it from the server itself, using Ubuntu's list of trusted authorities.
 > Cloudflare's own "Origin CA" certificates don't work here. Ubuntu doesn't
 > trust them, so the installer's own HTTPS check fails. Use a publicly
 > trusted certificate such as Let's Encrypt.
+
+A **certificate authority**, here Let's Encrypt, issues the certificate after
+you prove control of the web address. A **TXT record** is a DNS entry holding
+text rather than a server address. Certbot gives you the exact text to enter;
+it is asking for proof, not asking you to invent another password.
 
 **Steps.** The server's port 80 is closed, so you prove you own the domain
 with a DNS record instead. Stop after any failed command; do not copy files
@@ -246,7 +269,23 @@ nothing from `git status`.
 
 ## Checkpoint
 
-The manifest, runtime file and certificate are in place and valid. Nothing is
-installed yet. This is a safe place to stop.
+Continue when the validator prints **`manifest and runtime file look valid`**,
+Git prints no changes, and the certificate shows your hostname and a future
+expiry date. Save that date now; renewal is manual.
+
+The validator checks the settings' format. Part 6 will check whether the
+provider keys actually work in a browser. If validation fails, fix the named
+field before installing. You can pause here with all three files saved.
+
+**Agent prompt, if validation fails:**
+
+```text
+I'm at Part 4.5 of docs/self-hosting. Explain this validation error in plain
+language: [paste the error line after removing private details]. Read
+infra/self-hosting/install.py and runtime.py from my chosen release to find
+the actual validation rule. Identify the field and give one bounded repair
+and a check. Never print runtime.env, regenerate application keys, change the
+release SHA or edit the installation journal to make the check pass.
+```
 
 **Next:** [Part 5: Install one stage at a time](part-5-install-stages.md)

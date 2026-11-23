@@ -8,6 +8,17 @@ keywords: [self-hosting, database, installation, verification, migrations]
 
 # Install the release database
 
+**Installing your first server?** Run [Part 5.6](part-5-install-stages.md#56-database-install-the-schema).
+That stage performs the database installation for you. You don't need to
+repeat the standalone commands below.
+
+A database's **schema** is its structure: the tables, relationships and rules
+used to store records. A release's **baseline** is the saved starting structure
+for a new installation. A **migration** changes an existing structure for a
+newer release. This page explains how maintainers verify the baseline.
+For existing classroom data, use [Upgrades](upgrades.md) or [Recovery](recovery.md)
+instead of trying to create the starting structure again.
+
 Use this procedure once, on a **new, offline database**. A running or previously
 initialized installation upgrades through Alembic. A backup restores through
 the backup procedure. Neither is a fresh installation. The external database

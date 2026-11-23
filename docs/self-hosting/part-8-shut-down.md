@@ -8,6 +8,14 @@ keywords: [self-hosting, tutorial, shut down, destroy, decommission, billing]
 
 # Part 8: Shut it down
 
+**Choose the outcome first:** are you retiring an empty practice server,
+closing a classroom installation, or moving to a replacement? For a move, use
+[Recovery](recovery.md) and verify the replacement before destroying the old
+server. A classroom's last day doesn't automatically require deleting its server.
+
+Most of this part happens in your provider's dashboard. The stop command in
+8.2 happens on the server; backup commands still happen on your computer.
+
 Use this part at the end of the school year, if you move to the hosted site,
 or if you set up a test server and are done with it.
 
@@ -114,11 +122,20 @@ DNS name can later point at someone else's server.
   depends on it.
 - **The domain:** keep it, or let it expire if you bought it only for CTH.
 
-**What you should see.** Nothing left in any dashboard that names your CTH
-hostname.
+**What you should see.** The retired server and its dedicated integrations
+are gone. Any deliberately retained domain, encrypted backup or storage item
+has an owner, an expiry date and a recorded cost. You can explain every item
+that remains.
 
 **If something looks wrong.** If you can't remove something now, write down
 what's left and when you'll remove it.
+
+## Checkpoint
+
+Record the server name and IP you retired, when you confirmed its absence,
+what storage you kept and any continuing charges. Check your next provider
+invoice against that note. If a resource remains unexpectedly, keep the
+cleanup task open until you've accounted for it.
 
 ## That's it
 

@@ -7,6 +7,12 @@ roles: [operator]
 
 # Rehearsal findings and operator usability
 
+**Maintainer/rehearsal reference.** This page describes how the project
+prepares or records a temporary test installation. It isn't another task list
+for teachers to complete. For your own server, follow [the tutorial](README.md).
+**Staging** means a separate practice environment; a **rehearsal** is a trial
+run used to discover problems before relying on a procedure.
+
 Recorded November 18–19, 2026 (America/Los_Angeles). This is an informative learning
 record, not a new invariant or an amendment to an application contract. It
 distinguishes observations from proposed changes. Update it as the rehearsal

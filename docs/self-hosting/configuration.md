@@ -8,6 +8,26 @@ keywords: [self-hosting, configuration, credentials, admission, Redis]
 
 # Deployment configuration and credentials
 
+Use this page when you want to know **what a setting means**. For creating
+the files, follow [Part 4](part-4-describe-your-installation.md); it supplies
+the commands and expected results.
+
+There are two files. `installation.json` identifies this server and the
+version first installed on it. `runtime.env` holds the settings the running
+app needs, including private keys. JSON is a structured text format; an
+environment file is a list of `NAME=value` lines. Neither file is something
+you need to program.
+
+**Example:** `hostname` is your address without `https://`.
+`DATABASE_URL` is the app's connection description for its database, not a
+website to open. Keep its provided format unless you're deliberately changing
+the installation design.
+
+When this page says **mode 0600** or **`600 root root`**, it means the file
+belongs to the server administrator and only that account can read or write
+it. The leading zero is conventional notation for file permissions; you aren't
+being asked to invent a password.
+
 Configuration parsing, required-field rejection, credential separation and template checks were tested locally. Host rehearsal results are release-specific; the [rehearsal record](rehearsal-findings.md) identifies what ran and what remains unverified. Do not read a successful parser check as proof that a provider key or browser flow works. See the [handbook](handbook-overview.md), [credential contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md) and [credential operations procedure](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md).
 
 ## Installation manifest
