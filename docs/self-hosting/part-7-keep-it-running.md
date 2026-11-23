@@ -8,12 +8,18 @@ keywords: [self-hosting, tutorial, backup, restore, age, certificate renewal, up
 
 # Part 7: Keep it running
 
-Set up backups **before** real students join. A backup you've never restored
-is only a hope, so this part also restores one.
+Set up backups **before** real students join. Test a restore so you know the
+archive and its decryption key work together.
 
 The backup commands run on **your computer** in a macOS or Linux terminal. On
-Windows, use [WSL](https://learn.microsoft.com/windows/wsl/install): PowerShell
-can corrupt the binary data these commands pass along.
+Windows, use [WSL](https://learn.microsoft.com/windows/wsl/install). These are
+Bash commands, not PowerShell commands. Run `bash` in your local terminal
+before following this part, and use a normal local user, not root.
+
+Test SSH from this terminal first. If your provider uses `ubuntu` rather than
+`root`, the remote commands below also need that login and an authorized
+noninteractive `sudo` arrangement. Do not add `ssh -t` to a binary backup
+pipeline to obtain a password prompt; ask for help adapting the commands.
 
 Replace `203.0.113.10` with your server's IP address throughout.
 
@@ -32,6 +38,7 @@ doesn't expose them. The private half of the key never goes near the server.
 2. Create the key:
 
    ```bash
+   umask 077
    age-keygen -o ~/cth-backup.agekey
    ```
 
@@ -50,13 +57,20 @@ with it is unreadable. Keep two copies in different places.
 **What you're doing.** Copying the whole database from the server, encrypted,
 into a file on your computer.
 
-**Why.** The database is everything: accounts, classes, balances and history.
+**Why.** The database holds accounts, classes, balances and history. It does
+not contain the application keys; back those up separately in 7.3.
 
-**Steps.** Replace `age1…` with your public key:
+**Steps.** In each backup session, use a private local folder and replace
+`age1…` with your public key. Choose a new filename for each attempt:
 
 ```bash
+umask 077
 set -o pipefail
-backup="cth-db-$(date +%Y-%m-%d).dump.age"
+set -o noclobber
+mkdir -p "$HOME/cth-backups"
+chmod 700 "$HOME/cth-backups"
+cd "$HOME/cth-backups"
+backup="cth-db-$(date -u +%Y%m%dT%H%M%SZ).dump.age"
 ssh root@203.0.113.10 'cd / && runuser -u postgres -- pg_dump --format=custom cth_reference' \
   | age -r age1… > "$backup.partial" \
   && mv "$backup.partial" "$backup" && ls -lh "$backup"
@@ -69,8 +83,10 @@ is written to a `.partial` file first and only gets its real name once
 everything succeeded, so a failed run never replaces a good backup.
 
 **What you should see.** No output from the dump, then one line from `ls`
-showing a file of at least several hundred kilobytes, larger as your classes
-grow.
+showing the saved filename and size. Size alone does not prove the archive
+is complete; the restore test in 7.4 does that check. Save the release SHA
+with your backup record. Avoid class or account deletions during a backup;
+if one occurs, retire that archive and take a new one afterwards.
 
 **If something looks wrong.** If there's no `ls` line, the backup failed: read
 the error, and delete the leftover `.partial` file. Check you used the right IP
@@ -88,8 +104,13 @@ sign in. They exist only on the server until you copy them.
 **Steps.**
 
 ```bash
+umask 077
 set -o pipefail
-backup="cth-etc-$(date +%Y-%m-%d).tar.age"
+set -o noclobber
+mkdir -p "$HOME/cth-backups"
+chmod 700 "$HOME/cth-backups"
+cd "$HOME/cth-backups"
+backup="cth-etc-$(date -u +%Y%m%dT%H%M%SZ).tar.age"
 ssh root@203.0.113.10 'tar -C /etc -cf - cth' \
   | age -r age1… > "$backup.partial" \
   && mv "$backup.partial" "$backup" && ls -lh "$backup"
@@ -101,9 +122,11 @@ ssh root@203.0.113.10 'tar -C /etc -cf - cth' \
 read the error, and delete the leftover `.partial` file.
 
 > [!IMPORTANT]
-> You only need a new copy of this file when something in `/etc/cth` changes,
-> such as a renewed certificate. Keep at least one copy for as long as you
-> keep database backups.
+> Take a new copy whenever `/etc/cth` changes, including certificate renewal.
+> Keep the matching key archive for every eligible database backup. The
+> `AUDIT_HMAC_KEY` is also needed to verify the audit history. Store a protected
+> off-device copy of the encrypted archives, separate from the age private
+> key; losing your computer must not lose both the data and its only key.
 
 ## 7.4 Test that a backup restores
 
@@ -113,57 +136,129 @@ on your computer, and checking the data is there.
 **Why.** It proves your backup file and your key both work. Do this after your
 first backup and every few months after.
 
-**Steps.**
+**Steps.** Run each block separately and stop on any error. Keep this terminal
+open until cleanup, because later commands use its variables.
 
-1. Install the PostgreSQL **14** tools. On macOS with Homebrew:
+1. Install PostgreSQL **14 server and client tools**. On macOS with Homebrew:
 
    ```bash
    brew install postgresql@14
-   brew services start postgresql@14
    export PATH="$(brew --prefix postgresql@14)/bin:$PATH"
    ```
 
-   On Ubuntu or WSL, install `postgresql-14` from the
-   [PostgreSQL apt repository](https://www.postgresql.org/download/linux/ubuntu/).
-   The version must be 14; newer tools write backups older servers reject.
+   On Ubuntu/WSL, install `postgresql-14` from the
+   [PostgreSQL apt repository](https://www.postgresql.org/download/linux/ubuntu/),
+   then run `export PATH="/usr/lib/postgresql/14/bin:$PATH"`.
+   Do not start a shared Homebrew service for this drill. We create a separate
+   instance below. Confirm `initdb --version` and `pg_restore --version` both
+   report 14. The source dump is made by PostgreSQL 14; matching tools keep
+   this drill consistent with the installer. This does not extend version
+   14's [support lifetime](before-you-begin.md#which-release-this-guide-matches).
 
-2. Restore into a scratch database, check it, and delete it. Use your backup
-   file's name:
-
-   ```bash
-   createdb cth_restore_test
-   age -d -i ~/cth-backup.agekey cth-db-2026-11-22.dump.age \
-     | pg_restore --no-owner --no-privileges --dbname=cth_restore_test
-   psql -d cth_restore_test -Atc 'SELECT version_num FROM alembic_version'
-   psql -d cth_restore_test -Atc 'SELECT count(*) FROM seats'
-   dropdb cth_restore_test
-   ```
-
-   `--no-owner --no-privileges` is needed because your computer doesn't have
-   the server's `cthowner` and `cthapp` accounts.
-
-3. Check the key backup opens too:
+2. Create an empty, private instance. It has no TCP listener and uses a new
+   local socket directory, so it cannot connect to your normal database:
 
    ```bash
-   age -d -i ~/cth-backup.agekey cth-etc-2026-11-22.tar.age | tar -tf -
+   umask 077
+   set -o pipefail
+   unset PGHOST PGHOSTADDR PGPORT PGDATABASE PGUSER PGPASSWORD PGSERVICE PGSERVICEFILE PGOPTIONS
+   cth_restore_dir=$(mktemp -d /tmp/cth-restore.XXXXXX) &&
+   mkdir "$cth_restore_dir/socket" &&
+   initdb -D "$cth_restore_dir/data" --username=cth_restore_operator --auth=trust --encoding=UTF8 --locale=C &&
+   pg_ctl -D "$cth_restore_dir/data" -l "$cth_restore_dir/server.log" \
+     -o "-c listen_addresses='' -k '$cth_restore_dir/socket' -p 55434" -w start &&
+   export PGHOST="$cth_restore_dir/socket" PGPORT=55434 PGUSER=cth_restore_operator &&
+   psql -X -d postgres -v ON_ERROR_STOP=1 -Atc 'SHOW data_directory'
    ```
 
-**What you should see.** A revision ID (12 letters and digits), a count of
-seats (your test student and teacher, at least 2), and a file list including
-`cth/runtime.env` and `cth/installation.json`.
+   The last line must print the new directory ending in `/data`. Stop if it
+   does not. The temporary `trust` authentication is confined to this private
+   local directory; never use it for the classroom server.
+
+3. Set the two archive paths to your actual filenames, then restore:
+
+   ```bash
+   : "${PGHOST:?Complete step 2 in this terminal before restoring}"
+   cth_db_archive="$HOME/cth-backups/cth-db-REPLACE.dump.age"
+   cth_key_archive="$HOME/cth-backups/cth-etc-REPLACE.tar.age"
+   createdb cth_restore_test && \
+     age -d -i "$HOME/cth-backup.agekey" "$cth_db_archive" \
+       | pg_restore --exit-on-error --single-transaction --no-owner --no-privileges --dbname=cth_restore_test
+   ```
+
+   Continue only if this succeeds. `--no-owner --no-privileges` avoids
+   requiring the server's roles on your computer. The restore stops on errors
+   and commits only a complete successful transaction. See
+   [PostgreSQL's restore options](https://www.postgresql.org/docs/14/app-pgrestore.html).
+
+4. Check the restored revision, seats and key archive:
+
+   ```bash
+   psql -X -d cth_restore_test -v ON_ERROR_STOP=1 -Atc 'SELECT version_num FROM alembic_version'
+   psql -X -d cth_restore_test -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM seats'
+   age -d -i "$HOME/cth-backup.agekey" "$cth_key_archive" | tar -tf -
+   ```
+
+   Compare the revision with the installed release's database baseline in
+   `migrations/fresh/<revision>/manifest.json`. Compare the seat count with what you
+   created; there is no universal expected count. The file list must include
+   `cth/runtime.env` and `cth/installation.json`. Do not print their contents.
+
+5. After checking the results, stop the temporary instance and remove its
+   restored data. Confirm the printed path is this drill's `/tmp/cth-restore.…`
+   directory before running the second block:
+
+   ```bash
+   printf '%s\n' "$cth_restore_dir"
+   pg_ctl -D "$cth_restore_dir/data" -m fast -w stop
+   ```
+
+   Only after shutdown succeeds:
+
+   ```bash
+   rm -r -- "$cth_restore_dir"
+   unset PGHOST PGPORT PGUSER cth_restore_dir cth_db_archive cth_key_archive
+   ```
+
+   Do this cleanup after a failed drill too, once you have inspected the error.
+   The temporary database contains real records when you test a real backup.
+
+**What you should see.** A successful restore, the expected revision and seat
+count, the key archive's file list, and a clean shutdown. An error at any step
+means the drill has not passed; keep the source and encrypted archives intact.
 
 **If something looks wrong.**
 
-- **`no identity matched any of the recipients`:** the backup was encrypted to
-  a different public key than the private key you used.
-- **Errors about roles:** you left out `--no-owner --no-privileges`.
-- **`unsupported version` from `pg_restore`:** your tools aren't version 14.
+- **`no identity matched any of the recipients`:** the archive and age private
+  key do not match.
+- **`createdb` fails:** stop. Do not restore into an existing database or run
+  `dropdb` to clear the error.
+- **`unsupported version` from `pg_restore`:** inspect which executable is
+  running (`command -v pg_restore`) and its version. Do not retry against a
+  different server to get past the error.
+- **The terminal closed:** do not rerun the restore with missing variables.
+  Locate this drill's private directory and stop its instance with `pg_ctl -D`
+  before cleaning it up. Never substitute the system PostgreSQL data directory.
 
-This proves your backups can be read. Restoring onto a **new server** after a
-disaster isn't a rehearsed tutorial path yet. The
-[operations reference](operations.md#backups-restoration-and-deletion) covers
-it, and it's advanced. If you ever need it, take your time and ask for help
-before touching the old server.
+**What has already been proven.** The production release procedure uses the
+same PostgreSQL dump/restore and age encryption tools. Its
+[v2.4.5 record](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md)
+reports a successful restore with matching manifest, revision and table
+counts, plus a successful check that no deleted identities would return.
+Those results remain evidence for that procedure and its prerequisites.
+
+This chapter's manual commands are a smaller drill: they check archive
+readability, the restored revision and the seat count. They do not produce the
+production tool's manifest or automate its deleted-identity check. For those
+checks, use the [configurable backup tool](operations.md#backups-restoration-and-deletion).
+Do not run the production wrapper unchanged; its host and service are different.
+
+Bringing a **replacement server** online also requires restoring the right
+application keys, database ownership and permissions, service configuration
+and DNS, then checking the application before admitting users. That host
+recovery walkthrough is not supplied here. Ask for help with those steps;
+this is a gap in the self-hosting instructions, not evidence that PostgreSQL
+backup and restore do not work.
 
 ## 7.5 Make backups a habit
 
@@ -176,8 +271,14 @@ before touching the old server.
 - Run [7.2](#72-back-up-the-database) on a regular schedule, following your
   school's or district's policy if it has one.
 - Run [7.3](#73-back-up-the-keys-and-settings) after anything in `/etc/cth` changes.
-- Keep only the most recent backup, unless your local policy says otherwise.
-  When a student or class is deleted from CTH, older backups still contain them.
+- Choose a retention window that meets the classroom deletion rules and your
+  approved local policy. A backup taken before a student, class or account
+  deletion can contain the deleted records even if it is your newest backup.
+  Retire affected archives, restore-drill copies and provider snapshots, then
+  verify a replacement backup taken after the deletion. Do not restore an old
+  copy to recreate deleted identities. If provider retention or school policy
+  conflicts with this requirement, resolve that conflict before continuing.
+  [Retention authority](../INVARIANT/ARCHITECTURE/INV-ARC-018_PII_STORAGE_AND_RETENTION_ENFORCEMENT.md#vii-prohibited-storage-patterns)
 - Test a backup with [7.4](#74-test-that-a-backup-restores) after your first
   backup, and again whenever your policy calls for it.
 
@@ -223,7 +324,10 @@ Update the expiry date in your note, and back up `/etc/cth` again ([7.3](#73-bac
 > [Troubleshooting](troubleshooting.md).
 
 **What you should see.** `"stage": "ingress"` … `"result": "ok"`, and a
-`notAfter=` date about three months away.
+`notAfter=` date later than the old expiry. Record that actual date and verify
+the site from an external browser too. Manual certificates need an attended
+renewal unless authentication hooks are configured; this tutorial does not
+configure them. [Certbot manual renewal](https://eff-certbot.readthedocs.io/en/stable/using.html#manual)
 
 **If something looks wrong.** If `cth-ingress` won't start, run
 `journalctl -u cth-ingress.service -n 30 --no-pager`. The usual causes are
@@ -238,7 +342,12 @@ Ubuntu's updates.
 
 **Steps.**
 
-- Ubuntu installs security updates automatically by default. Leave that on.
+- Check your provider image's security-update configuration; do not assume
+  automatic updates are enabled. On the server, inspect
+  `systemctl list-timers --all apt-daily-upgrade.timer` and
+  `apt-config dump | grep -E 'APT::Periodic::(Update-Package-Lists|Unattended-Upgrade)'`.
+  If they are absent or disabled, follow your provider's Ubuntu update
+  instructions or arrange help. The CTH installer does not configure this.
 - Some updates need a reboot. If the file `/var/run/reboot-required` exists,
   back up ([7.2](#72-back-up-the-database)), then run `reboot` at a quiet time.
 - After any reboot, log in and run `check readiness` as in
@@ -270,8 +379,10 @@ They're written for experienced operators.
    private server; a security fix might.
 3. Before any upgrade, take both backups ([7.2](#72-back-up-the-database),
    [7.3](#73-back-up-the-keys-and-settings)).
-4. **Rolling back** is the same procedure in reverse, and depends on whether
-   the database changed. It's in the same reference section. Never "roll back"
+4. **Rolling back is not simply reversing an upgrade.** The old application
+   must be compatible with the current database. Some migrations cannot be
+   downgraded; check the release's `migrations/forward_only_register.txt` and
+   use the reviewed recovery path in the reference. Never "roll back"
    by restoring an old backup over a live database without reading it first:
    you'd lose everything since that backup.
 
@@ -307,8 +418,12 @@ first.
 **What you're doing.** Closing the site to everyone but you, behind a
 Cloudflare email-code sign-in, and opening it again afterwards.
 
-**Why.** While you work on the server, nobody else can sign in or change
-data. This is optional; the installer doesn't need it.
+**Why.** Access restricts new web requests to the people you admit. It does
+not stop the scheduler, existing work or other server-side writers. For a
+final backup or work requiring no writes, stop the application as described
+in Part 8. The installer no longer requires an Access probe, but Access is
+the designated maintenance gate in [DOM-OPS-001](../DOMAIN/DOM-OPS-001_OPERATIONS_DOMAIN.md#application-availability-gate);
+do not add a second maintenance gate inside CTH.
 
 **Steps to turn maintenance mode on** *(Cloudflare Zero Trust, November 2026;
 the menus may move)*.
@@ -328,7 +443,9 @@ Applications**.
 
 **What you should see.** While it's on, a private browser window opening any
 page on your site lands on a Cloudflare page asking for an email address.
-Only your address gets a code. Once you delete the application, pages load
+An unapproved identity must not gain access. Test both your admitted session
+and an unadmitted session; receiving an email is not proof of authorization.
+Once you delete the application, pages load
 normally again.
 
 **If something looks wrong.** If a page loads without asking for an email

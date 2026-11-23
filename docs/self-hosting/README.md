@@ -18,8 +18,14 @@ before. You don't need to be a programmer.
 Normally a teacher signs up on the project's hosted site. Self-hosting means
 you rent your own server instead and install CTH on it. You become the
 **operator**: you own the server, the web address, the passwords and keys, and
-the backups. Nobody else can see your classes, and nobody else will fix the
-server if it breaks. This guide shows you how to do all of that.
+the backups. Your installation has its own classroom data, but you still rely
+on your hosting and authentication providers. You are responsible for access,
+maintenance and recovery; the project does not administer your server for you.
+
+**Start with a practice installation using made-up students.** The installer
+is for a new server. Upgrades and recovery onto a replacement server still
+need experienced help. Check [release compatibility and current limits](before-you-begin.md#which-release-this-guide-matches)
+before renting anything.
 
 ## What you'll have at the end
 
@@ -32,14 +38,15 @@ server if it breaks. This guide shows you how to do all of that.
 
 | | Rough figure |
 | --- | --- |
-| Your time | An afternoon for Parts 1–4, about an hour for Part 5, and an hour for Part 6. You can stop between any two steps. |
-| Server | The size the project tested (2 vCPUs, 4 GB memory, 80 GB disk) cost about **$28 a month** at DigitalOcean in November 2026. Other providers charge similar amounts. Check the current price before you create it. |
+| Your time | Allow several sessions for setup, DNS changes, first-use checks and a backup restore. These are planning estimates, not measured first-time completion times. Pause at the checkpoints. |
+| Server | The recorded rehearsal used 2 vCPUs, 4 GB memory and 120 GB disk, quoted at **$0.048/hour**. The original 80 GB reference plan was a different configuration. Compare the current price and billing terms before creating a server; see the [rehearsal record](rehearsal-findings.md). |
 | Domain name | Usually $10–$20 a year. |
-| Other services | Cloudflare, Turnstile and Passwordless.dev all have free plans that cover one classroom. Check their current limits. |
+| Other services | Check the current plan limits for Cloudflare and Passwordless.dev against your expected users and usage. Budget separately for backup storage and any paid monitoring. |
 
 > [!WARNING]
-> A rented server costs money **until you destroy it**. Turning it off does
-> not stop the bill. [Part 8](part-8-shut-down.md) shows how to shut
+> On DigitalOcean, a server costs money **until you destroy it**; turning it
+> off does not stop the bill. Other providers have their own billing rules. See
+> [DigitalOcean billing](https://docs.digitalocean.com/products/droplets/details/pricing/). [Part 8](part-8-shut-down.md) shows how to shut
 > everything down.
 
 ## How the installation works
@@ -55,15 +62,15 @@ stage is a **safe stop point**: you can close the terminal, go home, and carry
 on tomorrow. If a stage fails, you stop and look before doing anything else.
 The guide tells you how.
 
-There is no automatic "do everything" button for teachers. Running the stages
-yourself is slower, but you always know what just happened.
+Run and check one stage at a time so you can identify where a failure
+occurred. The installer does not provide an unattended teacher setup flow.
 
 ## The tutorial
 
 **Before you start**
 
 1. [Before you begin](before-you-begin.md): skills, accounts, budget, and what is required versus recommended
-2. [Terms you'll see](terms.md): short definitions of every technical word in this guide
+2. [Terms you'll see](terms.md): short definitions of common technical terms
 3. [Good to learn](good-to-learn.md): optional background reading
 
 **The eight parts**

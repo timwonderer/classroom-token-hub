@@ -13,7 +13,9 @@ In this part you write the files the installer reads. Everything goes in
 in the [configuration dictionary](configuration.md); you don't need it to
 follow these steps.
 
-All commands run on **the server**, as root.
+All commands run on **the server**, as root. In each new SSH session, run
+`umask 077` and `set -o noclobber` before creating files, even if you completed
+an earlier step yesterday. These shell settings do not survive a logout.
 
 ## 4.1 Set your hostname for this session
 
@@ -95,7 +97,8 @@ provider keys, and five fixed settings.
 
 **Why.** The keys protect sessions, encrypt student names and authenticator
 secrets, and sign the audit trail. Generating them on the server means they
-never travel over the internet. The provider keys are typed at hidden prompts,
+do not need to be pasted into the terminal. Their encrypted backup will later
+travel over SSH. The provider keys are typed at hidden prompts,
 so they never appear on screen or in your shell history.
 
 **Steps.** Paste the whole block. It stops four times and asks for a key;
@@ -172,7 +175,8 @@ it from the server itself, using Ubuntu's list of trusted authorities.
 > trusted certificate such as Let's Encrypt.
 
 **Steps.** The server's port 80 is closed, so you prove you own the domain
-with a DNS record instead:
+with a DNS record instead. Stop after any failed command; do not copy files
+until Certbot confirms issuance:
 
 ```bash
 apt-get install -y certbot
@@ -198,7 +202,8 @@ openssl x509 -in /etc/cth/tls/origin.crt -noout -subject -enddate
 
 **What you should see.** Certbot ends with `Successfully received
 certificate`. The last command prints `subject=CN = classroom.example.org`
-(yours) and a `notAfter=` date about three months away.
+(yours) and a `notAfter=` expiry date. Use the actual date printed, rather
+than assuming a fixed certificate lifetime.
 
 Add to your note: **certificate expiry date**. You must renew it before then
 ([Part 7](part-7-keep-it-running.md#76-renew-the-certificate)).

@@ -84,6 +84,14 @@ separate secret lifecycles as specified by the security contracts.
 
 ## Installation and integration boundaries
 
+**Google Cloud is not required for the classroom app.** Cloud Run and
+Firestore belong to the project's separate status implementation. You can
+omit that service, or use an independent monitor and a status page of your
+choice. A replacement for the repository's status backend would need its own
+implementation and verification; it is not a configurable storage adapter.
+The parity and staging sections below are for maintainers reproducing that
+particular stack, not extra steps in the teacher tutorial.
+
 | What you are checking | Dependencies and evidence |
 | --- | --- |
 | Core application health | Run the selected application revision with PostgreSQL and its supported schema. Startup requires `DATABASE_URL`, `FLASK_ENV`, `SECRET_KEY`, `ENCRYPTION_KEY`, `PEPPER_KEY` and `AUDIT_HMAC_KEY`. A successful `/health` executes `SELECT 1`. On `/health/status`, only the database signal executes a check. Unregistered checks remain unknown. Neither endpoint requires a separate status publisher. |
@@ -110,7 +118,10 @@ be used for an isolated parity run.
   and status session secret. Check the resolved project and database before writing.
 - **Browser destinations.** The `STATUS_PAGE_URL` validator currently accepts only
   the hosted status origin and UptimeRobot. Configure an exact operator-approved
-  HTTPS origin for staging, or omit the link. Reading public documentation or status
+  HTTPS origin for staging through a separately reviewed implementation
+  change, or leave status integration unconfigured. The reference runtime
+  parser does not accept `STATUS_PAGE_URL`, and some templates hardcode the
+  hosted link; omitting a variable does not remove those links. Reading public documentation or status
   pages does not write production state. Do not submit synthetic support requests
   or enable notification integrations against production destinations. The public home, privacy, terms and district pages may use the application default
   `MARKETING_SITE_URL`; a separate marketing site is not required. Review `EXTERNAL_DOCS_BASE_URL` and support destinations. Verify
