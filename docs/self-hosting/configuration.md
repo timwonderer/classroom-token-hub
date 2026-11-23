@@ -8,7 +8,7 @@ keywords: [self-hosting, configuration, credentials, admission, Redis]
 
 # Deployment configuration and credentials
 
-**Locally tested** covers configuration parsing, required-field rejection, credential separation, template rendering and simulated checks. **Proposed** covers systemd, Ubuntu, provider registration, gate admission and deployed verification. See the [handbook](README.md), [credential contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md) and [credential operations procedure](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md).
+**Locally tested** covers configuration parsing, required-field rejection, credential separation, template rendering and simulated checks. **Proposed** covers systemd, Ubuntu, provider registration, gate admission and deployed verification. See the [handbook](handbook-overview.md), [credential contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md) and [credential operations procedure](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md).
 
 ## Installation manifest
 
@@ -20,9 +20,9 @@ Store a root-owned mode-0600 JSON file outside the checkout under a root-control
 | `machine_id` | Copy the 32 lowercase hex digits from the new host's own machine-id, using the operator console. Avoid publishing it in evidence. | Host identity must match on every invocation. |
 | `release_sha` | Select an exact reviewed Git commit (40 lowercase hex digits). Used by release extraction, venv and the web unit. | Confirm the supplied source contains that commit and its reviewed database artifact. |
 | `database` | Select a new, unreserved lowercase PostgreSQL database name, beginning with a letter, up to 63 characters. | The fresh database owner, enrollment, version and app peer connection must resolve to it. |
-| `hostname` | Register the public DNS name of this installation. Enroll this hostname with the selected ingress. | Verify origin certificate name and external Access challenge at this name. |
-| `ingress_mode` | Optional; the default and only supported value is `cloudflare-proxy`. Manual installation and Actions use the same IPv4 proxied HTTPS profile. | The installer checks the selected TLS listener and the external Access gate. |
-| `admission_hostname` | Exact distinct team DNS hostname selected by the administrator of the access policy. | An anonymous HTTPS request to the application login must redirect to this host's Access login path. |
+| `hostname` | Register the public DNS name of this installation. Enroll this hostname with the selected ingress. | Verify the origin certificate name at this name. |
+| `ingress_mode` | Optional; the default and only supported value is `cloudflare-proxy`. Manual installation and Actions use the same IPv4 proxied HTTPS profile. | The installer checks the selected TLS listener. |
+| `admission_hostname` | Optional. The Cloudflare Access team hostname, if you use Access for maintenance mode. Manifests from earlier releases may keep it. | When present, it must be a valid hostname distinct from `hostname`. The installer does not probe Access. |
 | `runtime_env` | Path to an existing root-owned private systemd environment file under `/etc/cth/`. Reference path `/etc/cth/runtime.env`. | Config stage parses all required fields. |
 | `tls_cert` | Absolute root-owned regular PEM chain file under `/etc/cth/` for the origin hostname. | Nginx checks pairing with the key. Health probe verifies hostname, chain, and expiry using the host CA store. |
 | `tls_key` | Separate root-owned private PEM key file under `/etc/cth/`. Generate and transport through the operator's TLS process. Keep normal group/other permissions cleared. Unattended startup requires a readable key without an interactive passphrase. | Nginx configuration check must succeed. Preserve the key on failure. |
@@ -67,7 +67,7 @@ The initial reference EnvironmentFile accepts the variables above. Other support
 | `LOGIN_NOTICE_PATH` | Optional root-managed sign-in notice path. Omit on the initial installation. |
 | `LOG_LEVEL`, `LOG_FORMAT`, `TLCP_NOISE_ENDPOINT_PREFIXES` | Optional logging level/format and comma-separated request-telemetry filtering inputs. Use the built-in production settings. Never add secrets/PII to log formats. |
 | `TRUSTED_PROXY_CIDRS` | Optional additional trusted proxy networks. Keep omitted. Gunicorn receives requests from the dedicated local Nginx proxy. |
-| Status collector, optional monitoring and backups | Their separately owned credentials, recipients, projects and retention are outside this EnvironmentFile. Supply them only to their own service. See [installation boundaries](README.md) and the [external status persistence contract](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md). |
+| Status collector, optional monitoring and backups | Their separately owned credentials, recipients, projects and retention are outside this EnvironmentFile. Supply them only to their own service. See [installation boundaries](handbook-overview.md) and the [external status persistence contract](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md). |
 
 ## TLS and admission prerequisites
 
@@ -81,6 +81,6 @@ For this temporary rehearsal, use the already issued Let's Encrypt staging certi
 
 Monitoring services such as Pulsetic use public HTTPS and need no special client certificate. During an Access-restricted window, an unadmitted monitor encounters the gate; that is an admission observation, not application health. A specialized status service is not an installation prerequisite.
 
-The ingress check probes the anonymous public login and the HTTPS origin separately. A closed gate must redirect to the exact selected admission hostname and its Access login path. It sends no provider credential and follows no redirect. For real acceptance, use an external browser and two enrolled test origins to check admitted and denied identities, distinct client rate-limit attribution, and denial of direct-origin access. Keep the gate closed if any check fails. Other admission providers can be evaluated separately against the deployment contract.
+The ingress and readiness checks probe the HTTPS origin only. They do not require Cloudflare Access: Access is optional and serves only as maintenance mode, so an open site passes. For real acceptance, use an external browser to check distinct client rate-limit attribution and denial of direct-origin access.
 
 The shipped browser templates still embed hosted status, policy, support, provider SDK and challenge URLs. Configuring marketing and docs bases does not rewrite literal markup. Inspect the rendered destinations and exercise only approved links and staging provider registrations. The automated allocation profile checks the enrolled firewall digest but permits ordinary unrestricted outbound rules. Staging isolation comes from the selected host, private state and independent credentials; a public informational link is not a production business integration. The smallest application change is to source those links and SDK destinations from validated settings or omit optional links. That change requires separate review. Monitoring cannot grant application authority.

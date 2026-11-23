@@ -5,7 +5,6 @@
   "database": "cth_reference",
   "hostname": "classroom.example.invalid",
   "runtime_env": "/etc/cth/runtime.env",
-  "admission_hostname": "admission.example.invalid",
   "tls_cert": "/etc/cth/tls/origin.crt",
   "tls_key": "/etc/cth/tls/origin.key"
 }

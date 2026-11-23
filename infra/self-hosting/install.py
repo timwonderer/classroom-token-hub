@@ -18,7 +18,7 @@ import runtime
 
 STAGES = ('host', 'postgres', 'redis', 'release', 'config', 'database', 'services', 'scheduler', 'ingress', 'readiness')
 STATE = Path('/var/lib/cth-installer')
-KEYS = {'installation_id', 'release_sha', 'machine_id', 'database', 'hostname', 'runtime_env', 'admission_hostname', 'tls_cert', 'tls_key'}
+KEYS = {'installation_id', 'release_sha', 'machine_id', 'database', 'hostname', 'runtime_env', 'tls_cert', 'tls_key'}
 
 
 def require(condition, message):
@@ -34,7 +34,7 @@ def parse_manifest(contents):
             result[key] = value
         return result
     cfg = json.loads(contents, object_pairs_hook=unique)
-    require(isinstance(cfg, dict) and KEYS <= set(cfg) <= KEYS | {'ingress_mode', 'python'} and all(isinstance(v, str) for v in cfg.values()),
+    require(isinstance(cfg, dict) and KEYS <= set(cfg) <= KEYS | {'admission_hostname', 'ingress_mode', 'python'} and all(isinstance(v, str) for v in cfg.values()),
             'manifest must contain exactly the documented string fields')
     require(str(UUID(cfg['installation_id'])) == cfg['installation_id'], 'expected canonical installation UUID')
     require(re.fullmatch('[0-9a-f]{40}', cfg['release_sha']), 'expected full release SHA')

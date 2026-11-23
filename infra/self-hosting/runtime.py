@@ -52,8 +52,9 @@ def validate_config(cfg):
     require(cfg.get("ingress_mode", "cloudflare-proxy") == "cloudflare-proxy", "invalid ingress mode")
     app_host = cfg.get("hostname")
     require(app_host == "staging." + HOSTED_ZONE or hostname(app_host), "invalid deployment DNS field: hostname")
-    require(hostname(cfg.get("admission_hostname")), "invalid deployment DNS field: admission_hostname")
-    require(cfg["hostname"] != cfg["admission_hostname"], "public hostname and admission hostname must differ")
+    if "admission_hostname" in cfg:
+        require(hostname(cfg["admission_hostname"]), "invalid deployment DNS field: admission_hostname")
+        require(cfg["hostname"] != cfg["admission_hostname"], "public hostname and admission hostname must differ")
     paths = [cfg.get(key) for key in ("runtime_env", "tls_cert", "tls_key")]
     for path in paths:
         require(isinstance(path, str) and re.fullmatch(r"/etc/cth/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+", path)
@@ -210,16 +211,6 @@ def local_health(cfg, tls=False):
             "unexpected bounded health response")
 
 
-def gate(cfg):
-    # Do not follow redirects or forward credentials to a remote destination.
-    result = curl("https://" + cfg["hostname"] + "/admin/login", "--output", "/dev/null", "--write-out",
-                  "%{http_code} %{redirect_url}").partition(" ")
-    dest = urlsplit(result[2])
-    require(result[0] in ("302", "303", "307") and dest.scheme == "https" and
-            dest.netloc == cfg["admission_hostname"] and dest.path.startswith("/cdn-cgi/access/login/"),
-            "unauthenticated public login did not reach the selected admission gate")
-
-
 def scheduler(cfg):
     query = """SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a USING (pid)
                WHERE l.locktype='advisory' AND l.granted AND l.objsubid=1
@@ -283,7 +274,6 @@ def run(action, stage, cfg):
                 and command("systemctl", "is-active", "nginx.service", ok=(0, 3)) == "inactive",
                 "stock nginx must be masked and inactive")
         local_health(cfg)
-        gate(cfg)
         managed(Path("/etc/cth/ingress.conf"), "ingress.conf", cfg, apply)
         unit(stage, cfg, apply)
         await_start("cth-ingress.service", lambda: inspect_ingress(cfg))
@@ -297,6 +287,5 @@ def run(action, stage, cfg):
         local_health(cfg)
         local_health(cfg, tls=True)
         scheduler(cfg)
-        gate(cfg)
     else:
         raise ValueError("unknown runtime stage")
