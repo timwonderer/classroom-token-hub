@@ -62,9 +62,16 @@ identifiers and keys out of a public recovery report.
 
 ## 2. Freeze the old copy and choose the recovery point
 
-**Work here: the old server terminal, if it is reachable.** Close general web
-access with [Cloudflare Access](part-7-keep-it-running.md#710-optional-maintenance-mode-with-cloudflare-access),
-then disable and stop the app and its HTTPS front end:
+**Work here first: your Cloudflare dashboard, whether or not the old server
+is reachable.** Configure the [Access maintenance restriction](part-7-keep-it-running.md#710-optional-maintenance-mode-with-cloudflare-access)
+for the entire CTH hostname, admitting only the recovery operator. In a new
+unadmitted browser session, confirm the Access challenge or denial prevents
+access. Keep this restriction through the DNS move and browser validation.
+Access is optional for ordinary installation; this controlled recovery window
+uses it to keep the replacement private while you check it.
+
+**Then work on the old server, if it is reachable:** disable and stop the app
+and its HTTPS front end:
 
 ```bash
 systemctl disable --now cth-ingress.service cth-web.service
@@ -490,10 +497,18 @@ Run it again after a permitted test transaction and before reopening. If
 history remains empty, `extends` repeats the initial-state safeguards and
 preserves that limited result; don't claim nonempty business-audit verification.
 
+**Before changing DNS, in both recovery situations:** confirm the Part 7.10
+Access application covers the entire CTH hostname and admits only the
+operator. Test again from an unadmitted session; it must encounter the Access
+challenge or denial. Do not move DNS if it can reach CTH without that gate.
+When the old origin is offline, an admitted session may see an origin error;
+the denied-session test checks the edge restriction, not application health.
+
 In Cloudflare, change **only your CTH hostname's existing proxied A record**
 to the replacement server's verified IPv4 address. Keep **Proxied** enabled
 and **Full (strict)** selected. Leave the Access restriction in place while
-you test from your admitted browser.
+you test from your admitted browser. Verify an unadmitted browser remains
+blocked after the DNS change too.
 
 Now repeat the teacher and student checks in [Part 6](part-6-first-use.md),
 using the accounts and classes you expect from the restored backup. Confirm:
