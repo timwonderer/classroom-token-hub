@@ -96,7 +96,7 @@ class FirestoreNoticeStore:
         from google.cloud import firestore
         from status.measurements import (DIAGNOSTICS, classify_component,
                                          parse_time, retained_activity, validate_fresh_snapshot)
-        from .request_errors import error_window, add_window
+        from .request_errors import error_window, add_window, valid_error_day
         if received_at.utcoffset() is None:
             raise ValueError("Receipt time requires timezone.")
         received_at = received_at.astimezone(timezone.utc)
@@ -128,10 +128,17 @@ class FirestoreNoticeStore:
                 transaction.create(source_ref, {**wrapper, "expires_at": sampled + timedelta(days=7)})
                 if window:
                     previous_day = day_doc.to_dict() if day_doc.exists else {}
-                    totals = add_window(previous_day.get("request_errors"), window)
-                    transaction.set(day_ref, {"request_errors": totals,
-                        "expires_at": datetime.combine(day_date + timedelta(days=30),
-                                                       datetime.min.time(), timezone.utc)})
+                    day_bounds = {"date": day_date.isoformat(), "scheduled_windows":
+                        288 if day_date < received_at.date() else
+                        (received_at.hour * 60 + received_at.minute) // 5}
+                    # A derivative must never block immutable evidence or current
+                    # status. Preserve corrupt history as unavailable, not zero.
+                    if ("request_errors" not in previous_day or
+                            valid_error_day(previous_day["request_errors"], day_bounds)):
+                        totals = add_window(previous_day.get("request_errors"), window)
+                        transaction.set(day_ref, {"request_errors": totals,
+                            "expires_at": datetime.combine(day_date + timedelta(days=30),
+                                                           datetime.min.time(), timezone.utc)})
             elif failure_ref:
                 transaction.create(failure_ref, {**wrapper, "expires_at": received_at + timedelta(days=7)})
             # Do not let delayed or duplicate source evidence erase a newer failure,

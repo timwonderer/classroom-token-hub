@@ -31,7 +31,7 @@ def add_window(previous, window):
     return result
 
 
-def _valid_day(value, day):
+def valid_error_day(value, day):
     """Old reliability counters and malformed derivatives are missing evidence."""
     if not isinstance(value, dict) or set(value) != set(COUNT_KEYS + LAST_KEYS):
         return False
@@ -64,7 +64,7 @@ def error_summary(days):
     gap_days = 0
     for day in days:
         value = day.get("errors")
-        if not _valid_day(value, day):
+        if not valid_error_day(value, day):
             gap_days += int(day["scheduled_windows"] > 0)
             continue
         totals = add_window(totals, value)

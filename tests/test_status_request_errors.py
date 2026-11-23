@@ -107,3 +107,26 @@ def test_public_chart_counts_and_window_timestamp_have_text_equivalents(page):
     assert 'not reliability' in html and 'do not establish fault' in html
     assert '90-day' not in html and 'no problems measured' not in html
     assert 'aria-hidden="true" focusable="false"' in html
+
+
+@pytest.mark.parametrize('corruption', ['missing_count', 'bad_time', 'null', 'list', 'empty'])
+def test_corrupt_history_never_blocks_source_or_current_ingestion(database, corruption):
+    store, data = database
+    store.append_snapshot(errors(), NOW)
+    day = data['telemetry_days'][NOW.date().isoformat()]
+    if corruption == 'missing_count': del day['request_errors']['requests']
+    elif corruption == 'bad_time': day['request_errors']['last_4xx'] = 'not-a-time'
+    elif corruption == 'null': day['request_errors'] = None
+    elif corruption == 'list': day['request_errors'] = []
+    elif corruption == 'empty': day['request_errors'] = {}
+    original = deepcopy(day)
+    for minute in (5, 10):
+        at = NOW + timedelta(minutes=minute)
+        value = errors(at)
+        store.append_snapshot(value, at)
+        store.append_snapshot(value, at + timedelta(seconds=10))
+        assert store.current_snapshot()['snapshot'] == value
+        assert store.current_snapshot()['last_activity']['service']['sampled_at'] == at.isoformat()
+        assert data['telemetry_days'][NOW.date().isoformat()] == original
+        assert error_summary(store.error_history(now=at))['observed'] == 0
+    assert len(data['telemetry_snapshots']) == 3
