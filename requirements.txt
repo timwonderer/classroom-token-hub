@@ -18,10 +18,9 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 Mako==1.4.3
 markdown==3.10.3
-# TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
-# - soft_str and soft_unicode removed (deprecated since 2.0)
-# - Markup.striptags() behavior may differ
-# Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
+# Upgraded to 3.0.4 in PR #1796: audited for soft_str/soft_unicode and
+# Markup.striptags() usage (removed/changed in 3.x) — neither is called
+# anywhere in this codebase. Targeted XSS/template test suite verified clean.
 MarkupSafe==3.0.4
 packaging==26.3
 pluggy==1.7.0
