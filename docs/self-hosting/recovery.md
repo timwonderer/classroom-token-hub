@@ -391,7 +391,9 @@ Before starting any replacement service, supply the independent expected
 baseline paired with this backup and run the `exact` phase of
 [the complete audit check](upgrades.md#check-the-complete-audit-history) on the
 replacement, using its restored SHA and original audit key. It must match the
-saved revision, full scope set, counts, final sequences and head hashes. A
+saved revision, full scope set, counts, final sequences and head hashes. It
+requires a nonempty audit chain, but no payment is needed: the ledger
+spot-check reports zero rows when no protected ledger row exists. A
 missing or unverified baseline keeps audit completeness unresolved; leave the
 service private while recovering that evidence.
 

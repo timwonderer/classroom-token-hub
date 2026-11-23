@@ -692,9 +692,18 @@ exit status. Paste the complete block including `PYTHON`; do not add `--pty`.
 See the [systemd 249 command reference](https://www.freedesktop.org/software/systemd/man/249/systemd-run.html#--pipe).
 Importing this release's Flask app does not start its scheduler.
 
+First set the selected SHA and phase in this terminal:
+
 ```bash
 cth_audit_sha=REPLACE_WITH_SELECTED_40_CHARACTER_SHA
 cth_audit_phase=exact
+```
+
+Then run the verification command below. This separate block uses your
+selected phase without resetting it, so you can rerun it after choosing
+`extends`:
+
+```bash
 systemd-run --wait --pipe --collect \
   -p User=cthapp -p Group=cthapp \
   -p "WorkingDirectory=/opt/cth/releases/$cth_audit_sha" \
@@ -773,18 +782,19 @@ with app.app_context():
             assert result.state == 'VERIFIED', 'Protected ledger row check failed'
             checked_rows += 1
     db.session.rollback()
-    assert nonempty > 0 and checked_rows > 0, 'No protected financial activity to verify'
+    assert nonempty > 0, 'No nonempty audit chain to verify'
     print(f'Expected-baseline comparison passed: {phase}')
-    print(f'Complete nonempty chains checked: {nonempty}; protected ledger rows checked: {checked_rows}')
+    print(f'Complete nonempty chains checked: {nonempty}; protected ledger rows checked: {checked_rows} (0 means none were eligible)')
 PYTHON
 ```
 
 Expect `Expected-baseline comparison passed:` with the chosen phase and
-positive verification counts, with no assertion or command failure. This
-checks all retained chains and one selected protected ledger row per class;
-it doesn't verify every business record or every balance calculation. Use a
-real permitted payment in your fictional practice class before the first
-backup so there is protected financial activity to verify.
+a positive nonempty-chain count, with no assertion or command failure.
+The ledger spot-check may cover **zero rows** when no eligible protected
+ledger row exists; that does not invalidate matching audit history. You do
+not need to create a payment just to make a backup recoverable. This checks
+all retained chains and up to one selected protected ledger row per class;
+it doesn't verify every business record or every balance calculation.
 
 After startup, set `cth_audit_phase=extends` and run the Python command again.
 Explain new events using actual scheduler or browser activity. A retired
