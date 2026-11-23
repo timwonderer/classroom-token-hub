@@ -9,98 +9,62 @@ protects a key already *present* in os.environ, so popping the key (leaving
 it absent) let that later call repopulate it straight from .env. See
 CHANGELOG.md [Unreleased] / PR #1799.
 
-Per CodeRabbit's review on that PR: a test that reimplements the reset itself
-proves nothing about whether tests/conftest.py's own reset still runs. These
-tests instead spawn a fresh subprocess that imports the real conftest.py (and
-through it, the real app) with a value actually present in .env — the exact
-scenario the bug occurred in — and read os.environ back out afterward.
+Earlier drafts of this test ran a real subprocess against the shared .env /
+tests/conftest.py on disk to exercise the production code path directly.
+CodeRabbit correctly flagged that mutating those shared files — even
+temporarily, even with a try/finally restore — is unsafe if a second pytest
+session starts concurrently in the same checkout (it would read, or write
+back, the wrong content). This version instead:
+
+1. Asserts directly on conftest.py's own source text, so reverting the fix
+   to the prior os.environ.pop(...) form fails this test outright — no
+   subprocess, no file mutation, nothing shared with a concurrent session.
+   (Same idea as the pure-function checks in test_conftest_drop_guard.py.)
+2. Proves the underlying load_dotenv(override=False) mechanism in full
+   isolation, using pytest's own tmp_path/monkeypatch fixtures.
 """
-import json
 import os
-import subprocess
-import sys
-import textwrap
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ENV_PATH = REPO_ROOT / ".env"
+from dotenv import load_dotenv
 
-# Importing conftest.py (without running pytest) executes its module-level
-# env setup and the `from app import app as flask_app, db` import, but not
-# any fixture — the schema drop/recreate lives in a session-scoped fixture,
-# never at import time, so this is safe to run standalone.
-_PROBE = textwrap.dedent(
-    """
-    import json
-    import os
-    import sys
-    sys.path.insert(0, "tests")
-    import conftest  # noqa: F401
-    print(json.dumps({
-        "key": os.environ.get("PASSWORDLESS_API_KEY"),
-        "public": os.environ.get("PASSWORDLESS_API_PUBLIC"),
-    }))
-    """
-)
+CONFTEST_PATH = Path(__file__).resolve().parent / "conftest.py"
 
 
-_LEAK_VARS = ("PASSWORDLESS_API_KEY", "PASSWORDLESS_API_PUBLIC")
+def test_conftest_resets_passwordless_vars_with_assignment_not_pop():
+    """Mutation proof (testing.md MISTAKE 6a): reverting conftest.py's reset
+    to the prior os.environ.pop(...) form flips every assertion here."""
+    source = CONFTEST_PATH.read_text()
+    assert 'os.environ["PASSWORDLESS_API_KEY"] = ""' in source
+    assert 'os.environ["PASSWORDLESS_API_PUBLIC"] = ""' in source
+    assert 'os.environ.pop("PASSWORDLESS_API_KEY"' not in source
+    assert 'os.environ.pop("PASSWORDLESS_API_PUBLIC"' not in source
 
 
-def _subprocess_env_with_no_ambient_leak_vars():
-    # The outer pytest process already ran the real (fixed) conftest.py once
-    # at collection time, which leaves these two vars set to "" in *this*
-    # process's os.environ. A plain inherited env would carry that "" into
-    # the child regardless of what the child's own conftest.py does, masking
-    # exactly the regression this test exists to catch. Strip them so the
-    # child starts with nothing ambient — only .env can supply a value.
-    return {k: v for k, v in os.environ.items() if k not in _LEAK_VARS}
+def test_empty_string_reset_survives_a_later_load_dotenv_override_false(tmp_path, monkeypatch):
+    dotenv_file = tmp_path / ".env"
+    dotenv_file.write_text("PASSWORDLESS_API_KEY=should-not-leak\nPASSWORDLESS_API_PUBLIC=should-not-leak\n")
+
+    # Mirrors conftest.py's own reset, in isolation.
+    monkeypatch.setenv("PASSWORDLESS_API_KEY", "")
+    monkeypatch.setenv("PASSWORDLESS_API_PUBLIC", "")
+
+    # Mirrors app/__init__.py's own dotenv load, which runs again later.
+    load_dotenv(dotenv_path=dotenv_file, override=False)
+
+    assert os.environ["PASSWORDLESS_API_KEY"] == ""
+    assert os.environ["PASSWORDLESS_API_PUBLIC"] == ""
 
 
-def _run_probe_with_a_key_leaked_from_dotenv():
-    original = ENV_PATH.read_bytes() if ENV_PATH.exists() else None
-    try:
-        ENV_PATH.write_bytes(
-            (original or b"")
-            + b"\nPASSWORDLESS_API_KEY=leaked-from-dotenv\n"
-            b"PASSWORDLESS_API_PUBLIC=leaked-from-dotenv\n"
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", _PROBE],
-            cwd=REPO_ROOT,
-            env=_subprocess_env_with_no_ambient_leak_vars(),
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-    finally:
-        if original is None:
-            ENV_PATH.unlink(missing_ok=True)
-        else:
-            ENV_PATH.write_bytes(original)
-    assert result.returncode == 0, result.stderr
-    return json.loads(result.stdout.strip().splitlines()[-1])
+def test_popping_the_key_would_have_let_a_later_load_dotenv_restore_it(tmp_path, monkeypatch):
+    """Pattern 7 (.claude/rules/testing.md): proves the property, not a
+    coincidence — this is the exact failure mode of the prior
+    os.environ.pop(...)-based reset, before it was changed to "" assignment."""
+    dotenv_file = tmp_path / ".env"
+    dotenv_file.write_text("PASSWORDLESS_API_KEY=leaked-value\n")
 
+    monkeypatch.delenv("PASSWORDLESS_API_KEY", raising=False)
 
-def test_conftest_clears_a_passwordless_key_leaked_from_dotenv():
-    assert _run_probe_with_a_key_leaked_from_dotenv() == {"key": "", "public": ""}
+    load_dotenv(dotenv_path=dotenv_file, override=False)
 
-
-def test_removing_the_conftest_reset_would_leak_the_dotenv_value():
-    """Pattern 7 (tests/helpers): prove the property, not a coincidence — revert
-    the fix to the prior os.environ.pop(...) form and watch this go red."""
-    conftest_path = REPO_ROOT / "tests" / "conftest.py"
-    original = conftest_path.read_bytes()
-    reverted = original.replace(
-        b'os.environ["PASSWORDLESS_API_KEY"] = ""\n'
-        b'os.environ["PASSWORDLESS_API_PUBLIC"] = ""\n',
-        b'os.environ.pop("PASSWORDLESS_API_KEY", None)\n'
-        b'os.environ.pop("PASSWORDLESS_API_PUBLIC", None)\n',
-    )
-    assert reverted != original, "expected fix text not found verbatim in conftest.py"
-    conftest_path.write_bytes(reverted)
-    try:
-        payload = _run_probe_with_a_key_leaked_from_dotenv()
-    finally:
-        conftest_path.write_bytes(original)
-    assert payload == {"key": "leaked-from-dotenv", "public": "leaked-from-dotenv"}
+    assert os.environ.get("PASSWORDLESS_API_KEY") == "leaked-value"
