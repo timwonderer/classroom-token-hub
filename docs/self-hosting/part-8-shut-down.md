@@ -13,7 +13,8 @@ or if you set up a test server and are done with it.
 
 > [!CAUTION]
 > Destroying the server deletes every class, account and record on it,
-> permanently. Your provider can't bring it back.
+> from its active disk. Do not rely on provider recovery. Separate snapshots
+> and backups may survive and need their own retention or deletion decision.
 
 ## 8.1 Decide what happens to the data
 
@@ -80,8 +81,10 @@ complete copy of the data.
 1. In your provider's dashboard, find the server by name and IP address.
    Check it's the right one.
 2. Destroy (delete) it. *DigitalOcean example: the Droplet's **Destroy** tab.*
-3. Also delete anything you created for it: snapshots, backups at the
-   provider, extra volumes, and the firewall.
+3. Reconcile snapshots, provider backups, volumes and the firewall against
+   your decision in 8.1. Delete only resources dedicated to this installation
+   whose retention has ended. Do not delete a shared firewall or a backup you
+   deliberately retained; record any remaining storage and charges.
 
 **What you should see.** The server no longer appears in the dashboard, and
 the provider's billing page shows no running resources for it.

@@ -11,6 +11,12 @@ roles: [operator]
 
 ## Choose the host and release
 
+Read the [current release and support limits](before-you-begin.md#which-release-this-guide-matches)
+before allocating a server. The profile below describes the original selection;
+the [recorded host rehearsal](rehearsal-findings.md) used Premium Intel with
+120 GB disk instead. Provider, CPU vendor and region are examples; the
+installer's OS, architecture and software checks are actual constraints.
+
 The first reference configuration is an x86-64 DigitalOcean SFO3 Basic Premium AMD Droplet with 2 vCPUs, 4 GB RAM, 80 GB advertised NVMe, Ubuntu 22.04 LTS, Python 3.10 and PostgreSQL server and client 14.24. It uses two private Redis processes. The plan chosen for this profile was $28/month, approximately $0.042/hour. Two hours of compute at that rate cost about $0.084. Check the selected size's current rate and budget DNS, keys, monitoring, backup storage and transfer separately. Billing continues while a Droplet is powered off. [DigitalOcean billing](https://docs.digitalocean.com/products/droplets/details/pricing/)
 
 1. **Infrastructure owner.** Select a dedicated empty host and record its provider resource ID, image, region, network policy, expected machine identity and the operator responsible for recovery. Reserve an administrator-only control path. Restrict incoming traffic before any app service starts. On an existing database or shared production host, use the established upgrade or restore procedures. A self-hosting test must have no routes, credentials or resources authorizing access to production.

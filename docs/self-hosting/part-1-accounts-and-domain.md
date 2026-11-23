@@ -24,8 +24,9 @@ internet.
 
 **Steps.**
 
-1. Choose any provider that offers **Ubuntu 22.04 LTS on x86-64**. DigitalOcean,
-   Hetzner, Linode (Akamai), Vultr and AWS Lightsail all do.
+1. Choose a provider that currently offers **Ubuntu 22.04 LTS on x86-64**,
+   with SSH access and a firewall you can configure. This guide uses
+   DigitalOcean as its example; verify image availability before paying.
 2. Create an account and add a payment method.
 3. Don't create a server yet. That's Part 2.
 
@@ -40,8 +41,9 @@ accounts. Wait for approval before continuing.
 **What you're doing.** Getting a web address and letting Cloudflare manage it.
 
 **Why.** The current installer expects the Cloudflare proxy in front of the server
-([why](before-you-begin.md#strongly-recommended-with-alternatives)). Cloudflare
-can only do that for a domain whose DNS it manages.
+([why](before-you-begin.md#strongly-recommended-with-alternatives)). This tutorial uses
+Cloudflare's Free-plan full DNS setup. Other Cloudflare arrangements are not
+covered here.
 
 **Steps.**
 
@@ -52,6 +54,11 @@ can only do that for a domain whose DNS it manages.
      your registrar; or
    - **you need a domain:** buy one through **Cloudflare Registrar** (or any
      registrar, then add it as above).
+   Before changing nameservers, compare all existing DNS records, including
+   email records, with the originals. Missing records can break an existing
+   website or email. For a school-owned domain, have its administrator handle
+   this step; control of one subdomain does not give you permission to move
+   the whole domain. [Cloudflare setup and record checks](https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/)
 3. Choose the name for your CTH, usually a subdomain such as
    `classroom.example.org`. It must be a domain you control; the installer
    refuses the project's own `classroomtokenhub.com`.

@@ -7,7 +7,13 @@ roles: [operator]
 
 # First use and ongoing operation
 
-**Proposed for the Ubuntu reference host.** Perform these checks behind restricted access. The B1 database and protected-row evidence in the [fresh database chapter](fresh-database.md) was locally tested. The host, external provider, browser and destructive lifecycle exercises below require a controlled test deployment.
+This is the advanced operator reference. For the teacher walkthrough, start
+with [Part 6](part-6-first-use.md) and [Part 7](part-7-keep-it-running.md).
+The [rehearsal record](rehearsal-findings.md) gives the bounded host results;
+the complete lifecycle procedure below has not been independently rehearsed.
+Use fictional classes for validation and restrict access during operational
+work. Read the [current support limits](before-you-begin.md#which-release-this-guide-matches)
+before committing real classroom data.
 
 ## First operator account
 
@@ -53,7 +59,23 @@ Host root can rerun `python3 infra/self-hosting/install.py check readiness --con
 
 Before admitting classrooms, establish encrypted, access-controlled recovery points on separate storage and complete a restore drill. Define recovery point and recovery time objectives, key custody, retention and a deletion procedure. Include the database, release identity and the protected key material required for decryption and audit verification under separate access controls. Exclude the student-setup Redis, temporary credentials, raw identity data in logs, and secrets in public evidence. A write-capable application login is unnecessary for the backup reader. [Credential and backup operations](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md) · [PII storage and retention](../INVARIANT/ARCHITECTURE/INV-ARC-018_PII_STORAGE_AND_RETENTION_ENFORCEMENT.md)
 
-The repository includes a proposed independent backup utility at `infra/db-backup/cth_db_backup.py`. It requires private configuration for the source reader, a dedicated disposable verification database, the age public recipient, private state directory and chosen off-host store. Its verification routine resets its designated scratch database. Confirm that endpoint belongs exclusively to this backup deployment. Review the release's `infra/db-backup/README.md` before using it. The host installer does not establish or certify this backup system.
+The repository's `infra/db-backup/cth_db_backup.py` is used by the production
+pre-release procedure. The [v2.4.5 deployment record](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/ops/audits/DEPLOY_2026-11-14_1d74ea8.md)
+records a successful encrypted backup, comparison of all 47 table counts,
+restore matching the manifest and revision, and a successful deleted-identity
+check. Reuse that evidence for the same tool and prerequisites; a different
+host does not by itself invalidate it. This does not establish that the proposed
+nightly timers or remote-storage deployment were installed.
+
+The tool requires private configuration for the source reader, a dedicated
+disposable verification database, the age public recipient and private state
+directory; remote storage is optional. Its verification routine resets its
+designated scratch database. Confirm that endpoint belongs exclusively to this
+backup deployment. The production `prerelease.sh` wrapper hardcodes `root@cth`,
+the `classroom-economy` service and the owner's Mac paths: do not run it unchanged
+against a self-hosted installation. Review `infra/db-backup/README.md` and use
+the configurable tool below with your own endpoints. The host installer does
+not provision these backup roles or a verification database.
 
 | Authority and command after provisioning the backup utility | Expected result | Failure and recovery |
 | --- | --- | --- |

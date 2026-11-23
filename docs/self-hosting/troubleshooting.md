@@ -17,9 +17,10 @@ Installer errors look like `stage: message`. Search this page for the message.
 ## Problems fixed in newer releases
 
 These came up during the project's staging run on 22 November 2026 and were
-fixed on `main` that day. A release published after v2.4.5 includes the fixes.
-If you install such a release, you won't see them. On an older release, use
-the workaround.
+fixed on `main`. Check that your selected release actually contains the
+linked fixes; a later version number alone is not proof. The tutorial
+requires those fixes. Notes below explain older failures, not a recommendation
+to start a new installation on an older release.
 
 ### Redis stage fails on its first run
 
@@ -103,9 +104,11 @@ quoting the message. Don't install PostgreSQL yourself to get past it.
 14. These two checks compare against the exact version the release was
 installed with.
 
-**Fix.** Your site keeps working: `check readiness` doesn't check package
-versions. Keep the security update; don't downgrade PostgreSQL. A newer CTH
-release will expect the newer version.
+**Fix.** This version mismatch alone does not prove the app is broken or
+healthy. Keep the security update; do not downgrade to satisfy the old check.
+Run `check readiness`, check service logs, and repeat teacher/student sign-in.
+Ask maintainers which release supports the installed package; a future fix
+is not guaranteed by this guide.
 
 ### Cloudflare shows an error page (520–526)
 

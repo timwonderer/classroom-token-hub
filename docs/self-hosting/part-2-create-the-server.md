@@ -11,8 +11,10 @@ keywords: [self-hosting, tutorial, server, SSH, firewall, DNS]
 From this part on, **billing has started**. If you stop for more than a few
 days, read [Part 8](part-8-shut-down.md) first.
 
-The steps show DigitalOcean's screens as a labelled example. Every provider
-has the same pieces under slightly different names.
+The steps show DigitalOcean's screens as a labelled example. Other providers
+have different console, firewall and login arrangements; confirm these before
+creating a server. Use IPv4 for this tutorial; do not add an AAAA record or
+enable a separate public IPv6 path.
 
 ## 2.1 Create the server
 
@@ -25,8 +27,9 @@ it refuses a machine that already runs a database, web server or Redis.
 
 1. Create a new server with:
    - **Image:** Ubuntu **22.04** LTS, x86-64. Not 24.04, and not an ARM server.
-   - **Size:** the tested size is 2 vCPUs, 4 GB memory, 80 GB disk. Smaller
-     sizes are untested.
+   - **Size:** the recorded rehearsal used 2 vCPUs, 4 GB memory and 120 GB
+     disk. The original reference specified 80 GB. These are reference
+     configurations, not measured minimums or classroom capacity guarantees.
    - **Region:** one near you and your students.
    - **Authentication:** your SSH **public key**, not a password.
 2. Don't add the provider's one-click apps, managed databases or extra
@@ -46,7 +49,7 @@ region or provider. The installer won't accept any other version.
 ## 2.2 Read the server's fingerprint in the web console
 
 **What you're doing.** Finding out the server's true identity through a
-channel an attacker can't fake: your provider's own website.
+separate channel: your authenticated provider dashboard.
 
 **Why.** The first time you SSH in, your computer can't tell your server from
 an impostor. Comparing fingerprints settles that.
@@ -96,7 +99,9 @@ The `#` means you are root.
 **If something looks wrong.**
 
 - **Fingerprints differ:** type `no`. Don't continue. Check you used the right
-  IP address. If it still differs, destroy the server and create a new one.
+  IP address and key type. If it still differs, resolve it through the
+  provider's console or support before connecting. Do not delete a server
+  merely to clear an unexplained identity warning.
 - **`Permission denied (publickey)`:** the server doesn't have your public
   key, or your terminal isn't offering it. Check the key you chose in 2.1.
 - **Asked for a passphrase:** that's your SSH key's own passphrase, not a
@@ -132,7 +137,9 @@ SSH from all addresses while you need it, and narrow it again afterwards.
 Your SSH key still protects the login either way.
 
 **What you should see.** The firewall listed as attached to your server. Your
-SSH session from 2.3 keeps working.
+SSH session from 2.3 keeps working. Open a second terminal and make a new
+SSH connection before closing the first; an existing connection alone does
+not prove that the new firewall rules allow future logins.
 
 **If something looks wrong.** If SSH stops working, your public IP may have
 changed (home networks change it now and then). Update the SSH rule.
@@ -143,7 +150,8 @@ changed (home networks change it now and then). Update the SSH rule.
 to the server, through Cloudflare.
 
 **Why.** Students and teachers will type your hostname, not an IP address.
-Routing it through Cloudflare's proxy hides the server's address.
+The proxy gives visitors Cloudflare addresses; your firewall still needs to
+protect the origin even if its address becomes known.
 
 **Steps** *(Cloudflare dashboard)*.
 

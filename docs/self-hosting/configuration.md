@@ -8,7 +8,7 @@ keywords: [self-hosting, configuration, credentials, admission, Redis]
 
 # Deployment configuration and credentials
 
-**Locally tested** covers configuration parsing, required-field rejection, credential separation, template rendering and simulated checks. **Proposed** covers systemd, Ubuntu, provider registration, gate admission and deployed verification. See the [handbook](handbook-overview.md), [credential contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md) and [credential operations procedure](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md).
+Configuration parsing, required-field rejection, credential separation and template checks were tested locally. Host rehearsal results are release-specific; the [rehearsal record](rehearsal-findings.md) identifies what ran and what remains unverified. Do not read a successful parser check as proof that a provider key or browser flow works. See the [handbook](handbook-overview.md), [credential contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md) and [credential operations procedure](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md).
 
 ## Installation manifest
 
@@ -71,13 +71,43 @@ The initial reference EnvironmentFile accepts the variables above. Other support
 
 ## TLS and admission prerequisites
 
-For the CTH rehearsal, use `staging.classroomtokenhub.com` in the existing DNS zone. Protect that exact hostname and every path with a separate Cloudflare Access application. Scope the DNS record, origin certificate, browser session cookies and authentication registrations to staging. Admit only the owner's enrolled identity. Keep the stock Nginx service masked. The installer manages `cth-ingress.service` and Gunicorn stays on loopback.
+Use your own hostname, provider registrations and TLS files for an independent
+installation. [Part 4](part-4-describe-your-installation.md#44-get-the-https-certificate)
+provides the certificate steps. The installer manages `cth-ingress.service`;
+keep the stock Nginx service masked and Gunicorn on loopback.
 
-**Proxied HTTPS (manual and Actions).** The installer uses this profile by default. Before allocation, prepare the Access application, hostname and origin certificate. On the staging firewall allow inbound TCP 443 only from the current Cloudflare IPv4 ranges and SSH only from the operator's approved source. Compare the ranges with `EDGE_IPV4` in the reviewed installer. After allocation, point a proxied A record at the verified staging IPv4 and choose Full (strict) TLS. Use an origin certificate for the staging hostname trusted by both Cloudflare and the host's local HTTPS client. Keep port 80 closed. Nginx checks the original TCP peer, TLS server name and HTTP hostname, overwrites forwarded addresses and admits host-local TLS probes only for the two health paths. Publishing the origin requires the exact staging firewall to be attached. [Cloudflare source ranges](https://www.cloudflare.com/ips-v4)
+**Current installer constraint: Cloudflare-proxied IPv4 HTTPS.** Publish a
+proxied A record, set Full (strict) TLS, and permit incoming TCP 443 only from
+Cloudflare's current IPv4 ranges. Compare those ranges with `EDGE_IPV4` in the
+selected release. Limit SSH to the sources needed for your administrator and
+recovery access; leave port 80 closed. Use a publicly trusted certificate that
+both Cloudflare and the host's own HTTPS client accept. A Cloudflare Origin CA
+certificate alone does not satisfy the local probe.
+[Cloudflare source ranges](https://www.cloudflare.com/ips-v4)
 
-No Cloudflare Tunnel, private CA or origin-pull client certificate is required by this reference profile. It follows the observed production pattern: Cloudflare Access on the application hostname, Cloudflare-only origin HTTPS, and a publicly trusted server certificate. The IP allowlist proves a Cloudflare network peer, not a particular account or Access admission. Do not describe offline peer tests as proof against every alternate routing path; any additional origin-authentication proposal needs its own evidence and review.
+No Cloudflare Tunnel, private CA or origin-pull client certificate is required
+by this installer. The IP allowlist identifies a Cloudflare network peer, not
+a particular account or Access admission. Local checks do not prove that every
+alternative route to the origin is blocked; test direct-origin denial from
+outside the host too.
 
-For this temporary rehearsal, use the already issued Let's Encrypt staging certificate and key. Its manual DNS issuance does not configure renewal. Production uses Certbot's Nginx integration and an enabled renewal timer. The reference installer's dedicated Nginx unit and copied PEM inputs do **not** reproduce that renewal arrangement: a long-lived deployment needs a tested renewal-and-reload procedure before its certificate expires. Do not create another certificate for this exercise merely to change issuance method.
+**Maintenance access.** Access is not an installation precondition. When you
+need to restrict the application audience during setup or maintenance, follow
+[Part 7](part-7-keep-it-running.md#710-optional-maintenance-mode-with-cloudflare-access).
+An Access login does not replace CTH's teacher or student login, and does not
+stop scheduled jobs.
+
+**Certificate renewal.** The installer copies no automated renewal workflow.
+Its dedicated Nginx service and PEM input paths differ from the project's
+hosted Certbot setup. Follow [renewal and verification](part-7-keep-it-running.md#76-renew-the-certificate)
+before the actual expiry date. Choosing a different certificate automation
+tool is possible, but its deployment/reload steps need separate verification.
+
+**Maintainer rehearsal only.** The recorded trial used the project's
+`staging.classroomtokenhub.com`, a previously issued certificate and owner-only
+Access admission. Those were resources for that trial, not values for another
+operator to copy. Historical staging instructions remain in
+[staging bootstrap](staging-bootstrap.md) and the [rehearsal record](rehearsal-findings.md).
 
 Monitoring services such as Pulsetic use public HTTPS and need no special client certificate. During an Access-restricted window, an unadmitted monitor encounters the gate; that is an admission observation, not application health. A specialized status service is not an installation prerequisite.
 
