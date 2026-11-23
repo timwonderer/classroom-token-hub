@@ -1,4 +1,4 @@
-"""The eMudhra correction removes the affected root, retaining unaffected roots."""
+"""Requests uses the corrected certifi bundle after the eMudhra removals."""
 import ssl
 
 import certifi
@@ -15,5 +15,12 @@ def test_requests_trust_bundle_excludes_compromised_emsign_root():
         if key == 'commonName'
     }
     assert requests.certs.where() == certifi.where()
-    assert 'emSign ECC Root CA - G3' not in common_names
-    assert {'emSign Root CA - G1', 'emSign Root CA - C1', 'emSign ECC Root CA - C3'} <= common_names
+    # certifi 2026.10.23 also removes C1/C3, following NSS 3.131.1:
+    # https://firefox-source-docs.mozilla.org/security/nss/releases/nss_3_131_1.html
+    removed_roots = {
+        'emSign ECC Root CA - G3',
+        'emSign Root CA - C1',
+        'emSign ECC Root CA - C3',
+    }
+    assert common_names.isdisjoint(removed_roots)
+    assert 'emSign Root CA - G1' in common_names
