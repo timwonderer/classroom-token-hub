@@ -8,11 +8,7 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-### Changed
-
-- Consolidated five routine Dependabot dependency bumps: `actions/actionlint` 1.80.0→1.84.1, `pytz` 2026.2→2026.6, `pluggy` 1.6.0→1.7.0, `tomli` 2.4.1→2.5.0, and `google-auth` 2.61.0→2.62.2 (`status_service`). Verified against the full test suite with no new failures.
-
-
+### Added
 
 - <!-- notes: internal --> **Fresh PostgreSQL installations gain a release-specific schema baseline.** The artifact includes the migrated schema and required reference data at Alembic revision `a0faf8b2a35d`. Existing installations continue to use the migration chain.
 - <!-- notes: internal --> **Staging can install the application on Python 3.14.** The owner-attended staging workflow's new `python` input, or `"python": "3.14"` in a self-hosting manifest, installs a pinned, checksum-verified CPython 3.14.10 build and creates the release environment from it. Python 3.10 remains the default and production runtime until the staging and rollback checks in #1774 pass.
@@ -20,6 +16,7 @@ and this project follows semantic versioning principles.
 
 ### Changed
 
+- <!-- notes: internal --> Consolidated five routine Dependabot dependency bumps: `actions/actionlint` 1.80.0→1.84.1, `pytz` 2026.2→2026.6, `pluggy` 1.6.0→1.7.0, `tomli` 2.4.1→2.5.0, and `google-auth` 2.61.0→2.62.2 (`status_service`). Verified against the full test suite with no new failures.
 - <!-- notes: internal --> **Audit acceptance now requires a protected record and its complete class chain.** `DOM-OPS-002` v1.12 and `FEAT-OPS-001` v1.1 describe the scoped verification result and retire documentation of the obsolete integrity-status singleton writer.
 - <!-- notes: internal --> **The operator CLI attributes sysadmin creation to its own execution contract.** `FEAT-IDEN-008` governs creation of a system principal and TOTP enrollment. Duplicate logins retain their existing credentials.
 - <!-- notes: internal --> **Migration generation checks revision IDs against the active Alembic tree.** The generator retries an occupied ID and the Flask CLI refuses an explicit duplicate. The migration validator reports both filenames if independently authored revisions collide.
