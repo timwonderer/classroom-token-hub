@@ -135,9 +135,24 @@ def enforce_daily_limits_job():
             # job will touch, plus the actor seat -- ascending, once, before any
             # per-seat savepoint opens, exactly as settle_class_payroll_cycle
             # already does for its own student batch.
-            from app.services.attendance_service import lock_attendance_seat
-            for sid in sorted(set(seat_ids) | {actor_seat_id}):
-                lock_attendance_seat(sid, class_id)
+            #
+            # A seat enumerated above can vanish (be deleted) before this runs.
+            # The per-seat loop below already tolerates that (its own lookup
+            # returns None and it continues), so this batch lock must tolerate
+            # it too, rather than raising past the per-seat savepoint boundary
+            # and aborting the whole job -- the exact regression this job exists
+            # to not reintroduce (Codex review on PR #1832 of commit 0a691213).
+            # Lock only the rows that still exist, ascending by id, and skip
+            # any seat that is gone by the time this query runs.
+            candidate_ids = sorted(set(seat_ids) | {actor_seat_id})
+            locked_seats = (
+                Seat.query.filter(Seat.class_id == class_id, Seat.id.in_(candidate_ids))
+                .order_by(Seat.id.asc())
+                .with_for_update()
+                .all()
+            )
+            existing_ids = {seat.id for seat in locked_seats}
+            seat_ids = [sid for sid in seat_ids if sid in existing_ids]
 
             for seat_id in seat_ids:
                 try:
