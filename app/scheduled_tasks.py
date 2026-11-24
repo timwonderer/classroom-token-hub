@@ -36,7 +36,7 @@ def enforce_daily_limits_job():
     from sqlalchemy import func
     from sqlalchemy.orm import aliased
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled daily-limit enforcement job")
 
     try:
@@ -176,7 +176,7 @@ def database_maintenance_job():
     # Import here to avoid circular imports
     from app.extensions import db
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting nightly database maintenance job")
 
     total_cleaned = 0
@@ -217,7 +217,7 @@ def run_rent_reconciliation_job():
     from app.services.class_configuration_query_service import is_feature_enabled
     from app.feats.reconcile_rent_feat import execute_reconcile_rent
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled rent reconciliation job")
 
     reconciled = 0
@@ -303,7 +303,7 @@ def run_automatic_payroll_job():
         canonical_temporal_resolver,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled automatic-payroll job")
 
     now = canonical_temporal_resolver(
@@ -383,7 +383,7 @@ def run_audit_invariant_check_job():
     signatures and verifying hash continuity. The result is consumed by the
     Operations status-signal pipeline.
     """
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting nightly audit invariant check")
     try:
         from app.utils.audit_verifier import run_full_invariant_check, record_integrity_verification
@@ -443,7 +443,7 @@ def run_insurance_expiry_job():
         canonical_temporal_resolver,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled insurance boundary-expiry job")
 
     now = canonical_temporal_resolver(
@@ -543,7 +543,7 @@ def run_insurance_renewal_job():
         list_renewable_insurance_entitlements,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled insurance coverage-renewal job")
 
     try:
@@ -608,7 +608,7 @@ def run_collective_goal_expiry_job():
         canonical_temporal_resolver,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled collective-goal expiry job")
 
     now = canonical_temporal_resolver(
@@ -695,7 +695,7 @@ def run_ledger_settlement_job():
     """
     from app.services.ledger_settlement_service import settle_pending_transaction_contexts
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     summary = settle_pending_transaction_contexts()
     logger.info(
         "Ledger settlement sweep completed; settled %s context(s), failed %s context(s)",
@@ -728,7 +728,7 @@ def run_savings_interest_job():
     # being left to registration order.
     run_ledger_settlement_job()
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     class_ids = [row[0] for row in db.session.query(Seat.class_id).distinct().all()]
     posted = 0
     failed = 0
@@ -803,7 +803,7 @@ def run_store_item_expiry_job():
     from app.services.identity_service import resolve_teacher_seat_for_class
     from sqlalchemy.orm import aliased
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled store item expiry job")
 
     ended = aliased(EntitlementEvent)
@@ -926,7 +926,7 @@ def close_prior_day_hall_pass_requests_job():
     from app.services.hall_pass_request_queue import list_class_ids_with_pending_hall_pass_requests
     from app.services.identity_service import resolve_teacher_seat_for_class
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     for class_id in list_class_ids_with_pending_hall_pass_requests():
         try:
             class_row = db.session.get(ClassEconomy, class_id)
@@ -1085,7 +1085,7 @@ def init_scheduled_tasks(app):
     from app.extensions import scheduler
     from app.scheduler_ownership import SchedulerOwnershipError, owns_scheduler
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
 
     # Only the process holding the scheduler lock may run the jobs; see
     # app/scheduler_ownership.py. Refusing here means a stray direct call
