@@ -298,11 +298,14 @@ def test_another_class_cannot_extend_a_lineage_it_does_not_own(app):
 # --------------------------------------------------------------------------- #
 
 
-def _await_blocked_backend(app, timeout=15.0):
-    """Wait until some backend is blocked waiting to acquire a single-bigint-key
-    Postgres advisory lock (``objsubid = 1``) — specifically the lineage lock
-    ``schedule_next_bill_cycle`` takes before deriving a successor, per
-    ``_acquire_lineage_lock`` in ``app/feats/schedule_next_bill_cycle_feat.py``
+def _await_blocked_backend(app, outcomes, timeout=15.0):
+    """Wait until command B's own Postgres backend (identified by
+    ``outcomes["b_pid"]``, which ``_race``/``_race_with_rollback`` capture as
+    the first statement inside command B's transaction) is blocked waiting to
+    acquire a single-bigint-key advisory lock (``objsubid = 1``) —
+    specifically the lineage lock ``schedule_next_bill_cycle`` takes before
+    deriving a successor, per ``_acquire_lineage_lock`` in
+    ``app/feats/schedule_next_bill_cycle_feat.py``
     (``pg_advisory_xact_lock(hashtext(key))``, the single-bigint-argument
     overload — Postgres records ``classid``/``objid`` as its high/low 32 bits
     and ``objsubid = 1`` for that overload, vs. ``objsubid = 2`` for the
@@ -310,24 +313,33 @@ def _await_blocked_backend(app, timeout=15.0):
     unrelated schema-setup coordination lock).
 
     A generic "any ungranted lock anywhere in the cluster" check is not a
-    reliable barrier: an unrelated, transient lock wait elsewhere in the
-    database can satisfy it before command B has even begun evaluating this
-    lineage, releasing command A too early and letting B's own read land
-    *after* A has already committed — at which point B is no longer racing
-    anything, and legitimately (if wrongly, for this test's purposes) derives
-    a later successor. Matching on this lock specifically means a reported
-    block really is command B waiting behind command A on the same lineage.
+    reliable barrier, for two reasons. First, an unrelated, transient lock
+    wait elsewhere in the database can satisfy it before command B has even
+    begun evaluating this lineage, releasing command A too early and letting
+    B's own read land *after* A has already committed — at which point B is
+    no longer racing anything, and legitimately (if wrongly, for this test's
+    purposes) derives a later successor. Second, even scoped to this lock's
+    ``objsubid``, a DIFFERENT backend's unrelated use of the same advisory
+    lock family (another concurrent idempotency lock from
+    ``app/feats/prod.py``, or another session's database on a shared
+    Postgres server — this sandbox runs several concurrently) could still
+    satisfy a PID-unscoped check. Filtering on command B's own backend PID
+    means a reported block really is command B itself waiting behind command
+    A on this exact lineage.
     """
     deadline = time.monotonic() + timeout
     with app.app_context():
         with db.engine.connect() as conn:
             while time.monotonic() < deadline:
-                waiting = conn.execute(sa.text(
-                    "SELECT count(*) FROM pg_locks"
-                    " WHERE NOT granted AND locktype = 'advisory' AND objsubid = 1"
-                )).scalar()
-                if waiting:
-                    return True
+                pid = outcomes.get("b_pid")
+                if pid is not None:
+                    waiting = conn.execute(sa.text(
+                        "SELECT count(*) FROM pg_locks"
+                        " WHERE NOT granted AND locktype = 'advisory'"
+                        " AND objsubid = 1 AND pid = :pid"
+                    ), {"pid": pid}).scalar()
+                    if waiting:
+                        return True
                 time.sleep(0.01)
     return False
 
@@ -363,6 +375,12 @@ def _race(app, class_id, internal_ref, key_a, key_b, reference):
         with app.app_context():
             try:
                 with FEATContext("FEAT-OBL-002", idempotency_key=key_b):
+                    # Captured as the first statement of B's own owned
+                    # transaction, so it names the exact backend that then
+                    # attempts the lineage lock below.
+                    outcomes["b_pid"] = db.session.execute(
+                        sa.text("SELECT pg_backend_pid()")
+                    ).scalar()
                     outcomes["b"] = schedule_next_bill_cycle(request(key_b)).id
             except BaseException as exc:
                 outcomes["b_error"] = exc
@@ -376,7 +394,7 @@ def _race(app, class_id, internal_ref, key_a, key_b, reference):
 
     thread_b = threading.Thread(target=command_b)
     thread_b.start()
-    blocked = _await_blocked_backend(app)
+    blocked = _await_blocked_backend(app, outcomes)
     release_a.set()
     thread_a.join(timeout=20)
     thread_b.join(timeout=20)
@@ -420,3 +438,118 @@ def test_same_command_racing_itself_is_a_replay_not_a_conflict(app, due_lineage)
     with app.app_context():
         assert _cycle_numbers(class_id, internal_ref) == [1, 2]
         assert len(_reservations(class_id, internal_ref)) == 2
+
+
+class _DeliberateRollback(Exception):
+    """Raised inside command A's FEATContext to force a real transaction
+    rollback — never caught by production code, only by the test harness."""
+
+
+def _race_with_rollback(app, class_id, internal_ref, key_a, key_b, reference):
+    """Command A creates the successor, holds its transaction open until
+    command B has blocked behind it on the lineage lock, then ROLLS BACK
+    instead of committing. Command B, unblocked once A's rollback completes,
+    must find the lineage exactly as it was and succeed — not be refused as a
+    conflict for having merely waited behind a transaction that, in the end,
+    wrote nothing here."""
+    a_holding = threading.Event()
+    release_a = threading.Event()
+    outcomes = {}
+
+    def request(key):
+        return ScheduleNextBillCycleRequest(
+            class_id=class_id, internal_ref=internal_ref,
+            cycle_boundary_at=_boundary(2), next_assessment_at=_boundary(3),
+            policy_uuid="policy-1", idempotency_key=key, reference_time_utc=reference,
+        )
+
+    def command_a():
+        with app.app_context():
+            try:
+                with FEATContext("FEAT-OBL-002", idempotency_key=key_a):
+                    outcomes["a"] = schedule_next_bill_cycle(request(key_a)).id
+                    a_holding.set()
+                    assert release_a.wait(timeout=20)
+                    # Force this whole transaction to roll back, discarding the
+                    # cycle and reservation just created — unrelated to this
+                    # lineage in production terms (e.g. a later step of the
+                    # same FEAT failed), but real: nothing here is committed.
+                    raise _DeliberateRollback("forcing a rollback after the insert")
+            except BaseException as exc:  # surfaced by the assertions below
+                outcomes["a_error"] = exc
+                a_holding.set()
+            finally:
+                db.session.remove()
+
+    def command_b():
+        with app.app_context():
+            try:
+                with FEATContext("FEAT-OBL-002", idempotency_key=key_b):
+                    outcomes["b_pid"] = db.session.execute(
+                        sa.text("SELECT pg_backend_pid()")
+                    ).scalar()
+                    outcomes["b"] = schedule_next_bill_cycle(request(key_b)).id
+            except BaseException as exc:
+                outcomes["b_error"] = exc
+            finally:
+                db.session.remove()
+
+    thread_a = threading.Thread(target=command_a)
+    thread_a.start()
+    assert a_holding.wait(timeout=20)
+    assert "a_error" not in outcomes, outcomes.get("a_error")
+
+    thread_b = threading.Thread(target=command_b)
+    thread_b.start()
+    blocked = _await_blocked_backend(app, outcomes)
+    release_a.set()
+    thread_a.join(timeout=20)
+    thread_b.join(timeout=20)
+    assert blocked, "command B never blocked behind command A; the race was not exercised"
+    return outcomes
+
+
+def test_a_rollback_while_b_waits_on_the_lock_lets_b_succeed(app, due_lineage):
+    """A concurrent command holding the lineage lock ahead of us, and then
+    rolling back, is not evidence of a conflict: pg_advisory_xact_lock
+    releases on rollback exactly as it does on commit, so a command that only
+    had to wait behind one must still succeed once the lineage turns out to
+    be exactly as it was."""
+    class_id, internal_ref = due_lineage
+    outcomes = _race_with_rollback(app, class_id, internal_ref, "race:a-rollback", "race:b", _FAR_FUTURE)
+
+    assert isinstance(outcomes.get("a_error"), _DeliberateRollback), outcomes
+    assert "b" in outcomes, outcomes
+    assert "b_error" not in outcomes, outcomes.get("b_error")
+    with app.app_context():
+        # A's cycle 2 and reservation were rolled back; B is the only
+        # successful creator of cycle 2.
+        assert _cycle_numbers(class_id, internal_ref) == [1, 2]
+        assert [r.idempotency_key for r in _reservations(class_id, internal_ref)] == [
+            "setup:1", "race:b",
+        ]
+
+
+def test_a_fully_committed_before_b_even_attempts_the_lock_is_still_a_conflict(app, due_lineage):
+    """Zero lock contention: command A's whole command — lock, derive, write,
+    commit — finishes before command B so much as attempts the lineage lock,
+    so B's own ``_acquire_lineage_lock`` call returns ``True`` (lock free, no
+    wait at all). This is not a race in any timing sense. But B's request
+    targets the exact same successor boundary A already created, so B must
+    still be refused rather than falling through an uncontended lock
+    acquisition into deriving and committing a further, duplicate-boundary
+    cycle. The deciding question is whether the lineage has already reached
+    the boundary this request targets, never whether this call had to wait."""
+    class_id, internal_ref = due_lineage
+    with app.app_context():
+        _succeed(class_id, internal_ref, "nowait:a", 2, _FAR_FUTURE)
+        db.session.commit()
+
+        with pytest.raises(SuccessionConflictError):
+            _succeed(class_id, internal_ref, "nowait:b", 2, _FAR_FUTURE)
+        # Cycle 2 is due at _FAR_FUTURE, so a command that fell through an
+        # uncontended lock into re-deriving would have created cycle 3.
+        assert _cycle_numbers(class_id, internal_ref) == [1, 2]
+        assert [r.idempotency_key for r in _reservations(class_id, internal_ref)] == [
+            "setup:1", "nowait:a",
+        ]

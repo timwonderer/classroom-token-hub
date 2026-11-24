@@ -137,12 +137,15 @@ def _acquire_lineage_lock(class_id: str, internal_ref: str) -> bool:
     forbids.
 
     Taking this lock before any eligibility read removes that window: at most
-    one command per lineage may be mid-evaluation at a time. Returns ``True``
-    when the lock was free (no concurrent command in flight for this lineage,
-    so this call may proceed to evaluate eligibility and derive normally), or
-    ``False`` when it had to wait for a concurrent command to finish — in
-    which case the caller is the loser of DOM-OBL-001 §V.7 case 3 and MUST NOT
-    derive a successor from whatever that command left behind.
+    one command per lineage may be mid-evaluation at a time. Note that
+    whether this call had to wait (returns ``False``) or found the lock free
+    (returns ``True``) is NOT by itself the deciding signal for whether a
+    conflict occurred — a concurrent command may fully commit (releasing the
+    lock) in the instant before this call even attempts it, which looks
+    identical to "no contention" here. The caller must still check, once the
+    lock is held either way, whether the lineage has actually been advanced
+    past what this request targets (see the boundary comparison in
+    ``schedule_next_bill_cycle``). The return value is informational only.
 
     Released automatically at this transaction's commit or rollback
     (``pg_advisory_xact_lock``), i.e. at ``FEATContext`` exit — never unlocked
@@ -220,22 +223,22 @@ def schedule_next_bill_cycle(
         )
 
     # Serialize succession for this lineage before any eligibility read (§V.7
-    # case 3). If this call had to wait, a concurrent command already decided
-    # this lineage's fate while we were blocked: re-check identity (a racing
-    # replay of the SAME command still returns its own outcome), and anything
-    # else is a conflict — we do not get to derive a successor from whatever
-    # that command left behind.
-    if not _acquire_lineage_lock(request.class_id, request.internal_ref):
-        reservation = obligations_service.get_obligation_command_reservation(
-            request.class_id, COMMAND_NAME, request.idempotency_key
-        )
-        if reservation is not None:
-            return _replay(reservation, request)
-        raise SuccessionConflictError(
-            f"{COMMAND_NAME} identity '{request.idempotency_key}' raced a concurrent "
-            f"execution against lineage '{request.internal_ref}'; refusing to "
-            f"re-derive a successor from the lineage state that execution left behind."
-        )
+    # case 3): at most one command per lineage may be mid-evaluation at a
+    # time. This is taken unconditionally, whether or not this call actually
+    # has to wait — a concurrent command may have already fully committed
+    # (releasing the lock) in the instant before this call even attempted it,
+    # which is indistinguishable from "no contention" by the lock alone.
+    _acquire_lineage_lock(request.class_id, request.internal_ref)
+
+    # A concurrent command may have executed — and committed or rolled back —
+    # immediately before us or while we waited. Re-check our own identity
+    # first: a racing replay of the SAME command still returns its own
+    # outcome, whether or not this call ever contended for the lock.
+    reservation = obligations_service.get_obligation_command_reservation(
+        request.class_id, COMMAND_NAME, request.idempotency_key
+    )
+    if reservation is not None:
+        return _replay(reservation, request)
 
     # Eligibility and position are read once, from authoritative state. The
     # successor derived here is the only one this command may create.
@@ -252,6 +255,32 @@ def schedule_next_bill_cycle(
             f"lineage '{request.internal_ref}' cycle {latest.cycle_number} is next assessed at "
             f"{latest.next_assessment_at}; succession is not due at {reference_time_utc}."
         )
+
+    # A DIFFERENT command may have already advanced this lineage to or past
+    # the exact successor boundary this request was asked to create — whether
+    # this call waited for it or found the lock already free when it tried.
+    # The deciding question is never "did I wait on the lock", only "has the
+    # lineage already reached this boundary": a command derives its successor
+    # once, from the lineage state it evaluated, and on conflict it does not
+    # get to re-derive past whatever a different command left behind (§V.7
+    # case 3). latest.cycle_boundary_at >= request.cycle_boundary_at, decided
+    # through the resolver rather than a direct comparison (SPEC-TIME-001).
+    if latest is not None and not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="later_than",
+        reference_time_utc=reference_time_utc,
+        candidate=request.cycle_boundary_at,
+        reference=latest.cycle_boundary_at,
+    ).is_later:
+        raise SuccessionConflictError(
+            f"{COMMAND_NAME} identity '{request.idempotency_key}' targeted successor "
+            f"boundary {request.cycle_boundary_at} for lineage '{request.internal_ref}', "
+            f"but cycle {latest.cycle_number} (cycle_boundary_at={latest.cycle_boundary_at}) "
+            f"already reaches or passes it, created by a different command; refusing to "
+            f"re-derive a successor from the lineage state that command left behind."
+        )
+
     cycle_number = 1 if eligibility is SuccessionEligibility.EMPTY else latest.cycle_number + 1
 
     bill_cycle = BillCycle(
