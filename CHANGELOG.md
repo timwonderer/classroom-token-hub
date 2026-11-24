@@ -16,6 +16,10 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- <!-- notes: fixed -->
+
+  **The student view and `/api/student-status` now show projected pay** (#1645). `get_class_attendance_status()` hardcoded `projected_pay: None`; it now prices unpaid attendance the same way a real payroll run does (`app/services/payroll/pricing.py`, DOM-PROD-001 §XV.3) — closed-but-unpaid work at the payroll setting in force when it closed, the still-open session as if it closed now at the setting in force now — so a mid-cycle rate change reprices only the open session, never work already closed under the old rate, and the estimate always agrees with what a payroll run would actually pay.
+
 - <!-- notes: fixed, security -->
 
   **The Economic Engine rebalance preview judges insurance premiums against their own billing cadence.** `resolve_insurance()` always resolved a WEEKLY coverage period regardless of a policy's actual `charge_frequency`, so a correctly-priced MONTHLY-billed policy's premium was compared against a weekly-scaled recommended band (~30/7 too narrow) and could be wrongly flagged "out of range" in `/admin/economic-engine?review_rebalance=1`. `coverage_period` is no longer defaulted — every caller now states the policy's own cadence explicitly, the same way rent already has no engine-side default (#1762). Advisory-only; this page never applies insurance changes and no ledger or money data is affected.
