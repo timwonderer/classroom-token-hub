@@ -22,6 +22,10 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: fixed -->
 
+  **`prerelease.sh` checks the backup venv's Python before stopping production, and waits on PostgreSQL readiness instead of a fixed sleep** (#1819). `backup` now verifies `~/cth-backup-venv/bin/python` exists, runs, and can import `psycopg2` before `classroom-economy` is stopped, so a broken or relocated backup interpreter (e.g. after a Homebrew Python upgrade) is caught before production is touched rather than after it is already down. The `cth-verify` restore-check container's fixed `sleep 5` is replaced with up to 30 one-second `pg_isready` polls; if it never becomes ready, the script aborts before `createdb`/`counts`/`restore` run, failing closed rather than proceeding against a server that was never confirmed up. Counts/restore/evidence fail-closed handling is unchanged. SOP-DEP-002 §VII.A.5-7.
+
+- <!-- notes: fixed -->
+
   **Status history reports observed errors.** Replaced the 90-day reliability bars and threshold-history tables with a 30-day 4xx/5xx distribution, observed request totals, last recorded five-minute windows and explicit coverage. Fixed-boundary samples prevent overlapping requests and retries from inflating counts. Older reliability rollups remain unavailable as error evidence; totals accumulate after collector rollout. The chart has visible text equivalents, a neutral empty state and timezone-labelled timestamps. Current status and incident handling are unchanged.
 
 
