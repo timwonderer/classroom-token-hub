@@ -82,6 +82,13 @@ def _run_probe() -> str:
         PYTHONPATH=str(REPO_ROOT),
         FLASK_ENV="production",
         DATABASE_URL=test_db_url,
+        # create_app() defaults LOG_LEVEL to INFO when unset (app/__init__.py),
+        # but this probe's correctness must not depend on whatever the test
+        # runner's ambient environment happens to carry: an inherited
+        # LOG_LEVEL=DEBUG or =WARNING would make an assertion fail for the
+        # wrong reason (an unrelated level mismatch, or lines suppressed
+        # entirely) rather than for what this test actually checks.
+        LOG_LEVEL="INFO",
         # create_app() requires these only in production (app/__init__.py);
         # verify_turnstile_token() itself is not exercised by this probe.
         TURNSTILE_SECRET_KEY="probe-secret",
