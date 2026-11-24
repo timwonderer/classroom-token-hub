@@ -222,16 +222,27 @@ def _record_hall_pass_log_impl(
     ctx = _require_context(ctx)
     if not requested_by_seat_id or not ctx.class_id:
         raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
-    # Lock the seat before _enforce_hall_pass_settings locks the class below.
-    # execute_account_transfer / allocate_creation_posting_sequence lock
-    # Seat then ClassEconomy; a hall-pass approval that locked them in the
-    # opposite order could deadlock against a concurrent transfer for the
+    # Lock the seat(s) before _enforce_hall_pass_settings locks the class
+    # below. execute_account_transfer / allocate_creation_posting_sequence
+    # lock Seat then ClassEconomy; a hall-pass approval that locked them in
+    # the opposite order could deadlock against a concurrent transfer for the
     # same student (PR #1550 review). Locking the seat first here, whether or
     # not this destination consumes a pass, keeps every writer that takes
     # both locks in the same Seat -> ClassEconomy order.
+    #
+    # The HallPassLog row written below also carries a foreign key to
+    # approved_by_seat_id (the approving teacher's seat, ctx.seat_id for an
+    # approval; equal to requested_by_seat_id for a self-recorded entry), so
+    # Postgres takes an implicit FOR KEY SHARE lock on it at insert time too.
+    # Since #1640 widened rent reconciliation's lock set to every seat in the
+    # class -- the approver's seat included -- an unlocked approver seat can
+    # complete the same circular wait against reconciliation that #1640
+    # otherwise closed (Codex review on PR #1832). Lock both, ascending,
+    # before any class-scoped work.
     from app.services.entitlement_service import lock_hall_pass_holder
 
-    lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
+    for sid in sorted({requested_by_seat_id, approved_by_seat_id}):
+        lock_hall_pass_holder(sid, ctx.class_id)
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
