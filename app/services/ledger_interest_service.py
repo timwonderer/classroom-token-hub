@@ -27,6 +27,7 @@ from app.services.ledger_balance_query_service import (
     posting_scope_of,
     resolve_reconciliation_cursors,
 )
+from app.services.ledger_correction_service import REVERSAL_TRANSACTION_TYPE
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -271,12 +272,20 @@ def _savings_ledger(seat_id, class_id, cadence):
     )
     # Every row shares one account scope, so its cursor is read once, not per row.
     cursors = resolve_reconciliation_cursors(posting_scope_of(row) for row in rows)
+    # A REVERSAL's own ``type`` never carries its original's (FEAT-LED-002
+    # §III.2.1), so whether it undoes an interest credit must be read off what
+    # it reverses, not off itself. Collected before the main pass: a reversal
+    # row can precede its original in query order, which carries no ORDER BY.
+    interest_credit_ids = {
+        row.id for row in rows
+        if row.type == "Interest" and (row.idempotency_key or "").startswith(prefix)
+    }
     history = []
     paid_keys = set()
     paid_through = None
     for row in rows:
         window = None
-        if row.type == "Interest" and (row.idempotency_key or "").startswith(prefix):
+        if row.id in interest_credit_ids:
             window = _paid_window(class_id, cadence, row, prefix)
         if window is not None:
             paid_keys.add(row.idempotency_key)
@@ -291,7 +300,17 @@ def _savings_ledger(seat_id, class_id, cadence):
         elif row.posted_at is not None and classify_posting_state(
             row.posting_sequence, cursors.get(posting_scope_of(row))
         ) == TransactionStatus.POSTED:
-            history.append((row.posted_at, row.amount_cents, False))
+            # A reversal of an interest credit must cancel that credit in the
+            # principal-only series, not reduce it: the credit it reverses was
+            # itself excluded from principal, so letting the reversal's negative
+            # amount count would subtract interest that was never principal
+            # (SPEC-ECON-001 §4.1). A reversal of an ordinary deposit carries no
+            # such original and reduces principal normally.
+            reverses_interest = (
+                row.type == REVERSAL_TRANSACTION_TYPE
+                and row.original_transaction_id in interest_credit_ids
+            )
+            history.append((row.posted_at, row.amount_cents, reverses_interest))
     history.sort(key=lambda entry: entry[0])
     return _SavingsLedger(history, paid_keys, paid_through)
 

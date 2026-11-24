@@ -32,7 +32,11 @@ from app.scheduled_tasks import run_savings_interest_job
 from app.utils import canonical_temporal_resolver as resolver_module
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
-from tests.helpers.ledger import create_ledger_idempotent_transaction
+from tests.helpers.ledger import (
+    compensate_ledger_posted_transaction,
+    create_ledger_idempotent_transaction,
+    settle_ledger_balances,
+)
 
 RATE = Decimal("0.1733")
 DAILY_RATE = RATE / Decimal("365")
@@ -201,6 +205,57 @@ def test_simple_interest_withdrawal_still_reduces_the_earning_base(client, app, 
     assert rows[1].amount == _simple("500.00", 7)
 
 
+def test_reversed_interest_credit_does_not_reduce_simple_interest_principal(client, app, monkeypatch):
+    """A reversed interest credit must cancel out of the principal-only series,
+    not reduce it further (#1646 follow-up, CodeRabbit finding on PR #1833).
+
+    Window one's credit is already excluded from the principal-only base. Its
+    reversal undoes that exact credit, so the pair's net effect on principal
+    must be zero: window two's earning base stays the untouched $1000.00
+    deposit. Before this fix the reversal (tagged as an ordinary, non-interest
+    row) subtracted the reversed interest from principal a second time, so
+    window two underpaid.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    seat = classroom.students[0].seat
+    _configure_interest(client, classroom, payout="weekly", compound="never", calc="simple")
+
+    monday = _next_monday(tz_name)
+    _fund_savings(monkeypatch, app, classroom, seat, "1000.00", _local(tz_name, monday, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, monday, 1))  # settles the deposit
+
+    week_two_start = monday + timedelta(days=7)
+    _tick(monkeypatch, app, _local(tz_name, week_two_start, 0, 30))  # credits window one
+
+    window_one_credit = _interest_rows(app, classroom, seat)[0]
+    assert window_one_credit.amount == _simple("1000.00", 7)
+
+    # Reverse window one's credit and settle the reversal itself from WITHIN
+    # window two (not at window two's own close tick), so it genuinely
+    # participates in window two's own earning-base computation instead of
+    # landing after every day window two accrues over.
+    reverse_at = _local(tz_name, week_two_start, 2)
+    with app.app_context(), _pinned_clock(monkeypatch, reverse_at):
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"1646-reverse:{seat.id}"):
+            compensate_ledger_posted_transaction(
+                window_one_credit,
+                description="Reverse window-one interest credit for #1646 regression",
+                idempotency_key=f"1646-reverse-tx:{seat.id}",
+            )
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"1646-reverse-settle:{seat.id}"):
+            settle_ledger_balances(seat.id, classroom.class_id)
+
+    week_two_close = week_two_start + timedelta(days=7)
+    _tick(monkeypatch, app, _local(tz_name, week_two_close, 0, 30))  # credits window two
+
+    rows = _interest_rows(app, classroom, seat)
+    assert len(rows) == 2
+    # Before the fix: strictly less than this, since the reversal's negative
+    # amount was double-counted against principal.
+    assert rows[1].amount == _simple("1000.00", 7)
+
+
 # --------------------------------------------------------------------------- #
 # Sanity: compound interest is unaffected by the fix                          #
 # --------------------------------------------------------------------------- #
@@ -325,3 +380,4 @@ def test_forecast_next_credit_matches_runtime_for_simple_interest_second_window(
     rows = _interest_rows(app, classroom, seat)
     assert len(rows) == 2
     assert rows[1].amount == forecast.next_credit
+
