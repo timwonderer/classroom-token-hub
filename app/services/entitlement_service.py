@@ -416,7 +416,14 @@ def remove_hall_passes(
     quantity_to_remove = int(quantity or 0)
     if quantity_to_remove <= 0:
         raise ValueError("Hall-pass removal quantity must be positive")
-    lock_hall_pass_holder(seat.id, seat.class_id)
+    # revoke_entitlement below locks {target, actor} ascending on its own, but
+    # locking only the target here first still leaves the same half-open
+    # window: a concurrent writer could take the (lower-id) actor seat and
+    # wait on this target between this lock and revoke_entitlement's own
+    # (CodeRabbit review on PR #1832). Lock both here, ascending, up front.
+    resolved_actor_seat_id = actor_seat_id if actor_seat_id is not None else seat.id
+    for sid in sorted({seat.id, resolved_actor_seat_id}):
+        lock_hall_pass_holder(sid, seat.class_id)
     grants = EntitlementEvent.query.filter_by(
         class_id=seat.class_id, target_seat_id=seat.id,
         entitlement_type="HALL_PASS", event_type="GRANTED", acquisition_type="GRANT",
@@ -433,7 +440,7 @@ def remove_hall_passes(
     for grant in available[:quantity_to_remove]:
         revoke_entitlement(
             class_id=seat.class_id, target_seat_id=seat.id,
-            actor_seat_id=actor_seat_id if actor_seat_id is not None else seat.id,
+            actor_seat_id=resolved_actor_seat_id,
             entitlement_id=grant.entitlement_id, product_id=grant.product_id,
             entitlement_type="HALL_PASS", acquisition_type="GRANT",
             correlation_id=removal_correlation, payload={"source": "remove_hall_passes"},
