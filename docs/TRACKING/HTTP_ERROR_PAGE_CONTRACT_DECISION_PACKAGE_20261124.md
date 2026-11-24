@@ -243,7 +243,7 @@ existing test fail.
 
 | Store | Retained window | Finding |
 |---|---|---|
-| `actor_request_trace` | 2026-11-17 → 2026-11-24 (bounded retention) | 1,604 rows; every `request_id` has the generated shape (32 lowercase hex); no `endpoint` looks like a raw path (numeric segment or characters outside a route pattern). **No raw-path endpoint and no id outside the generated shape in the retained window; V2 exposure not ruled out (below).** Rows older than the window have already been purged by retention and cannot be examined |
+| `actor_request_trace` | 2026-11-17 → 2026-11-24 (bounded retention) | 1,604 rows; every `request_id` has the generated shape (32 lowercase hex); no `endpoint` shows either indicator checked: a numeric path segment, or a character a route pattern cannot contain. **Neither indicator and no id outside the generated shape in the retained window; neither V1 nor V2 exposure is ruled out (below).** Rows older than the window have already been purged by retention and cannot be examined |
 | `audit_events.request_id` | 2026-09-28 → 2026-11-24 | 5,374 rows; none has a `request_id` outside the generated shape. **V2 exposure not ruled out (below)** |
 | `operational_events` | — | 0 rows. **Nothing to expose** |
 | Application journal (`classroom-economy` unit) | unknown | **Not examined.** Production shell access is the owner's; count-only commands are below |
@@ -253,8 +253,10 @@ The request-id check tests shape only. A caller could have sent a 32-character h
 value can still encode a personal identifier (for example a number padded with zeros), so a
 generated-shape id shows neither that the application generated it nor that it holds no personal
 data. **V2's exposure question therefore stays open for these stores**: no stored id fell outside
-the generated shape, and nothing more is established. The endpoint check is not affected: no raw
-path was found.
+the generated shape, and nothing more is established. The endpoint check is likewise an indicator, not proof: a raw path
+made only of letters and slashes (an unmatched URL a signed-in user typed) passes both indicators, so
+raw paths in `endpoint` are not ruled out either. Unmatched requests reach the trace only for a
+signed-in seat, which bounds but does not close that case.
 
 **Count-only commands for the owner** (print numbers and a date, never a matching line). Each handler logged `<status> <reason>: <URL>`, and a logged URL holds no spaces, so `[^ ]*` scans the whole URL and finds `student=` or `class_id=` in any query position:
 
