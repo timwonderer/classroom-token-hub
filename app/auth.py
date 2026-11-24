@@ -394,18 +394,27 @@ def set_canonical_user_session(*, username_lookup_hash: str, expected_role: str)
 
 
 def establish_teacher_session(user):
-    """Establish canonical teacher session keys and the fixed 60-minute window (DOM-IDEN-003)."""
+    """Establish canonical teacher session keys and the fixed 60-minute window (DOM-IDEN-003).
+
+    Caller must hold FEAT-IDEN-009 (identity_service.establish_teacher_session_fields
+    owns the row write); this only sets the non-DB Flask session keys and reads
+    back what that command wrote onto ``user``.
+    """
     from app.session_lifetime import SESSION_EXPIRES_AT_KEY
+    from app.services.identity_service import establish_teacher_session_fields
+
     now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-    user.current_session_started_at = now
-    user.current_session_expires_at = canonical_temporal_resolver(
+    expires_at = canonical_temporal_resolver(
         SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
         timestamp=now, elapsed_seconds=TEACHER_SESSION_MINUTES * 60,
     ).shifted_timestamp_utc
+    nonce = establish_teacher_session_fields(user, started_at=now, expires_at=expires_at)
+
     session["user_id"] = user.id
     session["role"] = "admin"
+    session["current_session_nonce"] = nonce
     # The cookie dies with the server-side window.
-    session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
+    session[SESSION_EXPIRES_AT_KEY] = expires_at.isoformat()
     session.permanent = True
 
 
@@ -418,32 +427,62 @@ def end_signed_in_session():
     a stale cookie must not end a newer sign-in elsewhere.
     """
     from app.feats.base import FEATContext
-    from app.models import User
+    from app.services.identity_service import revoke_signed_in_session
     from app.utils.user_ids import session_user_id
 
     user_id = session_user_id(session)
     nonce = session.get("current_session_nonce")
     if user_id is not None and nonce:
-        with FEATContext("FEAT-IDEN-001", idempotency_key=f"identity:sign-out:{user_id}:{nonce}"):
-            user = User.query.filter_by(id=user_id).with_for_update().one_or_none()
-            if user is not None and user.current_session_nonce == nonce:
-                user.current_session_nonce = None
-                user.current_session_expires_at = None
+        with FEATContext("FEAT-IDEN-009", idempotency_key=f"identity:sign-out:{user_id}:{nonce}"):
+            revoke_signed_in_session(user_id, nonce)
     session.clear()
 
 
 def establish_sysadmin_session(user):
-    """Establish canonical system-admin session keys."""
+    """Establish canonical system-admin session keys.
+
+    Caller must hold FEAT-IDEN-009 (identity_service.establish_sysadmin_session_fields
+    owns the row write).
+    """
+    from app.services.identity_service import establish_sysadmin_session_fields
+
+    nonce = establish_sysadmin_session_fields(user)
     session["user_id"] = user.id
     session["role"] = "sysadmin"
+    session["current_session_nonce"] = nonce
     session.permanent = True
 
 
-def establish_student_session(user, *, class_id: str):
-    """Establish canonical student session keys."""
+def establish_student_session(user, *, class_id: str | None = None, seat_id: int | None = None):
+    """Establish canonical student session keys and the fixed session window.
+
+    ``class_id``/``seat_id`` are omitted when login has no valid persisted
+    class selection yet; the session is then established class-less, pending
+    ``student.select_class_context``.
+
+    Caller must hold FEAT-IDEN-009 (identity_service.establish_student_session_fields
+    owns the row write, including the canonical active-class pointers).
+    """
+    from app.session_lifetime import SESSION_EXPIRES_AT_KEY
+    from app.services.identity_service import establish_student_session_fields
+
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    expires_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=SESSION_TIMEOUT_MINUTES * 60,
+    ).shifted_timestamp_utc
+    nonce = establish_student_session_fields(
+        user, started_at=now, expires_at=expires_at, class_id=class_id, seat_id=seat_id,
+    )
+
     session["user_id"] = user.id
-    session["class_id"] = class_id
     session["role"] = "student"
+    session["current_session_nonce"] = nonce
+    session["login_time"] = now.isoformat()
+    session["last_activity"] = now.isoformat()
+    session[SESSION_EXPIRES_AT_KEY] = expires_at.isoformat()
+    if class_id is not None:
+        session["class_id"] = class_id
     session.permanent = True
 
 
@@ -499,8 +538,8 @@ def switch_student_session_context(student, *, class_id: str, seat_id: int):
     if seat and seat.user_id:
         linked_user = db.session.get(User, seat.user_id)
         if linked_user and (linked_user.last_active_class_id != class_id or linked_user.last_active_seat_id != seat_id):
-            linked_user.last_active_class_id = class_id
-            linked_user.last_active_seat_id = seat_id
+            from app.services.identity_service import select_student_class_fields
+            select_student_class_fields(linked_user, class_id=class_id, seat_id=seat_id)
             db.session.flush()
     
     # Log the transition for audit clarity

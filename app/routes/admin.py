@@ -2167,7 +2167,7 @@ def select_class_context():
         return redirect(url_for("admin.onboarding"))
 
     if request.method == "POST":
-        # Only the selection runs inside FEAT-IDEN-001; a FEAT commits on exit,
+        # Only the selection runs inside FEAT-IDEN-009; a FEAT commits on exit,
         # and rendering the selector must not (INV-ARC-007: GET must be pure).
         return _apply_teacher_class_selection(ctx, raw_options)
 
@@ -2181,7 +2181,7 @@ def select_class_context():
     )
 
 
-@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 def _apply_teacher_class_selection(ctx, raw_options):
     """The submitted class selection: move the teacher's canonical pointers."""
     selected_class_id = (request.form.get("class_id") or "").strip()
@@ -2208,8 +2208,8 @@ def _apply_teacher_class_selection(ctx, raw_options):
         # (seat.class_id != last_active_class_id) — the class switch then fails.
         # `selected["seat_id"]` is the teacher seat for the newly chosen class,
         # validated by _get_validated_teacher_class_options.
-        user.last_active_class_id = selected["class_id"]
-        user.last_active_seat_id = selected["seat_id"]
+        from app.services.identity_service import select_teacher_class_fields
+        select_teacher_class_fields(user, class_id=selected["class_id"], seat_id=selected["seat_id"])
         # A teacher has a distinct Seat + IdentityProfile per class, so
         # switching classes switches identity. Invalidate the session
         # identity caches carried over from the previous class, then
@@ -2584,17 +2584,15 @@ def login():
                 except (TypeError, ValueError):
                     totp_valid = False
                 if totp_valid:
-                    nonce = secrets.token_urlsafe(32)
+                    attempt_token = secrets.token_urlsafe(32)
                     with FEATContext(
-                        "FEAT-IDEN-001",
-                        idempotency_key=f"identity:teacher-login:{user.id}:{nonce}",
+                        "FEAT-IDEN-009",
+                        idempotency_key=f"identity:teacher-login:{user.id}:{attempt_token}",
                     ):
                         from app.services.teacher_lifecycle import record_teacher_sign_in
                         user = record_teacher_sign_in(user.id)
                         session.clear()
                         establish_teacher_session(user)
-                        session["current_session_nonce"] = nonce
-                        user.current_session_nonce = nonce
                         login_at = canonical_temporal_resolver(
                             SYSTEM_LEVEL_EVALUATION, primitive="current_time",
                         ).canonical_now_utc.isoformat()
@@ -3279,10 +3277,10 @@ def set_current_class():
 
     try:
         idempotency_key = f"feat:iden:set-current-class:{user_id}:{class_id}"
-        with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
+        with FEATContext("FEAT-IDEN-009", idempotency_key=idempotency_key):
+            from app.services.identity_service import select_teacher_class_fields
             user = db.session.get(User, user_id)
-            user.last_active_class_id = class_id
-            user.last_active_seat_id = target_seat.id
+            select_teacher_class_fields(user, class_id=class_id, seat_id=target_seat.id)
             db.session.flush()
     except Exception:
         current_app.logger.error(
@@ -10319,7 +10317,7 @@ def passkey_auth_start():
 
 
 @admin_bp.route('/passkey/auth/finish', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 @limiter.limit("20 per minute")
 def passkey_auth_finish():
     """
@@ -10355,9 +10353,6 @@ def passkey_auth_finish():
         auth_username = session.get('passkey_auth_username')
         session.clear()
         establish_teacher_session(user)
-        nonce = secrets.token_urlsafe(32)
-        session["current_session_nonce"] = nonce
-        user.current_session_nonce = nonce
         session["login_time"] = now.isoformat()
         session["last_activity"] = now.isoformat()
         session['admin_auth_username'] = auth_username or f"user_{user.id}"
