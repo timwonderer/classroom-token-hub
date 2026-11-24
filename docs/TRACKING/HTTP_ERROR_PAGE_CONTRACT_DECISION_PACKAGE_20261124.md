@@ -243,15 +243,18 @@ existing test fail.
 
 | Store | Retained window | Finding |
 |---|---|---|
-| `actor_request_trace` | 2026-11-17 → 2026-11-24 (bounded retention) | 1,604 rows; every `request_id` has the generated shape (32 lowercase hex); no `endpoint` looks like a raw path (numeric segment or characters outside a route pattern). **No exposure found in the retained window.** Rows older than the window have already been purged by retention and cannot be examined |
-| `audit_events.request_id` | 2026-09-28 → 2026-11-24 | 5,374 rows; none has a `request_id` outside the generated shape. **No exposure found** |
+| `actor_request_trace` | 2026-11-17 → 2026-11-24 (bounded retention) | 1,604 rows; every `request_id` has the generated shape (32 lowercase hex); no `endpoint` looks like a raw path (numeric segment or characters outside a route pattern). **No raw-path endpoint and no id outside the generated shape in the retained window; V2 exposure not ruled out (below).** Rows older than the window have already been purged by retention and cannot be examined |
+| `audit_events.request_id` | 2026-09-28 → 2026-11-24 | 5,374 rows; none has a `request_id` outside the generated shape. **V2 exposure not ruled out (below)** |
 | `operational_events` | — | 0 rows. **Nothing to expose** |
 | Application journal (`classroom-economy` unit) | unknown | **Not examined.** Production shell access is the owner's; count-only commands are below |
 | nginx access logs and their Loki copy (`nginx_access`) | unknown | **Not examined.** nginx logs the full request line, query included, by default; that is a proxy-layer record outside V1 (which concerns the application) and is listed as U3 |
 
-A generated-shape id does not prove the id was generated, since a caller could send 32 hex
-characters, but such an id carries no personal data, so the exposure question V2 raises is answered
-for these stores.
+The request-id check tests shape only. A caller could have sent a 32-character hex value, and such a
+value can still encode a personal identifier (for example a number padded with zeros), so a
+generated-shape id shows neither that the application generated it nor that it holds no personal
+data. **V2's exposure question therefore stays open for these stores**: no stored id fell outside
+the generated shape, and nothing more is established. The endpoint check is not affected: no raw
+path was found.
 
 **Count-only commands for the owner** (print numbers and a date, never a matching line). Each handler logged `<status> <reason>: <URL>`, and a logged URL holds no spaces, so `[^ ]*` scans the whole URL and finds `student=` or `class_id=` in any query position:
 
@@ -723,7 +726,7 @@ In HTML, JSON, plain text and the log records they cause (SPEC-OPS-003 §VIII.A)
 
 ### X. Response format and protocol
 
-1. **Resolution.** One resolver for every error response:
+1. **Resolution.** One resolver for every error response, with the single exception in §X.5.2:
    1. Path under `/api/` → JSON (those resources have no HTML representation).
    2. Otherwise JSON only when the `Accept` header names `application/json` explicitly with q > 0 and
       with a q strictly greater than any explicitly named `text/html`. Wildcards (`*/*`,
@@ -739,8 +742,13 @@ In HTML, JSON, plain text and the log records they cause (SPEC-OPS-003 §VIII.A)
 5. **Authentication failures.**
    1. Browser navigation to a protected page without a valid session is redirected to the role's
       sign-in page (as today), including from `require_seat_context()`.
-   2. A programmatic request (an `/api/` path, or a background request as `_is_background_request`
-      defines it) without a valid session is answered **401** in JSON. It is never redirected to an
+   2. A programmatic request (an `/api/` path, or a background request: `Sec-Fetch-Mode` present and
+      not `navigate`, a JSON body, or `X-Requested-With: XMLHttpRequest`, as `_is_background_request`
+      in `app/auth.py` defines it) without a valid session is answered **401** in JSON. **This is the
+      one exception to §X.1**, authorized by ruling H-1 and limited to authentication failures: a
+      background request outside `/api/` gets JSON for its 401 even with a wildcard `Accept`. Every
+      other error on such a request follows §X.1, because ruling I-5 forbids inferring a JSON
+      preference from anything but the path or an explicit `Accept`. It is never redirected to an
       HTML sign-in page, so a client's automatic redirect-following cannot turn the failure into an
       apparent success.
    3. **Bounded protocol deviation.** CTH authenticates with a session cookie, and no registered HTTP
@@ -973,7 +981,7 @@ are the release SOP's browser checks (SOP-DEP-001B) for the changed pages and th
 | Boundary | Proved by |
 |---|---|
 | Protocol | per status: code and reason; `Allow` on 405; `Retry-After` on 429 (HTML and JSON); 401 only for programmatic requests without a valid session and failed credential submissions (E §X.5), never for browser navigation or scope refusals; no claim of RFC 9110 conformance for them in tests or docs; 418 is 418; no error becomes 2xx/3xx |
-| Response format | resolver matrix: `/api/` × {none, `*/*`, `application/json`, `text/html`, `application/json;q=0.5, text/html`, tie, malformed}; JSON shape; compatibility paths; plain-text fallback when the template raises |
+| Response format | resolver matrix: `/api/` × {none, `*/*`, `application/json`, `text/html`, `application/json;q=0.5, text/html`, tie, malformed}; a background request outside `/api/` with `Accept: */*` → JSON 401 when its session is invalid (§X.5.2) and HTML for any other error (§X.1); JSON shape; compatibility paths; plain-text fallback when the template raises |
 | Outcome | safe method → Not applicable, no notice; failed non-safe request → Unknown notice; no status-to-outcome path (a 403/404/429 on a POST is still Unknown) |
 | Recovery | safe destination on every page; no `history.back`; Try again only for safe requests and re-issues the same safe request; no auto-refresh |
 | Disclosure | mutation tests: `abort(400, description="SECRET")`, an exception carrying `SECRET`, path and query containing `SECRET`, a caller `X-Request-Id: SECRET` — absent from HTML, JSON, fallback, response headers and log records; protected-resource missing vs forbidden responses byte-identical apart from the request id |
