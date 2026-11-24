@@ -14,13 +14,17 @@ def test_DOM_OPS_001__unhandled_exception_logs_request_id_and_route(caplog):
 
     caplog.set_level(logging.ERROR, logger=app.logger.name)
 
+    # Well-formed, so only non-adoption -- not a format check -- can reject it.
+    caller_id = "0" * 23 + "123456789"
+
     with app.test_client() as client:
-        response = client.get("/_boom", headers={"X-Request-Id": "caller-chosen-id"})
+        response = client.get("/_boom", headers={"X-Request-Id": caller_id})
 
     assert response.status_code == 500
     request_id = response.headers.get("X-Request-Id")
     # Generated at the entry point, never the caller's (DOM-OPS-001 INV-OPS-004).
     assert re.fullmatch(r"[0-9a-f]{32}", request_id)
+    assert request_id != caller_id
 
     matching_records = [
         record
