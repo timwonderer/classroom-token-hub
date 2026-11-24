@@ -861,9 +861,14 @@ def project_savings_balances(
         days = []
         for day in window:
             if day.end_of_day_balance is not None:
+                # A known (already-ended) day's own balance feeds its own
+                # day's interest base below, but must never overwrite the
+                # running ``principal``: every known day is strictly earlier
+                # than the "now" point ``opening_principal`` already
+                # captures, so letting it leak forward would discard any
+                # deposit/withdrawal posted today, before today's own day
+                # (necessarily still unknown) is reached.
                 base = day.end_of_day_balance
-                if simple:
-                    principal = base
             else:
                 base = principal if simple else balance
             days.append(SavingsAccrualDay(
