@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from types import SimpleNamespace
 
+import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
@@ -110,6 +111,55 @@ def _replay(reservation: ObligationCommandReservation, request: ScheduleNextBill
     return db.session.get(BillCycle, reservation.bill_cycle_id)
 
 
+def _lineage_lock_text_key(class_id: str, internal_ref: str) -> str:
+    """Text key for a Postgres transaction-scoped advisory lock scoped to
+    exactly one lineage (``class_id`` + ``internal_ref``).
+
+    Namespaced to ``COMMAND_NAME`` (hashed via ``hashtext()``, the same
+    convention ``app/feats/prod.py`` uses for its own idempotency-key advisory
+    lock) so it cannot collide with an unrelated advisory lock taken elsewhere
+    in the codebase under a different key space.
+    """
+    return f"{COMMAND_NAME}:lineage:{class_id}:{internal_ref}"
+
+
+def _acquire_lineage_lock(class_id: str, internal_ref: str) -> bool:
+    """Serialize succession for one lineage with a transaction-scoped Postgres
+    advisory lock (DOM-OBL-001 §V.7 case 3).
+
+    A plain eligibility read with no lock lets two concurrent commands each
+    read the same pre-state, derive the same successor, and rely on
+    ``uq_bill_cycles_ref_cycle`` to catch the loser — but that backstop only
+    fires when the loser's own read happens *before* the winner commits. If
+    the loser's read is merely delayed past the winner's commit, it silently
+    re-derives against the now-advanced lineage and creates a later successor
+    instead of failing closed — exactly the "falling forward" §V.7 case 3
+    forbids.
+
+    Taking this lock before any eligibility read removes that window: at most
+    one command per lineage may be mid-evaluation at a time. Returns ``True``
+    when the lock was free (no concurrent command in flight for this lineage,
+    so this call may proceed to evaluate eligibility and derive normally), or
+    ``False`` when it had to wait for a concurrent command to finish — in
+    which case the caller is the loser of DOM-OBL-001 §V.7 case 3 and MUST NOT
+    derive a successor from whatever that command left behind.
+
+    Released automatically at this transaction's commit or rollback
+    (``pg_advisory_xact_lock``), i.e. at ``FEATContext`` exit — never unlocked
+    explicitly here.
+    """
+    key = _lineage_lock_text_key(class_id, internal_ref)
+    acquired_immediately = db.session.execute(
+        sa.text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"), {"key": key}
+    ).scalar()
+    if acquired_immediately:
+        return True
+    db.session.execute(
+        sa.text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key}
+    )
+    return False
+
+
 def _validate_identity(request: ScheduleNextBillCycleRequest) -> None:
     if not request.class_id or not request.internal_ref:
         raise ValueError(f"{COMMAND_NAME} requires class_id and internal_ref.")
@@ -167,6 +217,24 @@ def schedule_next_bill_cycle(
         raise ValueError(
             f"next_assessment_at must be strictly after cycle_boundary_at "
             f"({request.next_assessment_at} <= {request.cycle_boundary_at})"
+        )
+
+    # Serialize succession for this lineage before any eligibility read (§V.7
+    # case 3). If this call had to wait, a concurrent command already decided
+    # this lineage's fate while we were blocked: re-check identity (a racing
+    # replay of the SAME command still returns its own outcome), and anything
+    # else is a conflict — we do not get to derive a successor from whatever
+    # that command left behind.
+    if not _acquire_lineage_lock(request.class_id, request.internal_ref):
+        reservation = obligations_service.get_obligation_command_reservation(
+            request.class_id, COMMAND_NAME, request.idempotency_key
+        )
+        if reservation is not None:
+            return _replay(reservation, request)
+        raise SuccessionConflictError(
+            f"{COMMAND_NAME} identity '{request.idempotency_key}' raced a concurrent "
+            f"execution against lineage '{request.internal_ref}'; refusing to "
+            f"re-derive a successor from the lineage state that execution left behind."
         )
 
     # Eligibility and position are read once, from authoritative state. The

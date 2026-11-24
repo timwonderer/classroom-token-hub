@@ -299,17 +299,36 @@ def test_another_class_cannot_extend_a_lineage_it_does_not_own(app):
 
 
 def _await_blocked_backend(app, timeout=15.0):
-    """Wait until some backend is waiting on a lock another transaction holds."""
+    """Wait until some backend is blocked waiting to acquire a single-bigint-key
+    Postgres advisory lock (``objsubid = 1``) — specifically the lineage lock
+    ``schedule_next_bill_cycle`` takes before deriving a successor, per
+    ``_acquire_lineage_lock`` in ``app/feats/schedule_next_bill_cycle_feat.py``
+    (``pg_advisory_xact_lock(hashtext(key))``, the single-bigint-argument
+    overload — Postgres records ``classid``/``objid`` as its high/low 32 bits
+    and ``objsubid = 1`` for that overload, vs. ``objsubid = 2`` for the
+    two-int32-argument overload ``tests/conftest.py`` uses for its own,
+    unrelated schema-setup coordination lock).
+
+    A generic "any ungranted lock anywhere in the cluster" check is not a
+    reliable barrier: an unrelated, transient lock wait elsewhere in the
+    database can satisfy it before command B has even begun evaluating this
+    lineage, releasing command A too early and letting B's own read land
+    *after* A has already committed — at which point B is no longer racing
+    anything, and legitimately (if wrongly, for this test's purposes) derives
+    a later successor. Matching on this lock specifically means a reported
+    block really is command B waiting behind command A on the same lineage.
+    """
     deadline = time.monotonic() + timeout
     with app.app_context():
         with db.engine.connect() as conn:
             while time.monotonic() < deadline:
                 waiting = conn.execute(sa.text(
-                    "SELECT count(*) FROM pg_locks WHERE NOT granted"
+                    "SELECT count(*) FROM pg_locks"
+                    " WHERE NOT granted AND locktype = 'advisory' AND objsubid = 1"
                 )).scalar()
                 if waiting:
                     return True
-                time.sleep(0.05)
+                time.sleep(0.01)
     return False
 
 
