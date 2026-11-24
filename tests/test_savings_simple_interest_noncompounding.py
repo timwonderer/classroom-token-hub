@@ -307,6 +307,83 @@ def test_withdrawal_draining_credited_interest_does_not_leave_negative_principal
     assert rows[1].amount == _simple("1000.00", 7)
 
 
+def test_savings_ledger_history_independent_of_database_row_order(client, app, monkeypatch):
+    """_savings_ledger's reconstructed history must not depend on the order
+    Postgres happens to return same-instant rows in (Codex finding on PR
+    #1833, #1646 follow-up).
+
+    ``settle_balances`` gives every row it settles in one pass the same
+    ``posted_at``, and the underlying query carries no ``ORDER BY``, so two
+    rows sharing a timestamp can come back in either order. The interest-pool
+    walk in ``_end_of_day_balances`` is order-dependent for such ties (a
+    withdrawal processed before vs. after a same-instant deposit draws a
+    different amount from the pool), so the sort that builds ``history`` must
+    use a deterministic tie-breaker (``posting_sequence``) rather than
+    whatever order the rows arrived in.
+    """
+    from app.services import ledger_interest_service as svc
+
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    seat = classroom.students[0].seat
+    _configure_interest(client, classroom, payout="weekly", compound="never", calc="simple")
+
+    monday = _next_monday(tz_name)
+    _fund_savings(monkeypatch, app, classroom, seat, "1000.00", _local(tz_name, monday, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, monday, 1))  # settles the deposit
+
+    week_two_start = monday + timedelta(days=7)
+    _tick(monkeypatch, app, _local(tz_name, week_two_start, 0, 30))  # credits window one
+
+    window_one_credit = _interest_rows(app, classroom, seat)[0]
+    drain_amount = Decimal("1000.00") + window_one_credit.amount
+    # Both settle in the SAME _tick call below, so settle_balances stamps both
+    # with the identical posted_at -- the exact tie this finding is about.
+    _fund_savings(
+        monkeypatch, app, classroom, seat, f"-{drain_amount}",
+        _local(tz_name, week_two_start, 2),
+    )
+    _fund_savings(
+        monkeypatch, app, classroom, seat, "1000.00",
+        _local(tz_name, week_two_start, 2, 10),
+    )
+    _tick(monkeypatch, app, _local(tz_name, week_two_start, 2, 20))  # settles both, same posted_at
+
+    with app.app_context():
+        rows = (
+            Transaction.query
+            .filter(
+                Transaction.seat_id == seat.id,
+                Transaction.class_id == classroom.class_id,
+                Transaction.account_type == "savings",
+            )
+            .all()
+        )
+        assert len(rows) >= 4
+
+        class _FakeFilter:
+            def __init__(self, data):
+                self._data = data
+
+            def all(self):
+                return self._data
+
+        class _FakeQuery:
+            def __init__(self, data):
+                self._data = data
+
+            def filter(self, *args, **kwargs):
+                return _FakeFilter(self._data)
+
+        monkeypatch.setattr(svc.Transaction, "query", _FakeQuery(rows))
+        forward = svc._savings_ledger(seat.id, classroom.class_id, "weekly")
+
+        monkeypatch.setattr(svc.Transaction, "query", _FakeQuery(list(reversed(rows))))
+        backward = svc._savings_ledger(seat.id, classroom.class_id, "weekly")
+
+    assert forward.history == backward.history
+
+
 # --------------------------------------------------------------------------- #
 # Sanity: compound interest is unaffected by the fix                          #
 # --------------------------------------------------------------------------- #

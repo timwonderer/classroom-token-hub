@@ -296,7 +296,7 @@ def _savings_ledger(seat_id, class_id, cadence):
                 reference=paid_through,
             ).is_later:
                 paid_through = window.end_utc
-            history.append((window.end_utc, row.amount_cents, True))
+            history.append((window.end_utc, row.amount_cents, True, row.posting_sequence))
         elif row.posted_at is not None and classify_posting_state(
             row.posting_sequence, cursors.get(posting_scope_of(row))
         ) == TransactionStatus.POSTED:
@@ -310,8 +310,18 @@ def _savings_ledger(seat_id, class_id, cadence):
                 row.type == REVERSAL_TRANSACTION_TYPE
                 and row.original_transaction_id in interest_credit_ids
             )
-            history.append((row.posted_at, row.amount_cents, reverses_interest))
-    history.sort(key=lambda entry: entry[0])
+            history.append((row.posted_at, row.amount_cents, reverses_interest, row.posting_sequence))
+    # Two rows can share a timestamp -- settle_balances assigns every row it
+    # settles in one pass the same posted_at -- and the principal-only walk
+    # (_end_of_day_balances) is order-dependent on ties since the interest-pool
+    # floor logic does not commute (a withdrawal processed before vs. after a
+    # same-instant deposit can draw a different amount from the pool). The
+    # query above carries no ORDER BY, so Postgres' row order for a tie is
+    # undefined; posting_sequence is assigned deterministically at creation
+    # and is the real event order, so it breaks every such tie (Codex review
+    # on PR #1833).
+    history.sort(key=lambda entry: (entry[0], entry[3]))
+    history = [entry[:3] for entry in history]
     return _SavingsLedger(history, paid_keys, paid_through)
 
 
