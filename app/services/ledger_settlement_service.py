@@ -31,9 +31,12 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict:
     standalone scheduled sweep (scripts/settle_pending_transactions.py) would
     raise on the first flush and settle nothing.
 
-    When invoked while another FEAT is already active (composed automation),
-    each FEAT-LED-003 boundary nests as a savepoint under that parent, which
-    owns the durable commit.
+    This must be invoked only at top level, with no FEAT already active.
+    FEATContext's hard nesting guard (INV-ARC-000 §VIII.2 / INV-ARC-021 §V.2)
+    rejects a nested, non-scaffold FEAT context outright — it does not nest
+    as a savepoint — so each pending context would be reported as failed.
+    A caller composing this with its own FEAT work (e.g. `run_savings_interest_job`)
+    must call this before opening that FEAT, not from within it.
 
     ``failed_seat_class_pairs`` names exactly which contexts this run could not
     settle, so a caller that must not finalize downstream work against a seat's

@@ -374,7 +374,32 @@ def reconcile_rent(
     # ledger settlement's seat-then-class order (INV-LED-015), and the
     # production deadlock FEAT-LED-003 (the ledger settlement sweep) exists to
     # close against (#1640).
-    lock_ledger_seats(class_id, [seat.id for seat in _rent_roster(class_id)])
+    #
+    # The lock set is every seat in the class, not just the current rent
+    # roster (CodeRabbit review on this PR, confirmed real by reading the
+    # code): _expire_ended_period_perks -> expire_rent_perks locks each prior
+    # cycle's HALL_PASS perk holder by seat id (app/services/
+    # entitlement_service.py), and _grant_period_start_perks reads/touches the
+    # seat on each current-cycle assessment — both working from historical
+    # RENT assessments (get_assessments_for_bill_cycle), which can include a
+    # seat no longer in _rent_roster (unclaimed since, or since exempted).
+    # Such a seat can carry a lower id than a seat still on the active roster,
+    # so locking only the roster can still let the later, unlocked touch pin
+    # this class's implicit lock before that seat is held — the same
+    # circular wait this fix otherwise closes. Every seat this function can
+    # touch is guaranteed to belong to this class (multi-tenancy scoping), so
+    # locking the whole class roster, not just the rent-liable subset, is the
+    # simplest set provably wide enough.
+    #
+    # Residual, accepted risk: this lock is a snapshot at entry. A seat
+    # claimed into the class after this point, within this same run, is not
+    # in the locked set; if later re-queried (_rent_roster is re-read inside
+    # _assess_cycle/_assess_late_fees) and then inserted into class-scoped
+    # work, it is touched without the ascending-lock protection. The failure
+    # mode is a Postgres-detected deadlock aborting one of the two
+    # transactions, not data corruption or a stuck lock, and the next
+    # scheduled reconciliation run catches the seat up normally.
+    lock_ledger_seats(class_id, [seat.id for seat in Seat.query.filter_by(class_id=class_id).all()])
 
     # A supplied reference_time_utc is validated (aware) and normalized to UTC;
     # without one, the resolver's clock supplies "now".

@@ -186,22 +186,26 @@ def test_unclaim_student_seat_does_not_deadlock_rent_reconciliation(app):
     held, release, attempted = Event(), Event(), Event()
     pids: dict[str, int] = {}
 
-    def unclaim_scope():
+    def holder_scope():
+        # Stands in for a concurrent transaction already holding this roster
+        # seat — the same role rent reconciliation's own ascending roster lock
+        # plays, already proven correct by the sibling test above. A bare
+        # connection of its own (never db.session) is used because neither
+        # production function being tested here has a pause point to
+        # synchronize against: this is the same reason the sibling test above
+        # mirrors settlement's lock manually instead of invoking
+        # settle_balances. (An earlier version of this test held the seat on
+        # a bare connection and then released it BEFORE calling the real
+        # unclaim_student_seat() — Codex's directed review on this PR caught
+        # that the assertion window closed before unclaim's real call even
+        # started, so it proved nothing about unclaim's own lock order. This
+        # version keeps the hold alive through the entire measurement window,
+        # with the REAL unclaim_student_seat() as the contender.)
         with app.app_context():
             try:
-                # Hold the seat lock on a bare connection of its own, outside
-                # db.session entirely. FEATContext (opened below by
-                # unclaim_student_seat, FEAT-IDEN-006) treats a clean
-                # read-only autobegin on db.session as discardable
-                # (is_discardable_read_autobegin) and rolls it back before
-                # starting its own top-level transaction — which would
-                # silently drop a lock taken on db.session before entering a
-                # FEAT context. A separate raw connection has no such
-                # lifecycle and is unaffected by it, matching the pattern the
-                # NOWAIT probe below already uses for the same reason.
                 with db.engine.connect() as holder_conn:
                     with holder_conn.begin():
-                        pids["unclaim"] = holder_conn.execute(
+                        pids["holder"] = holder_conn.execute(
                             text("SELECT pg_backend_pid()")
                         ).scalar_one()
                         holder_conn.execute(
@@ -213,9 +217,17 @@ def test_unclaim_student_seat_does_not_deadlock_rent_reconciliation(app):
                         )
                         held.set()
                         assert release.wait(10)
-                # Lock released with the connection above; unclaim_student_seat
-                # (the new, correct seat-then-class order) now re-acquires it
-                # itself inside its own FEATContext.
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    def unclaim_scope():
+        with app.app_context():
+            try:
+                pids["unclaim"] = db.session.execute(
+                    text("SELECT pg_backend_pid()")
+                ).scalar_one()
+                attempted.set()
                 unclaim_student_seat(
                     canonical_context=teacher_ctx, seat_id=seat_id,
                     expected_generation=expected_generation,
@@ -227,40 +239,39 @@ def test_unclaim_student_seat_does_not_deadlock_rent_reconciliation(app):
             finally:
                 db.session.remove()
 
-    def reconciliation_scope():
-        with app.app_context():
-            try:
-                pids["reconciliation"] = db.session.execute(
-                    text("SELECT pg_backend_pid()")
-                ).scalar_one()
-                attempted.set()
-                execute_reconcile_rent(class_id, idempotency_key="deadlock-1640-unclaim-reconcile")
-                return "accepted"
-            finally:
-                db.session.remove()
-
     with ThreadPoolExecutor(max_workers=2) as pool:
-        unclaim = pool.submit(unclaim_scope)
+        holder = pool.submit(holder_scope)
         try:
             assert held.wait(10)
-            reconciliation = pool.submit(reconciliation_scope)
+            unclaim = pool.submit(unclaim_scope)
             assert attempted.wait(10)
 
-            # Reconciliation must be the one waiting, blocked on the seat
-            # unclaim already holds — never the reverse.
+            # Unclaim must be the one waiting, blocked on the seat the holder
+            # already holds — and, while it waits, must NOT already hold the
+            # class row (the pre-fix behavior: class locked first, then
+            # blocked trying to lock the seat). A third connection with
+            # NOWAIT proves the class row is genuinely free, not queued
+            # behind unclaim.
             deadline = monotonic() + 5
             while True:
                 blockers = db.session.execute(
-                    text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["reconciliation"]}
+                    text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["unclaim"]}
                 ).scalar_one()
-                if pids.get("unclaim") in blockers:
+                if pids.get("holder") in blockers:
                     break
                 assert monotonic() < deadline, (
-                    "Reconciliation never blocked on the seat unclaim holds; "
-                    "the two paths may no longer share a lock order."
+                    "unclaim_student_seat never blocked on the seat the "
+                    "holder holds; the two paths may no longer share a lock "
+                    "order."
                 )
                 Event().wait(.01)
+
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text("SELECT class_id FROM classes WHERE class_id=:class_id FOR UPDATE NOWAIT"),
+                    {"class_id": class_id},
+                ).one()
         finally:
             release.set()
+        assert holder.result(timeout=15) == "accepted"
         assert unclaim.result(timeout=15) == "accepted"
-        assert reconciliation.result(timeout=15) == "accepted"

@@ -65,7 +65,7 @@ For each context, open its own `FEAT-LED-003` boundary keyed `settlement-sweep:{
 2. Lock every `PENDING` `Transaction` row for the context, ordered by account type then posting sequence.
 3. Lock (or create) each account type's `LedgerBalanceSnapshot` row.
 4. Advance `reconciled_through_posting_sequence` to the highest posting sequence now admitted, recompute `posted_balance_cents` from history through that cursor (`INV-LED-008`), and stamp `posted_at` on each newly admitted transaction.
-5. Commit the context's boundary. When invoked while another FEAT is already active (composed automation, e.g. from `run_savings_interest_job`), this boundary nests as a savepoint under that parent, which owns the durable commit.
+5. Commit the context's boundary. Invoke the sweep only at top level, with no FEAT active. A nested invocation is rejected when `FEATContext` is constructed (its hard nesting guard, INV-ARC-000 §VIII.2 / INV-ARC-021 §V.2), so each pending context would be reported as failed rather than nested as a savepoint. `run_savings_interest_job` calls the sweep before opening its own payout FEAT for exactly this reason.
 
 A context with no eligible transactions (already settled, or raced to settlement by a concurrent sweep) is a no-op.
 
