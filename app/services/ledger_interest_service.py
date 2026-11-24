@@ -27,6 +27,7 @@ from app.services.ledger_balance_query_service import (
     posting_scope_of,
     resolve_reconciliation_cursors,
 )
+from app.services.ledger_correction_service import REVERSAL_TRANSACTION_TYPE
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -163,7 +164,7 @@ def _window_day_plan(class_id, compounding_period, start_utc, end_utc):
 
 
 def _compounding_period(policy):
-    if (policy.calculation_type or "simple").strip().lower() == "simple":
+    if _is_simple(policy):
         return None
     return _COMPOUNDING_PERIOD.get((policy.compound_frequency or "never").strip().lower())
 
@@ -235,7 +236,7 @@ def _paid_window(class_id, payout_frequency, transaction, prefix):
 class _SavingsLedger(NamedTuple):
     """A seat's savings ledger as the daily balance method reads it."""
 
-    history: list        # ``(effective_utc, amount_cents)``, ascending
+    history: list        # ``(effective_utc, amount_cents, is_interest_credit)``, ascending
     paid_keys: set       # interest keys already credited
     paid_through: object  # end of the latest window already credited, or None
 
@@ -249,6 +250,11 @@ def _savings_ledger(seat_id, class_id, cadence):
     whether or not it has settled yet. Compounding across windows therefore
     does not depend on when the job ran or when settlement posted a credit, and
     a replay reconstructs the same balances (§9.2, §12, §14.1).
+
+    Each history entry is tagged with whether it is an interest credit, so a
+    caller can derive a principal-only series (every credited interest dollar
+    excluded) for simple interest's earning base, per §4.1 —
+    ``_end_of_day_balances(..., principal_only=True)``.
 
     A window is credited once. ``paid_through`` is the end of the latest window
     already credited, under any cadence or key format; no day ending at or
@@ -266,12 +272,20 @@ def _savings_ledger(seat_id, class_id, cadence):
     )
     # Every row shares one account scope, so its cursor is read once, not per row.
     cursors = resolve_reconciliation_cursors(posting_scope_of(row) for row in rows)
+    # A REVERSAL's own ``type`` never carries its original's (FEAT-LED-002
+    # §III.2.1), so whether it undoes an interest credit must be read off what
+    # it reverses, not off itself. Collected before the main pass: a reversal
+    # row can precede its original in query order, which carries no ORDER BY.
+    interest_credit_ids = {
+        row.id for row in rows
+        if row.type == "Interest" and (row.idempotency_key or "").startswith(prefix)
+    }
     history = []
     paid_keys = set()
     paid_through = None
     for row in rows:
         window = None
-        if row.type == "Interest" and (row.idempotency_key or "").startswith(prefix):
+        if row.id in interest_credit_ids:
             window = _paid_window(class_id, cadence, row, prefix)
         if window is not None:
             paid_keys.add(row.idempotency_key)
@@ -282,19 +296,69 @@ def _savings_ledger(seat_id, class_id, cadence):
                 reference=paid_through,
             ).is_later:
                 paid_through = window.end_utc
-            history.append((window.end_utc, row.amount_cents))
+            history.append((window.end_utc, row.amount_cents, True, row.posting_sequence))
         elif row.posted_at is not None and classify_posting_state(
             row.posting_sequence, cursors.get(posting_scope_of(row))
         ) == TransactionStatus.POSTED:
-            history.append((row.posted_at, row.amount_cents))
-    history.sort(key=lambda entry: entry[0])
+            # A reversal of an interest credit must cancel that credit in the
+            # principal-only series, not reduce it: the credit it reverses was
+            # itself excluded from principal, so letting the reversal's negative
+            # amount count would subtract interest that was never principal
+            # (SPEC-ECON-001 §4.1). A reversal of an ordinary deposit carries no
+            # such original and reduces principal normally.
+            reverses_interest = (
+                row.type == REVERSAL_TRANSACTION_TYPE
+                and row.original_transaction_id in interest_credit_ids
+            )
+            history.append((row.posted_at, row.amount_cents, reverses_interest, row.posting_sequence))
+    # Two rows can share a timestamp -- settle_balances assigns every row it
+    # settles in one pass the same posted_at -- and the principal-only walk
+    # (_end_of_day_balances) is order-dependent on ties since the interest-pool
+    # floor logic does not commute (a withdrawal processed before vs. after a
+    # same-instant deposit can draw a different amount from the pool). The
+    # query above carries no ORDER BY, so Postgres' row order for a tie is
+    # undefined; posting_sequence is assigned deterministically at creation
+    # and is the real event order, so it breaks every such tie (Codex review
+    # on PR #1833).
+    history.sort(key=lambda entry: (entry[0], entry[3]))
+    history = [entry[:3] for entry in history]
     return _SavingsLedger(history, paid_keys, paid_through)
 
 
-def _end_of_day_balances(history, day_ends):
-    """Balance at each (ascending) day end: effects in effect before it."""
+def _end_of_day_balances(history, day_ends, *, principal_only=False):
+    """Balance at each (ascending) day end: effects in effect before it.
+
+    ``principal_only`` excludes every history entry tagged as an interest
+    credit, giving the lifetime principal-only series simple interest's earning
+    base must use (SPEC-ECON-001 §4.1): previously credited interest never
+    participates in a later window's accrual.
+
+    A later withdrawal or an interest-credit reversal can still draw on money
+    that was credited as interest (the posted balance does not separate the
+    two), and once it does, that interest is gone from the account — it
+    cannot keep excluding itself from principal forever, or an
+    emptied-then-refunded account would carry a phantom negative principal
+    offset into new deposits. ``interest_pool`` tracks how much
+    credited-but-not-yet-withdrawn interest the posted balance currently still
+    contains, and the two ways money leaves it are deliberately not symmetric:
+
+    - A reversal of an interest credit (``is_interest`` true, negative amount)
+      is attributed to that credit first: it eagerly cancels against the pool
+      (so it nets to zero against the credit it reverses, matching ordinary,
+      non-draining operation), and only any excess beyond what the pool still
+      holds -- interest already spent by an intervening withdrawal -- comes
+      out of principal.
+    - An ordinary withdrawal (``is_interest`` false, negative amount) is
+      attributed to principal first, exactly as before this fix, so a partial
+      withdrawal that principal alone can cover still reduces the
+      principal-only series at full face value. The pool is drawn down only
+      as a floor: when the withdrawal's face value would carry ``cents``
+      below zero, the shortfall -- the part principal cannot cover -- is
+      absorbed from the pool instead of leaving ``cents`` negative.
+    """
     balances = []
     cents = 0
+    interest_pool = 0
     index = 0
     for day_end in day_ends:
         while index < len(history) and canonical_temporal_resolver(
@@ -303,7 +367,24 @@ def _end_of_day_balances(history, day_ends):
             candidate=history[index][0],
             reference=day_end,
         ).is_earlier:
-            cents += history[index][1]
+            _, amount, is_interest = history[index]
+            if principal_only:
+                if is_interest:
+                    if amount >= 0:
+                        interest_pool += amount
+                    else:
+                        draw = min(-amount, interest_pool)
+                        interest_pool -= draw
+                        cents -= (-amount - draw)
+                else:
+                    cents += amount
+                    if cents < 0:
+                        shortfall = -cents
+                        draw = min(shortfall, interest_pool)
+                        interest_pool -= draw
+                        cents += draw
+            else:
+                cents += amount
             index += 1
         balances.append(Decimal(cents) / 100)
     return balances
@@ -332,16 +413,28 @@ def _accrual_floor(class_id, ledger, claimed_at):
     return max(floors)
 
 
+def _is_simple(policy):
+    return (policy.calculation_type or "simple").strip().lower() == "simple"
+
+
 def _window_days(class_id, policy, window, history, rate_at, accrue_after):
     """One window's days: balance, rate, and compounding marker per day.
 
     A day ending at or before ``accrue_after`` keeps its place, so compounding
     boundaries stay where they are, but accrues nothing.
+
+    For simple interest the per-day balance is the principal-only series —
+    every previously credited interest dollar excluded — so a later window's
+    earning base never includes interest credited by an earlier one
+    (SPEC-ECON-001 §4.1). Every other calculation type keeps the full posted
+    balance, interest included, as its earning base (§6.2).
     """
     plan = _window_day_plan(
         class_id, _compounding_period(policy), window.start_utc, window.end_utc
     )
-    balances = _end_of_day_balances(history, [day_end for day_end, _ in plan])
+    balances = _end_of_day_balances(
+        history, [day_end for day_end, _ in plan], principal_only=_is_simple(policy)
+    )
     return plan, balances, [
         rate_at(day_end)
         if canonical_temporal_resolver(
@@ -436,7 +529,7 @@ def apply_savings_interest(seat, *, annual_rate=None, reference_time_utc=None):
                     created.append(transaction)
                 # The credit joins the balance from its window's close, as the
                 # ledger will reconstruct it on the next run (§9.2).
-                insort(history, (window.end_utc, transaction.amount_cents))
+                insort(history, (window.end_utc, transaction.amount_cents, True))
         window = payout_window_containing(class_id, cadence, window.end_utc)
     return created
 
@@ -473,6 +566,13 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     ).canonical_now_utc
     ledger = _savings_ledger(seat_id, class_id, cadence)
     posted_now = _end_of_day_balances(ledger.history, [now_utc])[0]
+    # Simple interest's projected earning base must start from the current
+    # principal-only balance, not the posted balance: interest already credited
+    # must not earn further interest in a projected window either (§4.1).
+    principal_now = (
+        _end_of_day_balances(ledger.history, [now_utc], principal_only=True)[0]
+        if _is_simple(policy) else posted_now
+    )
     seat = Seat.query.filter_by(id=seat_id, class_id=class_id).one_or_none()
     accrue_after = _accrual_floor(class_id, ledger, seat.claimed_at if seat else None)
 
@@ -538,6 +638,7 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
 
     series = project_savings_balances(
         posted_balance=posted_now,
+        opening_principal=principal_now,
         windows=windows,
         checkpoints=[
             sum(
@@ -556,6 +657,7 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     )
     next_credit = project_savings_balances(
         posted_balance=posted_now,
+        opening_principal=principal_now,
         windows=windows[:1],
         checkpoints=[1],
         calculation_type=policy.calculation_type,
