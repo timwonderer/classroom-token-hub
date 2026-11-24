@@ -8067,7 +8067,8 @@ def payroll_manual_payment():
                 raise
 
             db.session.rollback()
-            current_app.logger.error(f"Error processing manual payment: {e}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error processing manual payment: {type(e).__name__}")
             flash('Error processing manual payment. Please try again.', 'error')
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
@@ -9569,7 +9570,8 @@ def announcement_create():
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error creating announcement: {e}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error creating announcement: {type(e).__name__}")
             flash('An error occurred while creating the announcement.', 'danger')
 
     return render_template(
@@ -9636,7 +9638,8 @@ def announcement_edit(announcement_id):
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error updating announcement: {e}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error updating announcement: {type(e).__name__}")
             flash('An error occurred while updating the announcement.', 'danger')
 
     # Build view model for class context display in edit mode. Label the active
