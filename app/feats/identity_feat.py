@@ -752,6 +752,29 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
             "last_hash": hash_claim_name(last, class_id=ctx.class_id, field="last"),
         })
 
+    # Seat(s)-then-class (INV-LED-015, DOM-LED-001 §VII): lock every
+    # pre-existing unclaimed seat this import's claim-name groups will touch
+    # (via _ensure_distinct_claim_codes below) before locking the class, not
+    # after. Locking the class first, as this used to, holds it while waiting
+    # on a seat a settlement sweep or reconciliation already holds -- the same
+    # inversion #1640/PR #1832 closed for unclaim_student_seat and the other
+    # identity-domain writers (#1835). Newly-inserted seats need no pre-lock:
+    # a row this same transaction just created cannot be held by anyone else.
+    distinct_hashes = {(entry["first_hash"], entry["last_hash"]) for entry in prepared}
+    existing_seat_ids = set()
+    for first_hash, last_hash in distinct_hashes:
+        existing_seat_ids.update(
+            row[0] for row in db.session.query(Seat.id).filter(
+                Seat.class_id == ctx.class_id, Seat.role == "student", Seat.user_id.is_(None),
+                Seat.claim_first_name_hash == first_hash, Seat.claim_last_name_hash == last_hash,
+            ).all()
+        )
+    if existing_seat_ids:
+        (
+            Seat.query.filter(Seat.id.in_(existing_seat_ids), Seat.class_id == ctx.class_id)
+            .order_by(Seat.id.asc()).with_for_update().all()
+        )
+
     # Serialize with claims, unclaims, and concurrent imports touching the same names.
     ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     for entry in prepared:
