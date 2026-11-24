@@ -12,7 +12,7 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: internal -->
 
-  **Draft contracts for the HTTP error pages, for owner ratification** (`docs/TRACKING/HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`). No normative document governs the error pages, and the seven templates and their handlers have drifted. Per the owner's ruling the contract is split in two: a proposed `SPEC-DES-002` for page design (6 owner decisions) and a proposed `SPEC-OPS-007` for what a page conveys, must not convey, and the actions it offers (16 owner decisions). Unratified and unnumbered: it governs nothing and changes no template or handler.
+  **Draft contracts for the HTTP error pages, for owner ratification** (`docs/TRACKING/HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`). No normative document governs the error pages, and the templates and handlers have drifted. Per the owner's rulings the package proposes `SPEC-DES-002` (presentation, incorporated through INV-ARC-020) and `SPEC-OPS-007` (error communication, disclosure, response semantics and recovery actions, incorporated through DOM-OPS-001), a `SPEC-OPS-003` amendment for error-response logging, the incorporation amendments, 15 existing compliance defects, 6 remaining owner decisions, and an implementation and validation plan. Unratified and unnumbered: it governs nothing and changes no template, handler or ratified document.
 
 ### Removed
 
