@@ -18,12 +18,25 @@ from tests.dom.prod.test_attendance_invalidation_lineage import _sources
 
 
 def _ordered_race(app, monkeypatch, first, second, hooks):
-    """Hold the first lawful lock; prove the other DB session waits on it."""
+    """Hold the first lawful lock; prove the other DB session waits on it.
+
+    Each hook is ``(owner, name)`` or ``(owner, name, predicate)``. A
+    predicate (called with the hooked function's own args/kwargs) lets a hook
+    on a function shared across unrelated seats -- ``lock_attendance_seat``,
+    called once per seat in #1640's ascending pre-lock loops -- name which
+    specific call is the contested checkpoint, so an earlier, uncontended call
+    on a different seat passes straight through instead of being mistaken for
+    it.
+    """
     acquired, attempted, release = Event(), Event(), Event()
     pids, seen = {}, set()
-    for owner, name in hooks:
+    for spec in hooks:
+        owner, name, *rest = spec
+        predicate = rest[0] if rest else (lambda *a, **k: True)
         original = getattr(owner, name)
-        def gate(*args, _original=original, **kwargs):
+        def gate(*args, _original=original, _predicate=predicate, **kwargs):
+            if not _predicate(*args, **kwargs):
+                return _original(*args, **kwargs)
             role = 'first' if current_thread().name.endswith('_0') else 'second'
             if role in seen:
                 return _original(*args, **kwargs)
@@ -97,10 +110,20 @@ def test_payroll_and_unpaid_invalidation_serialize_same_source(app, monkeypatch,
     args = _args(ctx,target,pairs[0])
     invalidate = _invalidate(args, command.preview_attendance_interval_invalidation(**args).identity)
     payroll = lambda: _pay(ctx,target)
-    # Payroll closes due intervals under the same seat lock before pricing.
+    # Payroll now locks its actor-and-target seats ascending at the top of
+    # _record_payroll_event_impl, before close_due_attendance_intervals ever
+    # runs (#1640: closes a deadlock window against a concurrent reconciliation
+    # or attendance sweep holding the teacher's own seat, Codex review on PR
+    # #1832). When the teacher's seat sorts before the target's, that moved
+    # payroll's contested TARGET-seat lock attempt earlier than the
+    # close_due_attendance_intervals call this race used to hook -- so hook
+    # lock_attendance_seat instead, filtered to the target seat specifically,
+    # so the (now uncontended) teacher-seat lock this loop also takes isn't
+    # mistaken for the contested checkpoint.
     first, second = (payroll,invalidate) if first_kind=='payroll' else (invalidate,payroll)
     results = _ordered_race(app,monkeypatch,first,second,
-        [(prod,'close_due_attendance_intervals'),(command,'lock_recovery_scope')])
+        [(prod,'lock_attendance_seat',lambda seat_id,class_id: seat_id==target),
+         (command,'lock_recovery_scope')])
     assert results[0][0]=='accepted'
     assert results[1][0]=='denied'
     if first_kind=='payroll':

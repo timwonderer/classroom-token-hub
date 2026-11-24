@@ -804,3 +804,94 @@ def test_multi_seat_interest_waits_before_class_lock_and_cannot_deadlock_payroll
         assert interest.result(timeout=15) == "accepted"
     assert posted_seats == sorted(posted_seats)
     assert higher_seat_id in posted_seats
+
+
+def test_interest_skips_a_seat_whose_settlement_failed_this_run_and_catches_it_up_later(
+    client, app, monkeypatch,
+):
+    """#1640: a seat settlement could not post this tick must not have its
+    still-open payout window finalized against a stale (pre-failure) balance.
+
+    ``savings_interest_idempotency_key`` is scoped per (class, seat, window) —
+    never per run — so a window is permanent only once an interest row for it
+    actually exists. Writing one off an understated balance would be wrong
+    forever; not writing one this tick costs nothing, because a later tick
+    that finally settles the seat still finds the window open and prices it
+    correctly. A DIFFERENT seat in the SAME class, whose settlement succeeds
+    this run, must still be paid on time — the skip is per-seat, not a
+    blanket failure of the whole class (the bug this regression guards is
+    `run_savings_interest_job` having no visibility into WHICH context
+    failed, per `settle_pending_transaction_contexts`'s old count-only
+    return).
+    """
+    from app.services import ledger_settlement_service
+
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    flaky_seat = classroom.students[0].seat
+    control_seat = classroom.students[1].seat
+    _configure_interest(client, classroom, payout="weekly")
+
+    monday = _next_monday(tz_name)
+    # Both seats start the window with a settled balance (funded and settled
+    # before the window opens), so a later, unsettled top-up to the flaky seat
+    # changes what ITS correct window total should be without touching the
+    # control seat at all.
+    for seat in (flaky_seat, control_seat):
+        _fund_savings(monkeypatch, app, classroom, seat, "100000.00", _local(tz_name, monday, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, monday, 1))
+
+    # Mid-week: a second deposit lands on the flaky seat only. A savings
+    # effect earns from its POSTING time, not its deposit time (§9.2) — so
+    # once this settlement keeps failing right through week 1's own close,
+    # this money can never retroactively belong to week 1 regardless of any
+    # fix; that part is correct, intentional behavior, not the bug. What the
+    # bug actually breaks is narrower, and what this test isolates: whether
+    # week 1 gets FINALIZED (an interest row written, permanently consuming
+    # its one-per-window idempotency key) while this seat's settlement is
+    # actively broken, using only the stale pre-top-up balance as if that
+    # were the whole truth, rather than waiting for settlement to recover.
+    _fund_savings(monkeypatch, app, classroom, flaky_seat, "50000.00", _local(tz_name, monday, 10))
+
+    real_settle_balances = ledger_settlement_service.settle_balances
+    settlement_allowed = {"flaky": False}
+
+    def _flaky_settle_balances(seat_id, class_id):
+        if seat_id == flaky_seat.id and not settlement_allowed["flaky"]:
+            raise RuntimeError("Simulated settlement failure for #1640 regression")
+        return real_settle_balances(seat_id, class_id)
+
+    monkeypatch.setattr(ledger_settlement_service, "settle_balances", _flaky_settle_balances)
+
+    # Window close: the flaky seat's top-up cannot settle this run.
+    _tick(monkeypatch, app, _local(tz_name, monday + timedelta(days=7), 1))
+
+    control_rows = _interest_rows(app, classroom, control_seat)
+    flaky_rows = _interest_rows(app, classroom, flaky_seat)
+    assert len(control_rows) == 1, (
+        "the control seat's settlement succeeded this run; its window must "
+        "still be paid on time regardless of the flaky seat's failure"
+    )
+    assert flaky_rows == [], (
+        "the flaky seat's week-1 window must stay OPEN (unpaid) while its "
+        "settlement keeps failing, never finalized against the stale "
+        "pre-top-up balance"
+    )
+
+    # Settlement recovers; a later tick must still find the window open and
+    # pay it exactly once, off whatever is legitimately postable by then. The
+    # still-unsettled top-up now posts after week 1's own boundary, so it
+    # belongs to week 2, not week 1 (§9.2) — that is correct either way; what
+    # matters here is that the fix neither loses week 1 nor pays it twice.
+    settlement_allowed["flaky"] = True
+    _tick(monkeypatch, app, _local(tz_name, monday + timedelta(days=7), 2))
+
+    caught_up_rows = _interest_rows(app, classroom, flaky_seat)
+    assert len(caught_up_rows) == 1, (
+        "the window was never consumed while settlement failed, so the next "
+        "successful tick must still pay it exactly once"
+    )
+    assert caught_up_rows[0].amount == _daily_compound("100000.00", 7), (
+        "week 1's payout must reflect exactly what had legitimately posted "
+        "by its own close, not a corrupted or duplicated value"
+    )

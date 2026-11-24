@@ -49,6 +49,7 @@ from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.class_configuration_query_service import (
     get_class_feature_history, get_rent_settings, is_feature_enabled,
 )
+from app.services.ledger_recovery_service import lock_ledger_seats
 from app.feats.base import requires_feat_context, FEATContext
 # Obligations DOMAIN commands (plain functions), invoked within THIS FEAT's single
 # context — never the execute_* FEAT wrappers (INV-ARC-000 / -021 / -006).
@@ -360,6 +361,45 @@ def reconcile_rent(
     class_id = request.class_id
     if not class_id:
         raise ValueError("reconcile_rent requires class_id")
+
+    # Multi-seat balance-dependent command (DOM-LED-001 §VII, the ascending-lock
+    # paragraph following INV-LED-017): acquire every affected seat anchor, in
+    # ascending seat-ID order, before any class-scoped work. Every assessment,
+    # late-fee, and perk-grant insert below (assess_obligation's
+    # ObligationAssessment row, in particular) carries a foreign key to both a
+    # seat and this class, so Postgres takes an implicit FOR KEY SHARE lock on
+    # each referenced row the instant it is inserted. Without locking the whole
+    # roster up front, the FIRST such insert pins a KEY SHARE on this class
+    # well before every seat in the roster has been touched — the inverse of
+    # ledger settlement's seat-then-class order (INV-LED-015), and the
+    # production deadlock FEAT-LED-003 (the ledger settlement sweep) exists to
+    # close against (#1640).
+    #
+    # The lock set is every seat in the class, not just the current rent
+    # roster (CodeRabbit review on this PR, confirmed real by reading the
+    # code): _expire_ended_period_perks -> expire_rent_perks locks each prior
+    # cycle's HALL_PASS perk holder by seat id (app/services/
+    # entitlement_service.py), and _grant_period_start_perks reads/touches the
+    # seat on each current-cycle assessment — both working from historical
+    # RENT assessments (get_assessments_for_bill_cycle), which can include a
+    # seat no longer in _rent_roster (unclaimed since, or since exempted).
+    # Such a seat can carry a lower id than a seat still on the active roster,
+    # so locking only the roster can still let the later, unlocked touch pin
+    # this class's implicit lock before that seat is held — the same
+    # circular wait this fix otherwise closes. Every seat this function can
+    # touch is guaranteed to belong to this class (multi-tenancy scoping), so
+    # locking the whole class roster, not just the rent-liable subset, is the
+    # simplest set provably wide enough.
+    #
+    # Residual, accepted risk: this lock is a snapshot at entry. A seat
+    # claimed into the class after this point, within this same run, is not
+    # in the locked set; if later re-queried (_rent_roster is re-read inside
+    # _assess_cycle/_assess_late_fees) and then inserted into class-scoped
+    # work, it is touched without the ascending-lock protection. The failure
+    # mode is a Postgres-detected deadlock aborting one of the two
+    # transactions, not data corruption or a stuck lock, and the next
+    # scheduled reconciliation run catches the seat up normally.
+    lock_ledger_seats(class_id, [seat.id for seat in Seat.query.filter_by(class_id=class_id).all()])
 
     # A supplied reference_time_utc is validated (aware) and normalized to UTC;
     # without one, the resolver's clock supplies "now".

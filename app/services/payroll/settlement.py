@@ -189,7 +189,16 @@ def settle_class_payroll_cycle(
     events: list[PayrollEvent] = []
 
     seat_ids = _eligible_seat_ids(class_id)
-    for seat_id in seat_ids:
+    # The actor seat (the teacher running this cycle, or a system run's actor)
+    # is referenced by PayrollEvent.actor_seat_id on every event this loop
+    # writes, so it must be locked here too, not only the eligible students --
+    # otherwise it is first locked deep inside the per-seat
+    # record_payroll_event_command call below, after this loop has already
+    # locked every student ascending among themselves but without the actor.
+    # Rent reconciliation locks every seat in the class, ascending, including
+    # the actor's (#1640); leaving it out of this pre-lock set can complete
+    # that same circular wait (Codex review on PR #1832).
+    for seat_id in sorted(set(seat_ids) | {ctx.seat_id}):
         lock_attendance_seat(seat_id, class_id)
     for seat_id in seat_ids:
         if _already_settled(class_id, seat_id, payroll_cycle_id):

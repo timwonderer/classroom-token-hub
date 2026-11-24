@@ -117,15 +117,25 @@ def approve_hall_pass_request(
     # too — before the pending-request row — keeps submission and approval
     # taking these two locks in the same order, so a resubmission racing an
     # approval of the same seat's request can no longer deadlock.
+    #
+    # The HallPassLog this approval goes on to write (_record_hall_pass_log_impl
+    # below) carries a foreign key to the approver's seat (ctx.seat_id) as well
+    # as the student's, so lock both here, ascending, rather than locking only
+    # the student first and the approver later — the half-open window that
+    # order leaves is the same actor-seat-FK gap Codex found elsewhere in this
+    # PR (#1640), now against reconciliation's widened, class-wide lock set.
+    from app.services.entitlement_service import lock_hall_pass_holder
+
     peek = get_pending_hall_pass_request(request_id, class_id=ctx.class_id)
     if peek is None:
         raise HallPassRequestNotFound(request_id)
     if before_current_class_day(ctx, peek.requested_at_utc):
         raise ValueError("This hall pass request closed when its day ended.")
+    for sid in sorted({peek.requested_by_seat_id, ctx.seat_id}):
+        lock_hall_pass_holder(sid, ctx.class_id)
     seat = (
         db.session.query(Seat)
         .filter(Seat.id == peek.requested_by_seat_id, Seat.class_id == ctx.class_id)
-        .with_for_update()
         .one_or_none()
     )
     if seat is None:
