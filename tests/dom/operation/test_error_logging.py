@@ -1,4 +1,5 @@
 import logging
+import re
 
 from app import create_app
 
@@ -14,10 +15,12 @@ def test_DOM_OPS_001__unhandled_exception_logs_request_id_and_route(caplog):
     caplog.set_level(logging.ERROR, logger=app.logger.name)
 
     with app.test_client() as client:
-        response = client.get("/_boom", headers={"X-Request-Id": "test-request-id"})
+        response = client.get("/_boom", headers={"X-Request-Id": "caller-chosen-id"})
 
     assert response.status_code == 500
-    assert response.headers.get("X-Request-Id") == "test-request-id"
+    request_id = response.headers.get("X-Request-Id")
+    # Generated at the entry point, never the caller's (DOM-OPS-001 INV-OPS-004).
+    assert re.fullmatch(r"[0-9a-f]{32}", request_id)
 
     matching_records = [
         record
@@ -29,4 +32,4 @@ def test_DOM_OPS_001__unhandled_exception_logs_request_id_and_route(caplog):
     record = matching_records[0]
     assert getattr(record, "route", None) == "/_boom"
     assert getattr(record, "method", None) == "GET"
-    assert getattr(record, "request_id", None) == "test-request-id"
+    assert getattr(record, "request_id", None) == request_id
