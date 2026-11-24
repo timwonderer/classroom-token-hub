@@ -154,6 +154,62 @@ def test_disabling_rent_withdraws_untouched_advance_rent_and_keeps_committed_per
             assert _state(_rent_correlation(classroom, seat_id, 1)).is_outstanding
 
 
+def test_disabling_rent_partway_through_a_partly_paid_preview_period(app):
+    """DOM-OBL-001 §V.8, §IX.15-16: the preview cycle (2) is advance-assessed and
+    not yet begun when rent is disabled. A partial payment against it commits
+    the period (§V.7's withdrawal clause no longer applies once any satisfaction
+    is recorded), so disabling rent must leave the committed part alone, keep
+    the unpaid remainder owed and payable, and keep assessing late fees against
+    it once its own grace boundary lapses — exactly as for any other surviving
+    rent debt (§IX.16)."""
+    classroom = _built(app, late_penalty=Decimal("5.00"))
+    with app.app_context():
+        seat_id = classroom.students[0].seat.id
+        correlation_id = _rent_correlation(classroom, seat_id, 2)
+        _fund(classroom, seat_id)
+        _pay(classroom, seat_id, correlation_id, Decimal("20.00"))
+
+        before = _state(correlation_id)
+        assert before.is_outstanding and before.remaining_amount == Decimal("30.00")
+
+        _disable_rent(classroom)
+
+        # The committed part stays: the partial payment is untouched by disablement.
+        committed = _state(correlation_id)
+        assert committed.is_outstanding
+        assert committed.remaining_amount == Decimal("30.00")
+
+        def late_fees_on_cycle_2():
+            return ObligationAssessment.query.filter_by(
+                class_id=classroom.class_id,
+                obligation_type="LATE_FEE",
+                event_type="ASSESSMENT",
+                source_correlation_id=correlation_id,
+            ).count()
+
+        assert late_fees_on_cycle_2() == 0, "cycle 2's grace has not lapsed yet"
+
+        # Reconcile well past cycle 2's own grace boundary, with rent disabled
+        # throughout. Late fees must keep accruing against the surviving debt.
+        second = _cycles(classroom)[1]
+        _reconcile(classroom, second.grace_boundary_at + timedelta(days=2))
+
+        assert late_fees_on_cycle_2() >= 1, "late fees must continue on surviving preview-period debt"
+
+        # The remainder stays payable: it is not frozen or wiped by disablement.
+        _pay(classroom, seat_id, correlation_id, Decimal("30.00"))
+        paid_off = _state(correlation_id)
+        assert paid_off.is_satisfied
+        assert paid_off.remaining_amount == Decimal("0.00")
+
+        # Paying the rent principal in full stops further late fees from accruing
+        # (DOM-OBL-001 §IX.16: only the still-unsatisfied principal keeps drawing
+        # penalties), but the fees already assessed above remain valid debts.
+        fees_after_payoff = late_fees_on_cycle_2()
+        _reconcile(classroom, second.grace_boundary_at + timedelta(days=5))
+        assert late_fees_on_cycle_2() == fees_after_payoff
+
+
 def test_period_paid_in_advance_grants_perks_when_it_begins_even_while_disabled(app):
     classroom = _built(app)
     with app.app_context():
