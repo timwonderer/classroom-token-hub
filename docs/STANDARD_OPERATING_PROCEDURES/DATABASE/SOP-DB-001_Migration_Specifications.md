@@ -26,10 +26,11 @@
 > it named is archived. No rule changes.
 >
 > v1.9 (2026-11-24): the §V.B reconstruction lands. `migrations/baseline/0001_baseline_schema.sql`
-> now carries `announcements.user_id` and `policy_transitions.created_by` back in, in the form they
-> had immediately before their respective rename migrations, so `3a69db4907b4` and `8f1a2c3d4b5e`
-> replay against the schema they were actually written for. The two register rows are marked
-> resolved below and kept, per this section's own recording requirement. No rule changes.
+> now carries `announcements.user_id` and a column on the later-retired policy-lineage table back
+> in, in the form they had immediately before their respective rename migrations, so
+> `3a69db4907b4` and `8f1a2c3d4b5e` replay against the schema they were actually written for. The
+> two register rows are marked resolved below and kept, per this section's own recording
+> requirement. No rule changes.
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
@@ -233,9 +234,10 @@ Proven by execution, not by argument, and reported with its exact command and sc
 > `--follow` on `app/models.py`) found exactly two elements affected by the gap the freeze above
 > describes, matching the two register rows and no others: `announcements.user_id` (removed in
 > commit `180a55a7`, the same commit that authored `3a69db4907b4`) and
-> `policy_transitions.created_by` (added without a foreign key in `3ddf973a`, gained its FK in
-> `513c3f81` — the model change `8f1a2c3d4b5e` was generated against — then renamed away in
-> `27c2a7f0`, the commit that authored the `c7a7b8c9d0e1` rename migration). Every other table or
+> `policy_transitions.created_by` (on the table later retired by operator ruling 2026-09-30, see the
+> register below; added without a foreign key in `3ddf973a`, gained its FK in `513c3f81` — the
+> model change `8f1a2c3d4b5e` was generated against — then renamed away in `27c2a7f0`, the commit
+> that authored the `c7a7b8c9d0e1` rename migration). Every other table or
 > column that commit `27c2a7f0` touched (`store_products.user_id`, `ledger_transaction.user_id`,
 > `attendance_sessions.target_user_id`, `payroll_event.target_user_id`, `issues.sysadmin_id`,
 > `audit_events.teacher_id`) is operated on only by migrations that are themselves ancestors of
