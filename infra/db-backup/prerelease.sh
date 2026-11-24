@@ -18,7 +18,7 @@
 # The application stays stopped; the release workflow restarts it.
 set -euo pipefail
 
-export PATH=/opt/homebrew/opt/postgresql@14/bin:$PATH   # client major must match the server (14)
+export PATH="${CTH_BACKUP_PG_BIN:-/opt/homebrew/opt/postgresql@14/bin}:$PATH"   # client major must match the server (14); override via CTH_BACKUP_PG_BIN
 export DOCKER_HOST=${DOCKER_HOST:-unix://$HOME/.colima/default/docker.sock}
 export CTH_BACKUP_SOURCE_URL="$(cat ~/cth-backup/source_url)"
 export CTH_BACKUP_VERIFY_URL='postgresql://postgres:verify@127.0.0.1:55432/cth_backup_verify'

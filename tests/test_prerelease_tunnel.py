@@ -67,7 +67,17 @@ def env():
     stub("lsof", 'exit "${FAKE_PORT_BUSY:-1}"')
     stub("age-keygen", 'echo "${FAKE_RECIPIENT:-age1fake}"')
     tool = home / "cth-backup-venv" / "bin" / "python"
-    tool.write_text('#!/bin/bash\necho "tool $*"\nexit "${FAKE_TOOL_FAILS:-0}"\n')
+    # FAKE_TOOL_FAILS must fail only the actual backup invocation (`$TOOL backup --reason manual`), not
+    # the `--version` / `-c import psycopg2` prerequisite checks prerelease.sh now runs first — otherwise
+    # a test using it to simulate the backup tool failing never gets past the prerequisite check at all.
+    tool.write_text(
+        '#!/bin/bash\n'
+        'echo "tool $*"\n'
+        'case "$*" in\n'
+        '  *"backup --reason manual"*) exit "${FAKE_TOOL_FAILS:-0}" ;;\n'
+        '  *) exit 0 ;;\n'
+        'esac\n'
+    )
     tool.chmod(0o755)
 
     base = {
@@ -75,6 +85,12 @@ def env():
         "PATH": f"{stubs}:/usr/bin:/bin:/usr/sbin:/sbin",
         "STUB_LOG": str(state / "calls.log"),
         "STUB_STATE": str(state),
+        # prerelease.sh prepends a hardcoded Homebrew postgresql@14 bin dir to PATH. On a machine where
+        # that package is actually installed, its real pg_isready would resolve ahead of the stub above
+        # and fail every poll (nothing is listening on 127.0.0.1:55432 in these tests), breaking the
+        # success-path tests on such a host. Override it to the stub directory so the stub always wins
+        # regardless of what is installed on the host running the tests.
+        "CTH_BACKUP_PG_BIN": str(stubs),
     }
     yield {"root": root, "home": home, "state": state, "base": base}
     shutil.rmtree(root, ignore_errors=True)
@@ -120,7 +136,11 @@ def test_backup_closes_the_tunnel_when_the_app_will_not_stop(env):
 def test_backup_closes_the_tunnel_when_the_backup_tool_fails(env):
     result = run(env, "backup", FAKE_TOOL_FAILS=1)
     assert result.returncode != 0
+    # The tunnel must actually have been opened (i.e. the prerequisite checks and app-stop passed, and
+    # the failure is the backup tool invocation itself), then closed by the ERR trap.
+    assert opened_with_control_socket(env)
     assert not tunnel_open(env)
+    assert any("-O exit" in c for c in ssh_calls(env))
 
 
 def test_restore_closes_the_tunnel_and_deletes_the_identity(env):
