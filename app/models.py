@@ -2353,7 +2353,6 @@ class Issue(db.Model):
     teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Diagnostic note for sysadmin
     support_permissions = db.Column(db.JSON, nullable=False, default=dict, server_default='{}')
     share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Consent for class disclosure
-    eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Marks if student may receive reward for a legitimate bug
 
     # Sysadmin review and resolution
     sysadmin_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
