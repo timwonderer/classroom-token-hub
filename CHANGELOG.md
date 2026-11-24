@@ -18,7 +18,7 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: fixed -->
 
-  **The student view and `/api/student-status` now show projected pay** (#1645). `get_class_attendance_status()` hardcoded `projected_pay: None`; it now prices unpaid attendance the same way a real payroll run does (`app/services/payroll/pricing.py`, DOM-PROD-001 §XV.3) — closed-but-unpaid work at the payroll setting in force when it closed, the still-open session as if it closed now at the setting in force now — so a mid-cycle rate change reprices only the open session, never work already closed under the old rate, and the estimate always agrees with what a payroll run would actually pay.
+  **The student view and `/api/student-status` now show projected pay** (#1645). `get_class_attendance_status()` hardcoded `projected_pay: None`; it now reuses the same pricing rules a real payroll run applies (`app/services/payroll/pricing.py`, DOM-PROD-001 §XV.3) — closed-but-unpaid work at the payroll setting in force when it closed, the still-open session as if it closed now at the setting in force now — so a mid-cycle rate change reprices only the open session, never work already closed under the old rate. The open-session portion is an estimate, not a guaranteed payout: it reflects work as if it ended at this instant, and a payroll run never actually settles a session that is still open.
 
 - <!-- notes: fixed, highlight -->
 
