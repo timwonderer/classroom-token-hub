@@ -16,7 +16,10 @@ really existed.
 
 Fixed by wrapping both routes in ``@requires_feat_context("FEAT-OPS-001")``,
 matching the already-correct sibling route ``passkey_auth_finish``, whose
-FEATContext owns the transaction and commits on clean exit.
+FEATContext owns the transaction and commits on clean exit. (``passkey_auth_finish``
+itself later moved to FEAT-IDEN-009 -- #1777, identity session lifecycle -- since
+it establishes a session rather than performing a maintenance operation; the
+transaction-ownership shape this comment describes is unchanged.)
 """
 from __future__ import annotations
 
