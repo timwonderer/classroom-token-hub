@@ -49,6 +49,7 @@ from app.feats.prod import record_payroll_event
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
 from app.hash_utils import hash_claim_name
 from app.models import ClassEconomy, Seat
+from app.services.attendance_service import close_due_attendance_intervals
 from app.services.classroom_setup import create_roster_student_seat
 from app.services.context_resolver import CanonicalContext
 from tests.helpers.class_domain import customize_rent_settings, enable_class_feature
@@ -489,3 +490,107 @@ def test_teacher_manual_credit_does_not_deadlock_reconciliation_holding_teacher_
             release.set()
         assert holder.result(timeout=15) == "accepted"
         assert credit.result(timeout=15) == "accepted"
+
+
+def test_attendance_closure_does_not_deadlock_concurrent_payroll_on_teacher_seat(app):
+    """A scheduled attendance closure, concurrent with a payroll run already
+    holding the teacher's own seat, must never deadlock (#1640-adjacent,
+    CodeRabbit finding on PR #1832's own review of commit cbd7b3b9).
+
+    ``close_due_attendance_intervals`` (and ``close_due_hanging_hall_pass``,
+    called from ``enforce_daily_limits_job``) append closures attributing them
+    to the teacher's seat as ``actor_seat_id`` -- an implicit ``FOR KEY
+    SHARE`` lock Postgres takes at insert time. Locking only the student
+    target here, ahead of the explicit, ascending actor-and-target lock
+    #1640's payroll fix now takes, left the two paths free to acquire the two
+    seats in opposite orders whenever the teacher's seat id happened to be
+    lower than the student's -- the same circular wait #1640 closed
+    elsewhere, with a scheduled attendance closure as the other side instead
+    of reconciliation. The fix locks both seats ascending here too, matching
+    payroll's own order -- proven here by holding whichever of the two seats
+    sorts first and asserting the closure blocks on exactly that one,
+    regardless of whether it is the teacher's seat or the student's.
+    """
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        class_id = classroom.class_id
+        teacher_seat_id = classroom.teacher_seat.id
+        target_seat_id = classroom.students[0].seat.id
+        teacher_ctx = CanonicalContext(
+            user_id=classroom.teacher_user.id, class_id=class_id,
+            seat_id=teacher_seat_id, actor_role="teacher",
+        )
+    contended_seat_id = min(teacher_seat_id, target_seat_id)
+
+    held, release, attempted = Event(), Event(), Event()
+    pids: dict[str, int] = {}
+
+    def holder_scope():
+        # Stands in for a concurrent payroll run that has already locked
+        # whichever of the two seats sorts first (proven correct by the
+        # sibling manual-credit test above; mirrored here with a bare
+        # connection since the production function has no pause point of its
+        # own to synchronize against).
+        with app.app_context():
+            try:
+                with db.engine.connect() as holder_conn:
+                    with holder_conn.begin():
+                        pids["holder"] = holder_conn.execute(
+                            text("SELECT pg_backend_pid()")
+                        ).scalar_one()
+                        holder_conn.execute(
+                            text(
+                                "SELECT id FROM seats WHERE id=:id AND "
+                                "class_id=:class_id FOR UPDATE"
+                            ),
+                            {"id": contended_seat_id, "class_id": class_id},
+                        )
+                        held.set()
+                        assert release.wait(10)
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    def closure_scope():
+        with app.app_context():
+            try:
+                pids["closure"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+                with FEATContext("FEAT-PROD-001", idempotency_key="attendance-deadlock-1640-closure"):
+                    attempted.set()
+                    close_due_attendance_intervals(
+                        ctx=teacher_ctx, seat_id=target_seat_id,
+                        as_of_utc=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                    )
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        holder = pool.submit(holder_scope)
+        try:
+            assert held.wait(10)
+            closure = pool.submit(closure_scope)
+            assert attempted.wait(10)
+
+            # The closure must be the one waiting, blocked specifically on
+            # whichever seat sorts first -- never the other seat first,
+            # which would mean it is locking in an order that can invert
+            # against payroll's.
+            deadline = monotonic() + 5
+            while True:
+                blockers = db.session.execute(
+                    text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["closure"]}
+                ).scalar_one()
+                if pids["holder"] in blockers:
+                    break
+                assert monotonic() < deadline, (
+                    "close_due_attendance_intervals never blocked on the "
+                    "seat that sorts first; it may lock the two seats in an "
+                    "order that can invert against payroll's (the "
+                    "#1640-adjacent bug)."
+                )
+                Event().wait(.01)
+        finally:
+            release.set()
+        assert holder.result(timeout=15) == "accepted"
+        assert closure.result(timeout=15) == "accepted"
