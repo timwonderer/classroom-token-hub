@@ -391,20 +391,32 @@ def resolve_insurance(
     class_id: Optional[str] = None,
     product: str,
     tier: str = SINGLE,
-    coverage_period: str = "weekly",
+    coverage_period: str,
     covered_calendar_days: Optional[int] = None,
     cwi: Optional[Decimal] = None,
     mode: Optional[str] = None,
 ) -> InsuranceResolution:
     """Resolve the canonical insurance economic reference (SPEC §4.5.3–§4.5.8).
 
+    The engine itself carries no implicit coverage-period assumption — exactly
+    like rent, which always takes its cadence from ``RentSettings.frequency_type``
+    with no engine-side fallback (``EconomyBalanceChecker.rent_band`` has no default
+    either). ``coverage_period`` therefore has NO DEFAULT: every caller must state
+    the policy's actual billing cadence (``InsurancePolicy.charge_frequency``,
+    lowercased) explicitly. This is deliberate, not an oversight — a silent
+    "weekly" default here is exactly what produced the always-weekly rebalance-
+    preview bug (issue #1762): a non-weekly-billed policy's premium was compared
+    against a weekly-scaled recommended band regardless of how it was actually
+    charged.
+
     Args:
         class_id: canonical class scope. When ``cwi`` / ``mode`` are not supplied,
             they are read via ``resolve_base(class_id)``.
         product: one of ``TRANSACTION`` / ``PRODUCTIVITY`` / ``NON_MONETARY``.
         tier: ``single`` / ``basic`` / ``mid`` / ``premium``.
-        coverage_period: ``"weekly"`` or ``"monthly"`` (or any non-weekly period,
-            in which case ``covered_calendar_days`` is required).
+        coverage_period: REQUIRED. ``"weekly"`` or ``"monthly"`` (or any
+            non-weekly period, in which case ``covered_calendar_days`` is also
+            required).
         covered_calendar_days: class-local calendar-day span of the coverage interval
             (half-open ``[start, next_renewal)``); required for non-weekly coverage.
         cwi: optional CWI override (else resolved from ``class_id``).
@@ -534,6 +546,24 @@ def resolve_insurance(
             "premium is affordability guidance only; CTH cannot value the external benefit",
         ),
     )
+
+
+def premium_currency_band(resolution: "InsuranceResolution") -> tuple[Decimal, Decimal]:
+    """Currency premium band for ``resolution``'s own coverage period and CWI.
+
+    ``recommended_ranges['premium_rate']`` is a fraction of CWI *per week-equivalent*
+    (SPEC §4.5.2); scaling it by ``cwi`` alone yields a WEEKLY-period band regardless
+    of the coverage period the caller actually resolved. A caller comparing a
+    policy's actual (possibly non-weekly) premium against the recommended band must
+    scale by ``coverage_week_equivalent`` too, the same way ``period_premium`` is
+    derived above. Raises ``ValueError`` if ``resolution.cwi`` is ``None``.
+    """
+    if resolution.cwi is None:
+        raise ValueError("cwi is required to compute a currency premium band")
+    rate_min, rate_max = resolution.recommended_ranges['premium_rate']
+    minimum = _money(resolution.cwi * Decimal(str(rate_min)) * resolution.coverage_week_equivalent)
+    maximum = _money(resolution.cwi * Decimal(str(rate_max)) * resolution.coverage_week_equivalent)
+    return minimum, maximum
 
 
 # --------------------------------------------------------------------------- #
