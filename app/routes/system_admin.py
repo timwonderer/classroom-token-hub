@@ -828,7 +828,8 @@ def update_issue(issue_ref):
         flash(f"Ticket #{issue.id} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error updating ticket {issue_id}: {str(e)}")
+        # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+        current_app.logger.error(f"Error updating ticket {issue_id}: {type(e).__name__}")
         flash("Error updating ticket. Please try again.", "error")
 
     return redirect(url_for('sysadmin.view_issue', issue_ref=issue_ref))
@@ -1147,7 +1148,8 @@ def resolve_escalated_issue(issue_ref):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error resolving escalated issue {issue_id}: {e}")
+        # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+        current_app.logger.error(f"Error resolving escalated issue {issue_id}: {type(e).__name__}")
         flash("An error occurred while resolving the issue.", "error")
 
     return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))

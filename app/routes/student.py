@@ -3408,7 +3408,8 @@ def submit_general_issue():
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error submitting issue: {str(e)}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error submitting issue: {type(e).__name__}")
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
@@ -3472,7 +3473,8 @@ def report_transaction_issue(transaction_id):
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error submitting transaction issue: {str(e)}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error submitting transaction issue: {type(e).__name__}")
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
@@ -3540,7 +3542,8 @@ def report_attendance_session_issue(attendance_session_id):
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error submitting attendance session issue: {str(e)}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error submitting attendance session issue: {type(e).__name__}")
             flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',

@@ -296,6 +296,9 @@ def create_app():
         SECRET_KEY_FALLBACKS=secret_key_fallbacks,
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # Statement errors otherwise quote every bound value (free text, usernames,
+        # internal ids) into exception text that reaches logs (INV-ARC-005 §V).
+        SQLALCHEMY_ENGINE_OPTIONS={"hide_parameters": True},
         CONFIGURATION_EXPORT_KEY=os.getenv("CONFIGURATION_EXPORT_KEY", "").strip(),
         SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
