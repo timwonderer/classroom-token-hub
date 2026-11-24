@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.63 | 2026-11-23 | 3.62 | Normative |
+| SOP-DOC-001 | 3.64 | 2026-11-24 | 3.63 | Normative |
 
 ---
 
@@ -282,6 +282,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.64 (2026-11-24):**
+- Register DOM-SUP-001 v1.11: `issues.eligible_for_reward` is physically dropped by migration `4fad9d362d0d`, completing the v1.10 bug-reward retirement (owner ruling 2026-10-27; issue #1678). `Issue.eligible_for_reward` no longer exists on the model.
 
 **Version 3.63 (2026-11-23):**
 - Register owner-approved SPEC-OPS-002 v1.7 and SPEC-OPS-006 v1.7: 30-day overall error observations replace 90-day reliability history, with non-overlapping totals and explicit coverage.
