@@ -41,7 +41,7 @@ Below both, **Recent Transaction Activity** lists the last ten entries with Date
 
 ### Finding a transaction
 
-The **Transactions** tab lists **All Banking Transactions** behind five filters: **Account** (checking or savings), **Type**, **From**, **To**, and **Student**. Choose **Apply Filters**, or **Clear Filters** to start over. A counter beside the buttons reads *Showing N of N transactions*.
+The **Transactions** tab lists **All Banking Transactions** behind five filters: **Account** (checking or savings), **Type**, **From**, **To**, and **Student** (pick one student from the class list). Choose **Apply Filters**, or **Clear Filters** to start over. A counter beside the buttons reads *Showing N of N transactions*.
 
 Student names link through to that student's detail page, so this tab is a reasonable starting point for "why is this balance wrong."
 
