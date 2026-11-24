@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-009 | 1.0 | 2026-11-24 | — | Normative | PROPOSED (owner review pending — see Amendments) |
+| FEAT-IDEN-009 | 1.0 | 2026-11-24 | — | Normative | ACTIVE |
 
 ---
 
@@ -265,8 +265,6 @@ that:
   same "select class" operation as `_apply_teacher_class_selection`/`switch_class`, just reached
   from a different entry point.
 
-**This version is PROPOSED, not ACTIVE.** Per the documentation hierarchy (`.claude/CLAUDE.md`),
-constitutional-tier documents are authored carefully and an owner ruling is what makes one
-settled; this is the first FEAT contract introduced for #1777 rather than an amendment to an
-existing one, so it is submitted for the owner's review of its shape (operation grouping, the
-FEAT-IDEN-001/FEAT-IDEN-005 reassignments in particular) before being merged as ACTIVE.
+**Promoted to ACTIVE (2026-11-24):** the owner reviewed and approved this contract's shape
+(operation grouping, and the FEAT-IDEN-001/FEAT-IDEN-005 reassignments in particular) prior to
+merge.
