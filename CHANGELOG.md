@@ -10,6 +10,10 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- <!-- notes: fixed, security -->
+
+  **The Economic Engine rebalance preview judges insurance premiums against their own billing cadence.** `resolve_insurance()` always resolved a WEEKLY coverage period regardless of a policy's actual `charge_frequency`, so a correctly-priced MONTHLY-billed policy's premium was compared against a weekly-scaled recommended band (~30/7 too narrow) and could be wrongly flagged "out of range" in `/admin/economic-engine?review_rebalance=1`. `coverage_period` is no longer defaulted — every caller now states the policy's own cadence explicitly, the same way rent already has no engine-side default (#1762). Advisory-only; this page never applies insurance changes and no ledger or money data is affected.
+
 - <!-- notes: fixed -->
 
   **Status history reports observed errors.** Replaced the 90-day reliability bars and threshold-history tables with a 30-day 4xx/5xx distribution, observed request totals, last recorded five-minute windows and explicit coverage. Fixed-boundary samples prevent overlapping requests and retries from inflating counts. Older reliability rollups remain unavailable as error evidence; totals accumulate after collector rollout. The chart has visible text equivalents, a neutral empty state and timezone-labelled timestamps. Current status and incident handling are unchanged.
