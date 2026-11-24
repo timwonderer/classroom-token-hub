@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.64 | 2026-11-24 | 3.63 | Normative |
+| SOP-DOC-001 | 3.65 | 2026-11-24 | 3.64 | Normative |
 
 ---
 
@@ -156,7 +156,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
-- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.7 (2026-11-23): 30-day 4xx/5xx error distribution, non-overlapping counts, last observation windows and explicit coverage replace historical reliability scores. v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
+- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.8 (owner ruling 2026-11-24): the sampler excludes the `/teapot` 418 easter egg. v1.7 (2026-11-23): 30-day 4xx/5xx error distribution, non-overlapping counts, last observation windows and explicit coverage replace historical reliability scores. v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001/DOM-LED-001 and FEAT-PROD-003/005/006 for canonical interval eligibility, exact historical reconstruction/graph attribution and atomic correction.
 - [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning PROD/Ledger/Operations/Policies contracts and FEAT-PROD-006/005/003: pure assessment, distinct immutable-source historical reconstruction and existing atomic correction; original canonical lineage remains separately reported.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
@@ -282,6 +282,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.65 (2026-11-24):**
+- Register SPEC-OPS-006 v1.8: the status sampler excludes `/teapot`, the 418 easter egg, from request counts (owner ruling 2026-11-24).
 
 **Version 3.64 (2026-11-24):**
 - Register DOM-SUP-001 v1.11: `issues.eligible_for_reward` is physically dropped by migration `4fad9d362d0d`, completing the v1.10 bug-reward retirement (owner ruling 2026-10-27; issue #1678). `Issue.eligible_for_reward` no longer exists on the model.

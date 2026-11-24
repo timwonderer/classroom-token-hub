@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.7 | 2026-11-23 | 1.6 | Subordinate implementation contract |
+| SPEC-OPS-006 | 1.8 | 2026-11-24 | 1.7 | Subordinate implementation contract |
+
+*Revision 1.8 (2026-11-24; owner ruling 2026-11-24): the sampler excludes `/teapot`, the easter egg that always answers 418 (§VI), so visiting it never adds to the 4xx request-error count.*
 
 *Revision 1.7 (2026-11-23; owner-approved amendment): replace the 90-day reliability strip and historical threshold percentages with a 30-day overall request-error distribution. Count 4xx and 5xx without assigning fault, show last recorded observation windows, and disclose missing coverage. Current status and incident policy are unchanged.*
 
@@ -82,7 +84,8 @@ upgraded in either order, and keeps retained activity readable (§VIII).
 ## VI. Collection, freshness and classification
 
 The sampler queries local Loki with fixed reviewed route expressions and a common
-UTC evaluation time. It aggregates away all labels. Caller-defined queries are
+UTC evaluation time. It aggregates away all labels. Requests to `/teapot`, an easter egg that
+always answers 418 by design, are excluded from every group (owner ruling 2026-11-24). Caller-defined queries are
 forbidden. Request counts and latency come from the same 300-second window.
 The service group observes upstream application requests. Route groups are proxies,
 not a complete registry of business operations. Source evidence may overlap groups.
