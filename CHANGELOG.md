@@ -18,6 +18,10 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: fixed -->
 
+  **A teacher roster import could deadlock against ledger settlement holding a pre-existing unclaimed namesake seat** (#1835). `import_student_seats` (FEAT-IDEN-006) locked the class row before `_ensure_distinct_claim_codes` locked any pre-existing unclaimed seat sharing an imported row's claim-name hash — the same class-before-seat inversion #1640/PR #1832 closed for the other identity-domain writers, independently reachable since settlement can hold any unclaimed seat with pending activity. The import now locks every pre-existing namesake seat its batch will touch, ascending by id, before locking the class (INV-LED-015, DOM-LED-001 §VII).
+
+- <!-- notes: fixed -->
+
   **The student view and `/api/student-status` now show projected pay** (#1645). `get_class_attendance_status()` hardcoded `projected_pay: None`; it now reuses the same pricing rules a real payroll run applies (`app/services/payroll/pricing.py`, DOM-PROD-001 §XV.3) — closed-but-unpaid work at the payroll setting in force when it closed, the still-open session as if it closed now at the setting in force now — so a mid-cycle rate change reprices only the open session, never work already closed under the old rate. The open-session portion is an estimate, not a guaranteed payout: it reflects work as if it ended at this instant, and a payroll run never actually settles a session that is still open.
 
 - <!-- notes: fixed, highlight -->
