@@ -49,6 +49,14 @@ latest() { ls -t "$CTH_BACKUP_STATE_DIR"/points/*."$1" 2>/dev/null | head -1 || 
 case "${1:-}" in
 backup)
   pg_dump --version
+  # Prerequisite validation BEFORE anything touches production: a removed or relocated backup-venv
+  # interpreter (e.g. the Homebrew Python it was built against gets upgraded out from under it) must
+  # fail here, not after classroom-economy is already stopped with nothing able to back it up.
+  [ -x "$PY" ] || { echo "$PY not found or not executable: rebuild the backup venv (see infra/db-backup/README.md) before releasing"; exit 1; }
+  "$PY" --version >/dev/null 2>&1 \
+    || { echo "$PY does not run ('$PY --version' failed): rebuild the backup venv before releasing"; exit 1; }
+  "$PY" -c 'import psycopg2' >/dev/null 2>&1 \
+    || { echo "$PY cannot import psycopg2: rebuild the backup venv (pip install psycopg2-binary) before releasing"; exit 1; }
   # A new point invalidates any earlier counts/restore receipt for this state dir: `evidence` must not
   # be able to read a stale .ok left over from a previous point taken the same day.
   rm -f "$CTH_BACKUP_STATE_DIR/counts.ok" "$CTH_BACKUP_STATE_DIR/restore.ok"
@@ -59,7 +67,23 @@ backup)
   docker rm -f cth-verify >/dev/null 2>&1 || true
   docker run --rm -d --name cth-verify -e POSTGRES_PASSWORD=verify \
     -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql/data postgres:14
-  sleep 5
+  # Bounded, polling readiness wait in place of a fixed sleep: the container's postgres:14 init time
+  # varies by host load, so a fixed sleep either wastes time or (as happened during the v2.5.0 release)
+  # loses the race and leaves cth-verify not yet accepting connections when createdb runs. Fail closed
+  # if it never comes up within the bound rather than proceeding against a server that isn't ready.
+  ready=0
+  for _ in $(seq 1 30); do
+    if pg_isready -h 127.0.0.1 -p 55432 -U postgres >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  if [ "$ready" -ne 1 ]; then
+    echo "cth-verify postgres:14 container did not become ready on 127.0.0.1:55432 within 30s"
+    docker rm -f cth-verify >/dev/null 2>&1 || true
+    exit 1
+  fi
   docker exec cth-verify createdb -U postgres cth_backup_verify
   docker exec cth-verify createdb -U postgres cth_restore_check
 
