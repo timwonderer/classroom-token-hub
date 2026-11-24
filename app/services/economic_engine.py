@@ -774,9 +774,14 @@ def accrue_daily_interest(
     - ``weekly`` / ``monthly``: interest accrued so far joins at each day marked
       ``capitalizes`` — a class-local week or month start inside the window.
 
-    Interest already credited is part of ``end_of_day_balance`` for every
-    calculation type, simple included. For simple interest that does not conform
-    to §4.1; it is a tracked known deviation (SPEC-ECON-001 Appendix A, KD-1).
+    For ``daily``/``weekly``/``monthly`` compounding, interest already credited to
+    the ledger is part of ``end_of_day_balance`` and so of every later day's
+    earning base — that is the intended compounding behavior. For simple
+    (``never``) interest, the caller MUST instead supply a principal-only
+    ``end_of_day_balance`` series that excludes every previously credited
+    interest dollar (SPEC-ECON-001 §4.1; formerly tracked known deviation KD-1,
+    resolved). This function trusts the balances it is given; it does not
+    itself distinguish principal from credited interest.
 
     A non-positive earning base earns nothing. Full ``Decimal`` precision is kept;
     the caller rounds once, when the window is credited (§5.3).
@@ -823,38 +828,62 @@ def project_savings_balances(
     checkpoints,
     calculation_type: str,
     compound_frequency: str,
+    opening_principal: Optional[Decimal] = None,
 ) -> list[Decimal]:
     """Posted-balance forecast built from the runtime accrual (SPEC-ECON-001 §10).
 
     ``windows`` is the class-local payout calendar from now forward, each window a
     sequence of ``ProjectedSavingsDay``. A day with a known balance (one already
-    ended in the open window) uses it; every other day assumes the balance is
-    left alone: today's posted balance plus interest credited since. Each window
-    is credited with ``credit_savings_interest(accrue_daily_interest(...))`` and
-    joins the balance for the next — exactly what the payout job will post.
+    ended in the open window) uses it; every other day assumes no further
+    activity. Each window is credited with
+    ``credit_savings_interest(accrue_daily_interest(...))``.
+
+    The returned series is always the full posted balance, interest included —
+    ``balance`` below. Simple interest's *earning base* for an unknown day must
+    not include interest credited by an earlier projected window (§4.1), so a
+    second, principal-only running value (``principal``) tracks it separately:
+    a known day's balance (already principal-only for simple, per caller)
+    replaces ``principal``; an unknown day falls back to ``principal`` rather
+    than ``balance``. For every other calculation type, principal and balance
+    are the same value and this has no effect. ``opening_principal`` seeds
+    ``principal`` for a forecast whose "now" point already carries previously
+    credited interest; it defaults to ``posted_balance`` when omitted.
 
     ``checkpoints[k]`` is how many windows have closed by forecast point ``k + 1``.
     Returns ``len(checkpoints) + 1`` points; index 0 is now.
     """
     opening = _money(posted_balance or Decimal("0.00"))
+    simple = (calculation_type or "simple").strip().lower() == "simple"
     balance = opening
+    principal = _money(opening_principal) if opening_principal is not None else opening
     after_window = [opening]
     for window in windows:
-        days = [
-            SavingsAccrualDay(
-                end_of_day_balance=(
-                    day.end_of_day_balance if day.end_of_day_balance is not None else balance
-                ),
+        days = []
+        for day in window:
+            if day.end_of_day_balance is not None:
+                # A known (already-ended) day's own balance feeds its own
+                # day's interest base below, but must never overwrite the
+                # running ``principal``: every known day is strictly earlier
+                # than the "now" point ``opening_principal`` already
+                # captures, so letting it leak forward would discard any
+                # deposit/withdrawal posted today, before today's own day
+                # (necessarily still unknown) is reached.
+                base = day.end_of_day_balance
+            else:
+                base = principal if simple else balance
+            days.append(SavingsAccrualDay(
+                end_of_day_balance=base,
                 annual_rate=day.annual_rate,
                 capitalizes=day.capitalizes,
-            )
-            for day in window
-        ]
-        balance = _money(balance + credit_savings_interest(accrue_daily_interest(
+            ))
+        window_interest = credit_savings_interest(accrue_daily_interest(
             days=days,
             calculation_type=calculation_type,
             compound_frequency=compound_frequency,
-        )))
+        ))
+        balance = _money(balance + window_interest)
+        if not simple:
+            principal = balance
         after_window.append(balance)
     return [opening] + [after_window[min(count, len(windows))] for count in checkpoints]
 
