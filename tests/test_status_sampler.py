@@ -18,6 +18,7 @@ def fake_loki(endpoint, params, *, timeout):
     assert params["time"] == NOW.isoformat()
     query = params["query"]
     assert 'upstream_addr="127.0.0.1:8000"' in query
+    assert 'uri!~"/teapot([?].*)?"' in query  # the 418 easter egg is never counted
     if "sum by (status)" in query:
         result = [{"metric": {"status": code}, "value": [NOW.timestamp(), str(count)]} for code, count in [("200", 90), ("404", 6), ("500", 1), ("502", 3)]]
     elif 'status="404"' in query:

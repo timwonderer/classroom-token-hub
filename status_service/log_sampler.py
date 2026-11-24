@@ -93,7 +93,8 @@ def _latest_event(fetch, sampled_at: datetime, deadline: float) -> str | None:
 
 
 def _component(key: str, sampled_at: datetime, deadline: float, fetch) -> dict:
-    base = '{job="nginx_access"} | json | upstream_addr="127.0.0.1:8000"'
+    # SPEC-OPS-006 §VI: the /teapot easter egg's 418 is not a request error.
+    base = '{job="nginx_access"} | json | upstream_addr="127.0.0.1:8000" | uri!~"/teapot([?].*)?"'
     if key != "service":
         base += " | uri=~" + json.dumps(ROUTES[key])
     base += ' | __error__=""'
