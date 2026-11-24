@@ -30,6 +30,10 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: fixed -->
 
+  **Scheduled jobs' start and completion lines reach the production journal** (#1717). Every job in `app/scheduled_tasks.py` logged through a bare, top-level `scheduled_tasks` logger, which resolved its effective level from the *root* logger (left at `WARNING`) rather than from `app`'s explicit `INFO` level — so every `logger.info("Starting scheduled ...")`/`"... job completed ..."` call was dropped at the logger itself, before reaching any handler. The logger is now `logging.getLogger(__name__)` (`app.scheduled_tasks`), a child of `app`, matching how `app.feats.base`'s FEAT-ENTRY lines already reach `journalctl -u classroom-economy`. No log lines were lost to this bug beyond not being emitted; affected jobs' outcomes remain readable from their own domain tables.
+
+- <!-- notes: fixed -->
+
   **Status history reports observed errors.** Replaced the 90-day reliability bars and threshold-history tables with a 30-day 4xx/5xx distribution, observed request totals, last recorded five-minute windows and explicit coverage. Fixed-boundary samples prevent overlapping requests and retries from inflating counts. Older reliability rollups remain unavailable as error evidence; totals accumulate after collector rollout. The chart has visible text equivalents, a neutral empty state and timezone-labelled timestamps. Current status and incident handling are unchanged.
 
 
