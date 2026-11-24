@@ -253,11 +253,11 @@ A generated-shape id does not prove the id was generated, since a caller could s
 characters, but such an id carries no personal data, so the exposure question V2 raises is answered
 for these stores.
 
-**Count-only commands for the owner** (print numbers and a date, never a matching line):
+**Count-only commands for the owner** (print numbers and a date, never a matching line). Each handler logged `<status> <reason>: <URL>`, and a logged URL holds no spaces, so `[^ ]*` scans the whole URL and finds `student=` or `class_id=` in any query position:
 
 ```bash
 journalctl -u classroom-economy --no-pager -o short-iso | head -1 | cut -c1-10
-journalctl -u classroom-economy --no-pager -o cat | grep -cE '(Not Found|Forbidden|Unauthorized|Bad Request|Too Many|Rate|Service Unavailable)[^?]*[?&](student|class_id)='
+journalctl -u classroom-economy --no-pager -o cat | grep -cE '(Not Found|Forbidden|Unauthorized|Bad Request|Too Many Requests|Service Unavailable): [^ ]*[?&](student|class_id)='
 sudo sh -c 'ls -1tr /var/log/nginx/access.log* | head -1 | xargs stat -c %y | cut -c1-10'
 sudo sh -c 'zgrep -hcE "[?&](student|class_id)=" /var/log/nginx/access.log* | paste -sd+ - | bc'
 ```
