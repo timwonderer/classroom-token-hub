@@ -167,6 +167,47 @@ def test_a_selection_past_an_advisory_insurance_row_is_applied(client, app):
         assert get_current_version(classroom.class_id, product.product_lineage_uuid).price < Decimal("9999.00")
 
 
+def test_INV_ECON_001__correctly_priced_monthly_insurance_is_not_flagged_out_of_range(client, app):
+    """Issue #1762: the rebalance preview always resolved insurance on a WEEKLY
+    coverage period, so a correctly-priced MONTHLY-billed policy's premium was
+    compared against a weekly-scaled band (~30/7 narrower) and wrongly flagged
+    "out of range". A premium priced exactly at the authoring form's own
+    recommendation (``build_insurance_premium_helper``, which already scales by
+    coverage period per SPEC-ECON-003 §4.5.2) must not appear in the preview.
+    """
+    from app.services.insurance_definition_service import create_insurance_definition
+    from app.services.insurance_premium_helper import build_insurance_premium_helper
+
+    classroom = _teacher_class(client, app)
+    with app.app_context():
+        helper = build_insurance_premium_helper(classroom.class_id)
+        assert helper is not None
+        recommended_monthly_premium = Decimal(str(helper["frequencies"]["MONTHLY"]["recommended"]["single"]))
+
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"rebalance-owner:insurance-monthly:{classroom.class_id}"):
+            create_insurance_definition(
+                class_id=classroom.class_id,
+                actor_seat_id=classroom.teacher_seat.id,
+                definition={
+                    "title": "Correctly Priced Monthly Cover",
+                    "insurance_type": "TRANSACTION",
+                    "premium": recommended_monthly_premium,
+                    "charge_frequency": "MONTHLY",
+                    "reimbursement_percentage": Decimal("80"),
+                    "payout_multiple": Decimal("3"),
+                    "claims_per_week_equivalent": Decimal("1"),
+                    "claim_window_days": 7,
+                    "bill_preview_days": 3,
+                    "nonpayment_mode": "ACCUMULATE",
+                },
+            )
+        db.session.commit()
+
+    page = client.get("/admin/economic-engine?review_rebalance=1")
+    assert page.status_code == 200, page.get_data(as_text=True)[:2000]
+    assert "Correctly Priced Monthly Cover" not in page.get_data(as_text=True)
+
+
 def test_insurance_advisory_row_is_judged_in_the_class_policy_mode(app, monkeypatch):
     """The checker exposes ``policy_mode``; reading ``mode`` always fell back to default."""
     from types import SimpleNamespace
@@ -176,7 +217,7 @@ def test_insurance_advisory_row_is_judged_in_the_class_policy_mode(app, monkeypa
 
     seen = []
 
-    def fake_resolve_insurance(*, product, cwi, mode):
+    def fake_resolve_insurance(*, product, cwi, mode, coverage_period=None, covered_calendar_days=None):
         seen.append(mode)
         return SimpleNamespace(cwi=None)
 
