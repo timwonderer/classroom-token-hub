@@ -521,6 +521,7 @@ def test_attendance_closure_does_not_deadlock_concurrent_payroll_on_teacher_seat
             seat_id=teacher_seat_id, actor_role="teacher",
         )
     contended_seat_id = min(teacher_seat_id, target_seat_id)
+    other_seat_id = max(teacher_seat_id, target_seat_id)
 
     held, release, attempted = Event(), Event(), Event()
     pids: dict[str, int] = {}
@@ -554,8 +555,15 @@ def test_attendance_closure_does_not_deadlock_concurrent_payroll_on_teacher_seat
     def closure_scope():
         with app.app_context():
             try:
-                pids["closure"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
                 with FEATContext("FEAT-PROD-001", idempotency_key="attendance-deadlock-1640-closure"):
+                    # Read inside FEATContext.__enter__'s transaction, not
+                    # before it: __enter__ rolls back any prior transaction
+                    # before opening its own, which can hand the next
+                    # statement a different pooled connection -- recording
+                    # the PID too early binds it to a connection that never
+                    # performs the closure's lock statements (CodeRabbit
+                    # review on PR #1832, commit f0478037).
+                    pids["closure"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
                     attempted.set()
                     close_due_attendance_intervals(
                         ctx=teacher_ctx, seat_id=target_seat_id,
@@ -590,6 +598,23 @@ def test_attendance_closure_does_not_deadlock_concurrent_payroll_on_teacher_seat
                     "#1640-adjacent bug)."
                 )
                 Event().wait(.01)
+
+            # Blocking on the lower-id seat alone doesn't prove ascending
+            # order -- a reversed implementation could lock the higher-id
+            # seat FIRST and then block on the lower one, which the check
+            # above cannot distinguish from the correct order (CodeRabbit
+            # review on PR #1832, commit f0478037). Prove the higher-id seat
+            # is genuinely still unlocked: a separate connection must be able
+            # to take it with FOR UPDATE NOWAIT while the closure is blocked.
+            with db.engine.connect() as prober_conn:
+                with prober_conn.begin():
+                    prober_conn.execute(
+                        text(
+                            "SELECT id FROM seats WHERE id=:id AND "
+                            "class_id=:class_id FOR UPDATE NOWAIT"
+                        ),
+                        {"id": other_seat_id, "class_id": class_id},
+                    )
         finally:
             release.set()
         assert holder.result(timeout=15) == "accepted"
