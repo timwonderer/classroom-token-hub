@@ -499,8 +499,14 @@ def consume_entitlement(
     use is the hall-pass log (FEAT-PROD-002 §III), and this refuses a pass
     that a log already names.
     """
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): see expire_entitlement's
+    # own comment -- the event this always flushes below carries a foreign key
+    # to actor_seat_id as well as target_seat_id, so both must be locked
+    # ascending before any seat-specific work, not just target (and not only
+    # when entitlement_type == "HALL_PASS").
+    for sid in sorted({target_seat_id, actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
     if entitlement_type == "HALL_PASS":
-        lock_hall_pass_holder(target_seat_id, class_id)
         if entitlements_with_pending_action(class_id, [entitlement_id]):
             raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
@@ -564,10 +570,22 @@ def expire_entitlement(
     Idempotent: an already-EXPIRED lineage returns its existing event. A conflicting
     terminal disposition (e.g. REVOKED) fails closed.
     """
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): the event this always
+    # flushes below carries a foreign key to actor_seat_id as well as
+    # target_seat_id, so Postgres takes an implicit FOR KEY SHARE lock on the
+    # actor seat at insert time regardless of entitlement_type. Locking only
+    # the target (the former scope of the call below, gated to
+    # _STORE_EXPIRING_TYPES) left the actor seat -- the teacher's, at every
+    # call site -- to be locked later via that implicit check, in whatever
+    # order the two ids fall: the same deadlock shape #1640's payroll fix
+    # closed elsewhere (Codex review on PR #1832). Lock both ascending,
+    # unconditionally, before any seat-specific work.
+    for sid in sorted({target_seat_id, actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
     # A request sent before the boundary stays with the teacher (DOM-STORE-001
-    # §IX); the lock makes that check and a concurrent request mutually exclusive.
+    # §IX); the lock above makes that check and a concurrent request mutually
+    # exclusive.
     if entitlement_type in _STORE_EXPIRING_TYPES:
-        lock_hall_pass_holder(target_seat_id, class_id)
         if entitlements_with_pending_action(class_id, [entitlement_id]):
             raise ValueError(f"Entitlement {entitlement_id} has a request waiting and cannot be ended")
     existing = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
@@ -618,8 +636,13 @@ def revoke_entitlement(
     revocation is lawful. One terminal event per lineage (DOM-STORE-001
     §VIII), so a lineage that already terminated fails closed.
     """
+    # The event row below always references target_seat_id and actor_seat_id
+    # via foreign key, which takes an implicit lock on each at insert time
+    # regardless of entitlement_type. Lock both now, ascending, so this never
+    # races a payroll/reconciliation writer locking the same seats in order.
+    for sid in sorted({target_seat_id, actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
     if entitlement_type == "HALL_PASS":
-        lock_hall_pass_holder(target_seat_id, class_id)
         if entitlements_with_pending_action(class_id, [entitlement_id]):
             raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
@@ -698,9 +721,12 @@ def expire_rent_perks(
 
     Returns the count of entitlements expired.
     """
-    # Hall passes among the perks: lock their holders first, in seat order, so
-    # an approval that would use one of them waits or is waited on.
-    holder_ids = sorted({
+    # Every perk grant's EXPIRED event below references both its target seat
+    # and actor_seat_id via foreign key, which takes an implicit lock on each
+    # at insert time regardless of entitlement_type. Lock the whole set,
+    # ascending, up front so this never races a payroll/reconciliation writer
+    # locking the same seats in order.
+    target_ids = {
         row[0]
         for row in db.session.query(EntitlementEvent.target_seat_id)
         .filter(
@@ -708,13 +734,12 @@ def expire_rent_perks(
             EntitlementEvent.correlation_id == correlation_id,
             EntitlementEvent.acquisition_type == "PERK",
             EntitlementEvent.event_type == "GRANTED",
-            EntitlementEvent.entitlement_type == "HALL_PASS",
         )
         .distinct()
         .all()
-    })
-    for holder_id in holder_ids:
-        lock_hall_pass_holder(holder_id, class_id)
+    }
+    for sid in sorted(target_ids | {actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
 
     # Lock grant rows to serialize concurrent expiration attempts (FOR UPDATE).
     grants = (

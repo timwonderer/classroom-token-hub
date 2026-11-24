@@ -121,6 +121,24 @@ def enforce_daily_limits_job():
             )
             now_utc = now_evaluation.canonical_now_utc
 
+            # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): each per-seat
+            # iteration below runs in its own savepoint (so one seat's failure
+            # doesn't abort the whole job), and a successful savepoint keeps
+            # its locks for the rest of this OUTER transaction. Locking only
+            # {seat_id, actor_seat_id} per iteration is ascending within that
+            # pair, but not across iterations: processing seat 3 before seat 1
+            # can leave this job holding the (lower) teacher seat while it still
+            # has seat 1 ahead of it in the loop, so a concurrent payroll run
+            # already holding seat 1 and waiting on the teacher seat deadlocks
+            # against this job waiting on seat 1 (CodeRabbit review on PR #1832
+            # of commit f0478037). Pre-lock the WHOLE batch -- every seat this
+            # job will touch, plus the actor seat -- ascending, once, before any
+            # per-seat savepoint opens, exactly as settle_class_payroll_cycle
+            # already does for its own student batch.
+            from app.services.attendance_service import lock_attendance_seat
+            for sid in sorted(set(seat_ids) | {actor_seat_id}):
+                lock_attendance_seat(sid, class_id)
+
             for seat_id in seat_ids:
                 try:
                     with db.session.begin_nested():
