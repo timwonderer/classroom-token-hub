@@ -163,7 +163,7 @@ def _window_day_plan(class_id, compounding_period, start_utc, end_utc):
 
 
 def _compounding_period(policy):
-    if (policy.calculation_type or "simple").strip().lower() == "simple":
+    if _is_simple(policy):
         return None
     return _COMPOUNDING_PERIOD.get((policy.compound_frequency or "never").strip().lower())
 
@@ -235,7 +235,7 @@ def _paid_window(class_id, payout_frequency, transaction, prefix):
 class _SavingsLedger(NamedTuple):
     """A seat's savings ledger as the daily balance method reads it."""
 
-    history: list        # ``(effective_utc, amount_cents)``, ascending
+    history: list        # ``(effective_utc, amount_cents, is_interest_credit)``, ascending
     paid_keys: set       # interest keys already credited
     paid_through: object  # end of the latest window already credited, or None
 
@@ -249,6 +249,11 @@ def _savings_ledger(seat_id, class_id, cadence):
     whether or not it has settled yet. Compounding across windows therefore
     does not depend on when the job ran or when settlement posted a credit, and
     a replay reconstructs the same balances (§9.2, §12, §14.1).
+
+    Each history entry is tagged with whether it is an interest credit, so a
+    caller can derive a principal-only series (every credited interest dollar
+    excluded) for simple interest's earning base, per §4.1 —
+    ``_end_of_day_balances(..., principal_only=True)``.
 
     A window is credited once. ``paid_through`` is the end of the latest window
     already credited, under any cadence or key format; no day ending at or
@@ -282,17 +287,23 @@ def _savings_ledger(seat_id, class_id, cadence):
                 reference=paid_through,
             ).is_later:
                 paid_through = window.end_utc
-            history.append((window.end_utc, row.amount_cents))
+            history.append((window.end_utc, row.amount_cents, True))
         elif row.posted_at is not None and classify_posting_state(
             row.posting_sequence, cursors.get(posting_scope_of(row))
         ) == TransactionStatus.POSTED:
-            history.append((row.posted_at, row.amount_cents))
+            history.append((row.posted_at, row.amount_cents, False))
     history.sort(key=lambda entry: entry[0])
     return _SavingsLedger(history, paid_keys, paid_through)
 
 
-def _end_of_day_balances(history, day_ends):
-    """Balance at each (ascending) day end: effects in effect before it."""
+def _end_of_day_balances(history, day_ends, *, principal_only=False):
+    """Balance at each (ascending) day end: effects in effect before it.
+
+    ``principal_only`` excludes every history entry tagged as an interest
+    credit, giving the lifetime principal-only series simple interest's earning
+    base must use (SPEC-ECON-001 §4.1): previously credited interest never
+    participates in a later window's accrual.
+    """
     balances = []
     cents = 0
     index = 0
@@ -303,7 +314,8 @@ def _end_of_day_balances(history, day_ends):
             candidate=history[index][0],
             reference=day_end,
         ).is_earlier:
-            cents += history[index][1]
+            if not (principal_only and history[index][2]):
+                cents += history[index][1]
             index += 1
         balances.append(Decimal(cents) / 100)
     return balances
@@ -332,16 +344,28 @@ def _accrual_floor(class_id, ledger, claimed_at):
     return max(floors)
 
 
+def _is_simple(policy):
+    return (policy.calculation_type or "simple").strip().lower() == "simple"
+
+
 def _window_days(class_id, policy, window, history, rate_at, accrue_after):
     """One window's days: balance, rate, and compounding marker per day.
 
     A day ending at or before ``accrue_after`` keeps its place, so compounding
     boundaries stay where they are, but accrues nothing.
+
+    For simple interest the per-day balance is the principal-only series —
+    every previously credited interest dollar excluded — so a later window's
+    earning base never includes interest credited by an earlier one
+    (SPEC-ECON-001 §4.1). Every other calculation type keeps the full posted
+    balance, interest included, as its earning base (§6.2).
     """
     plan = _window_day_plan(
         class_id, _compounding_period(policy), window.start_utc, window.end_utc
     )
-    balances = _end_of_day_balances(history, [day_end for day_end, _ in plan])
+    balances = _end_of_day_balances(
+        history, [day_end for day_end, _ in plan], principal_only=_is_simple(policy)
+    )
     return plan, balances, [
         rate_at(day_end)
         if canonical_temporal_resolver(
@@ -436,7 +460,7 @@ def apply_savings_interest(seat, *, annual_rate=None, reference_time_utc=None):
                     created.append(transaction)
                 # The credit joins the balance from its window's close, as the
                 # ledger will reconstruct it on the next run (§9.2).
-                insort(history, (window.end_utc, transaction.amount_cents))
+                insort(history, (window.end_utc, transaction.amount_cents, True))
         window = payout_window_containing(class_id, cadence, window.end_utc)
     return created
 
@@ -473,6 +497,13 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     ).canonical_now_utc
     ledger = _savings_ledger(seat_id, class_id, cadence)
     posted_now = _end_of_day_balances(ledger.history, [now_utc])[0]
+    # Simple interest's projected earning base must start from the current
+    # principal-only balance, not the posted balance: interest already credited
+    # must not earn further interest in a projected window either (§4.1).
+    principal_now = (
+        _end_of_day_balances(ledger.history, [now_utc], principal_only=True)[0]
+        if _is_simple(policy) else posted_now
+    )
     seat = Seat.query.filter_by(id=seat_id, class_id=class_id).one_or_none()
     accrue_after = _accrual_floor(class_id, ledger, seat.claimed_at if seat else None)
 
@@ -538,6 +569,7 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
 
     series = project_savings_balances(
         posted_balance=posted_now,
+        opening_principal=principal_now,
         windows=windows,
         checkpoints=[
             sum(
@@ -556,6 +588,7 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     )
     next_credit = project_savings_balances(
         posted_balance=posted_now,
+        opening_principal=principal_now,
         windows=windows[:1],
         checkpoints=[1],
         calculation_type=policy.calculation_type,
