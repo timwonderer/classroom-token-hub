@@ -4,6 +4,8 @@ The sysadmin bug reward was retired until badges are implemented (owner
 ruling 2026-10-27). Removing the checkbox alone left the resolve route still
 honouring `eligible_for_reward` / `reward_amount`, so a hand-built POST could
 still credit a student; the route itself must ignore them.
+`issues.eligible_for_reward` itself was later physically dropped (DOM-SUP-001
+v1.11, issue #1678); the field no longer exists on `Issue` at all.
 """
 from app.extensions import db
 from app.models import Issue, IssueResolutionAction, Transaction
@@ -46,7 +48,7 @@ def test_DOM_SUP_001__resolve_ignores_retired_bug_reward_fields(client, app):
     assert response.status_code == 302
     db.session.refresh(issue)
     assert issue.status == Issue.STATUS_DEV_RESOLVED
-    assert issue.eligible_for_reward is False
+    assert not hasattr(issue, "eligible_for_reward")
     assert Transaction.query.filter_by(
         seat_id=student.seat.id, class_id=classroom.class_id, type="bug_reward").count() == 0
     assert IssueResolutionAction.query.filter_by(issue_id=issue.id).count() == 0
