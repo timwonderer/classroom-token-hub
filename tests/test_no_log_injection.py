@@ -68,14 +68,9 @@ def _messages(mock_logger_method, needle):
     return out
 
 
-def test_404_handler_logs_request_url_unchanged_when_it_carries_no_raw_control_chars(app):
-    """request.url keeps percent-encoding (confirmed: a %0D%0A in the request
-    line reaches it as the literal text ``%0D%0A``, never a decoded CR/LF),
-    so sanitize_for_log is a no-op here today -- this site's real exposure is
-    smaller than CodeQL's alert implies. The call is still wrapped (see the
-    RequestIdFilter test below and test_sanitizer_escapes_cr_and_lf for the
-    sites that do carry a decoded, attacker-controlled value) as defense in
-    depth against a future change to what reaches this log line."""
+def test_404_handler_logs_no_part_of_the_requested_url(app):
+    """The 404 line names the route pattern, here <unmatched>, never the URL:
+    nothing the caller put in the path reaches the log (INV-ARC-005 §V)."""
     client = app.test_client()
     with patch.object(app.logger, "warning") as mock_warning:
         response = client.get("/does-not-exist%0d%0aFAKE-INJECTED-LINE/x")
@@ -84,8 +79,7 @@ def test_404_handler_logs_request_url_unchanged_when_it_carries_no_raw_control_c
 
     lines = _messages(mock_warning, "404 Not Found")
     assert len(lines) == 1
-    assert "\r" not in lines[0] and "\n" not in lines[0]
-    assert "%0D%0AFAKE-INJECTED-LINE" in lines[0]
+    assert lines[0] == "404 Not Found: <unmatched>"
 
 
 def test_sanitizer_would_neutralize_a_raw_control_character_reaching_this_site():
@@ -120,9 +114,7 @@ def test_request_id_filter_endpoint_fallback_is_sanitized(app):
     with app.test_request_context("/does-not-exist%0d%0aFAKE-INJECTED-LINE/x"):
         record = _record_with_request_id_filter(app)
 
-    assert "\r" not in record.endpoint and "\n" not in record.endpoint
-    assert "\\x0d\\x0a" in record.endpoint
-    assert "FAKE-INJECTED-LINE" in record.endpoint
+    assert record.endpoint == "<unmatched>"
 
 
 def test_request_id_filter_sanitizes_a_prepopulated_endpoint(app):
