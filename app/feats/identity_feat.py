@@ -368,8 +368,15 @@ def activate_student_credentials(
     else:
         seat = db.session.get(Seat, seat_id) if seat_id is not None else None
         if seat:
-            ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
+            # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): a concurrent
+            # FEAT-LED-003 settlement context (or, since #1640, a whole-roster
+            # reconciliation sweep that now locks every seat in the class,
+            # claimed or not) takes this same seat FOR UPDATE before the class
+            # row. Locking the class first here would complete the opposite
+            # cycle (#1640-adjacent).
             seat = Seat.query.filter_by(id=seat_id).populate_existing().with_for_update().one_or_none()
+            if seat:
+                ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
         if (not seat or seat.user_id is not None or seat.claimed_at is not None
                 or type(claim_generation) is not int or seat.claim_generation != claim_generation):
             return CredentialSetupResult(
@@ -555,6 +562,23 @@ def bind_authenticated_student_to_class(
         )
 
     class_id = class_row.class_id
+    # Step 2: Find unclaimed seats (both user_id and claimed_at must be NULL).
+    # Locked ascending, before the class row: seat-then-class (INV-LED-015,
+    # DOM-LED-001 §VII). Since #1640 widened rent reconciliation's lock set to
+    # every seat in the class — claimed or not — this path's seats can overlap
+    # a concurrent reconciliation sweep's lock set; locking the class first
+    # here (as this did before) completes the same circular wait #1640 closed,
+    # with this claim as the other side instead of ledger settlement.
+    unclaimed_seats = (
+        Seat.query
+        .filter(
+            Seat.class_id == class_id,
+            Seat.claimed_at.is_(None),
+            Seat.user_id.is_(None),
+        )
+        .order_by(Seat.id.asc())
+        .populate_existing().with_for_update().all()
+    )
     ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
     principal = User.query.filter_by(id=user_id, user_role="student").populate_existing().with_for_update().one_or_none()
     if principal is None:
@@ -565,16 +589,6 @@ def bind_authenticated_student_to_class(
     if Seat.query.filter_by(class_id=class_id, user_id=user_id).first() is not None:
         return ClassBindingResult(False, error_code="ALREADY_IN_CLASS", error_message="You're already in this class.")
 
-    # Step 2: Find unclaimed seats (both user_id and claimed_at must be NULL)
-    unclaimed_seats = (
-        Seat.query
-        .filter(
-            Seat.class_id == class_id,
-            Seat.claimed_at.is_(None),
-            Seat.user_id.is_(None),
-        )
-        .populate_existing().with_for_update().all()
-    )
     if not unclaimed_seats:
         return ClassBindingResult(
             success=False,

@@ -44,9 +44,11 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.feats.identity_feat import unclaim_student_seat
+from app.feats.identity_feat import bind_authenticated_student_to_class, unclaim_student_seat
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
+from app.hash_utils import hash_claim_name
 from app.models import ClassEconomy, Seat
+from app.services.classroom_setup import create_roster_student_seat
 from app.services.context_resolver import CanonicalContext
 from tests.helpers.class_domain import customize_rent_settings, enable_class_feature
 from tests.helpers.classroom_initializer import initialize
@@ -275,3 +277,106 @@ def test_unclaim_student_seat_does_not_deadlock_rent_reconciliation(app):
             release.set()
         assert holder.result(timeout=15) == "accepted"
         assert unclaim.result(timeout=15) == "accepted"
+
+
+def test_bind_authenticated_student_to_class_does_not_deadlock_settlement(app):
+    """An authenticated student joining a second class, concurrent with ledger
+    settlement holding the unclaimed seat they are about to claim, must never
+    deadlock (#1640-adjacent, Codex finding on PR #1832's own review).
+
+    ``bind_authenticated_student_to_class`` (FEAT-IDEN-005) locked the class
+    row (``ClassEconomy.query...with_for_update()``) before locking the join
+    code's unclaimed seats -- the opposite of settlement's seat-then-class
+    order (INV-LED-015). Rent reconciliation's own fix above (#1640) widened
+    its lock set to every seat in the class, claimed or not, which means an
+    unclaimed seat this bind path is about to lock can now also be a seat a
+    concurrent reconciliation (or, as tested here, settlement -- the simpler
+    production function to mirror directly) sweep already holds. The fix
+    brings this bind path to the same seat(s)-then-class order.
+    """
+    source = initialize("chemistry_p1", app)
+    target = initialize("ap_csp_p3", app)
+    first_name, last_name = "Unclaimed", "Joiner"
+    with app.app_context():
+        class_id = target.class_id
+        principal_user_id = source.students[0].user.id
+        join_code = target.join_code
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key="bind-deadlock-1640:seed"):
+            new_seat = create_roster_student_seat(
+                class_id=class_id, first_name=first_name, last_name=last_name,
+                claim_first_name_hash=hash_claim_name(first_name, class_id=class_id, field="first"),
+                claim_last_name_hash=hash_claim_name(last_name, class_id=class_id, field="last"),
+            )
+        db.session.commit()
+        seat_id = new_seat.id
+
+    held, release, attempted = Event(), Event(), Event()
+    pids: dict[str, int] = {}
+
+    def settlement_scope():
+        # Mirrors settle_balances' own lock order (INV-LED-015): the seat
+        # anchor is acquired first, and held through the window this test
+        # uses to let the bind path contend for it.
+        with app.app_context():
+            try:
+                with FEATContext("FEAT-LED-003", idempotency_key="bind-deadlock-1640-settlement"):
+                    pids["settlement"] = db.session.execute(
+                        text("SELECT pg_backend_pid()")
+                    ).scalar_one()
+                    Seat.query.filter_by(id=seat_id, class_id=class_id).with_for_update().one()
+                    held.set()
+                    assert release.wait(10)
+                    ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    def bind_scope():
+        with app.app_context():
+            try:
+                pids["bind"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+                attempted.set()
+                result = bind_authenticated_student_to_class(
+                    user_id=principal_user_id, join_code=join_code,
+                    first_name=first_name, last_name=last_name,
+                    correlation_id="corr-bind-deadlock-1640",
+                    idempotency_key="bind-deadlock-1640-bind",
+                )
+                assert result.success, result
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        settlement = pool.submit(settlement_scope)
+        try:
+            assert held.wait(10)
+            bind = pool.submit(bind_scope)
+            assert attempted.wait(10)
+
+            # The bind path must be the one waiting, blocked specifically on
+            # the seat settlement already holds, and must NOT already hold the
+            # class row while settlement waits to acquire it.
+            deadline = monotonic() + 5
+            while True:
+                blockers = db.session.execute(
+                    text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["bind"]}
+                ).scalar_one()
+                if pids["settlement"] in blockers:
+                    break
+                assert monotonic() < deadline, (
+                    "bind_authenticated_student_to_class never blocked on the "
+                    "seat settlement holds; it may have locked the class "
+                    "first instead (the #1640-adjacent bug)."
+                )
+                Event().wait(.01)
+
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text("SELECT class_id FROM classes WHERE class_id=:class_id FOR UPDATE NOWAIT"),
+                    {"class_id": class_id},
+                ).one()
+        finally:
+            release.set()
+        assert settlement.result(timeout=15) == "accepted"
+        assert bind.result(timeout=15) == "accepted"
