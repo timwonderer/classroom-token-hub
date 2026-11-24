@@ -40,3 +40,21 @@ def test_recover_page_loads_are_not_rate_limited(client, app):
             assert response.status_code == 200
     finally:
         app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_teapot_route_answers_418_im_a_teapot_with_the_styled_page(client):
+    """RFC 2324 §2.3.2: the status line is exactly `418 I'm a teapot`, and the
+    body is the styled error page, not Werkzeug's bare default.
+    """
+    response = client.get("/teapot")
+    assert response.status == "418 I'm a teapot"
+    html = response.data.decode()
+    assert '<h1 id="error-heading">418</h1>' in html
+    assert "This server is a teapot" in html
+    assert "rfc2324#section-2.3.2" in html
+
+
+def test_404_page_header_icon_links_to_the_teapot(client):
+    response = client.get("/no-such-page-anywhere")
+    assert response.status_code == 404
+    assert 'href="/teapot"' in response.data.decode()

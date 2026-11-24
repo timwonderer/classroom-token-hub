@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+
+- An easter egg: the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
+
 ### Removed
 
 - <!-- notes: internal -->
@@ -15,6 +19,8 @@ and this project follows semantic versioning principles.
   **`Issue.eligible_for_reward` is gone.** The column was already unread and unset after the sysadmin bug reward's retirement (#1677, DOM-SUP-001 v1.10); migration `4fad9d362d0d` physically drops `issues.eligible_for_reward` (#1678, DOM-SUP-001 v1.11). The `bug_reward` ledger type remains separately removed (migration `e3b7c1d9a2f4`, DOM-LED-001 v2.18).
 
 ### Fixed
+
+- The 404 page's "What can you do?" list uses real bullets, like the other error pages, so wrapped lines on phones line up with the text instead of starting under the bullet.
 
 - <!-- notes: fixed, highlight -->
 

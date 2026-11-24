@@ -1,0 +1,55 @@
+{% import "macros/cards.html" as cards %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>418 - I'm a teapot</title>
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+</head>
+
+<body class="error-page">
+    <main id="main-content" aria-labelledby="error-heading">
+    <div class="error-container">
+        <div class="error-header">
+            <span class="material-symbols-outlined icon-2xl icon-middle mb-2" aria-hidden="true">emoji_food_beverage</span>
+            <h1 id="error-heading">418</h1>
+            <p>I'm a teapot</p>
+        </div>
+
+        <div class="error-body">
+            {% call cards.alert_card('info', 'BREW is not defined', icon='kettle', body_class='mb-4', role='alert', heading_tag='h2') %}
+                <p class="mb-0">This server is a teapot, so it will not brew coffee. </p>
+            {% endcall %}
+
+            <div class="troubleshooting">
+                <h5>What can you do?</h5>
+                <ul>
+                    <li>Admire the short and stout teapot</li>
+                    <li>418 comes from RFC 2324, a 1998 April Fools' RFC</li>
+                    <li>Perhaps you would like a cup of darjeeling?</li>
+                    <li>Looking for coffee? Not here!</li>
+                    <li>This page does not affect your account in any way.</li>
+                </ul>
+            </div>
+
+            <div class="actions">
+                <a href="/" class="btn bg-primary text-white">Return to Login Page</a>
+                <button type="button" class="btn bg-primary text-white" onclick="history.back()">Go Back to Last Page</button>
+                <a href="https://www.rfc-editor.org/rfc/rfc2324#section-2.3.2" target="_blank" rel="noopener noreferrer"
+                    class="btn bg-secondary text-white">
+                    Read RFC 2324 <span class="visually-hidden">(opens in a new tab)</span> <span class="material-symbols-outlined icon-middle" aria-hidden="true">open_in_new</span>
+                </a>
+            </div>
+        </div>
+    </div>
+    <script>document.querySelectorAll('.material-symbols-outlined').forEach((icon) => icon.setAttribute('aria-hidden', 'true'));</script>
+    </main>
+</body>
+
+</html>

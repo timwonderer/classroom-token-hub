@@ -20,12 +20,6 @@
             color: var(--info);
         }
 
-        .troubleshooting ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
         .troubleshooting li {
             color: var(--text-secondary);
         }
@@ -45,7 +39,7 @@
     <main id="main-content" aria-labelledby="error-heading">
     <div class="error-container">
         <div class="error-header">
-            <span class="material-symbols-outlined icon-2xl icon-middle mb-2" aria-hidden="true">unknown_document</span>
+            <a href="{{ url_for('main.teapot') }}" class="text-reset text-decoration-none" aria-label="Something is brewing"><span class="material-symbols-outlined icon-2xl icon-middle mb-2" aria-hidden="true">unknown_document</span></a>
             <h1 id="error-heading">404</h1>
             <p>Page Not Found</p>
         </div>
@@ -59,11 +53,11 @@
             <div class="troubleshooting">
                 <h5>What can you do?</h5>
                 <ul>
-                    <li>• Check the URL for typos or mistakes</li>
-                    <li>• Use the navigation menu to find what you're looking for</li>
-                    <li>• Go back to the previous page and try a different link</li>
-                    <li>• Return to the home page and start fresh</li>
-                    <li>• If you think this is a mistake, file a support ticket in your account</li>
+                    <li>Check the URL for typos or mistakes</li>
+                    <li>Use the navigation menu to find what you're looking for</li>
+                    <li>Go back to the previous page and try a different link</li>
+                    <li>Return to the home page and start fresh</li>
+                    <li>If you think this is a mistake, file a support ticket in your account</li>
                 </ul>
             </div>
 

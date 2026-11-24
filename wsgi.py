@@ -323,6 +323,16 @@ def not_found_error(error):
     ), 404
 
 
+@app.errorhandler(418)
+def im_a_teapot(error):
+    """
+    Handle 418 I'm a teapot (RFC 2324 §2.3.2), raised only by the main.teapot
+    easter egg. Deliberately not logged to the database: it is not a fault.
+    """
+    # Werkzeug would send the reason phrase uppercased; RFC 2324 spells it this way.
+    return render_template('error_418.html'), "418 I'm a teapot"
+
+
 @app.errorhandler(403)
 def forbidden_error(error):
     """
