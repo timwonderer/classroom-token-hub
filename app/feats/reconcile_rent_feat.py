@@ -49,6 +49,7 @@ from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.class_configuration_query_service import (
     get_class_feature_history, get_rent_settings, is_feature_enabled,
 )
+from app.services.ledger_recovery_service import lock_ledger_seats
 from app.feats.base import requires_feat_context, FEATContext
 # Obligations DOMAIN commands (plain functions), invoked within THIS FEAT's single
 # context — never the execute_* FEAT wrappers (INV-ARC-000 / -021 / -006).
@@ -360,6 +361,20 @@ def reconcile_rent(
     class_id = request.class_id
     if not class_id:
         raise ValueError("reconcile_rent requires class_id")
+
+    # Multi-seat balance-dependent command (DOM-LED-001 §VII, the ascending-lock
+    # paragraph following INV-LED-017): acquire every affected seat anchor, in
+    # ascending seat-ID order, before any class-scoped work. Every assessment,
+    # late-fee, and perk-grant insert below (assess_obligation's
+    # ObligationAssessment row, in particular) carries a foreign key to both a
+    # seat and this class, so Postgres takes an implicit FOR KEY SHARE lock on
+    # each referenced row the instant it is inserted. Without locking the whole
+    # roster up front, the FIRST such insert pins a KEY SHARE on this class
+    # well before every seat in the roster has been touched — the inverse of
+    # ledger settlement's seat-then-class order (INV-LED-015), and the
+    # production deadlock FEAT-LED-003 (the ledger settlement sweep) exists to
+    # close against (#1640).
+    lock_ledger_seats(class_id, [seat.id for seat in _rent_roster(class_id)])
 
     # A supplied reference_time_utc is validated (aware) and normalized to UTC;
     # without one, the resolver's clock supplies "now".
