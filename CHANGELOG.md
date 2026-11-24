@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- <!-- notes: internal -->
+
+  **Credential lifecycle governing contracts define routine authenticator maintenance.** Coordinated INV, DOM, FEAT and SPEC amendments establish principal-scoped authority, atomic TOTP replacement, recoverable selected-passkey replacement, shared pure assertion validation, session invalidation, provider reconciliation and bounded external cleanup during local destruction. This is documentation only; application implementation and provider integration readiness remain separate review gates.
+
 ### Fixed
 
 - <!-- notes: fixed -->

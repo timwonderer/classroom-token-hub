@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.63 | 2026-11-23 | 3.62 | Normative |
+| SOP-DOC-001 | 3.64 | 2026-11-23 | 3.63 | Normative |
 
 ---
 
@@ -109,12 +109,13 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-IDEN-007 — Teacher Account Destruction](../FEATURE-EXECUTION/FEAT-IDEN-007_TEACHER_ACCOUNT_DESTRUCTION.md)
 - [FEAT-IDEN-008 — Operator Sysadmin Bootstrap](../FEATURE-EXECUTION/FEAT-IDEN-008_OPERATOR_SYSADMIN_BOOTSTRAP.md)
 - [FEAT-IDEN-101 — Teacher TOTP Setup](../FEATURE-EXECUTION/FEAT-IDEN-101_TEACHER_TOTP_SETUP.md)
-- [FEAT-IDEN-102 — Teacher Passkey Enrollment](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
+- [FEAT-IDEN-102 — Teacher Passkey Enrollment and Selected Replacement](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
 - [FEAT-IDEN-103 — Teacher Recovery Proof and Random Recipient Selection](../FEATURE-EXECUTION/FEAT-IDEN-103_TEACHER_RECOVERY_INITIATION.md)
 - [FEAT-IDEN-104 — Student Recovery Code Issuance](../FEATURE-EXECUTION/FEAT-IDEN-104_STUDENT_RECOVERY_CODE_GENERATION_FOR_TEACHER.md)
 - [FEAT-IDEN-105 — Private Class Confirmation and Aggregate Validation](../FEATURE-EXECUTION/FEAT-IDEN-105_TEACHER_RECOVERY_CODE_VALIDATION.md)
 - [FEAT-IDEN-106 — Teacher Update TOTP Secret](../FEATURE-EXECUTION/FEAT-IDEN-106_TEACHER_UPDATE_TOTP_SECRET.md)
 - [FEAT-IDEN-107 — Teacher Revoke Passkey](../FEATURE-EXECUTION/FEAT-IDEN-107_TEACHER_REVOKE_PASSKEY.md)
+- [FEAT-IDEN-108 — Credential Reconciliation](../FEATURE-EXECUTION/FEAT-IDEN-108_CREDENTIAL_RECONCILIATION.md)
 - [FEAT-LED-000 — Canonical Monetary Resolution Workflow](../FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md)
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
@@ -144,6 +145,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) — v2.6: the Hugo developer-docs site is a brand surface subordinate to the token layers it loads.
 - [SPEC-DISPLAY-001 — Display Metadata Resolver](../SPEC/SPEC-DISPLAY-001_DISPLAY_IDENTITY_METADATA_RESOLVER.md)
 - [SPEC-IDEN-001 — Username Retention Verification](../SPEC/SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION.md) — incorporated by FEAT-IDEN-002; memory-only setup staging, retrieval verification and page-bound proof.
+- [SPEC-IDEN-002 — Credential Lifecycle Protocol](../SPEC/SPEC-IDEN-002_CREDENTIAL_LIFECYCLE_PROTOCOL.md) — incorporated by DOM-IDEN-003 and INV-ARC-019; lifecycle state, reconciliation, destruction budgets and validation.
 - [SPEC-ECON-001 — Savings Interest Accrual and Disbursement Specification](../SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
 - [SPEC-ECON-002 — Economic Policy Visibility and Disclosure](../SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md)
 - [SPEC-ECON-003 — Economic Engine Calculation and Reference Specification](../SPEC/SPEC-ECON-003_ECONOMIC_ENGINE_CALCULATION_AND_REFERENCE_SPECIFICATION.md)
@@ -282,6 +284,14 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.64 (2026-11-23):**
+
+- Register FEAT-IDEN-108 v1.0 and SPEC-IDEN-002 v1.0 for unified credential reconciliation and lifecycle protocol.
+- Coordinate INV-ARC-001/002/003 v1.2, INV-ARC-008 v1.4, INV-ARC-018 v1.7 and INV-ARC-019 v1.8: explicit principal/system scopes, local authentication authority, activation and minimal retention.
+- Register DOM-IDEN-003 v2.12, DOM-IDEN-005/006 v2.4/v1.4, DOM-OPS-001/002 v2.16/v1.13 and FEAT-CORE-000 v1.3 for credential-generation, session, reconciliation and non-identifying outcome contracts.
+- Register FEAT-IDEN-007 v1.1, FEAT-IDEN-101 v1.4, FEAT-IDEN-102 v1.1, FEAT-IDEN-105 v1.4, FEAT-IDEN-106 v1.2 and FEAT-IDEN-107 v1.3; distinguish atomic TOTP replacement from recoverable passkey replacement.
+- Register SPEC-SEC-001 v1.7 and SPEC-OPS-004 v1.6; shared teacher/sysadmin validation is side-effect free. These amendments specify target behavior, not application implementation or deployment.
 
 **Version 3.63 (2026-11-23):**
 - Register owner-approved SPEC-OPS-002 v1.7 and SPEC-OPS-006 v1.7: 30-day overall error observations replace 90-day reliability history, with non-overlapping totals and explicit coverage.

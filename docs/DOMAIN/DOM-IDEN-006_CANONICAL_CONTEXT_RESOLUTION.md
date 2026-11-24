@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-006 | 1.3     | 2026-07-10 | 1.2 | Constitutional |
+| DOM-IDEN-006 | 1.4 | 2026-11-23 | 1.3 | Constitutional |
 
 ## I. Purpose
 This document defines the **Canonical Context Resolution** within Classroom Token Hub. It governs how the system determines the active class context for a given user, ensuring that all actions are performed within the correct classroom boundaries. It also defines how missing or malformed context is handled.
@@ -44,6 +44,19 @@ A valid `canonicalContext` object MUST contain:
 
 No downstream code may reconstruct, infer, mutate, or re-resolve `canonicalContext`.
 
+### Principal-scoped boundary
+
+For authentication and credential maintenance, the authenticated request boundary
+constructs principal context once from the canonical principal and current session
+or purpose-bound proof (INV-ARC-001/019). It contains no fabricated class or Seat.
+This is a distinct context, not an alternate constructor or partially populated
+`canonicalContext`. Downstream Identity commands receive it explicitly and recheck
+current generation, role and applicable session binding before mutation.
+A teacher with no active class selection can maintain credentials; this confers no
+classroom authority and does not legalize a principal without its required Seats.
+System reconciliation uses the explicit FEAT-IDEN-108 context, not a login session.
+The algorithm below and its class-selection redirects apply to class-scoped requests.
+
 ## VIII. Resolution Algorithm
 
 The backend SHALL construct `canonicalContext` using the following algorithm and no other algorithm.
@@ -74,7 +87,7 @@ The resolver SHALL NOT use `join_code` as runtime authority. `join_code` may onl
 
 The system SHALL:
 
-- construct `canonicalContext` exactly once per authenticated request;
+- construct `canonicalContext` exactly once per authenticated class-scoped request;
 - construct `canonicalContext` only through the canonical context resolver;
 - fail closed when class, seat, user, or role validation fails;
 - treat missing active class context as a class-selection requirement, not as authorization to guess or infer context;
@@ -141,7 +154,7 @@ This document governs runtime context resolution only.
 
 It does not govern roster provisioning, account claim, credential setup, account recovery, identity display, or class binding lifecycle. Those workflows are governed by the Identity domain documents.
 
-Identity lifecycle documents may define how `last_active_class_id` and `last_active_seat_id` are initialized or updated. However, once an authenticated request begins, this document is the sole authority for resolving and validating runtime class context.
+Identity lifecycle documents may define how `last_active_class_id` and `last_active_seat_id` are initialized or updated. For an authenticated class-scoped request, this document is the sole authority for resolving and validating runtime class context.
 
 ## XIV. Amendment
 
@@ -152,3 +165,5 @@ Revisions to this document must:
 3. Maintain consistency with `INV-CORE-000` and `INV-CORE-001`.
 4. Maintain consistency with `INV-ARC-008` for identity resolution and seat scope.
 5. Preserve the rule that `canonicalContext` is resolved exactly once at the authenticated request boundary and consumed downstream without re-resolution.
+
+**2026-11-23 amendment:** Records the owner-approved credential lifecycle scope, activation, reconciliation and retention boundaries. Class isolation and foundational lifecycle requirements remain unchanged.

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-019 | 1.7 | 2026-10-25 | 1.6 | Constitutional |
+| INV-ARC-019 | 1.8 | 2026-11-23 | 1.7 | Constitutional |
 
 ---
 
@@ -87,7 +87,8 @@ Outside `users`, persisted references to `users.id` are restricted to:
 - `seats.user_id`: optional authenticated-principal binding to a class actor;
 - `classes.teacher_user_id`: teacher principal ownership of a class;
 - `passkey_credentials.user_id`: authentication credential ownership;
-- `recovery_requests.user_id`: authentication recovery ownership.
+- `recovery_requests.user_id`: authentication recovery ownership;
+- `credential_operations.user_id`: current credential-operation ownership, removed with the principal; not an archive or post-destruction tombstone.
 
 No classroom record, author field, reviewer field, economic effect, or command
 fingerprint may store an authentication principal reference. Classroom attribution
@@ -103,6 +104,55 @@ explicitly detaches or destroys that seat; no User-to-Seat delete cascade is per
 Deleting an orphaned principal must neither delete nor
 rewrite surviving seat-owned facts. No compatibility principal columns or aliases
 may remain in the shipping schema.
+
+### Credential authority, activation and reconciliation
+
+CTH is the authoritative registry of credential ownership and authentication
+authority. External authentication providers establish cryptographic validity but
+do not independently confer authentication authority within CTH. Provider inventory
+SHALL NOT reconstruct, import, activate or otherwise establish local authority.
+
+A credential undergoing enrollment or replacement SHALL NOT confer authentication
+authority until its activation has been successfully committed. Credential-management
+authorization SHALL NOT confer authority beyond its explicitly authorized operation.
+
+Every externally verified assertion, including teacher/sysadmin sign-in, step-up,
+and TOTP replacement, requires side-effect-free local validation of the existing
+principal, exact credential ID, ownership, committed activation, intended purpose,
+validity and current credential generation. Missing, pending, revoked, superseded
+or mismatched credentials fail closed independently of reconciliation availability.
+Challenge consumption, session establishment, audit emission and usage bookkeeping
+are subsequent explicit commands, not side effects of validation.
+
+Identity owns a monotonic credential generation and minimal current operation state.
+Successful activation, replacement or removal atomically advances generation,
+invalidates existing sessions/challenges/management authorizations, and records the
+applicable audit outcome. Repeated completion or reconciliation cannot repeat that
+advance or invalidate a subsequently established session. Initial provisioning has
+no preceding principal session to revoke; its post-provisioning session follows the
+signup contract. Subsequent initial passkey activation invalidates that session.
+
+Reconciliation compares current provider inventory with lawful local state, protects
+pending operations, and retires orphaned remote credentials through explicit commands.
+It never creates local authentication authority. Operation-triggered reconciliation
+and scheduled provider-wide reconciliation share one Identity implementation, under
+separate narrowly scoped execution contexts. System reconciliation grants no classroom
+authority. No historical principal references may survive destruction for orphan discovery.
+
+Ordinary passkey replacement/removal retires known remote credentials before removing
+local bindings. Account destruction attempts remote retirement and empty-set
+reconciliation first, but provider failure after bounded attempts SHALL NOT prevent
+lawful local destruction. Later residue is discovered from current provider inventory;
+no tombstone, ownership archive, or indefinite principal retention is authorized.
+Local authorization, database and mandatory audit failure do not qualify for this
+provider exception. Completion distinguishes local destruction from verified external
+cleanup. Reconciliation is point-in-time evidence, not a guarantee against later
+external registration. INV-ARC-012 hard-deletion requirements remain unchanged.
+
+DOM-IDEN-003 §VII.A owns lifecycle policy; it incorporates SPEC-IDEN-002 for protocol,
+state minimization and operational bounds. Credential secrecy is distinct from PII;
+SPEC-SEC-001 governs secret/verifier representation. DOM-OPS-002 §2.5 governs the
+non-identifying outcome envelope, which is not a historical ownership registry.
 
 ### Incorporation of SPEC-SEC-001
 
@@ -359,3 +409,5 @@ removes this state. SPEC-CLASS-001 is incorporated for artifact and execution bi
 ## XVI. Amendment
 
 Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards and core invariants.
+
+**2026-11-23 amendment:** Records the owner-approved credential lifecycle scope, activation, reconciliation and retention boundaries. Class isolation and foundational lifecycle requirements remain unchanged.

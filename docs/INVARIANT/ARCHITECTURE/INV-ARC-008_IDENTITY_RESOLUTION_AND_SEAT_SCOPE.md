@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-008      | 1.3     | 2026-10-14     | 1.2        | Constitutional   |
+| INV-ARC-008 | 1.4 | 2026-11-23 | 1.3 | Constitutional |
 
 > [!IMPORTANT]
 > **v1.3 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
@@ -32,16 +32,17 @@ Constitutional within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `
 
 ## V. Core Rule
 
-Identity resolution MUST stop at one authenticated, active class context.
-
-Requests and participant URLs MUST resolve to exactly one `seat_id` within exactly one
-active `class_id`, or fail closed.
+Class-scoped identity resolution MUST stop at one authenticated, active class context.
+Class-scoped requests and participant URLs MUST resolve to exactly one `seat_id`
+within exactly one active `class_id`, or fail closed. Principal-scoped authentication
+and credential maintenance stop at the principal context defined by INV-ARC-001/019;
+they must not resolve a Seat or Class as a prerequisite or infer classroom authority.
 
 ## VI. Execution Constraints
 
 - **Authentication Resolution Pipeline**: The only authorized identity resolution chain
-  during authentication is `users.id` -> active class context -> `seats.id` ->
-  `identity_profile`.
+  for class-scoped participation after authentication is `users.id` -> active class context -> `seats.id` ->
+  `identity_profile`. Authentication alone establishes only the principal.
 - **Domain Execution Boundary**: Domain code MUST NOT reconstruct or infer `seat_id` or
   `class_id`. Those anchors must be supplied by the routing and authentication layer.
 - **Student ID Quarantine**: Legacy `student_id` is transitional and load-bearing for
@@ -73,7 +74,7 @@ path; neither may supply or recover `seat_id` or `class_id` for a new request.
 ## VIII. Downstream Consequence
 
 `DOM-IDEN` owns the truth of users, seats, and class bindings, while request handlers
-and auth helpers must enforce this invariant before any domain interaction occurs.
+and auth helpers must enforce the declared scope before domain interaction occurs.
 
 Teacher-facing participant navigation, class restoration, and claim-adjacent flows must
 all fail closed on scope mismatch.
@@ -87,3 +88,5 @@ Version 1.2 (2026-10-06) removes the "explicitly approved bridge code" allowance
 states the owner's compatibility ruling recorded in `SOP-DB-004` §VII–VIII. Supersedes only that
 allowance. Fail-closed active-class resolution and the prohibition on alias-based participant
 lookup are unchanged.
+
+**2026-11-23 amendment:** Records the owner-approved credential lifecycle scope, activation, reconciliation and retention boundaries. Class isolation and foundational lifecycle requirements remain unchanged.

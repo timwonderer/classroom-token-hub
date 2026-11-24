@@ -1,384 +1,91 @@
 # FEAT-IDEN-106: Teacher Update TOTP Secret
-**[NEW - Compliant with DOM-IDEN Authority]**
 
-| Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-106 | 1.1 | 2026-09-15 | 1.0 | Normative | NEW |
-
----
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|---|---|---|---|---|
+| FEAT-IDEN-106 | 1.2 | 2026-11-23 | 1.1 | Normative |
 
 ## I. Purpose
 
-This FEAT allows a teacher to change their TOTP (Time-based One-Time Password) secret. This is needed in two scenarios:
-
-1. **Account Recovery**: After successful student-verified recovery (FEAT-IDEN-105), teacher must reset TOTP.
-2. **Credential Rotation**: Teacher proactively changes TOTP for security (e.g., lost authenticator device).
-
-Per DOM-IDEN-003 §III.B:
-> "Teachers can update their TOTP secret at any time. The old secret is invalidated immediately upon update."
-
-This FEAT generates a new TOTP secret, encrypts and stores it, and optionally generates new backup codes.
-
-**Governing Authority:**
-- DOM-IDEN-003 §III.B (Teacher Authentication - TOTP Update)
-- DOM-IDEN-005 §VIII (Identity Binding)
-- FEAT-CORE-000 (Feature Execution Constitutional Directive)
-
----
-
-## Recovery versus authenticated rotation
-
-For recovery, the dedicated recovery completion contract at the end of this document
-specifies the full input, authorization, credential and completion behavior. The
-Seat-context, current-enrollment, backup-code and optional confirmation-checkbox
-steps below describe authenticated rotation only; they do not add recovery gates.
-Recovery requires verification of the newly enrolled TOTP before replacing credentials.
-
-## II. Execution Context
-
-### 1. Required Inputs
-
-* `user_id`: The teacher `User` updating TOTP (from session, authenticated).
-* `seat_id`: The admin `Seat` in the target class (from context).
-* `class_id`: The class context (from session or context).
-* `recovery_context_id`: Optional recovery request ID if this is part of account recovery (FEAT-IDEN-105).
-* `idempotency_key`: Client-provided unique request ID for retry safety.
-
-### 2. Resolved Context (MANDATORY)
-
-Before mutation, the FEAT MUST resolve:
-* The `User` record matching `user_id` in the `users` table.
-* The `Seat` record matching `seat_id` in the `seats` table.
-* Verify that `User.id == Seat.user_id` (seat is bound to this user).
-* Verify that `Seat.role = 'teacher'` (seat is a teacher seat).
-* Verify that `Seat.class_id == class_id` (seat is in the correct class).
-
----
-
-## III. Orchestration Logic
-
-### A. Verification Phase (Read-Only)
-
-#### Step 1: Validate Teacher User State
-1. Query `User` record where `id = user_id`.
-2. Verify that `user_role = 'teacher'`.
-3. **Failure Behavior**: Abort with `INVALID_USER_ROLE` if user is not a teacher.
-
-#### Step 2: Validate Seat State
-1. Query `Seat` record where `id = seat_id`.
-2. Verify that `user_id = user_id` (seat is bound to the target user).
-3. Verify that `role = 'teacher'` (seat is a teacher seat).
-4. **Failure Behavior**: Abort with `INVALID_SEAT_STATE` if seat is not a teacher seat.
-
-#### Step 3: Verify Recovery Context (If Provided)
-1. If `recovery_context_id` is provided:
-   - Query `recovery_requests` where `id = recovery_context_id`.
-   - Verify that `user_id = user_id` (recovery is for this teacher).
-   - Require pending status and the live server-stored setup nonce verifier from FEAT-IDEN-105.
-   - Require `completed_at IS NULL`; completed recovery cannot authorize another reset.
-   - Require the original five-day `expires_at` deadline; no additional post-completion recovery window exists.
-2. **Failure Behavior**: Abort with `RECOVERY_CONTEXT_INVALID` if recovery context is invalid or the original recovery deadline has elapsed.
-
-**Note:** If no recovery context, this is a proactive TOTP rotation (not part of recovery).
-
-#### Step 4: Check Current TOTP
-1. Query `User.totp_secret_encrypted`.
-2. Verify that TOTP is already enrolled (not NULL).
-3. **Failure Behavior**: Abort with `TOTP_NOT_ENROLLED` if no TOTP exists (use FEAT-IDEN-101 for initial setup).
-
----
-
-### B. Mutation Phase (Atomic Transaction)
-
-All mutations in this section **MUST** occur within a single database transaction.
-
-#### Step 1: Generate New TOTP Secret
-
-Perform secret generation outside the transaction:
-1. `new_secret = pyotp.random_base32()` (generates 32-character base32-encoded secret).
-2. `encrypted_secret = NORMALIZE_TOTP_FOR_STORAGE(new_secret)` (applies AES-128 encryption with `ENCRYPTION_KEY`).
-
-**Note:** The unencrypted new secret is displayed to the teacher ONLY ONCE. It is NOT stored in plaintext.
-
-#### Step 2: Replace TOTP on User
-
-Update the `User` record:
-1. Set `totp_secret_encrypted = encrypted_secret` (store encrypted new TOTP seed, overwriting old secret).
-
-Per DOM-IDEN-003 §III.B:
-> "Updating the TOTP secret invalidates the previous secret immediately."
-
-**Important:** The old secret is overwritten, not preserved. There is no rollback to old credentials after update.
-
-#### Step 3: Generate and Persist New Backup Codes
-
-Generate and persist fresh one-time backup codes (replaces old codes):
-1. Create 10 new backup codes (alphanumeric, format: XXXX-XXXX-XXXX-XXXX).
-2. Hash each backup code with `HASH_PASSWORD()` (canonical credential primitive from SPEC-SEC-001).
-3. Persist hashes to `User.backup_codes_encrypted` (encrypted JSON array of hashed codes, replacing old codes).
-4. For display, keep plaintext codes in memory (display once, then discard from memory).
-
-**Backup Code Lifecycle During Update:**
-- All old backup codes are immediately invalidated and replaced
-- New codes are stored as canonical one-way password verifiers
-- Each code can be used once; usage is tracked by `used_at` timestamp
-- After use, code cannot be reused
-- If teacher loses both new secret AND all backup codes, they must initiate recovery again
-
-**Note:** Old backup codes are invalidated immediately and cannot be recovered. New codes must be secured by the teacher.
-
-#### Step 4: Clear Recovery Context (If Applicable)
-
-If `recovery_context_id` was provided:
-1. Atomically set status `verified`, completed_at, and clear all setup and saved-progress material with credential replacement and passkey revocation.
-2. Clear the recovery session and require fresh login; a completed request cannot authorize another reset.
-
-#### Step 5: Audit Trace
-
-Per FEAT-CORE-000 §III.4:
-
-1. Call `DOM-OPS` to emit an `ACT-IDEN-106` audit event.
-2. **Required fields**:
-   - `feat_id`: "FEAT-IDEN-106"
-   - `user_id`: The teacher `user_id`
-   - `seat_id`: The admin `seat_id`
-   - `class_id`: The classroom context
-   - `recovery_context_id`: If part of recovery, the recovery request ID (optional)
-   - `idempotency_key`: The provided key
-   - `outcome`: `"TOTP_UPDATED"` (only possible outcome)
-   - `timestamp`: ISO 8601 UTC timestamp
-
-**Note:** DO NOT log the old or new unencrypted secrets or backup codes.
-
----
-
-## IV. Invariants & Constraints
-
-### 1. Old Secret Invalidated (MANDATORY)
-Per DOM-IDEN-003 §III.B:
-> "Updating TOTP immediately invalidates the old secret. There is no grace period or rollback."
-
-Once the new secret is stored, the old secret cannot be used to generate valid TOTP codes.
-
-### 2. TOTP Must Already Be Enrolled (MANDATORY)
-This FEAT only updates existing TOTP. For initial enrollment, use FEAT-IDEN-101.
-
-### 3. One-Time Display (MANDATORY)
-The unencrypted new secret is displayed to the teacher ONLY ONCE during update. After display, it is never revealed again.
-
-### 4. Atomic Transaction (MANDATORY)
-All mutations SHALL occur in a single transaction. If any step fails, complete rollback occurs and old secret remains valid.
-
-### 5. New Backup Codes (MANDATORY)
-When updating TOTP, new backup codes must be generated. Old backup codes become invalid.
-
-### 6. Recovery Context Optional (MANDATORY)
-TOTP update can occur:
-- As part of account recovery (with `recovery_context_id`), OR
-- As proactive credential rotation (without recovery context).
-
-Both scenarios use the same FEAT logic.
-
-### 7. One-Time Backup Code Usage (MANDATORY)
-Backup codes are replaced entirely during TOTP update. Old codes are invalidated. Each new code can be used exactly once during future recovery. Validation SHALL:
-- Retrieve stored hash from updated `User.backup_codes_encrypted`
-- Verify plaintext code against hash using `verify_password()`
-- Check that `used_at IS NULL` (code has not been used)
-- On successful validation, set `used_at = NOW()` to mark as consumed
-- Codes cannot be reused after `used_at` is set
-
----
-
-## V. Idempotency
-
-**Mechanism:** The combination of `idempotency_key` and `user_id` acts as the idempotency lock.
-
-**Behavior:**
-- If a retry occurs with the same `idempotency_key`:
-  - Check if `recovery_requests.status = 'verified'` (recovery already complete) OR the secret has been updated recently.
-  - If true, return success with outcome `ALREADY_UPDATED` (no duplicate state).
-  - If false, re-attempt the full mutation.
-- Replayed requests with the same `idempotency_key` **SHALL NOT** create duplicate TOTP resets or backup code generations.
-
-**Client Responsibility:**
-- Generate a stable `idempotency_key` (e.g., based on session).
-- Retry on transient errors with the same key.
-- Server stores key on audit log to detect and skip replays.
-
-**Important:** Once a TOTP secret is updated, there is no "previous" secret to restore. Idempotency means returning success on retry with the same key, not rolling back to an old secret.
-
----
-
-## VI. Failure Scenarios
-
-When the FEAT fails, the system SHALL:
-
-1. **Rollback all mutations** atomically.
-2. **Emit audit event** with outcome `FAILED` and error code.
-3. **Return error response** to client.
-4. **Keep old TOTP secret intact** (no partial updates).
-
-**Failure Cases:**
-
-| Scenario | Error Code | HTTP Status | Message |
-|----------|-----------|-------------|---------|
-| User not a teacher | `INVALID_USER_ROLE` | 403 | "Only teachers can update TOTP." |
-| Invalid seat | `INVALID_SEAT_STATE` | 409 | "Invalid seat. Please start over." |
-| TOTP not enrolled | `TOTP_NOT_ENROLLED` | 409 | "TOTP is not yet enrolled. Use setup to enable TOTP first." |
-| Recovery context invalid | `RECOVERY_CONTEXT_INVALID` | 409 | "Recovery context is invalid. Please start a new recovery." |
-| Encryption error | `ENCRYPTION_FAILED` | 500 | "Failed to encrypt new TOTP secret. Please try again." |
-| Database error | `INTERNAL_ERROR` | 500 | "An error occurred during update. Please try again." |
-
----
-
-## VII. Audit Requirements
-
-The `DOM-OPS` audit log **MUST** contain:
-
-| Field | Type | Required | Rationale |
-|-------|------|----------|-----------|
-| `feat_id` | String | ✓ | Identifies the FEAT (always "FEAT-IDEN-106") |
-| `user_id` | Integer | ✓ | The teacher user |
-| `seat_id` | Integer | ✓ | The admin seat |
-| `class_id` | UUID | ✓ | The classroom context |
-| `recovery_context_id` | Integer | ⚠️ | Recovery request ID if part of recovery, else NULL |
-| `idempotency_key` | String | ✓ | Replay detection |
-| `outcome` | Enum | ✓ | Must be: `TOTP_UPDATED` or `ALREADY_UPDATED` |
-| `timestamp` | ISO 8601 | ✓ | UTC timestamp of update |
-| `old_secret` | String | ✗ | DO NOT log (security) |
-| `new_secret` | String | ✗ | DO NOT log (security) |
-| `backup_codes` | Array | ✗ | DO NOT log (security) |
-| `error_code` | String | ⚠️ | Only if outcome is `FAILED` |
-
-**Outcomes:**
-- `TOTP_UPDATED`: Successful TOTP secret update.
-- `ALREADY_UPDATED`: Idempotent return; TOTP already updated in a previous request.
-
----
-
-## VIII. Display Requirements
-
-After successful TOTP update, the route handler SHALL display to the teacher:
-
-1. **Confirmation**: "TOTP secret updated successfully!"
-2. **New QR Code**: Scannable image for the new secret.
-   - Generated from `new_secret` using `qrcode.QRCode()`.
-   - Encodes: `otpauth://totp/classroom-economy:{user_id}@{class_id}?secret={new_secret}&issuer=ClassroomEconomy`.
-
-3. **Text Representation**: Raw base32 new secret for manual entry.
-   - Format: `{new_secret}` (32-character string).
-   - Display once, then hide.
-
-4. **New Backup Codes**: 10 single-use recovery codes.
-   - Format: XXXX-XXXX-XXXX-XXXX.
-   - Display once, then hide.
-   - Instruct teacher to store securely (replacing old codes).
-
-5. **Setup Confirmation**: Button to confirm teacher has saved new codes.
-   - Clicking confirms teacher has secured the new secret and backup codes.
-   - Cannot proceed without confirmation (if part of recovery).
-
-6. **If Recovery Context**: "Your account access has been restored. Your TOTP is now updated."
-
----
-
-## IX. Integration with FEAT-IDEN-105 (Recovery)
-
-**TOTP update completes the account recovery flow:**
-
-```
-FEAT-IDEN-103: Teacher Initiates Recovery
-└─ Creates recovery_request
-
-FEAT-IDEN-104: Students Generate Recovery Codes
-└─ Populates selected code rows created by FEAT-IDEN-103
-
-FEAT-IDEN-105: Teacher Validates Recovery Codes
-└─ Verifies all-or-nothing, authorizes one server-bound setup session
-
-FEAT-IDEN-106: Update TOTP Secret (THIS FEAT)
-├─ Teacher resets TOTP with new secret
-└─ Completes recovery (marks status: verified)
-```
-
-After FEAT-IDEN-106 completes with recovery context, the teacher has full account access restored.
-
----
-
-## X. Security Considerations
-
-### Old Secret Invalidation
-The moment the new secret is stored, the old secret becomes invalid. There is NO grace period. If the teacher needs to revert, they must restart account recovery.
-
-### Backup Code Replacement
-Old backup codes are invalidated. The teacher MUST save the new backup codes. If they lose both the new secret AND all backup codes, they must initiate account recovery again.
-
-### Rate Limiting (Recommended)
-To prevent brute-force TOTP changes, rate-limit TOTP updates:
-- Max 5 updates per day per user (or similar threshold).
-- Log all updates for anomaly detection.
-
----
-
-## XI. Dependencies
-
-- `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
-- `docs/FEATURE-EXECUTION/FEAT-IDEN-101_TEACHER_TOTP_SETUP.md`
-- `docs/FEATURE-EXECUTION/FEAT-IDEN-105_TEACHER_RECOVERY_CODE_VALIDATION.md`
-- `docs/DOMAIN/DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md`
-- `docs/DOMAIN/DOM-IDEN-005_IDENTITY_BINDING_AND_LIFECYCLE.md`
-
----
-
-## XII. Implementation Checklist
-
-Before code review, verify:
-
-- [ ] User role validation ensures only teachers can update
-- [ ] Current TOTP verification (TOTP already enrolled)
-- [ ] New secret generation with `pyotp.random_base32()`
-- [ ] New secret encrypted with `NORMALIZE_TOTP_FOR_STORAGE()`
-- [ ] Old secret completely replaced (no fallback)
-- [ ] Seat binding is verified before update
-- [ ] Recovery context validation (if provided)
-- [ ] QR code generated correctly for new secret
-- [ ] New backup codes generated and hashed
-- [ ] Old backup codes invalidated (implicitly, by not storing separately)
-- [ ] All mutations occur in a single transaction
-- [ ] RecoveryRequest marked as completed (if recovery context)
-- [ ] Audit event emitted with all required fields
-- [ ] Rollback occurs on any failure
-- [ ] Secrets and backup codes are NOT logged
-- [ ] Idempotency check prevents duplicate updates
-- [ ] Tests cover successful update and idempotent retry
-- [ ] Tests cover recovery context scenario
-- [ ] Tests cover proactive rotation scenario (no recovery context)
-
----
-
-## XIII. Amendments
-
-Revisions to this document SHALL:
-
-1. Increment the version.
-2. Update the effective date.
-3. Maintain consistency with DOM-IDEN-003 §III.B.
-4. Maintain consistency with FEAT-CORE-000.
-5. Maintain consistency with FEAT-IDEN-101 (initial TOTP setup).
-
-**This is version 1.0 of FEAT-IDEN-106 (new specification, 2026-08-09).**
-
-
-## Recovery completion contract
-
-For recovery, resolve the principal exclusively from the request. Class/Seat input
-requirements above apply to authenticated rotation only. Lock the teacher and
-request, verify pending/unexpired state, complete current class-confirmation coverage and
-constant-time comparison with the server nonce verifier. Read the encrypted pending
-seed and username from the server; verify the new authenticator code before any
-credential change. Atomically update username fields through the canonical builder,
-replace the TOTP seed, delete all user-owned passkeys, rotate the login-session nonce,
-mark verified/completed_at, and erase setup/saved material. No legacy User.salt or
-username field exists. A retry, revoked nonce, expiry or changed coverage fails closed.
-Username uniqueness conflicts roll back all credential and passkey changes.
-This recovery path does not generate backup codes or open a post-completion window.
+Atomically activate a verified replacement TOTP for routine maintenance, or complete independently authorized SATAR recovery.
+
+## II. Scope
+
+Principal-scoped teacher TOTP replacement and teacher recovery completion. These have distinct authorization paths; neither requires an active classroom.
+
+## III. Authority Level
+
+Execution-level contract subordinate to INV-CORE-000/001, INV-ARC-001/003/006/007/019,
+and DOM-IDEN-003/005. No implementation behavior overrides that authority.
+
+## IV. Dependencies
+
+- [DOM-IDEN-003 — Teacher Identity Architecture](../DOMAIN/DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md), §VII.A and §IX.
+- [DOM-IDEN-005 — Identity Binding and Lifecycle](../DOMAIN/DOM-IDEN-005_IDENTITY_BINDING_AND_LIFECYCLE.md).
+- [FEAT-CORE-000](FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md), declared execution scopes and workflows.
+- [SPEC-IDEN-002 — Credential Lifecycle Protocol](../SPEC/SPEC-IDEN-002_CREDENTIAL_LIFECYCLE_PROTOCOL.md), incorporated by DOM-IDEN-003.
+- [SPEC-SEC-001](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md).
+- [DOM-OPS-002](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md), §2.5 outcome envelope.
+
+## V. Routine TOTP replacement
+
+Require an authenticated eligible teacher with activated TOTP and a fresh, purpose-bound
+assertion from that teacher's activated passkey. Apply INV-ARC-019 local validation;
+provider proof alone is insufficient. Stage only an encrypted new secret on the current
+operation and expose QR/manual-entry material to its authorized browser.
+
+Until final verification/commit, the existing TOTP remains unchanged. Verify a submitted
+new code against the server-held pending seed, not a browser-supplied secret. In one
+local transaction, lock/recheck principal, operation, generation, session, expiry and
+passkey authority; overwrite the TOTP seed, consume authorization, erase pending secret,
+advance generation, revoke sessions/challenges/grants and emit ACT-IDEN-106.
+Failure rolls back all activation effects. Do not retain an old seed or fallback code.
+
+## VI. SATAR completion
+
+Declare the teacher-recovery identity-establishment scope of FEAT-CORE-000, including
+DOM-IDEN-005's unauthenticated establishment boundary. Resolve the target exclusively
+from the server recovery attempt; accept no class/Seat selector as credential authority.
+FEAT-IDEN-105's successful aggregate proof has already advanced generation and superseded
+routine maintenance. Verify the live setup nonce, pending status, original five-day
+expiry, current proof coverage, expected generation and the new authenticator code.
+
+After that proof, commit exact recovery completion intent and perform remote retirement
+of prior passkeys and principal reconciliation outside database transactions/row locks.
+Recovery is not the account-destruction provider-failure exception: unavailable provider
+work leaves recovery completion pending. Preserve only the material needed for recovery
+within its original deadline. Expired/superseded recovery cannot activate; remaining
+remote effects become cleanup-only under FEAT-IDEN-108.
+
+Revalidate all completion conditions in the final local transaction. Update username
+through the canonical builder, activate the new TOTP, remove superseded passkey bindings,
+advance generation, invalidate sessions/challenges/management grants, mark the recovery
+verified/completed_at, erase setup/resume material and emit the audit outcome. Username
+conflict or local failure rolls back local activation; it cannot undo prior provider
+retirement. Recovery never changes Seats, class ownership or economic records.
+
+## VII. Idempotency, audit and presentation
+
+Use operation transitions and unique receipts as specified in SPEC-IDEN-002. Replays
+cannot overwrite a newer generation or repeat session invalidation. Routine cancellation,
+expiry or incorrect new code preserves existing TOTP. SATAR and routine rotation are
+not interchangeable grants, and neither issues backup codes.
+
+Audit is the non-identifying DOM-OPS-002 §2.5 envelope. Pending seed and setup material
+never enter cookies/logs/URLs. Display the pending secret only within the live setup
+operation; after activation it is never revealed again. Require fresh sign-in after
+completion. Explain atomic local TOTP replacement separately from recovery's external
+passkey-retirement work; do not claim that provider work rolls back atomically.
+
+## VIII. Required validation
+
+Cover abort-before-verification, wrong code, local rollback, expiry, proof replay,
+old-secret invalidation, post-replacement challenge/session invalidation, stale response,
+SATAR supersession before/after retirement intent, lost provider responses, generation
+races, username uniqueness rollback, secret erasure and no-class maintenance. Preserve
+all SATAR selection, class-confirmation and independent-recovery tests.
+
+## IX. Amendment
+
+Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
+and update SOP-DOC-001 and dependent references. This 2026-11-23 revision records
+the approved lifecycle contract; it does not claim implemented or deployed behavior.

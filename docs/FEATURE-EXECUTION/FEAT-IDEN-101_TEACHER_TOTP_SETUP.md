@@ -1,322 +1,83 @@
 # FEAT-IDEN-101: Teacher TOTP Setup
-**[NEW - Compliant with DOM-IDEN Authority]**
 
-| Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-101 | 1.3 | 2026-10-14 | 1.2 | Normative | NEW |
-
-> [!IMPORTANT]
-> **v1.3 (2026-10-14), review correction.** v1.2 named the algorithm ("scrypt via werkzeug") at three places, which `SPEC-SEC-001` §V.5 forbids: "Algorithm and parameters MUST be centralized in the canonical primitive, not duplicated in FEAT documents or route code." Reworded to name only `HASH_PASSWORD()`, matching `FEAT-IDEN-106`'s phrasing. No behavior change.
->
-> **v1.2 (2026-10-14), documentation modernization.** §III.B.3 and the review checklist described backup-code hashing as "bcrypt + pepper." The canonical primitive is `HASH_PASSWORD()` (salted, NOT peppered, per `SPEC-SEC-001`); sibling `FEAT-IDEN-106` already used corrected wording. No behavior change.
-
----
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|---|---|---|---|---|
+| FEAT-IDEN-101 | 1.4 | 2026-11-23 | 1.3 | Normative |
 
 ## I. Purpose
 
-This FEAT activates TOTP (Time-based One-Time Password) two-factor authentication on a teacher `User` account during initial setup or reconfiguration. Per DOM-IDEN-003 §III.B:
-> "Teachers MUST enroll in TOTP (required 2FA) before gaining classroom access."
+Provision a teacher and activate verified initial TOTP atomically, optionally issuing one explicit signup-derived passkey enrollment authorization.
 
-This FEAT generates a TOTP secret, stores it encrypted on the `User` record, and provides QR code and backup codes for the teacher to secure.
+## II. Scope
 
-### Initial signup orchestration
+Initial teacher signup only. Existing-user TOTP replacement and SATAR completion use FEAT-IDEN-106; this FEAT cannot reconfigure a credential.
 
-Initial teacher signup is class-first at the workflow level: class metadata and
-teacher display metadata are staged, then username and TOTP are collected. No
-class, seat, or user row is durable before TOTP verification succeeds. The
-final signup transaction creates the teacher `User`, `ClassEconomy`, teacher
-`Seat`, and class-scoped `IdentityProfile` together. This FEAT's existing-user
-execution context applies to TOTP reconfiguration; it is not permission to
-attach initial signup to an existing teacher account.
+## III. Authority Level
 
-Initial staging is governed by INV-ARC-018's temporary signup inventory.
-FEAT-IDEN-101 owns encrypted server staging and final initial provisioning.
-The browser carries only a random 256-bit signup nonce; its purpose-separated
-SHA-256 verifier is the staging key. Every stage checks the server's fixed
-30-minute expiry. Username changes replace the pending seed. Invalid TOTP may
-redisplay the same pending enrollment within that deadline. Restart deletes the
-previous attempt; hourly cleanup removes expired attempts. Completion locks the
-attempt, rechecks username/TOTP against its encrypted payload, creates the User,
-Class, Seat and profile, and deletes the attempt in one transaction. Failure rolls
-back provisioning and consumption. Replay cannot create another account.
-No existing-user or backup-code behavior is introduced by this initial-signup change.
+Execution-level contract subordinate to INV-CORE-000/001, INV-ARC-001/003/006/007/019,
+and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 
-**Governing Authority:**
-- DOM-IDEN-003 §III.B (Teacher Authentication - TOTP Required)
-- DOM-IDEN-003 §IV (Teacher Recovery with Student-Verified Codes)
-- DOM-IDEN-005 §VIII (Identity Binding)
-- FEAT-CORE-000 (Feature Execution Constitutional Directive)
+## IV. Dependencies
 
----
+- [DOM-IDEN-003 — Teacher Identity Architecture](../DOMAIN/DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md), §VII.A and §IX.
+- [DOM-IDEN-005 — Identity Binding and Lifecycle](../DOMAIN/DOM-IDEN-005_IDENTITY_BINDING_AND_LIFECYCLE.md).
+- [FEAT-CORE-000](FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md), declared execution scopes and workflows.
+- [SPEC-IDEN-002 — Credential Lifecycle Protocol](../SPEC/SPEC-IDEN-002_CREDENTIAL_LIFECYCLE_PROTOCOL.md), incorporated by DOM-IDEN-003.
+- [SPEC-SEC-001](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md).
+- [DOM-OPS-002](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md), §2.5 outcome envelope.
 
-## II. Execution Context
+## V. Execution context and staging
 
-### 1. Required Inputs
+Declare the FEAT-CORE-000 identity-establishment scope. Follow DOM-IDEN-005's lawful
+provisioning sequence; do not require an existing teacher, Seat or active classroom.
+Stage class metadata and teacher display metadata first, then username and pending
+TOTP, in the encrypted server signup record authorized by INV-ARC-018. The browser
+holds only a random 256-bit capability; its purpose-separated SHA-256 verifier keys
+the record. Its fixed lifetime is 30 minutes, never extended by retries.
 
-* `user_id`: The teacher `User` being onboarded (from session or context).
-* `seat_id`: The admin `Seat` in the target class (from context).
-* `class_id`: The class context (from session or context).
-* `idempotency_key`: Client-provided unique request ID for retry safety.
+Username changes replace the pending seed. Invalid codes may redisplay the same
+pending secret within the original deadline. Restart deletes the previous attempt;
+hourly signup cleanup deletes expired rows. No plaintext staging enters cookies,
+logs, URLs, telemetry or audit. This flow issues no backup codes or recovery request.
 
-### 2. Resolved Context (MANDATORY)
+## VI. Atomic provisioning and optional enrollment
 
-Before mutation, the FEAT MUST resolve:
-* The `User` record matching `user_id` in the `users` table.
-* The `Seat` record matching `seat_id` in the `seats` table.
-* Verify that `User.id == Seat.user_id` (seat is bound to this user).
-* Verify that `Seat.role = 'teacher'` (seat is a teacher seat).
-* Verify that `Seat.class_id == class_id` (seat is in the correct class).
+Before submitting signup TOTP verification, the teacher may explicitly elect optional
+passkey enrollment. Verify the submitted code against server-held pending material.
+Lock/revalidate the signup attempt; atomically create User, initial ClassEconomy,
+administrative Seat and IdentityProfile, activate verified TOTP, initialize credential
+generation, consume staging and emit the required non-identifying outcome. Failure
+rolls back provisioning and consumption; a retry cannot provision another account.
 
----
+If explicitly elected, the same successful verification also establishes one five-minute
+initial-passkey capability bound to the new principal, generation and signup session/browser.
+It starts no general management session and cannot replace a credential. FEAT-IDEN-102
+consumes it into one enrollment operation, never renews it, and never reconstructs it
+from an authenticated session. A later request executes that FEAT; no nested FEAT call.
 
-## III. Orchestration Logic
+Establish the post-provisioning session through the normal session command. Offer
+optional passkey enrollment or skip. Skip retains that session. Optional failure does
+not undo signup. Successful passkey activation invalidates the signup session and
+requires fresh sign-in under the same rule as other credential mutations.
 
-### A. Verification Phase (Read-Only)
+## VII. Failure, display and audit
 
-#### Step 1: Validate Teacher User State
-1. Query `User` record where `id = user_id`.
-2. Verify that `user_role = 'teacher'`.
-3. **Failure Behavior**: Abort with `INVALID_USER_ROLE` if user is not a teacher.
+No identity is durable before valid TOTP verification. Display accessible QR and manual
+entry for the pending authenticator; do not require physical device separation or
+restrict synchronized credentials. Explain that passkeys are optional and SATAR is
+independent recovery. Do not reveal an activated seed again.
+Audit uses ACT-IDEN-101 and DOM-OPS-002 §2.5, without identifiers or secret material.
 
-#### Step 2: Check TOTP Enrollment Status
-1. Query `User.totp_secret_encrypted`.
-2. If already enrolled (not NULL), return `ALREADY_ENROLLED` (idempotent success).
-3. If not enrolled (NULL), proceed to generate secret.
+## VIII. Required validation
 
-#### Step 3: Validate Seat State
-1. Query `Seat` record where `Seat.id = seat_id`.
-2. Verify that `Seat.user_id = user_id` (seat is bound to the target user).
-3. Verify that `Seat.role = 'teacher'` (seat is a teacher seat).
-4. **Failure Behavior**: Abort with `INVALID_SEAT_STATE` if seat is not a teacher seat.
+Cover atomic provisioning/rollback, staging expiry/restart, wrong/new username,
+invalid TOTP, duplicate completion, secret non-retention, explicit enrollment election,
+skip/session preservation, failed optional enrollment, capability expiry/consumption,
+replay/renewal/repurposing denial and fresh sign-in after initial passkey activation.
+Preserve the existing signup security and accessibility tests.
 
----
+## IX. Amendment
 
-### B. Mutation Phase (Atomic Transaction)
-
-All mutations in this section **MUST** occur within a single database transaction.
-
-#### Step 1: Generate TOTP Secret
-
-Perform secret generation outside the transaction:
-1. `secret = pyotp.random_base32()` (generates 32-character base32-encoded secret).
-2. `encrypted_secret = NORMALIZE_TOTP_FOR_STORAGE(secret)` (applies AES-128 encryption with `ENCRYPTION_KEY`).
-
-**Note:** The unencrypted secret is displayed to the teacher ONLY during this initial setup. It is NOT stored in plaintext.
-
-#### Step 2: Activate TOTP on User
-
-Update the `User` record:
-1. Set `totp_secret_encrypted = encrypted_secret` (store encrypted TOTP seed).
-
-Per DOM-IDEN-003 §III.B:
-> "Teacher-specific fields: `totp_secret_encrypted`"
-
-#### Step 3: Generate and Persist Backup Codes
-
-Generate one-time backup codes for account recovery:
-1. Create 10 backup codes (alphanumeric, format: XXXX-XXXX-XXXX-XXXX).
-2. Hash each backup code with `HASH_PASSWORD()` (canonical credential primitive from `SPEC-SEC-001`, same as passwords — see `FEAT-IDEN-106`).
-3. Persist hashes to `User.backup_codes_encrypted` (encrypted JSON array of hashed codes).
-4. For display, keep plaintext codes in memory (display once, then discard from memory).
-
-**Backup Code Lifecycle:**
-- Codes are stored as one-way `HASH_PASSWORD()` hashes (cannot be decrypted, only verified)
-- When a code is used (e.g., during account recovery), it is validated against stored hash
-- Used codes are marked with `used_at` timestamp and cannot be reused
-- All codes are invalidated when TOTP secret is reset (FEAT-IDEN-106)
-- Old backup codes are replaced with new ones during TOTP updates
-
-**Note:** Backup codes are distinct from student-verified recovery codes (FEAT-IDEN-104). These are for manual fallback only.
-
-#### Step 4: Audit Trace
-
-Per FEAT-CORE-000 §III.4:
-
-1. Call `DOM-OPS` to emit an `ACT-IDEN-101` audit event.
-2. **Required fields**:
-   - `feat_id`: "FEAT-IDEN-101"
-   - `user_id`: The teacher `user_id`
-   - `seat_id`: The admin `seat_id`
-   - `class_id`: The classroom context
-   - `idempotency_key`: The provided key
-   - `outcome`: `"TOTP_ENROLLED"` (only possible outcome for new enrollment)
-   - `timestamp`: ISO 8601 UTC timestamp
-
-**Note:** DO NOT log the unencrypted secret or backup codes.
-
----
-
-## IV. Invariants & Constraints
-
-### 1. TOTP Required for Teachers (MANDATORY)
-Per DOM-IDEN-003 §III.B:
-> "All teacher users MUST have TOTP enrolled before they can authenticate."
-
-Once this FEAT completes, the teacher's login flow requires TOTP code verification (orchestrated by a separate authentication FEAT, T-001).
-
-### 2. Secret Encryption (MANDATORY)
-The TOTP secret SHALL be encrypted at rest using `NORMALIZE_TOTP_FOR_STORAGE()` with `ENCRYPTION_KEY` from environment.
-
-### 3. Single Enrollment (MANDATORY)
-Once enrolled, this FEAT **SHALL NOT** re-enroll (idempotent). Changing TOTP secret requires FEAT-IDEN-106 (Update TOTP Secret), which invalidates the old secret.
-
-### 4. Atomic Transaction (MANDATORY)
-All mutations SHALL occur in a single transaction. If any step fails, complete rollback occurs.
-
-### 5. One-Time Display (MANDATORY)
-The unencrypted secret is displayed to the teacher ONLY ONCE during initial setup via QR code and text representation. After display, the secret is never revealed again (only the encrypted version is stored).
-
-### 6. One-Time Backup Code Usage (MANDATORY)
-Each backup code can be used exactly once during account recovery. Once a code is used (validated and marked with `used_at` timestamp), it cannot be reused. This is tracked at validation time (not during storage). Validation SHALL:
-- Retrieve stored hash from `User.backup_codes_encrypted`
-- Verify plaintext code against hash using `verify_password()`
-- Check that `used_at IS NULL` (code has not been used)
-- On successful validation, set `used_at = NOW()` to mark as consumed
-
----
-
-## V. Idempotency
-
-**Mechanism:** The combination of `idempotency_key` and `user_id` acts as the idempotency lock.
-
-**Behavior:**
-- If a retry occurs with the same `idempotency_key`:
-  - Check if `User.totp_secret_encrypted IS NOT NULL` (TOTP already enrolled).
-  - If true, return success with outcome `ALREADY_ENROLLED` (no duplicate state).
-  - If false, re-attempt the full mutation.
-- Replayed requests with the same `idempotency_key` **SHALL NOT** create duplicate audit events.
-
-**Client Responsibility:**
-- Generate a stable `idempotency_key` (e.g., based on session or user context).
-- Retry on transient errors with the same key.
-- Server stores key on audit log to detect and skip replays.
-
----
-
-## VI. Failure Scenarios
-
-When the FEAT fails, the system SHALL:
-
-1. **Rollback all mutations** atomically.
-2. **Emit audit event** with outcome `FAILED` and error code.
-3. **Return error response** to client.
-4. **NOT advance the teacher** past the TOTP setup step.
-
-**Failure Cases:**
-
-| Scenario | Error Code | HTTP Status | Message |
-|----------|-----------|-------------|---------|
-| User not a teacher | `INVALID_USER_ROLE` | 403 | "Only teachers can enroll TOTP." |
-| Invalid seat | `INVALID_SEAT_STATE` | 409 | "Invalid seat. Please start over." |
-| Already enrolled | `ALREADY_ENROLLED` | 200 | "TOTP is already enrolled on this account. To change it, use the Update TOTP option." |
-| Encryption error | `ENCRYPTION_FAILED` | 500 | "Failed to encrypt TOTP secret. Please try again." |
-| Database error | `INTERNAL_ERROR` | 500 | "An error occurred during setup. Please try again." |
-
----
-
-## VII. Audit Requirements
-
-The `DOM-OPS` audit log **MUST** contain:
-
-| Field | Type | Required | Rationale |
-|-------|------|----------|-----------|
-| `feat_id` | String | ✓ | Identifies the FEAT (always "FEAT-IDEN-101") |
-| `user_id` | Integer | ✓ | The teacher user |
-| `seat_id` | Integer | ✓ | The admin seat |
-| `class_id` | UUID | ✓ | The classroom context |
-| `idempotency_key` | String | ✓ | Replay detection |
-| `outcome` | Enum | ✓ | Must be: `TOTP_ENROLLED` or `ALREADY_ENROLLED` |
-| `timestamp` | ISO 8601 | ✓ | UTC timestamp of enrollment |
-| `totp_secret` | String | ✗ | DO NOT log (security) |
-| `backup_codes` | Array | ✗ | DO NOT log (security) |
-| `error_code` | String | ⚠️ | Only if outcome is `FAILED` |
-
-**Outcomes:**
-- `TOTP_ENROLLED`: Successful TOTP enrollment on a previously-uncredentialed teacher.
-- `ALREADY_ENROLLED`: Idempotent return; TOTP was already enrolled (no new secret generated).
-
----
-
-## VIII. Display Requirements
-
-After successful enrollment, the route handler SHALL display to the teacher:
-
-1. **QR Code**: Scannable image representing the TOTP secret.
-   - Generated from `secret` using `qrcode.QRCode()` or similar.
-   - Encodes: `otpauth://totp/classroom-economy:{user_id}@{class_id}?secret={secret}&issuer=ClassroomEconomy`.
-
-2. **Text Representation**: Raw base32 secret for manual entry.
-   - Format: `{secret}` (32-character string).
-   - Display once, then hide (user must write down or save).
-
-3. **Backup Codes**: 10 single-use recovery codes.
-   - Format: XXXX-XXXX-XXXX-XXXX.
-   - Display once, then hide.
-   - Instruct teacher to store securely.
-
-4. **Setup Confirmation**: Button to confirm teacher has saved codes.
-   - Clicking confirms teacher has secured the secret and backup codes.
-   - Cannot proceed without confirmation.
-
----
-
-## IX. Integration with FEAT-IDEN-104 (Student-Verified Recovery)
-
-**TOTP setup enables the recovery mechanism:**
-
-```
-TOTP Setup (FEAT-IDEN-101)
-├─ Teacher enrolls TOTP secret
-└─ Teacher secures backup codes
-
-Teacher Recovery Flow (FEAT-IDEN-103 through FEAT-IDEN-105)
-├─ If teacher loses access, initiate recovery (FEAT-IDEN-103)
-├─ Students provide recovery codes (FEAT-IDEN-104)
-└─ Teacher identity verified, TOTP can be reset (FEAT-IDEN-106)
-```
-
-Both TOTP enrollment and recovery use the same `recovery_requests` and `student_recovery_codes` tables. Recovery is triggered separately but assumes TOTP is already enrolled.
-
----
-
-## X. Dependencies
-
-- `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
-- `docs/DOMAIN/DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md`
-- `docs/DOMAIN/DOM-IDEN-005_IDENTITY_BINDING_AND_LIFECYCLE.md`
-- `docs/DOMAIN/DOM-IDEN-006_CANONICAL_CONTEXT_RESOLUTION.md`
-
----
-
-## XI. Implementation Checklist
-
-Before code review, verify:
-
-- [ ] User role validation ensures only teachers can enroll
-- [ ] TOTP secret is generated with `pyotp.random_base32()`
-- [ ] Secret is encrypted with `NORMALIZE_TOTP_FOR_STORAGE()` before storage
-- [ ] Seat binding is verified before setup
-- [ ] QR code generated correctly for authenticator apps
-- [ ] Backup codes are hashed with `HASH_PASSWORD()` (per `SPEC-SEC-001`, same as passwords)
-- [ ] Unencrypted secret displayed only once
-- [ ] All mutations occur in a single transaction
-- [ ] Audit event emitted with all required fields
-- [ ] Rollback occurs on any failure
-- [ ] Secret and backup codes are NOT logged in audit
-- [ ] Idempotency check prevents duplicate enrollment
-- [ ] Tests cover successful enrollment and idempotent retry
-- [ ] Tests cover already-enrolled scenario
-
----
-
-## XII. Amendments
-
-Revisions to this document SHALL:
-
-1. Increment the version.
-2. Update the effective date.
-3. Maintain consistency with DOM-IDEN-003 §III.B.
-4. Maintain consistency with FEAT-CORE-000.
-5. Maintain consistency with FEAT-IDEN-103, FEAT-IDEN-104, FEAT-IDEN-106.
-
-**Version 1.1 adds encrypted, nonce-bound initial signup staging (2026-09-16).**
+Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
+and update SOP-DOC-001 and dependent references. This 2026-11-23 revision records
+the approved lifecycle contract; it does not claim implemented or deployed behavior.

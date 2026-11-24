@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-CORE-000 | 1.2 | 2026-11-15 | 1.1 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
+| FEAT-CORE-000 | 1.3 | 2026-11-23 | 1.2 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
 
 ---
 
@@ -124,10 +124,18 @@ directive.
    under host authority from the command line (`SPEC-OPS-004` §V: operator
    provisioning is out-of-band). The new system principal has no class or seat.
 
-No teacher operation outside identity establishment (including additional
-classroom creation), the session boundary and account deletion may run without a teacher seat in the active class. Holding the
-state an operation changes does not make the principal's `user_id` sufficient
-authority to change it.
+6. **Principal credential maintenance.** Teacher initial/additional passkey enrollment,
+   TOTP replacement, selected-passkey replacement and removal (DOM-IDEN-003 §VII.A)
+   resolve explicit principal context without a Seat or Class. Fresh purpose-bound
+   authorization, current generation and applicable session binding remain required.
+7. **Credential reconciliation.** FEAT-IDEN-108 runs from a recorded principal
+   operation or scheduled system authority (INV-ARC-019 §VI; DOM-IDEN-003 §VII.A).
+   It uses current Identity/provider state, never fabricated classroom context or
+   an expired session as authority. It cannot establish local authority from provider
+   inventory or access classroom data.
+
+No teacher operation outside these declared categories may run without a teacher
+Seat in the active class. Principal ownership does not by itself authorize mutation.
 
 Two operations resolve a *target* seat rather than the active one, and need no
 exception: class selection, and authenticated class binding. Each resolves the
@@ -192,6 +200,26 @@ actor under one authority grant.
 4. A change of actor or of authority source starts a different FEAT.
 
 ---
+
+### 6. External credential-provider effects
+
+A credential workflow is not a distributed atomic transaction. Each local step has
+one atomic transaction; external calls and retry delays SHALL occur with no database
+transaction or database row lock held open. Commit exact intent/operation authority
+first, perform the provider interaction, then re-evaluate current principal existence,
+generation, supersession and stage in a new local transaction. Provider effects cannot
+be rolled back by PostgreSQL. Use durable operation state and explicit serialization,
+not a long-running database transaction, to coordinate competing work.
+
+A reconciliation continuation uses FEAT-IDEN-108 because its authority differs from
+the initiating user. Initiating FEATs compose the shared Identity commands; they do
+not call the reconciliation FEAT executor. A job invokes FEAT-IDEN-108 separately.
+The account-destruction provider-failure exception is limited to DOM-IDEN-003 §VII.A;
+it never permits partial classroom/database destruction or omitted mandatory audit.
+
+Credential lifecycle audit fields use DOM-OPS-002 §2.5 rather than retaining resolved
+principal identifiers in durable observability. This does not weaken any financial
+protected-row lineage requirement.
 
 ## IV. Domain Interaction Rules
 
@@ -400,3 +428,5 @@ To ensure compliance, the implementation SHOULD utilize:
 - `docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
 - `docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
+
+**2026-11-23 amendment:** Records the owner-approved credential lifecycle scope, activation, reconciliation and retention boundaries. Class isolation and foundational lifecycle requirements remain unchanged.

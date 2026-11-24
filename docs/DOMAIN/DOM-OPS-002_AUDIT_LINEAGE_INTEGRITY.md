@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.12 | 2026-11-15 | 1.11 | Constitutional |
+| DOM-OPS-002 | 1.13 | 2026-11-23 | 1.12 | Constitutional |
 
 ---
 
@@ -113,6 +113,62 @@ Only the following code paths may write to tables owned by this domain:
 | `chain_heads` | `app/services/audit_service.py` → `emit_audit_event()` |
 
 Economic policy is recorded in each owning domain's own append-only table (`DOM-CLASS-003` §V); where §5.4 registers such a table as protected, its rows SHALL emit lineage exclusively through lawful FEAT-orchestrated execution paths. *(1.2: the class-wide `policy_versions` / `policy_transitions` tables formerly named here were retired by operator ruling 2026-09-30 and dropped; no audit event was ever emitted for them.)*
+
+---
+
+### 2.5 Credential lifecycle outcome envelope
+
+Credential lifecycle events prove operational behavior, not historical ownership.
+They use the existing `emit_audit_event` boundary in an active authorized FEAT and
+are non-identifying by construction, not guaranteed absolutely anonymous. This is
+an explicit event envelope; it does not declare User or credential rows to be
+protected-row snapshots or fabricate an ownership/lineage proof.
+
+| Envelope field | Rule |
+|---|---|
+| Event identifier | Independently generated random identifier; never derived from a principal, credential or request payload |
+| FEAT/action | Fixed contract/action identifiers (ACT-IDEN-101/102/105/106/107/108 and the destruction outcome) |
+| Execution mode | Interactive principal operation or system reconciliation; no principal identifier |
+| Stage transition/outcome | Closed before/after stage values and outcome category; no arbitrary metadata |
+| Timestamp | Canonical UTC occurrence time |
+| Correlation/request/idempotency identifiers | Independently generated opaque identifiers only; no identity-derived values or surviving ownership map |
+| Error category | Coarse allowlisted category, never raw provider response or exception |
+
+For the `audit_events` representation, register the event category
+`credential_lifecycle_outcome`: `table_name` is that category, `row_pk` is the independent
+event identifier (not a User, credential or operation-row key), `operation` is TRANSITION,
+`chain_scope` is system, and class/Seat/actor-id-hash fields are absent. `actor_type`
+records teacher, sysadmin or system execution kind without identity. The canonical
+protected payload for this event envelope contains only fixed action, execution mode,
+before/after stage, outcome and optional coarse error category. Hashing those
+non-identifying values is permitted; hashing prohibited identity data is not.
+This new category is an outcome event, not a new protected-row registry entry in §5.4.
+Existing financial protected-row fields, signature formats and lineage rules are unchanged.
+
+No principal identifier, provider-user identifier, credential identifier, username,
+credential label, authentication secret, verifier, identity-derived hash/digest or
+persistent recoverable ownership association is permitted anywhere in the envelope.
+An independent correlation ID is permitted only when it cannot independently reconstruct
+principal ownership. A temporary association exists only in live Identity-owned operation
+state, which is erased with that state/principal. No audit reader may use provider
+inventory to reconstruct local authentication authority.
+
+Audit rows remain append-only in the existing system chain. Principal deletion leaves
+no identifying field or recoverable mapping in that chain, so preserving it does not
+preserve an identity archive. Correlation packs, application/access logs, exports,
+secondary indexes and other observability storage SHALL NOT defeat that boundary by
+retaining token-bearing URLs, identity mappings or prohibited digests. Record coarse
+provider failures/retries without persisting exact external deletion targets. Identity
+uses exact targets only in its live operation state or transient orphan-discovery execution.
+
+Successful local activation/removal and its outcome emit commit atomically. Duplicate
+completion does not emit another mutation event; separate retry-attempt outcomes may
+record actual work without renewing authority. If local failure rolls back its success
+event, record failure only through a separate lawful failure-audit execution, never by
+committing a partially failed mutation. External provider calls occur outside database
+transactions: persist authorized intent before the call and emit its bounded result
+in the next local step. Uncertain results are not recorded as confirmed cleanup.
+The provider-failure exception for account destruction never waives mandatory local audit.
 
 ---
 
@@ -391,3 +447,5 @@ Version 1.4 (2026-10-03) supersedes the unqualified payroll UPDATE prohibition o
 Version 1.6 (2026-10-03) registers nineteen-field Ledger signature version 3 while preserving exact sixteen-field version-2 verification, and applies the protected invalidation triple-linkage creation protocol. It supersedes future-only compensation registration and incomplete invalidation linkage without reinterpreting historical signatures.
 
 Version 1.5 (2026-10-03) registers the sixteen implemented immutable Ledger creation fields under signature version 2; the three prospective compensation fields require their own later registered version before correction implementation. It supersedes stored-status payload registration for new Ledger events without reinterpreting historical version 1 signatures.
+
+**2026-11-23 amendment:** Records the approved credential-lifecycle validation/outcome boundary. No identity archive, financial lineage relaxation or deployed-behavior claim is introduced.
