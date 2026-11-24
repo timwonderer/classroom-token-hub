@@ -11,7 +11,10 @@
 This FEAT is the sole lawful mutation path for establishing, re-pointing and revoking a
 sign-in, for all three roles (student, teacher, sysadmin). It owns every write to the
 session-identity fields on `users`: `current_session_nonce`, `current_session_started_at`,
-`current_session_expires_at`, `last_active_class_id`, `last_active_seat_id`.
+`current_session_expires_at`, `last_active_class_id`, `last_active_seat_id`. One exception:
+`select_student_class_fields` is also callable under `FEAT-IDEN-005` (Authenticated Class
+Binding), for the pointer move that is the last step of binding a newly-added class — see
+§II.1.
 
 **Why this is its own FEAT, not FEAT-IDEN-001.** FEAT-IDEN-001 (Unauthenticated Student Seat
 Claim) is read-only (§IV.1 of that contract) and its precondition is the *absence* of an
@@ -78,15 +81,17 @@ Routes, `app/auth.py` and the CLI delegate exclusively to `app/services/identity
 
 Each command raises `PermissionError` unless `FEAT-IDEN-009` is the active FEAT
 (`get_active_feat_name()`), the same guard shape `create_system_principal` (FEAT-IDEN-008) already
-uses.
+uses — except `select_student_class_fields`, whose guard also accepts `FEAT-IDEN-005` (§I).
 
 `app/auth.py`'s `establish_teacher_session` / `establish_student_session` /
-`establish_sysadmin_session` / `end_signed_in_session` are the FEAT-external callers' entry
-points: they compute the clock-dependent values (via `canonical_temporal_resolver`,
-SPEC-TIME-001), call the identity-domain command for the row write, and set the matching
-non-persisted Flask `session` dict keys. **They do not themselves open the FEAT context** — the
-caller (a route) does, because the correlation/idempotency key is request-shaped, not something
-`app/auth.py` can manufacture for every caller uniformly.
+`establish_sysadmin_session` are the FEAT-external callers' entry points: they compute the
+clock-dependent values (via `canonical_temporal_resolver`, SPEC-TIME-001), call the
+identity-domain command for the row write, and set the matching non-persisted Flask `session`
+dict keys. **They do not themselves open the FEAT context** — the caller (a route) does, because
+the correlation/idempotency key is request-shaped, not something `app/auth.py` can manufacture
+for every caller uniformly. `end_signed_in_session` is the one exception: it opens
+`FEAT-IDEN-009` itself (keyed by the `user_id`/nonce being revoked, which it already has from the
+session), so a caller must **not** wrap it in another FEAT context.
 
 ### 2. Call Sites (all retargeted from FEAT-IDEN-001 / FEAT-OPS-001 by this FEAT, #1777)
 
@@ -264,6 +269,15 @@ that:
   same reason, retargeted here rather than left on `FEAT-IDEN-001`/`FEAT-IDEN-005` — they are the
   same "select class" operation as `_apply_teacher_class_selection`/`switch_class`, just reached
   from a different entry point.
+
+**Post-approval cleanup (2026-11-24):** two remaining direct writes to `users.last_active_class_id`/
+`last_active_seat_id` were found by review and closed before merge: `student._complete_student_login`'s
+invalid-persisted-class repair (now `identity_service.clear_student_class_fields`, a new command
+added for this exact repair) and `admin.login`'s automatic single-class teacher selection (now
+`select_teacher_class_fields`, already in use on the explicit-selection paths). §I and §II.1 were
+also corrected to document the `FEAT-IDEN-005` exception on `select_student_class_fields`'s guard,
+and that `end_signed_in_session` opens its own `FEAT-IDEN-009` context rather than requiring one
+from its caller.
 
 **Promoted to ACTIVE (2026-11-24):** the owner reviewed and approved this contract's shape
 (operation grouping, and the FEAT-IDEN-001/FEAT-IDEN-005 reassignments in particular) prior to

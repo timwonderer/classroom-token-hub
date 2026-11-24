@@ -2619,8 +2619,10 @@ def login():
 
                         if len(class_options) == 1:
                             only_class = class_options[0]
-                            user.last_active_class_id = only_class["class_id"]
-                            user.last_active_seat_id = only_class["seat_id"]
+                            from app.services.identity_service import select_teacher_class_fields
+                            select_teacher_class_fields(
+                                user, class_id=only_class["class_id"], seat_id=only_class["seat_id"],
+                            )
                             return redirect(next_url)
 
                         return redirect(url_for("admin.select_class_context"))

@@ -3143,7 +3143,8 @@ def _complete_student_login(form):
                     "correlation_version": "v1",
                 },
             )
-            linked_user.last_active_class_id = None
+            from app.services.identity_service import clear_student_class_fields
+            clear_student_class_fields(linked_user)
 
     if valid_persisted_selection is None:
         # No valid class selection — establish a class-less session and send

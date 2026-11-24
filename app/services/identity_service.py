@@ -242,6 +242,15 @@ def select_teacher_class_fields(user: User, *, class_id: str, seat_id: int) -> N
     user.last_active_seat_id = seat_id
 
 
+def clear_student_class_fields(user: User) -> None:
+    """Clear a student's canonical active-class pointers (e.g. a persisted
+    class_id that no longer names a claimed seat), without touching the
+    sign-in nonce or window."""
+    _require_feat("FEAT-IDEN-009")
+    user.last_active_class_id = None
+    user.last_active_seat_id = None
+
+
 def revoke_signed_in_session(user_id, nonce: str) -> bool:
     """Void the sign-in on ``users`` for exactly the session ``nonce`` names.
 
