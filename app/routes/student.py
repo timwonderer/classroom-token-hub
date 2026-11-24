@@ -530,8 +530,14 @@ def _stage_username_setup(seat, user):
         if not recovery_setup_is_valid(user, session.get('recovery_setup_authorization')):
             raise student_setup.SetupExpired('Setup expired.')
     else:
-        ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
+        # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): since #1640 widened
+        # rent reconciliation's lock set to every seat in the class --
+        # including this one, unclaimed though it still is -- locking the
+        # class first here can complete the same circular wait against a
+        # concurrent reconciliation sweep that #1640 otherwise closed.
         seat = Seat.query.filter_by(id=seat.id).populate_existing().with_for_update().one_or_none()
+        if seat:
+            ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
         if not seat or seat.user_id is not None or seat.claim_generation != session.get('onboarding_claim_generation'):
             raise student_setup.SetupExpired('Setup expired.')
     owner, binding = student_setup.scope(seat, user, recovery_authorization=session.get('recovery_setup_authorization'))

@@ -45,6 +45,7 @@ from sqlalchemy import text
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats.identity_feat import bind_authenticated_student_to_class, unclaim_student_seat
+from app.feats.prod import record_payroll_event
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
 from app.hash_utils import hash_claim_name
 from app.models import ClassEconomy, Seat
@@ -380,3 +381,111 @@ def test_bind_authenticated_student_to_class_does_not_deadlock_settlement(app):
             release.set()
         assert settlement.result(timeout=15) == "accepted"
         assert bind.result(timeout=15) == "accepted"
+
+
+def test_teacher_manual_credit_does_not_deadlock_reconciliation_holding_teacher_seat(app):
+    """A teacher issuing a manual credit, concurrent with rent reconciliation
+    holding the teacher's own seat, must never deadlock (#1640-adjacent,
+    Codex finding on PR #1832's own review).
+
+    ``_record_payroll_event_impl`` (FEAT-PROD-003) locks the target seat and
+    the class before inserting ``PayrollEvent`` -- but that insert carries a
+    foreign key to ``actor_seat_id`` (the acting teacher's seat), so Postgres
+    takes an implicit ``FOR KEY SHARE`` lock on it at insert time, well after
+    the class is already locked. Rent reconciliation's #1640 fix widened its
+    lock set to every seat in the class, the teacher's own seat included --
+    which reconciliation never touched before -- so a reconciliation sweep
+    that already holds the teacher's seat can now race a manual credit into
+    the same circular wait #1640 closed elsewhere. The fix locks the actor
+    seat together with the target seat, ascending, before the class.
+    """
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        _setup_rent_class(classroom)
+        class_id = classroom.class_id
+        teacher_seat_id = classroom.teacher_seat.id
+        student = classroom.students[0]
+        target_seat_id = student.seat.id
+        teacher_ctx = CanonicalContext(
+            user_id=classroom.teacher_user.id, class_id=class_id,
+            seat_id=teacher_seat_id, actor_role="teacher",
+        )
+
+    held, release, attempted = Event(), Event(), Event()
+    pids: dict[str, int] = {}
+
+    def holder_scope():
+        # Stands in for reconciliation's own ascending roster lock already
+        # holding the teacher's seat specifically (proven correct by the
+        # sibling tests above; mirrored here with a bare connection since
+        # neither production function has a pause point to synchronize
+        # against).
+        with app.app_context():
+            try:
+                with db.engine.connect() as holder_conn:
+                    with holder_conn.begin():
+                        pids["holder"] = holder_conn.execute(
+                            text("SELECT pg_backend_pid()")
+                        ).scalar_one()
+                        holder_conn.execute(
+                            text(
+                                "SELECT id FROM seats WHERE id=:id AND "
+                                "class_id=:class_id FOR UPDATE"
+                            ),
+                            {"id": teacher_seat_id, "class_id": class_id},
+                        )
+                        held.set()
+                        assert release.wait(10)
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    def credit_scope():
+        with app.app_context():
+            try:
+                pids["credit"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+                attempted.set()
+                record_payroll_event(
+                    ctx=teacher_ctx, target_seat_id=target_seat_id,
+                    payroll_event_type="manual_credit", mechanism="TEACHER",
+                    amount=Decimal("5.00"),
+                    correlation_id="corr-payroll-deadlock-1640",
+                    idempotency_key="payroll-deadlock-1640-credit",
+                )
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        holder = pool.submit(holder_scope)
+        try:
+            assert held.wait(10)
+            credit = pool.submit(credit_scope)
+            assert attempted.wait(10)
+
+            # The manual credit must be the one waiting, blocked specifically
+            # on the teacher seat the holder already holds, and must NOT
+            # already hold the class row while the holder waits on it.
+            deadline = monotonic() + 5
+            while True:
+                blockers = db.session.execute(
+                    text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["credit"]}
+                ).scalar_one()
+                if pids["holder"] in blockers:
+                    break
+                assert monotonic() < deadline, (
+                    "record_payroll_event never blocked on the teacher seat "
+                    "the holder holds; it may have locked the class first "
+                    "instead (the #1640-adjacent bug)."
+                )
+                Event().wait(.01)
+
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text("SELECT class_id FROM classes WHERE class_id=:class_id FOR UPDATE NOWAIT"),
+                    {"class_id": class_id},
+                ).one()
+        finally:
+            release.set()
+        assert holder.result(timeout=15) == "accepted"
+        assert credit.result(timeout=15) == "accepted"

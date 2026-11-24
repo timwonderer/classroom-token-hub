@@ -481,7 +481,17 @@ def _record_payroll_event_impl(
     if target_seat.claimed_at is None or target_seat.user_id is None:
         raise ValueError("A payroll event target seat must be claimed.")
 
-    lock_attendance_seat(target_seat_id, ctx.class_id)
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): the PayrollEvent insert
+    # below carries a foreign key to actor_seat_id (the acting teacher's or
+    # system actor's seat), so Postgres takes an implicit FOR KEY SHARE lock on
+    # it at insert time. Since #1640 widened rent reconciliation's lock set to
+    # every seat in the class -- the actor's seat included, which reconciliation
+    # previously never touched -- an unlocked actor seat here can complete the
+    # same circular wait against reconciliation that #1640 otherwise closed
+    # (Codex review on PR #1832). Lock every seat this insert's foreign keys
+    # will reference, ascending by id, before the class.
+    for sid in sorted({target_seat_id, ctx.seat_id}):
+        lock_attendance_seat(sid, ctx.class_id)
     ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     event = PayrollEvent(
         class_id=ctx.class_id,
