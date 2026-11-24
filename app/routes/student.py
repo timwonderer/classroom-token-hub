@@ -316,7 +316,6 @@ from app.utils.display_name_session import (
     upsert_teacher_display_name_cache,
     clear_teacher_display_name_cache,
 )
-from app.session_lifetime import SESSION_EXPIRES_AT_KEY
 from app.services.tlcp import class_log_ref, has_recent_error_for_actor
 from app.services.context_resolver import (
     resolve_canonical_context,
@@ -3060,7 +3059,7 @@ def login():
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
 
 
-@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 def _complete_student_login(form):
     """The validated login submission: authenticate and establish the session."""
     is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -3113,26 +3112,6 @@ def _complete_student_login(form):
     session.pop('generated_username', None)
     clear_teacher_display_name_cache()
 
-    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-    session['login_time'] = now.isoformat()
-    session['last_activity'] = session['login_time']
-
-    from app.auth import SESSION_TIMEOUT_MINUTES
-    user.current_session_started_at = now
-    user.current_session_expires_at = canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
-        timestamp=now, elapsed_seconds=SESSION_TIMEOUT_MINUTES * 60,
-    ).shifted_timestamp_utc
-
-    # Mirror the authoritative expiry onto the cookie so the browser evicts
-    # it at the same instant login_required stops honoring it. Without this
-    # the cookie outlives the session by Flask's 31-day default whenever the
-    # student closes the tab, since the server-side check only runs on a
-    # request. Set here rather than in either branch below: both the
-    # class-selection path and the direct-dashboard path pass through this
-    # line, and no session.clear() intervenes.
-    session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
-
     linked_user = user
 
     # Find all classes this user has claimed seats in.
@@ -3164,17 +3143,15 @@ def _complete_student_login(form):
                     "correlation_version": "v1",
                 },
             )
-            linked_user.last_active_class_id = None
+            from app.services.identity_service import clear_student_class_fields
+            clear_student_class_fields(linked_user)
 
     if valid_persisted_selection is None:
-        # No valid class selection — establish minimal session and send to class selector.
-        session['user_id'] = linked_user.id
-        session['role'] = 'student'
-        session.permanent = True
-        nonce = secrets.token_urlsafe(32)
-        session['current_session_nonce'] = nonce
-        linked_user.current_session_nonce = nonce
-        # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
+        # No valid class selection — establish a class-less session and send
+        # to the class selector. The surrounding FEAT-IDEN-009 context owns
+        # the transaction boundary (identity_service.establish_student_session_fields
+        # owns the row write).
+        establish_student_session(linked_user)
         return redirect(url_for('student.select_class_context'))
 
     # Resolve the canonical seat for the selected class.
@@ -3190,16 +3167,11 @@ def _complete_student_login(form):
             is_json=is_json,
         )
 
-    # Update canonical DB pointers before establishing session.
-    linked_user.last_active_class_id = valid_persisted_selection["class_id"]
-    linked_user.last_active_seat_id = target_seat.id
-
-    # Establish canonical session (user_id + class_id + role + nonce).
-    # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
-    establish_student_session(linked_user, class_id=valid_persisted_selection["class_id"])
-    nonce = secrets.token_urlsafe(32)
-    session['current_session_nonce'] = nonce
-    linked_user.current_session_nonce = nonce
+    # Establish canonical session (user_id + class_id + seat + role + nonce).
+    # The surrounding FEAT-IDEN-009 context owns the transaction boundary
+    # (identity_service.establish_student_session_fields owns the row write,
+    # including the canonical active-class pointers).
+    establish_student_session(linked_user, class_id=valid_persisted_selection["class_id"], seat_id=target_seat.id)
 
     _prime_seat_teacher_display_name_cache(linked_user.id)
 
@@ -3262,7 +3234,7 @@ def select_class_context():
         # Update canonical DB pointers so resolve_canonical_context() succeeds on next request.
         from app.auth import switch_student_session_context
         with FEATContext(
-            "FEAT-IDEN-005",
+            "FEAT-IDEN-009",
             idempotency_key=f"feat:iden:select-class-context:{linked_user.id}:{selected_class_id}",
         ):
             switch_student_session_context(selected_seat, class_id=selected_class_id, seat_id=selected_seat.id)
@@ -3295,7 +3267,7 @@ def logout():
 @student_bp.route('/switch-class/<class_public_id>', methods=['POST'])
 @login_required
 @limiter.limit("30 per minute", key_func=student_seat_limit_key)
-@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 def switch_class(class_public_id):
     """Switch to a different class. The URL carries the class's public id
     (DOM-OPS-001 §7: an internal class_id never appears in a URL); it resolves

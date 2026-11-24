@@ -45,6 +45,10 @@ and this project follows semantic versioning principles.
 
   **Changelog entries render Markdown correctly on GitHub.** Release-note metadata comments now sit above a separate indented paragraph, so bold text, inline code and links render instead of appearing literally. The release-notes parser uses the same structure; published note content is unchanged.
 
+- <!-- notes: internal -->
+
+  **Session establishment, class selection and sign-out now run under a dedicated FEAT contract** (#1777). These writes to `users.current_session_nonce`/`current_session_started_at`/`current_session_expires_at`/`last_active_class_id`/`last_active_seat_id` previously ran under `FEAT-IDEN-001` (Unauthenticated Student Seat Claim — read-only, no-authenticated-principal by contract) or, for two sysadmin routes and one teacher passkey route, `FEAT-OPS-001` (Maintenance/Cleanup Operations). Both were architecturally wrong FEATs for an authenticated-session write. New `FEAT-IDEN-009` (Identity Session Lifecycle, `docs/FEATURE-EXECUTION/FEAT-IDEN-009_IDENTITY_SESSION_LIFECYCLE.md`, submitted for owner review) and matching `app/services/identity_service.py` commands now own these writes for all three roles. No behavior change to session timing, locking or scope — the fixed 60-minute teacher window, student session window, idle-only sysadmin window, and nonce-conditional locked revocation are all unchanged; only which FEAT the writes execute under moved.
+
 ## [2.5.0] - 2026-11-23 — Self-hosting and reliable sign-in sessions
 
 Released as `6251659` on 2026-11-23 at 22:19 UTC by release run [45278550540](https://github.com/timwonderer/classroom-token-hub/actions/runs/45278550540). No migration. Record: [DEPLOY_2026-11-23_6251659.md](docs/ops/audits/DEPLOY_2026-11-23_6251659.md).
