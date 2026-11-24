@@ -14,7 +14,7 @@ audits, and superseded plans live in [`docs/archive/v2-tracking-2026/`](https://
 |---|---|
 | [`BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md`](BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md) | Approved Operations verifier policy decisions, cited by SOP-DOC-001. |
 | [`FEAT_REGISTRY_RECONCILIATION_2026-09-19.md`](FEAT_REGISTRY_RECONCILIATION_2026-09-19.md) | FEAT registry against implementation, cited from `app/feats/`. |
-| [`HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`](HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md) | Unratified draft contracts for the HTTP error pages (proposed SPEC-DES-002 presentation, SPEC-OPS-007 communication, SPEC-OPS-003 logging amendment), remaining owner decisions, and the ratification and implementation plan. |
+| [`HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`](HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md) | Unratified draft contracts for the HTTP error pages (proposed SPEC-DES-002 presentation, SPEC-OPS-007 communication, SPEC-OPS-003 logging amendment), classified findings, the remaining owner decision, and the ratification and implementation plan. |
 | [`DOCS_PLATFORM_ROADMAP.md`](DOCS_PLATFORM_ROADMAP.md) | Documentation platform plan. |
 | [`DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md`](DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md) | Reusable SOP-DEV-002 plan template for a single domain. |
 
