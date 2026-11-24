@@ -788,19 +788,26 @@ def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
         raise ValueError("Enter a first and last name, each at most 100 characters.")
     first, last = first_name.strip(), last_name.strip()
     User.query.filter_by(id=ctx.user_id).with_for_update().one()
-    class_row = ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one_or_none()
-    teacher = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id,
-                                  user_id=ctx.user_id, role="teacher").first()
-    if not class_row or class_row.teacher_user_id != ctx.user_id or not teacher:
-        raise ValueError("The teacher does not own this class.")
-    seat = Seat.query.filter_by(id=seat_id, class_id=ctx.class_id, role="student").first()
+    # Seat lock before the class lock (DOM-LED-001 §VII's multi-seat rule).
+    # Rent reconciliation (FEAT-OBL-002, #1640) now locks its whole roster —
+    # seat(s), then class — before any class-scoped insert. Locking the
+    # class here first, as this route previously did, would hold the class
+    # row while waiting on a seat reconciliation already holds, the same
+    # circular wait #1640 closed from the other direction.
+    seat = Seat.query.filter_by(
+        id=seat_id, class_id=ctx.class_id, role="student",
+    ).with_for_update().first()
     if seat is None:
         raise LookupError("Student seat not found in this class.")
     old_user_id = seat.user_id
     if old_user_id is None:
         raise ValueError("This seat is already unclaimed. Refresh the roster.")
+    class_row = ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one_or_none()
+    teacher = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id,
+                                  user_id=ctx.user_id, role="teacher").first()
+    if not class_row or class_row.teacher_user_id != ctx.user_id or not teacher:
+        raise ValueError("The teacher does not own this class.")
     user = User.query.filter_by(id=old_user_id).populate_existing().with_for_update().one()
-    seat = Seat.query.filter_by(id=seat_id).populate_existing().with_for_update().one()
     if (seat.user_id != old_user_id or type(expected_generation) is not int
             or seat.claim_generation != expected_generation):
         raise ValueError("The seat's claim has changed. Refresh the roster before unclaiming it.")

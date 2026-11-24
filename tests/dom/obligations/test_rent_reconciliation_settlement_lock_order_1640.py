@@ -44,8 +44,10 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.feats.base import FEATContext
+from app.feats.identity_feat import unclaim_student_seat
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
 from app.models import ClassEconomy, Seat
+from app.services.context_resolver import CanonicalContext
 from tests.helpers.class_domain import customize_rent_settings, enable_class_feature
 from tests.helpers.classroom_initializer import initialize
 
@@ -152,4 +154,113 @@ def test_rent_reconciliation_does_not_deadlock_ledger_settlement(app):
         finally:
             release.set()
         assert settlement.result(timeout=15) == "accepted"
+        assert reconciliation.result(timeout=15) == "accepted"
+
+
+def test_unclaim_student_seat_does_not_deadlock_rent_reconciliation(app):
+    """A teacher unclaiming a roster seat, concurrent with rent reconciliation,
+    must never deadlock (#1640-adjacent, found in review of the fix above).
+
+    ``unclaim_student_seat`` (FEAT-IDEN-006) used to lock the class row before
+    the student seat — the opposite of this PR's new reconciliation roster
+    lock (seat(s), then class, per DOM-LED-001 §VII). Unclaim holding the
+    class while waiting on a seat reconciliation's roster lock already holds,
+    while reconciliation holds that seat and waits on the class via its
+    ``BillCycle`` insert, is the same circular wait #1640 closed — with
+    unclaim as the other side instead of ledger settlement. The fix brings
+    unclaim to the same seat-then-class order.
+    """
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        _setup_rent_class(classroom)
+        class_id = classroom.class_id
+        student = classroom.students[-1]
+        seat_id = student.seat.id
+        expected_generation = student.seat.claim_generation
+        first_name, last_name = student.first_name, student.last_name
+        teacher_ctx = CanonicalContext(
+            user_id=classroom.teacher_user.id, class_id=class_id,
+            seat_id=classroom.teacher_seat.id, actor_role="teacher",
+        )
+
+    held, release, attempted = Event(), Event(), Event()
+    pids: dict[str, int] = {}
+
+    def unclaim_scope():
+        with app.app_context():
+            try:
+                # Hold the seat lock on a bare connection of its own, outside
+                # db.session entirely. FEATContext (opened below by
+                # unclaim_student_seat, FEAT-IDEN-006) treats a clean
+                # read-only autobegin on db.session as discardable
+                # (is_discardable_read_autobegin) and rolls it back before
+                # starting its own top-level transaction — which would
+                # silently drop a lock taken on db.session before entering a
+                # FEAT context. A separate raw connection has no such
+                # lifecycle and is unaffected by it, matching the pattern the
+                # NOWAIT probe below already uses for the same reason.
+                with db.engine.connect() as holder_conn:
+                    with holder_conn.begin():
+                        pids["unclaim"] = holder_conn.execute(
+                            text("SELECT pg_backend_pid()")
+                        ).scalar_one()
+                        holder_conn.execute(
+                            text(
+                                "SELECT id FROM seats WHERE id=:id AND "
+                                "class_id=:class_id FOR UPDATE"
+                            ),
+                            {"id": seat_id, "class_id": class_id},
+                        )
+                        held.set()
+                        assert release.wait(10)
+                # Lock released with the connection above; unclaim_student_seat
+                # (the new, correct seat-then-class order) now re-acquires it
+                # itself inside its own FEATContext.
+                unclaim_student_seat(
+                    canonical_context=teacher_ctx, seat_id=seat_id,
+                    expected_generation=expected_generation,
+                    first_name=first_name, last_name=last_name,
+                    correlation_id="deadlock-1640-unclaim",
+                    idempotency_key="test:deadlock-1640:unclaim-inner",
+                )
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    def reconciliation_scope():
+        with app.app_context():
+            try:
+                pids["reconciliation"] = db.session.execute(
+                    text("SELECT pg_backend_pid()")
+                ).scalar_one()
+                attempted.set()
+                execute_reconcile_rent(class_id, idempotency_key="deadlock-1640-unclaim-reconcile")
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        unclaim = pool.submit(unclaim_scope)
+        try:
+            assert held.wait(10)
+            reconciliation = pool.submit(reconciliation_scope)
+            assert attempted.wait(10)
+
+            # Reconciliation must be the one waiting, blocked on the seat
+            # unclaim already holds — never the reverse.
+            deadline = monotonic() + 5
+            while True:
+                blockers = db.session.execute(
+                    text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["reconciliation"]}
+                ).scalar_one()
+                if pids.get("unclaim") in blockers:
+                    break
+                assert monotonic() < deadline, (
+                    "Reconciliation never blocked on the seat unclaim holds; "
+                    "the two paths may no longer share a lock order."
+                )
+                Event().wait(.01)
+        finally:
+            release.set()
+        assert unclaim.result(timeout=15) == "accepted"
         assert reconciliation.result(timeout=15) == "accepted"
