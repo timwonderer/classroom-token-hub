@@ -33,6 +33,7 @@ from app.services import obligations_service
 from app.services.class_configuration_query_service import is_feature_enabled
 from app.services.context_resolver import CanonicalContext
 from app.utils.canonical_temporal_resolver import utc_now
+from tests.helpers import temporal
 from tests.helpers.class_domain import customize_rent_settings, enable_class_feature
 from tests.helpers.classroom_initializer import initialize, initialize_as_student
 from tests.helpers.ledger import create_ledger_idempotent_transaction
@@ -179,35 +180,56 @@ def test_disabling_rent_partway_through_a_partly_paid_preview_period(app):
         assert committed.is_outstanding
         assert committed.remaining_amount == Decimal("30.00")
 
-        def late_fees_on_cycle_2():
-            return ObligationAssessment.query.filter_by(
-                class_id=classroom.class_id,
-                obligation_type="LATE_FEE",
-                event_type="ASSESSMENT",
-                source_correlation_id=correlation_id,
-            ).count()
+        def late_fee_correlations():
+            return [
+                row.correlation_id
+                for row in ObligationAssessment.query.filter_by(
+                    class_id=classroom.class_id,
+                    obligation_type="LATE_FEE",
+                    event_type="ASSESSMENT",
+                    source_correlation_id=correlation_id,
+                ).order_by(ObligationAssessment.id.asc()).all()
+            ]
 
-        assert late_fees_on_cycle_2() == 0, "cycle 2's grace has not lapsed yet"
+        assert late_fee_correlations() == [], "cycle 2's grace has not lapsed yet"
 
         # Reconcile well past cycle 2's own grace boundary, with rent disabled
         # throughout. Late fees must keep accruing against the surviving debt.
+        # The clock is pinned for this and the payment that follows, so both
+        # sit on the same controlled timeline instead of the payment reading
+        # the real wall clock while reconciliation is told a later instant.
         second = _cycles(classroom)[1]
-        _reconcile(classroom, second.grace_boundary_at + timedelta(days=2))
+        past_grace = temporal.calendar_days_later(
+            second.grace_boundary_at, 2, class_id=classroom.class_id
+        )
+        with temporal.pinned_clock(past_grace):
+            _reconcile(classroom, past_grace)
+            fees_before_payoff = late_fee_correlations()
+            assert fees_before_payoff, "late fees must continue on surviving preview-period debt"
 
-        assert late_fees_on_cycle_2() >= 1, "late fees must continue on surviving preview-period debt"
+            # The remainder stays payable: it is not frozen or wiped by disablement.
+            _pay(classroom, seat_id, correlation_id, Decimal("30.00"))
 
-        # The remainder stays payable: it is not frozen or wiped by disablement.
-        _pay(classroom, seat_id, correlation_id, Decimal("30.00"))
         paid_off = _state(correlation_id)
         assert paid_off.is_satisfied
         assert paid_off.remaining_amount == Decimal("0.00")
 
-        # Paying the rent principal in full stops further late fees from accruing
-        # (DOM-OBL-001 §IX.16: only the still-unsatisfied principal keeps drawing
-        # penalties), but the fees already assessed above remain valid debts.
-        fees_after_payoff = late_fees_on_cycle_2()
-        _reconcile(classroom, second.grace_boundary_at + timedelta(days=5))
-        assert late_fees_on_cycle_2() == fees_after_payoff
+        # Paying off the principal must not disturb the late fees already
+        # assessed against it: the same assessments remain, each still its own
+        # valid, outstanding debt (DOM-OBL-001 §IX.16: already-assessed late
+        # fees stand on their own once issued).
+        assert late_fee_correlations() == fees_before_payoff
+        for late_correlation_id in fees_before_payoff:
+            assert obligations_service.get_obligation_state(late_correlation_id).is_outstanding
+
+        # Separately: paying the rent principal in full stops further late fees
+        # from accruing against it (only the still-unsatisfied principal keeps
+        # drawing penalties) — no new correlations appear after reconciling
+        # further on the same pinned timeline.
+        later = temporal.calendar_days_later(past_grace, 3, class_id=classroom.class_id)
+        with temporal.pinned_clock(later):
+            _reconcile(classroom, later)
+        assert late_fee_correlations() == fees_before_payoff
 
 
 def test_period_paid_in_advance_grants_perks_when_it_begins_even_while_disabled(app):
