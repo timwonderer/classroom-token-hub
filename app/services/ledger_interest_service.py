@@ -322,9 +322,33 @@ def _end_of_day_balances(history, day_ends, *, principal_only=False):
     credit, giving the lifetime principal-only series simple interest's earning
     base must use (SPEC-ECON-001 §4.1): previously credited interest never
     participates in a later window's accrual.
+
+    A later withdrawal or an interest-credit reversal can still draw on money
+    that was credited as interest (the posted balance does not separate the
+    two), and once it does, that interest is gone from the account — it
+    cannot keep excluding itself from principal forever, or an
+    emptied-then-refunded account would carry a phantom negative principal
+    offset into new deposits. ``interest_pool`` tracks how much
+    credited-but-not-yet-withdrawn interest the posted balance currently still
+    contains, and the two ways money leaves it are deliberately not symmetric:
+
+    - A reversal of an interest credit (``is_interest`` true, negative amount)
+      is attributed to that credit first: it eagerly cancels against the pool
+      (so it nets to zero against the credit it reverses, matching ordinary,
+      non-draining operation), and only any excess beyond what the pool still
+      holds -- interest already spent by an intervening withdrawal -- comes
+      out of principal.
+    - An ordinary withdrawal (``is_interest`` false, negative amount) is
+      attributed to principal first, exactly as before this fix, so a partial
+      withdrawal that principal alone can cover still reduces the
+      principal-only series at full face value. The pool is drawn down only
+      as a floor: when the withdrawal's face value would carry ``cents``
+      below zero, the shortfall -- the part principal cannot cover -- is
+      absorbed from the pool instead of leaving ``cents`` negative.
     """
     balances = []
     cents = 0
+    interest_pool = 0
     index = 0
     for day_end in day_ends:
         while index < len(history) and canonical_temporal_resolver(
@@ -333,8 +357,24 @@ def _end_of_day_balances(history, day_ends, *, principal_only=False):
             candidate=history[index][0],
             reference=day_end,
         ).is_earlier:
-            if not (principal_only and history[index][2]):
-                cents += history[index][1]
+            _, amount, is_interest = history[index]
+            if principal_only:
+                if is_interest:
+                    if amount >= 0:
+                        interest_pool += amount
+                    else:
+                        draw = min(-amount, interest_pool)
+                        interest_pool -= draw
+                        cents -= (-amount - draw)
+                else:
+                    cents += amount
+                    if cents < 0:
+                        shortfall = -cents
+                        draw = min(shortfall, interest_pool)
+                        interest_pool -= draw
+                        cents += draw
+            else:
+                cents += amount
             index += 1
         balances.append(Decimal(cents) / 100)
     return balances

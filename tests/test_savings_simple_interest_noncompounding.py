@@ -256,6 +256,57 @@ def test_reversed_interest_credit_does_not_reduce_simple_interest_principal(clie
     assert rows[1].amount == _simple("1000.00", 7)
 
 
+def test_withdrawal_draining_credited_interest_does_not_leave_negative_principal(client, app, monkeypatch):
+    """Withdrawing the full balance (principal plus credited interest) and then
+    redepositing new principal must not leave a phantom negative principal
+    offset baked into the earning base (Codex finding on PR #1833, #1646
+    follow-up).
+
+    Before this fix, the withdrawal's full face value was subtracted from the
+    principal-only series even though part of it was credited interest -- money
+    that was never principal to begin with -- so the series went permanently
+    negative by that amount, and a later deposit the same size as the original
+    principal was credited as if it were short by exactly the interest that
+    had been withdrawn.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    seat = classroom.students[0].seat
+    _configure_interest(client, classroom, payout="weekly", compound="never", calc="simple")
+
+    monday = _next_monday(tz_name)
+    _fund_savings(monkeypatch, app, classroom, seat, "1000.00", _local(tz_name, monday, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, monday, 1))  # settles the deposit
+
+    week_two_start = monday + timedelta(days=7)
+    _tick(monkeypatch, app, _local(tz_name, week_two_start, 0, 30))  # credits window one
+
+    window_one_credit = _interest_rows(app, classroom, seat)[0]
+
+    # Drain the whole posted balance -- principal plus the credited interest
+    # -- then deposit fresh principal the same size as the original.
+    drain_amount = Decimal("1000.00") + window_one_credit.amount
+    _fund_savings(
+        monkeypatch, app, classroom, seat, f"-{drain_amount}",
+        _local(tz_name, week_two_start, 2),
+    )
+    _fund_savings(
+        monkeypatch, app, classroom, seat, "1000.00",
+        _local(tz_name, week_two_start, 2, 10),
+    )
+    _tick(monkeypatch, app, _local(tz_name, week_two_start, 2, 20))  # settles both
+
+    week_two_close = week_two_start + timedelta(days=7)
+    _tick(monkeypatch, app, _local(tz_name, week_two_close, 0, 30))  # credits window two
+
+    rows = _interest_rows(app, classroom, seat)
+    assert len(rows) == 2
+    # Before the fix: strictly less than this, short by exactly
+    # window_one_credit.amount, since the withdrawal's face value (principal
+    # + interest) was fully subtracted from the principal-only series.
+    assert rows[1].amount == _simple("1000.00", 7)
+
+
 # --------------------------------------------------------------------------- #
 # Sanity: compound interest is unaffected by the fix                          #
 # --------------------------------------------------------------------------- #
