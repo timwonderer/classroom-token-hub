@@ -6,6 +6,8 @@ user saw Flask-Limiter's bare default page instead of the branded error
 pages every other status gets.
 """
 
+import re
+
 import wsgi  # noqa: F401 -- registers the error handlers on import
 
 
@@ -58,3 +60,10 @@ def test_404_page_header_icon_links_to_the_teapot(client):
     response = client.get("/no-such-page-anywhere")
     assert response.status_code == 404
     assert 'href="/teapot"' in response.data.decode()
+
+
+def test_teapot_page_headings_never_skip_a_level(client):
+    """INV-ARC-020 §VI.2: each heading is at most one level below the one before."""
+    levels = [int(n) for n in re.findall(r"<h([1-6])\b", client.get("/teapot").data.decode())]
+    assert levels[0] == 1
+    assert all(b <= a + 1 for a, b in zip(levels, levels[1:])), levels
