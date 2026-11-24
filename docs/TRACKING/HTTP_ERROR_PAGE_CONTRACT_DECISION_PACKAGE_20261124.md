@@ -1,12 +1,12 @@
 # HTTP error pages: draft contracts, rulings and ratification plan
 
-Date: November 24, 2026 (America/Los_Angeles), revision 4. Status: **UNRATIFIED DRAFT — governs
-nothing.** This is an informative tracking package under
+Date: November 24, 2026 (America/Los_Angeles), revision 5 — **final package for ratification**.
+Status: **UNRATIFIED DRAFT — governs nothing.** This is an informative tracking package under
 [SOP-DOC-000](../STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md) §V–VI, not a
 SPEC. It holds two proposed normative texts — **`SPEC-DES-002` HTTP Error Page Presentation**
 (Part D) and **`SPEC-OPS-007` HTTP Error Communication** (Part E) — a proposed `SPEC-OPS-003`
-amendment for error-response logging (Part F), the incorporation amendments (Part G), the one
-remaining owner decision (Part H), and the plan to ratification and implementation (Parts I–K).
+amendment for error-response logging (Part F), the incorporation amendments (Part G), the
+remaining conflicts with governing documentation (Part H), and the plan to ratification and implementation (Parts I–K).
 Findings are classified in Part 3. Nothing here changes a template, stylesheet, handler or ratified
 document. On ratification each text becomes or amends a numbered document, is registered through
 [SOP-DOC-001](../STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX.md), and this package
@@ -22,6 +22,12 @@ path disclosure, diagnostic logging, outcome classification, transaction ownersh
 and scope corrected (B.1–B.7); findings split into invariant violations, implementation
 inconsistencies, new requirements and unverified findings, with confirmed privacy violations
 prioritized under existing authority (Part 3, Part J step 0).
+**r5: owner feedback, fourth round** — H-1 ruled (401 kept for programmatic requests, documented as
+a bounded protocol deviation); status-URL restrictions rebased on demonstrated risk (IP literals and
+`localhost` allowed); no new card level (existing levels suffice); every page's safe destination
+settled; V1 and V2 remediated separately under existing authority; historical exposure distinguished
+from implementation violation (Part 3.5); remaining conflicts with governing documentation listed
+(Part H). No owner decision remains open.
 
 > **Governing principles (owner, 2026-11-24).** An error page must reduce uncertainty without
 > inventing certainty. It must help the user recover without compromising privacy, authority,
@@ -42,7 +48,7 @@ and they drifted (Part B).
 
 ## Part 1 — Owner rulings applied
 
-All three rounds are applied in the drafts; none is reopened. Existing implementation is evidence of
+All four rounds are applied in the drafts; none is reopened. Existing implementation is evidence of
 current behaviour, not authority over intended behaviour. An owner-approved proposed requirement does
 not make earlier implementation an invariant violation (Part 3 keeps the categories apart).
 
@@ -70,7 +76,7 @@ not make earlier implementation an invariant violation (Part 3 keeps the categor
 | OPS-13 generic page preserving semantics; OPS-14 418 included; OPS-15 controlled 429 probe | E §V, §XII, D §XI |
 | Communication contract; outcome safety; disclosure and privacy; operational accuracy; rendering resilience; protocol semantics | E §VI–XIII |
 
-### Round 3 (this revision)
+### Round 3
 
 | Ruling | Lands in |
 |---|---|
@@ -88,6 +94,18 @@ not make earlier implementation an invariant violation (Part 3 keeps the categor
 | **B.6** no assumption that history navigation is safe; no resubmission; a history-independent safe destination; no GET presented as a retry of a POST | E §IX |
 | **B.7** the contract covers every application-generated error response, route-local and blueprint-local included | E §II, B.9 |
 | **C** keep four finding categories; prioritize confirmed privacy violations under existing authority; inventory Grafana before log-format changes | Part 3, J step 0, J step 4 |
+
+### Round 4 (this revision)
+
+| Ruling | Lands in |
+|---|---|
+| **H-1** keep explicit 401 for scripted and API requests without a valid session; keep browser-navigation redirects; no redirect of programmatic requests to HTML sign-in; no invented mechanism; the missing `WWW-Authenticate` is a bounded, documented protocol deviation, and no full RFC 9110 compliance is claimed for that response | E §X.5, Part 3 I5 |
+| Status-URL restrictions rest on demonstrated security requirements; private-network instances are legitimate | E §XI.6 |
+| Add no card level unless the existing design system cannot express the semantics | D §VIII (no new level) |
+| Removing Back is acceptable only if every page keeps a meaningful, safe destination | E §IX.1, §XIII.1 |
+| Remediate V1 and V2 now, separately scoped, under existing authority | Part 3.1, J step 0 |
+| Read-only production investigation; never reproduce what it finds; separate implementation violation from historical exposure; keep audit lineage, retention and incident response; no silent rewriting of history | Part 3.5, J step 0c |
+| Keep implementation and validation proportional; no authentication redesign | E §X.5, Part J, Part K |
 
 ## Part 2 — Authority chain, verified
 
@@ -159,8 +177,8 @@ Four categories, kept apart. A finding moves category only on new evidence.
 
 | # | Finding | Invariant | Evidence | Priority |
 |---|---|---|---|---|
-| **V1** | Error log lines carry the full request URL, including query values that hold a student's name or internal seat id (`?student=`) and internal class ids (`?class_id=`) | INV-ARC-005 §V; DOM-OPS-001 §7 | B.8 "Logged URL"; `wsgi.py` 400/401/403/404/429/503 handlers | **Now, under existing authority** (J step 0). Whether such lines exist in production logs is unverified (U3) |
-| **V2** | The request identifier is taken from the caller's `X-Request-Id` / `X-Correlation-Id`, echoed in the response, written to every log line and persisted to `actor_request_trace` | DOM-OPS-001 INV-OPS-004 (generated at the entry point); INV-ARC-005 exposure if a caller places personal data in it | B.8 "Request identifier"; `app/__init__.py` `_get_request_id`, `attach_request_id_header`, `persist_request_trace` | **Now, under existing authority** (J step 0) |
+| **V1** | Error log lines carry the full request URL, including query values that hold a student's name or internal seat id (`?student=`) and internal class ids (`?class_id=`) | INV-ARC-005 §V; DOM-OPS-001 §7 | B.8 "Logged URL"; `wsgi.py` 400/401/403/404/429/503 handlers | **Remediated separately under existing authority** (J step 0a). Historical exposure: Part 3.5 |
+| **V2** | The request identifier is taken from the caller's `X-Request-Id` / `X-Correlation-Id`, echoed in the response, written to every log line and persisted to `actor_request_trace` | DOM-OPS-001 INV-OPS-004 (generated at the entry point); INV-ARC-005 exposure if a caller places personal data in it | B.8 "Request identifier"; `app/__init__.py` `_get_request_id`, `attach_request_id_header`, `persist_request_trace` | **Remediated separately under existing authority** (J step 0b). Historical exposure: Part 3.5 |
 | **V3** | Skipped heading levels (`h5`/`h6` after `h2`) | INV-ARC-020 §VI.2, §IX.3 | 400, 401, 404, 429, 503; 418 on PR #1839 | With the template rebuild (J step 6); small enough to fix earlier |
 
 ### 3.2 Existing implementation inconsistencies
@@ -174,11 +192,11 @@ ratified SPEC, an external standard, or the owner's intended behaviour.
 | I2 | 500 page states the error "has been automatically logged" with an Error ID that can never render | the system's actual behaviour |
 | I3 | 400 page shows `error.description` verbatim | intended disclosure rule; personal data in any description is unverified (U5) |
 | I4 | 404 page shows the full requested URL, including the query string | intended disclosure rule; the same query values as V1 can appear on screen to the requester |
-| I5 | No `WWW-Authenticate` on any 401 | RFC 9110 §15.5.2 (MUST) |
-| I6 | Credential-submission failures answered 401 although the sign-in endpoint requires no authentication | RFC 9110 §15.5.2 semantics |
+| I5 | No `WWW-Authenticate` on any 401 | RFC 9110 §15.5.2 (MUST). **Ruled (H-1):** a bounded, documented protocol deviation for cookie-session responses (E §X.5); not remediated, not claimed compliant |
+| I6 | Credential-submission failures answered 401 although the sign-in endpoint requires no authentication | RFC 9110 §15.5.2 semantics. Folded into the H-1 deviation; not changed (proportionality: re-labelling would migrate three sign-in scripts for no user-visible effect) |
 | I7 | `/api/` scope refusals (forbidden / mismatched class context) answered 401 "not logged in" by `login_required`, 404 by the API blueprint handler, 404 by the student blueprint, 403 in admin | consistency; owner I-6 |
 | I8 | Three JSON shapes, three JSON-selection rules (path, `Accept` best match, none) | consistency |
-| I9 | Status link hard-coded to the hosted instance; validator accepts two hosted origins only | instance correctness |
+| I9 | Status link hard-coded to the hosted instance; validator accepts two hosted origins only, so a self-hosted or private-network instance cannot configure its own | instance correctness |
 | I10 | 503 claims a service-wide disruption and gives recovery estimates; it auto-refreshes; 500 advises "try again" | intended accuracy and outcome rules |
 | I11 | Duplicated presentation (`.error-message` ×2; `.troubleshooting` in page block and `style.css`); runtime `aria-hidden` script | SPEC-DES-001 §IX; intended DES-6 |
 | I12 | Error renders run every context processor (session, user, class, feature queries); handlers roll back a session they do not own so those queries can run | intended resilience and ownership rules (2.3) |
@@ -187,7 +205,7 @@ ratified SPEC, an external standard, or the owner's intended behaviour.
 ### 3.3 Newly established requirements (bind after ratification)
 
 N1 code + meaning as one `h1`, icon on every page · N2 shared components, no page CSS · N3 five-class
-severity · N4 error rendering independent of session, database and context processors · N5 generic
+severity on existing levels · N4 error rendering independent of session, database and context processors · N5 generic
 `error.html` · N6 communication contract and fixed headings · N7 outcome classes from execution facts
 · N8 server-generated support reference · N9 one disclosure rule across surfaces · N10 one resolver
 and JSON shape · N11 limiter-free 429 probe · N12 error-response log record (Part F) · N13 every
@@ -204,6 +222,51 @@ application-generated error response in scope (B.9) · N14 instance-configured s
 | U5 | Do exception texts or `abort()` descriptions carry personal data? SQLAlchemy runs without `hide_parameters`, so statement errors include bound values; PII columns encrypt at bind (ciphertext), free-text columns are unchecked | trace in J step 3; Part F removes the exposure regardless |
 | U6 | The 22 `fetch(` callers' dependence on error statuses and shapes | J step 3 |
 | U7 | Error responses from Cloudflare and the Access gate | out of scope; separate review |
+
+### 3.5 Implementation violation vs historical exposure (V1, V2)
+
+A confirmed implementation violation (3.1) says the code could write prohibited information. Whether
+it did is a separate fact, established only by reading what was written. The investigation was
+read-only, reported aggregates only, and reproduced no value; nothing was modified, purged or
+re-keyed.
+
+**Implementation remediated** on branch `fix/error-log-url-and-request-id` (J step 0a/0b): one helper
+(`loggable_route()`) now supplies the route pattern, or `<unmatched>`, to every site that logged or
+persisted a raw path or URL. That covers the six `wsgi.py` handlers, the `endpoint` field of every
+log record, the unhandled-exception record, the Cloudflare-origin warning, the two admin
+class-context refusals, operational events and `actor_request_trace.endpoint`. The request id is
+always generated. Four tests feed a sentinel through the path, query and `X-Request-Id` and assert it
+reaches no log record, response header or trace row; with the fix reverted, all four and the updated
+existing test fail.
+
+**Historical exposure, production, 2026-11-24 (read-only, aggregate only):**
+
+| Store | Retained window | Finding |
+|---|---|---|
+| `actor_request_trace` | 2026-11-17 → 2026-11-24 (bounded retention) | 1,604 rows; every `request_id` has the generated shape (32 lowercase hex); no `endpoint` looks like a raw path (numeric segment or characters outside a route pattern). **No exposure found in the retained window.** Rows older than the window have already been purged by retention and cannot be examined |
+| `audit_events.request_id` | 2026-09-28 → 2026-11-24 | 5,374 rows; none has a `request_id` outside the generated shape. **No exposure found** |
+| `operational_events` | — | 0 rows. **Nothing to expose** |
+| Application journal (`classroom-economy` unit) | unknown | **Not examined.** Production shell access is the owner's; count-only commands are below |
+| nginx access logs and their Loki copy (`nginx_access`) | unknown | **Not examined.** nginx logs the full request line, query included, by default; that is a proxy-layer record outside V1 (which concerns the application) and is listed as U3 |
+
+A generated-shape id does not prove the id was generated, since a caller could send 32 hex
+characters, but such an id carries no personal data, so the exposure question V2 raises is answered
+for these stores.
+
+**Count-only commands for the owner** (print numbers and a date, never a matching line):
+
+```bash
+journalctl -u classroom-economy --no-pager -o short-iso | head -1 | cut -c1-10
+journalctl -u classroom-economy --no-pager -o cat | grep -cE '(Not Found|Forbidden|Unauthorized|Bad Request|Too Many|Rate|Service Unavailable)[^?]*[?&](student|class_id)='
+sudo sh -c 'ls -1tr /var/log/nginx/access.log* | head -1 | xargs stat -c %y | cut -c1-10'
+sudo sh -c 'zgrep -hcE "[?&](student|class_id)=" /var/log/nginx/access.log* | paste -sd+ - | bc'
+```
+
+**If a count is non-zero**, the exposure is confirmed for that store and is handled under
+SOP-SEC-001 §V.4 (incident record: minimal, access-controlled, no values). Retention runs its normal
+course; no log or trace is rewritten or selectively deleted outside the retention and incident
+procedures, so audit lineage is kept. Whether earlier purging under retention has already removed
+older exposure is recorded as unknown, not as absent.
 
 ---
 
@@ -458,12 +521,18 @@ A section with nothing to show is omitted entirely: never rendered empty, as a p
    HTTP status family, and it is **not** an operational or incident classification (SPEC-OPS-003 §VI
    classifies events; SPEC-OPS-006 classifies health).
 
-   | Condition | Meaning | Severity level |
+   | Condition | Meaning | `alert_card` level |
    |---|---|---|
    | Informational | Nothing went wrong; the response is intended (e.g. 418) | `info` |
-   | Expected refusal | A rule deliberately refused the request; nothing to recover beyond going elsewhere | `neutral` (new `alert_card` level from existing `--neutral-*` tokens, contrast-verified) |
+   | Expected refusal | A rule deliberately refused the request; nothing to recover beyond going elsewhere | `info` |
    | Recoverable restriction | The user can proceed by acting or waiting (sign in, correct input, wait out a limit) | `warning` |
    | Unexpected failure | The application could not complete the request | `danger` |
+
+   Only existing `alert_card` levels are used; the design system gains no level for error pages.
+   Informational and expected refusal share `info`: neither asks the user to act or signals a
+   fault, and the condition is told apart in words, which §3 requires regardless. A distinct colour
+   for refusal would carry no meaning the words do not already carry. (`login-notice`'s guardian
+   gray is not reused: it is the operator's voice on the sign-in pages, a different meaning.)
 
 2. **Uncertain outcome** is not a level. When SPEC-OPS-007 §VII reports an Unknown outcome, the page
    keeps its condition's level and adds the outcome notice — a shared component with its own `h2`
@@ -477,7 +546,7 @@ A section with nothing to show is omitted entirely: never rendered empty, as a p
 2. Every attribute accessibility depends on is in the server-rendered markup. No script adds,
    repairs or removes accessibility attributes.
 3. Icons never carry meaning alone. An interactive icon's accessible name describes its destination.
-4. Contrast meets WCAG 2.1 AA in the rendered role theme, including the `neutral` level.
+4. Contrast meets WCAG 2.1 AA in the rendered role theme.
 5. Nothing on the page moves, changes or navigates on a timer.
 6. Every template has a SOP-TEST-002 render fixture, one state per optional section that changes
    the rendered surface (outcome notice, support reference, sign-in panel, status link present/absent).
@@ -631,8 +700,15 @@ In HTML, JSON, plain text and the log records they cause (SPEC-OPS-003 §VIII.A)
 ### IX. Recovery actions
 
 1. **Safe destination, always.** Every page offers a link that depends neither on browser history nor
-   on re-running the failed request: the role's home when signed in, the sign-in page when not. Its
-   label names it ("Go to your dashboard", "Go to sign in").
+   on re-running the failed request, chosen by the handler (never the template) from the `role` key
+   of the session cookie the session interface has already decoded:
+   1. `student`, `admin` or `sysadmin` → that role's dashboard, labelled "Go to your dashboard";
+   2. no role → the sign-in choices (§IX.5).
+
+   The role is read, not validated: no database query, no nonce or expiry check. This is safe because
+   the link discloses nothing and authorizes nothing; the destination enforces its own authentication
+   and, for an expired or revoked session, redirects to sign-in. Every destination is a GET with no
+   side effect (INV-ARC-007).
 2. **No history navigation.** Pages offer no `history.back()` action: the application cannot establish
    what the previous history entry is, or that returning to it cannot resubmit a form, whatever the
    failed request's method.
@@ -660,9 +736,22 @@ In HTML, JSON, plain text and the log records they cause (SPEC-OPS-003 §VIII.A)
    418 is sent as 418.
 4. Status-specific headers are preserved or supplied: `Allow` on 405 (from the exception);
    `Retry-After` on 429 whenever the limiter knows the reset time, HTML and JSON alike.
-5. **401.** A 401 is sent only with a challenge for an authentication scheme the application actually
-   supports; no scheme is invented. Browser navigation to a protected page is redirected to sign-in
-   (as today). The remaining case — programmatic requests without a valid session — is Part H.
+5. **Authentication failures.**
+   1. Browser navigation to a protected page without a valid session is redirected to the role's
+      sign-in page (as today), including from `require_seat_context()`.
+   2. A programmatic request (an `/api/` path, or a background request as `_is_background_request`
+      defines it) without a valid session is answered **401** in JSON. It is never redirected to an
+      HTML sign-in page, so a client's automatic redirect-following cannot turn the failure into an
+      apparent success.
+   3. **Bounded protocol deviation.** CTH authenticates with a session cookie, and no registered HTTP
+      authentication scheme describes cookie sessions, so these 401s carry no `WWW-Authenticate`
+      challenge. This departs from RFC 9110 §15.5.2 ("MUST send a WWW-Authenticate header field").
+      The deviation is bounded to: 401 responses to programmatic requests whose session is missing,
+      expired or invalid, and 401 responses to failed credential submissions on the sign-in,
+      passkey and TOTP endpoints. No document, test or response claims RFC 9110 conformance for
+      them. No authentication scheme is invented to supply a header. Any other 401 is a defect.
+   4. A refusal of scope (a valid session asking for a class it may not use) is not an
+      authentication failure and is never answered 401 (§VIII.3; I7).
 6. **Fallback.** If a page cannot render, the response is fixed plain text with the same status and
    headers and no exception detail.
 7. A handler fixes status and headers first, then chooses the representation.
@@ -680,10 +769,22 @@ A response never:
 6. **Status-page destination.** The link target is the operator-configured `STATUS_PAGE_URL` of this
    instance. The configuration mechanism is the trust boundary; no request-controlled input
    (header, query, cookie, form field) can supply or alter it. Validation is structural, not a
-   provider allowlist: an absolute URL that parses; scheme `https`; a host present; no userinfo
-   (credentials); no fragment; no whitespace or control characters; a host that is not an IP literal
-   or `localhost`. An invalid or absent value yields no link and one configuration warning at
-   startup, never a fallback URL.
+   provider allowlist, and each rule answers a demonstrated risk of placing an operator value in an
+   `href` that every viewer's browser follows:
+
+   | Rule | Risk it answers |
+   |---|---|
+   | An absolute URL that parses, with a host | A relative or malformed value would send the viewer somewhere unintended within the app |
+   | Scheme `https` (owner ruling I-2) | `javascript:`, `data:`, `vbscript:` and `file:` would execute or read locally in the viewer's browser; plain `http` is excluded by I-2 |
+   | No userinfo (`user:pass@`) | Credentials in the value would be shown to every viewer in page source |
+   | No whitespace or control characters | Browsers strip some of them while parsing, so the URL followed could differ from the one validated |
+
+   **Not restricted:** IP literals, `localhost`, private-network and internal hostnames, ports,
+   paths, queries and fragments. The browser of the person viewing the page follows the link, and
+   the server never fetches it, so the server-side request forgery reasoning that justifies
+   blocking private addresses does not apply; an independently hosted instance on a private
+   network legitimately points at a status page on that network. An invalid or absent value yields
+   no link and one configuration warning at startup, never a fallback URL.
 
 An intentional 418 degrades no health check, monitor or alert (SPEC-OPS-006 1.8); ordinary access
 logging still applies.
@@ -699,8 +800,10 @@ logging still applies.
 ### XIII. Rendering resilience and transaction ownership
 
 1. An error response does not require the infrastructure whose failure may have caused it. Error
-   rendering performs no database query, class-context resolution, session restoration, domain query
-   or external call, and no global context processor runs a query for it.
+   rendering performs no database query, class-context resolution, session restoration (validating
+   the cookie against stored session state), domain query or external call, and no global context
+   processor runs a query for it. Reading a key from the already-decoded session cookie (§IX.1) is
+   not restoration.
 2. Already-established request facts (the generated request id, status, method, condition, outcome)
    are used only where lawful and necessary.
 3. Error handlers own no transaction. They commit nothing, roll back nothing they did not open, and
@@ -764,46 +867,52 @@ the same change.
    and `SPEC-OPS-003` to §0 Dependencies.
 3. **SPEC-OPS-003** v1.3: Part F.
 4. **SPEC-DES-001**: §IX's error-page sentence ends "…; their anatomy and components are governed by
-   `SPEC-DES-002`"; §VI gains the `neutral` alert level if adopted under §VI.5.
+   `SPEC-DES-002`". No level or token is added.
 5. **SPEC-OPS-004**: probe list includes 418 and 429; probes never call the limiter.
 6. **SOP-DOC-001**: register `SPEC-DES-002`, `SPEC-OPS-007` and every amended version.
+7. **SOP-DEP-002** §VIII step 10 (C1): "the journal has no `ERROR`, `CRITICAL`, `Traceback` or
+   `WORKER TIMEOUT` lines since the restart (application failures are `ERROR` records under
+   SPEC-OPS-003 §VIII.A; `Traceback` now matches only gunicorn's own worker failures)". Ratified with
+   Part F; takes effect when Part F ships.
 
 No amendment to INV-OPS-004, INV-ARC-001 or DOM-OPS-002 is needed for the request identifier
 (Part 2.2).
 
-## Part H — Remaining owner decision
+## Part H — Remaining conflicts with governing documentation
 
-One question survives the investigation. Everything else is ruled or settled by a governing document.
+No owner decision remains open. H-1 is ruled (Part 1, round 4; E §X.5). Checking the drafts against
+every ratified document they touch found the conflicts below. Each is resolved by an amendment in
+Part G, ratified in the same change as the drafts; none needs a new ruling.
 
-### H-1. Programmatic requests without a valid session (from I-1)
-
-**What the investigation found (B.10).** CTH authenticates with a session cookie and implements no
-HTTP authentication scheme; no registered scheme describes cookie sessions, so no compliant
-`WWW-Authenticate` challenge exists for it. Three of the four 401 sources resolve without a decision:
-
-| Source | Recommendation (no decision needed) |
-|---|---|
-| Browser navigation to a protected page | Already a redirect to sign-in. Keep. Not a 401, so no challenge is owed. |
-| `require_seat_context()` → HTML 401 page | Becomes the same sign-in redirect for navigations; programmatic callers fall under H-1. The standalone HTML 401 page then serves only H-1's HTML case, if any. |
-| Credential-submission failures ("Invalid credentials", "Authentication failed") | The sign-in endpoint requires no authentication, so 401 mis-describes a rejected submission. Answer **400** with the generic message SPEC-SEC-001 §V requires; migrate the sign-in, passkey and TOTP scripts first. |
-| nginx `auth_request` for Grafana | Internal to nginx, mapped to a redirect; never reaches a client. Keep. |
-
-**The open case:** `/api/` and background requests whose session is missing or expired
-(`app/auth.py` decorators, `api.py`), consumed by `attendance.js`, the onboarding poller and page
-scripts that branch on 401.
-
-| Option | Protocol | Consumers | Note |
+| # | Conflict | Governing text | Resolution |
 |---|---|---|---|
-| **(a) Redirect (303) to the sign-in page for these requests too** *(recommended)* | Compliant: no 401, no challenge owed, no 403 substitution | Each consumer changes to detect the redirect (`fetch(..., {redirect: "manual"})` → `opaqueredirect`) before the producer changes; migrated consumer-first per Part J step 8 | One mechanism for "sign in to continue" across browsers and scripts |
-| (b) Keep 401 without a challenge, recorded as a bounded, documented non-conformance with RFC 9110 §15.5.2 for cookie-session API responses | Knowingly non-conformant with a MUST | No change | Smallest change; leaves a standing exception the contract would have to name |
+| **C1** | Part F replaces `logger.exception` tracebacks with privacy-safe diagnostics, so the application will stop writing `Traceback` lines. The production release check greps the journal for `Traceback` to detect failures since the restart; after Part F it would stop seeing application failures and report a clean release falsely | SOP-DEP-002 §VIII step 10 ("the journal has no `ERROR`, `CRITICAL`, `Traceback` or `WORKER TIMEOUT` lines") | G.7: keep `ERROR` and `CRITICAL` (Part F logs every `SYSTEM_FAILURE` at `ERROR`, so the check still sees every application failure) and keep `Traceback` for gunicorn's own worker tracebacks, with a note that application failures appear as `ERROR` records. Ships with Part F, not before |
+| **C2** | SPEC-OPS-003 §II limits its scope to telemetry, so the error-response log record (Part F) has no governing home today | SPEC-OPS-003 §II | G.3: scope widened in v1.3 |
+| **C3** | The HTTP error communication responsibility is not named in DOM-OPS-001 §1, so SPEC-OPS-007 would have no incorporating clause | DOM-OPS-001 §1 | G.2 |
+| **C4** | The 401 responses deviate from RFC 9110 §15.5.2. No CTH governing document requires RFC 9110 conformance, so this is not a conflict with governing documentation; it is recorded because the owner directed that it be named and bounded, and E §X.5.3 does so | RFC 9110 §15.5.2 (external) | None needed beyond E §X.5.3 |
 
-The owner's ruling excludes inventing a challenge and substituting 403, so no third option is offered.
+Checked and **not** in conflict:
+
+- INV-OPS-004 (request id generated at the entry point), INV-ARC-001 §V, INV-ARC-000 §X, DOM-OPS-002
+  §2.1: V2's remediation conforms to them as written (Part 2.2).
+- DOM-SUP-001 correlation pack: it copies `actor_request_trace` rows and reads `request_id` as an
+  opaque value; the V2 remediation changes the value's source, not its shape or column.
+- SPEC-OPS-006 (public request monitoring): it measures statuses from outside; 401/403 remain
+  `ACCESS_DENIED` / `UNEXPECTED_DENIAL` where it already classifies them, and no status changes
+  under H-1.
+- SPEC-OPS-003 §VIII's metrics prohibitions (no request ids, URLs with parameters or exception text
+  in metric labels) are untouched; Part F concerns log records.
+- SPEC-DES-001 §VI: no level or token is added (D §VIII).
+- INV-ARC-007 / INV-ARC-006: the safe destination reads the decoded cookie and writes nothing
+  (E §IX.1, §XIII.1).
+- DOM-OPS-001 Status Page Publication State: it governs the hosted status page's content, not which
+  URL an instance links to; E §XI.6 governs only the link.
 
 ## Part I — Affected surfaces
 
 | Surface | Items |
 |---|---|
-| Templates | `error_400/401/403/404/429/500/503.html`, `error_418.html` (PR #1839), new `error.html`, new macros in `templates/macros/`, `alert_card` (`neutral` level) |
+| Templates | `error_400/401/403/404/429/500/503.html`, `error_418.html` (PR #1839), new `error.html`, new macros in `templates/macros/` |
 | CSS | `static/css/style.css` Error Pages section; `tokens.css` only if a token is added |
 | Handlers | `wsgi.py` (every error handler, `log_error_to_db`, `get_last_log_lines`, 404 cache, `get_validated_status_page_url`); `app/__init__.py` (`register_error_handlers`, context processors, `_get_request_id`, `attach_request_id_header`, log formats); `app/auth.py` decorators; `app/routes/api.py`, `student.py`, `admin.py`, `system_admin.py`; ≈237 route-local error returns in 9 files (B.9) |
 | Request identity | `app/__init__.py`; `app/services/tlcp.py` (`persist_request_trace`); `actor_request_trace.request_id`; support correlation pack (DOM-SUP-001) |
@@ -817,7 +926,9 @@ The owner's ruling excludes inventing a challenge and substituting 403, so no th
 ## Part J — Implementation and migration sequence
 
 **Step 0 — now, under existing authority, independent of ratification.** Confirmed invariant
-violations are not deferred for the specification:
+violations are not deferred for the specification. 0a and 0b are done on branch
+`fix/error-log-url-and-request-id` (Part 3.5); 0c's database part is done, its log part awaits the
+owner's count-only commands:
 
 - **0a (V1).** Error handlers stop logging `request.url`; log the route pattern or `<unmatched>` +
   blueprint prefix. Authority: INV-ARC-005 §V, DOM-OPS-001 §7. Small PR with a mutation test feeding
@@ -828,7 +939,7 @@ violations are not deferred for the specification:
 - **0c (U1–U3).** Read-only checks of production nginx, `LOG_FORMAT` and retained logs, to size any
   exposure already written; if found, handle under SOP-SEC-001 §V.4 and the retention rules.
 
-Then, after ratification of Parts D–G with H-1 answered:
+Then, after ratification of Parts D–G:
 
 1. **Ratify and register** (Part G). PR #1839 merges first or rebases onto the result; 418 is brought
    to the contract in step 6.
@@ -841,11 +952,12 @@ Then, after ratification of Parts D–G with H-1 answered:
 5. **Handler layer**: one error module — status and headers first, the resolver, condition and outcome,
    JSON shape with compatibility paths for traced consumers, plain-text fallback, Part F log record,
    rendering without context-processor queries, no transaction handling. Fixes I5–I8, I12.
-6. **Presentation layer**: shared macros and CSS, each template rebuilt, `error.html`, the `neutral`
-   level, the 404→418 link. Fixes V3, I3, I4, I9–I11, I13.
+6. **Presentation layer**: shared macros and CSS, each template rebuilt, `error.html`, the
+   404→418 link, the safe destination (E §IX.1). Fixes V3, I3, I4, I9–I11, I13.
 7. **Disclosure rule** across surfaces (N9): each `abort(403)`, each blueprint handler, `login_required`'s
    scope-to-401 mapping (I7), and route-local 403/404 returns.
-8. **Consumer migration**: route-local JSON errors to the canonical shape and H-1's chosen behaviour,
+8. **Consumer migration**: route-local JSON errors to the canonical shape and E §X.5 (401 kept; scope
+   refusals stop answering 401),
    consumer first, producer second, one PR per consumer group; compatibility paths removed when the
    step 3 table is empty.
 9. **Probes** (418, 429) and **docs** (self-hosting status URL, CHANGELOG, release record).
@@ -860,22 +972,23 @@ are the release SOP's browser checks (SOP-DEP-001B) for the changed pages and th
 
 | Boundary | Proved by |
 |---|---|
-| Protocol | per status: code and reason; `Allow` on 405; `Retry-After` on 429 (HTML and JSON); no 401 without a supported challenge (per H-1); 418 is 418; no error becomes 2xx/3xx |
+| Protocol | per status: code and reason; `Allow` on 405; `Retry-After` on 429 (HTML and JSON); 401 only for programmatic requests without a valid session and failed credential submissions (E §X.5), never for browser navigation or scope refusals; no claim of RFC 9110 conformance for them in tests or docs; 418 is 418; no error becomes 2xx/3xx |
 | Response format | resolver matrix: `/api/` × {none, `*/*`, `application/json`, `text/html`, `application/json;q=0.5, text/html`, tie, malformed}; JSON shape; compatibility paths; plain-text fallback when the template raises |
 | Outcome | safe method → Not applicable, no notice; failed non-safe request → Unknown notice; no status-to-outcome path (a 403/404/429 on a POST is still Unknown) |
 | Recovery | safe destination on every page; no `history.back`; Try again only for safe requests and re-issues the same safe request; no auto-refresh |
 | Disclosure | mutation tests: `abort(400, description="SECRET")`, an exception carrying `SECRET`, path and query containing `SECRET`, a caller `X-Request-Id: SECRET` — absent from HTML, JSON, fallback, response headers and log records; protected-resource missing vs forbidden responses byte-identical apart from the request id |
 | Request identity | generated id ignores inbound headers; format `[0-9a-f]{32}`; persisted trace and logs carry the generated id |
-| Accuracy | no "logged" text; capability-scoped 503 wording; status link only on unexpected-failure pages, only with a valid configured URL; URL validator accepts a self-hosted `https` status URL and rejects `http`, userinfo, fragments, IP literals, `localhost`, control characters |
+| Accuracy | no "logged" text; capability-scoped 503 wording; status link only on unexpected-failure pages, only with a valid configured URL; URL validator accepts `https` URLs with public hostnames, internal hostnames, IP literals, `localhost`, ports and fragments, and rejects non-`https` schemes (`http`, `javascript`, `data`), userinfo, relative values, whitespace and control characters |
 | Resilience | every error page renders, signed in and signed out, with the database unreachable and with an aborted transaction, issuing zero SQL statements (statement-count guard) |
 | Recording | one record per error; level by event; route pattern / `<unmatched>`; diagnostic record without message text or parameters; JSON log format stays valid with hostile values |
-| Accessibility | SOP-TEST-002 axe gate on every error template and state (outcome notice, status link on/off, sign-in panel, `neutral` level, 404→418 link); heading order; the 404 link reachable by keyboard with its accessible name |
+| Accessibility | SOP-TEST-002 axe gate on every error template and state (outcome notice, status link on/off, sign-in panel, safe destination signed in and signed out, 404→418 link); heading order; the 404 link reachable by keyboard with its accessible name |
 | Structural guards | templates carry no `<style>`, no accessibility-repair script, no `history.back`; each guard ships with its mutation proof (SOP-TEST-003 §IX.A) |
 | Adjacent regressions | `tests/test_error_handlers.py`; student/API context-error tests; status sampler tests; `attendance.js` 401 path; admin roster error path; sign-in, passkey and TOTP failure paths; TLCP trace tests |
 
 ## Not checked
 
 - Rendered axe results for the current pages (not rerun for this package).
-- Production configuration and logs (U1–U4); step 0c settles them read-only.
+- Production nginx configuration, `LOG_FORMAT`, the application journal and nginx access logs
+  (U1–U3); the database stores are checked (Part 3.5). Grafana inventory (U4).
 - Each `fetch(` caller and route-local error return individually (Part J step 3).
 - Error responses from Cloudflare and the Access gate (U7).
