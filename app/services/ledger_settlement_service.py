@@ -18,22 +18,35 @@ from app.utils.seat_scope import transaction_scope_filter
 logger = logging.getLogger(__name__)
 
 
-def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, int]:
+def settle_pending_transaction_contexts(limit: int | None = None) -> dict:
     """
     Sweep each seat/class context with unsettled ledger activity.
 
     Each context is settled inside its own FEAT-LED-003 (Settlement Sweep)
-    transaction boundary, so the settlement is durably committed and one
-    context's failure does not stop the run. Establishing the FEAT context is
+    transaction boundary, so one context's failure does not stop the run.
+    Settlement is durably committed only when this is invoked with no caller
+    transaction already open, as documented below: FEATContext otherwise
+    takes a savepoint (app/feats/base.py), and releasing a savepoint is not a
+    commit -- a caller-owned outer transaction that later rolls back undoes
+    every context this run reported as settled. Establishing the FEAT context is
     mandatory: settlement mutates Transaction and LedgerBalanceSnapshot rows,
     and FEAT-INTEGRITY blocks any flush/commit of mutated state outside a
     verified FEAT context (see app/feats/base.py). Without this boundary the
     standalone scheduled sweep (scripts/settle_pending_transactions.py) would
     raise on the first flush and settle nothing.
 
-    When invoked while another FEAT is already active (composed automation),
-    each FEAT-LED-003 boundary nests as a savepoint under that parent, which
-    owns the durable commit.
+    This must be invoked only at top level, with no FEAT already active.
+    FEATContext's hard nesting guard (INV-ARC-000 §VIII.2 / INV-ARC-021 §V.2)
+    rejects a nested, non-scaffold FEAT context outright — it does not nest
+    as a savepoint — so each pending context would be reported as failed.
+    A caller composing this with its own FEAT work (e.g. `run_savings_interest_job`)
+    must call this before opening that FEAT, not from within it.
+
+    ``failed_seat_class_pairs`` names exactly which contexts this run could not
+    settle, so a caller that must not finalize downstream work against a seat's
+    stale posted balance (e.g. savings interest, SPEC-ECON-001 §9.2) can skip
+    that seat this run rather than silently pricing it against last run's
+    snapshot (#1640).
     """
     context_query = (
         db.session.query(Transaction.seat_id, Transaction.class_id)
@@ -50,6 +63,7 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
 
     settled_contexts = 0
     failed_contexts = 0
+    failed_seat_class_pairs = []
 
     # Materialize the contexts before iterating because each context commits
     # independently, which invalidates server-side cursors on PostgreSQL.
@@ -65,6 +79,7 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
             settled_contexts += 1
         except Exception:
             failed_contexts += 1
+            failed_seat_class_pairs.append((seat_id, class_id))
             logger.exception(
                 "Settlement sweep failed for seat %s in class %s",
                 seat_log_ref(seat_id),
@@ -74,6 +89,7 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
     return {
         "settled_contexts": settled_contexts,
         "failed_contexts": failed_contexts,
+        "failed_seat_class_pairs": tuple(failed_seat_class_pairs),
     }
 
 def _normalize_account_type(raw_account_type, transaction_id) -> str:
