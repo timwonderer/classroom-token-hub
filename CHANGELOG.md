@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Removed
+
+- <!-- notes: internal -->
+
+  **`Issue.eligible_for_reward` is gone.** The column was already unread and unset after the sysadmin bug reward's retirement (#1677, DOM-SUP-001 v1.10); migration `4fad9d362d0d` physically drops `issues.eligible_for_reward` (#1678, DOM-SUP-001 v1.11). The `bug_reward` ledger type remains separately removed (migration `e3b7c1d9a2f4`, DOM-LED-001 v2.18).
+
 ### Fixed
 
 - <!-- notes: fixed, security -->
