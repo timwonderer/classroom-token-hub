@@ -258,17 +258,21 @@ made only of letters and slashes (an unmatched URL a signed-in user typed) passe
 raw paths in `endpoint` are not ruled out either. Unmatched requests reach the trace only for a
 signed-in seat, which bounds but does not close that case.
 
-**Count-only commands for the owner** (print numbers and a date, never a matching line). Each handler logged `<status> <reason>: <URL>`, and a logged URL holds no spaces, so `[^ ]*` scans the whole URL and finds `student=` or `class_id=` in any query position:
+**Count-only commands for the owner** (print numbers and a date, never a matching line). Each handler logged `<status> <reason>: <URL>`, and a logged URL holds no spaces, so `[^ ]*` scans the whole URL and finds `student=` or `class_id=` in any query position. Both patterns require at least one character of value after `=`, because an empty parameter exposes nothing and occurs naturally (the banking filter's "All" option submits `student=`):
 
 ```bash
 journalctl -u classroom-economy --no-pager -o short-iso | head -1 | cut -c1-10
-journalctl -u classroom-economy --no-pager -o cat | grep -cE '(Not Found|Forbidden|Unauthorized|Bad Request|Too Many Requests|Service Unavailable): [^ ]*[?&](student|class_id)='
+journalctl -u classroom-economy --no-pager -o cat | grep -cE '(Not Found|Forbidden|Unauthorized|Bad Request|Too Many Requests|Service Unavailable): [^ ]*[?&](student|class_id)=[^&# ]'
 sudo sh -c 'ls -1tr /var/log/nginx/access.log* | head -1 | xargs stat -c %y | cut -c1-10'
-sudo sh -c 'zgrep -hcE "[?&](student|class_id)=" /var/log/nginx/access.log* | paste -sd+ - | bc'
+sudo sh -c 'zgrep -hcE "[?&](student|class_id)=[^&# ]" /var/log/nginx/access.log* | paste -sd+ - | bc'
 ```
 
-**If a count is non-zero**, the exposure is confirmed for that store and is handled under
-SOP-SEC-001 §V.4 (incident record: minimal, access-controlled, no values). Retention runs its normal
+**If a count is non-zero**, it is an indicator, not a confirmation: a non-empty value can still be a
+placeholder or a value that is not personal data. The matches are classified without reproducing them
+(for example, counting by route pattern and by whether the value is numeric, a 36-character UUID or
+free text). Exposure is confirmed only when a match is shown to carry a student name or an internal
+class id, and is then handled under SOP-SEC-001 §V.4 (incident record: minimal, access-controlled, no
+values). Retention runs its normal
 course; no log or trace is rewritten or selectively deleted outside the retention and incident
 procedures, so audit lineage is kept. Whether earlier purging under retention has already removed
 older exposure is recorded as unknown, not as absent.
@@ -678,7 +682,12 @@ it ran.
 
 ### VIII. What an error response must not convey
 
-In HTML, JSON, plain text and the log records they cause (SPEC-OPS-003 §VIII.A):
+In HTML, JSON and plain text responses, and in the log records they cause (SPEC-OPS-003 §VIII.A).
+For log records one exception applies: the diagnostic representation SPEC-OPS-003 §VIII.A.4 defines
+for an unexpected failure (fully qualified exception class names, `module:function:line` frames, the
+SQLSTATE or driver code and the constraint or table name the driver reports, and the keyed
+fingerprint) is permitted in the log record and only there. Everything else in item 1, and items 2
+and 3, bind log records without exception.
 
 1. Raw exception messages or descriptions (`str(e)`, `error.description`), stack traces, exception
    class names, SQL or database internals, filesystem paths, credentials, tokens, configuration
