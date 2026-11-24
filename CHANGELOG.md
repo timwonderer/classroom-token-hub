@@ -16,6 +16,10 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- <!-- notes: fixed, security -->
+
+  **The Economic Engine rebalance preview judges insurance premiums against their own billing cadence.** `resolve_insurance()` always resolved a WEEKLY coverage period regardless of a policy's actual `charge_frequency`, so a correctly-priced MONTHLY-billed policy's premium was compared against a weekly-scaled recommended band (~30/7 too narrow) and could be wrongly flagged "out of range" in `/admin/economic-engine?review_rebalance=1`. `coverage_period` is no longer defaulted — every caller now states the policy's own cadence explicitly, the same way rent already has no engine-side default (#1762). Advisory-only; this page never applies insurance changes and no ledger or money data is affected.
+
 - <!-- notes: fixed -->
 
   **`prerelease.sh` checks the backup venv's Python before stopping production, and waits on PostgreSQL readiness instead of a fixed sleep** (#1819). `backup` now verifies `~/cth-backup-venv/bin/python` exists, runs, and can import `psycopg2` before `classroom-economy` is stopped, so a broken or relocated backup interpreter (e.g. after a Homebrew Python upgrade) is caught before production is touched rather than after it is already down. The `cth-verify` restore-check container's fixed `sleep 5` is replaced with up to 30 one-second `pg_isready` polls; if it never becomes ready, the script aborts before `createdb`/`counts`/`restore` run, failing closed rather than proceeding against a server that was never confirmed up. Counts/restore/evidence fail-closed handling is unchanged. SOP-DEP-002 §VII.A.5-7.
