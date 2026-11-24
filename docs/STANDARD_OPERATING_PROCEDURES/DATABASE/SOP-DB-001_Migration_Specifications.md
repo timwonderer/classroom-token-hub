@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.8     | 2026-10-22     | 1.7 | Normative |
+| SOP-DB-001       | 1.9     | 2026-11-24     | 1.8 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -24,6 +24,12 @@
 >
 > v1.8 (2026-10-22): the baseline reconstruction is tracked in issue #1649; the post-launch tracker
 > it named is archived. No rule changes.
+>
+> v1.9 (2026-11-24): the §V.B reconstruction lands. `migrations/baseline/0001_baseline_schema.sql`
+> now carries `announcements.user_id` and `policy_transitions.created_by` back in, in the form they
+> had immediately before their respective rename migrations, so `3a69db4907b4` and `8f1a2c3d4b5e`
+> replay against the schema they were actually written for. The two register rows are marked
+> resolved below and kept, per this section's own recording requirement. No rule changes.
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
@@ -205,7 +211,7 @@ Proven by execution, not by argument, and reported with its exact command and sc
 - Each correction is listed in the register below. The register is the complete set; a correction
   absent from it is an unrecorded edit to a merged migration and a Rule 3 violation.
 
-#### Standing remedy (freeze landed 2026-09-28; reconstruction deferred)
+#### Standing remedy (freeze landed 2026-09-28; reconstruction landed 2026-11-24)
 
 > [!NOTE]
 > **Freeze landed 2026-09-28 (v1.4).** `0001_bootstrap` no longer reads the ORM. It executes
@@ -219,22 +225,65 @@ Proven by execution, not by argument, and reported with its exact command and sc
 >
 > This is a freeze of the 2026-09-28 schema, **not** a reconstruction of the original baseline.
 > Elements removed from the ORM before that date are still absent at step 0, so the two corrections
-> in the register below remain load-bearing. What remains of the remedy is the reconstruction; no
-> new §V.B correction can arise from a model change made after the freeze.
+> in the register below remained load-bearing until the reconstruction landed (see immediately
+> below). No new §V.B correction can arise from a model change made after the freeze.
 
-The full remedy is a baseline that reconstructs the schema as it stood when the historical
+> [!NOTE]
+> **Reconstruction landed 2026-11-24 (v1.9), closing issue #1649.** Git archaeology (`git log -S` /
+> `--follow` on `app/models.py`) found exactly two elements affected by the gap the freeze above
+> describes, matching the two register rows and no others: `announcements.user_id` (removed in
+> commit `180a55a7`, the same commit that authored `3a69db4907b4`) and
+> `policy_transitions.created_by` (added without a foreign key in `3ddf973a`, gained its FK in
+> `513c3f81` — the model change `8f1a2c3d4b5e` was generated against — then renamed away in
+> `27c2a7f0`, the commit that authored the `c7a7b8c9d0e1` rename migration). Every other table or
+> column that commit `27c2a7f0` touched (`store_products.user_id`, `ledger_transaction.user_id`,
+> `attendance_sessions.target_user_id`, `payroll_event.target_user_id`, `issues.sysadmin_id`,
+> `audit_events.teacher_id`) is operated on only by migrations that are themselves ancestors of
+> `c7a7b8c9d0e1` in the revision graph, so they ran while the column still existed and need no
+> correction; `store_products` additionally recreates itself behind its own pre-existing
+> `table_exists` guard (`b7c41e9a2f30`), which already no-ops on the frozen/reconstructed baseline.
+>
+> `migrations/baseline/0001_baseline_schema.sql` now carries both elements back in, in the exact
+> form they had immediately before the commit that took them out — not a return to some earlier
+> full ORM snapshot, so every other post-freeze-worthy correction stays exactly as the 2026-09-28
+> freeze captured it:
+>
+> - `announcements.user_id integer` (nullable, matching the pre-`180a55a7` model), with a
+>   `users(id) ON DELETE CASCADE` foreign key (`announcements_user_id_fkey`) — `created_by_seat_id`
+>   is untouched and the two columns coexist in the baseline only so `3a69db4907b4` can act on
+>   `user_id` before `c7a7b8c9d0e1` backfills `created_by_seat_id` and drops it, exactly as the
+>   original chain does.
+> - `policy_transitions.created_by integer` (nullable, **no** foreign key — matching the
+>   pre-`513c3f81` model, since `8f1a2c3d4b5e`'s whole job is adding that FK). `created_by_seat_id`
+>   is likewise untouched.
+>
+> Evidence (`docs/ops/audits/BASELINE_RECONSTRUCTION_2026-11-24.md`): a fresh chain through the
+> reconstructed baseline reaches a `pg_dump --schema-only` schema at head that is byte-identical
+> (same SHA-256) to a fresh chain through the pre-reconstruction baseline — the two only differ at
+> step 0, by exactly the two added elements. `3a69db4907b4`'s `alter_column('user_id',
+> nullable=False)` and `8f1a2c3d4b5e`'s `create_foreign_key('fk_policy_transitions_created_by', …)`
+> were confirmed, by direct inspection of an intermediate database stopped at each revision, to take
+> their *present* branch rather than the guard's skip branch — the literal "corrections no longer
+> carry the chain" condition. `flask db heads` reports exactly one head before and after. The guards
+> themselves are untouched (Golden Rule 3 forbids editing a merged migration; this is a baseline
+> replacement, not an edit to either corrected revision) and are now provably dead on a fresh chain,
+> while remaining correct for any database that migrated through the pre-reconstruction baseline.
+
+The full remedy was a baseline that reconstructs the schema as it stood when the historical
 migrations were written, so each one executes against the schema it was written against. The
-freeze above stopped new drift; the reconstruction is still open, tracked as post-launch
-architectural debt in issue #1649 (carried from the post-launch tracker, archived 2026-10-22, and
-before it the pre-launch ship tracker, archived 2026-09-28). The bootstrap is itself a
-merged migration, so the remedy is a baseline replacement, not an edit under this section.
+freeze above stopped new drift; the reconstruction above closes the remaining gap. The bootstrap is
+itself a merged migration, so the remedy was a baseline replacement, not an edit under this
+section.
 
 #### Register of corrections
 
-| Revision | Absent element | Historical operation | Corrected |
-|----------|----------------|----------------------|-----------|
-| `3a69db4907b4` | `announcements.user_id` | backfill delete + `alter_column(nullable=False)` | 2026-09-17 |
-| `8f1a2c3d4b5e` | `policy_transitions.created_by` (table retired 2026-09-30) | `create_foreign_key("fk_policy_transitions_created_by")` | 2026-09-17 |
+| Revision | Absent element | Historical operation | Corrected | Status |
+|----------|----------------|----------------------|-----------|--------|
+| `3a69db4907b4` | `announcements.user_id` | backfill delete + `alter_column(nullable=False)` | 2026-09-17 | Resolved 2026-11-24 — element reconstructed in baseline; guard no longer load-bearing, kept per Rule 3 |
+| `8f1a2c3d4b5e` | `policy_transitions.created_by` (table retired 2026-09-30) | `create_foreign_key("fk_policy_transitions_created_by")` | 2026-09-17 | Resolved 2026-11-24 — element reconstructed in baseline; guard no longer load-bearing, kept per Rule 3 |
+
+The register is the complete set regardless of status; a resolved row is a historical record of a
+past gap, not evidence that reopens it, and is never deleted.
 
 **`3a69db4907b4` — Clean up announcement model.** Announcement authorship moved from a `User` to a
 `Seat`; `announcements` now carries `created_by_seat_id` and no `user_id`. The bootstrap therefore
@@ -254,6 +303,10 @@ forbids. If the frozen-baseline remedy lands, this disappears with the rest of t
 future change ever makes that downgrade reachable, it becomes a live candidate and must be evaluated
 on its own evidence.
 
+*2026-11-24 update:* the reconstruction landed (see *Standing remedy* above). `user_id` is now
+present at step 0, so the guarded `upgrade()` branch runs its original statements unchanged and the
+guard is dead on a fresh chain. The downgrade analysis above is unchanged and still holds.
+
 **`8f1a2c3d4b5e` — Add policy transition created_by FK.** The same rename: `policy_transitions`
 carried `created_by_seat_id` and no `created_by`. (1.6: the table itself was retired by operator ruling
 2026-09-30 and is dropped by `dd52b19d48d8`; the frozen baseline still creates it at step 0, so this
@@ -261,6 +314,12 @@ historical revision replays unchanged and the correction stays load-bearing.) Th
 which cannot exist on a fresh chain. The correction returns early unless
 `column_exists("policy_transitions", "created_by")`, and adds the `column_exists` helper the file
 lacked. The pre-existing `foreign_key_exists` guard is preserved beneath it.
+
+*2026-11-24 update:* the reconstruction landed (see *Standing remedy* above). `created_by` is now
+present at step 0, without a foreign key — matching the model the day before `513c3f81` added one —
+so the guarded `upgrade()` runs past the `column_exists` check and creates
+`fk_policy_transitions_created_by` exactly as originally intended. The guard is dead on a fresh
+chain; it remains correct for any database migrated before this reconstruction.
 
 Neither correction retargets its operation onto `created_by_seat_id`. That column is created by the
 bootstrap with its constraints already in place, and rewriting a historical revision to constrain a

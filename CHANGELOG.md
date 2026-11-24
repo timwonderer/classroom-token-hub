@@ -18,6 +18,22 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: fixed -->
 
+  **The historical migration baseline is reconstructed, closing #1649 (`SOP-DB-001` §V.B).**
+  `migrations/baseline/0001_baseline_schema.sql` carries `announcements.user_id` and
+  `policy_transitions.created_by` back in, in the exact form each had immediately before the commit
+  that renamed it away, so migrations `3a69db4907b4` and `8f1a2c3d4b5e` now replay against the
+  schema they were actually written for. The two `SOP-DB-001` §V.B Bootstrap-Replay Corrections are
+  no longer load-bearing on a fresh chain (their `column_exists`/`foreign_key_exists` guards now take
+  the branch that runs the original operation, confirmed by inspecting an intermediate database
+  stopped at each revision); they remain in place, correct for any database migrated before this
+  change, per Golden Rule 3. A fresh chain through the reconstructed baseline reaches a
+  `pg_dump --schema-only` schema at head that is byte-identical to one through the prior baseline —
+  the two differ only at step 0, by exactly the two added elements. Git archaeology
+  (`docs/ops/audits/BASELINE_RECONSTRUCTION_2026-11-24.md`) found no other element affected by the
+  gap the 2026-09-28 freeze (`docs/ops/audits/BASELINE_FREEZE_2026-09-28.md`) left open.
+
+- <!-- notes: fixed -->
+
   **The student view and `/api/student-status` now show projected pay** (#1645). `get_class_attendance_status()` hardcoded `projected_pay: None`; it now reuses the same pricing rules a real payroll run applies (`app/services/payroll/pricing.py`, DOM-PROD-001 §XV.3) — closed-but-unpaid work at the payroll setting in force when it closed, the still-open session as if it closed now at the setting in force now — so a mid-cycle rate change reprices only the open session, never work already closed under the old rate. The open-session portion is an estimate, not a guaranteed payout: it reflects work as if it ended at this instant, and a payroll run never actually settles a session that is still open.
 
 - <!-- notes: fixed, highlight -->

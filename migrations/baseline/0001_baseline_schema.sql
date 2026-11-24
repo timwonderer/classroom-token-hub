@@ -47,6 +47,7 @@ ALTER SEQUENCE public.actor_request_trace_id_seq OWNED BY public.actor_request_t
 
 CREATE TABLE public.announcements (
     id integer NOT NULL,
+    user_id integer,
     created_by_seat_id integer NOT NULL,
     class_id character varying(36) NOT NULL,
     title character varying(200) NOT NULL,
@@ -757,6 +758,7 @@ CREATE TABLE public.policy_transitions (
     activation_mode character varying(32) NOT NULL,
     status character varying(32) NOT NULL,
     created_at timestamp with time zone NOT NULL,
+    created_by integer,
     created_by_seat_id integer,
     applied_at timestamp with time zone,
     correlation_id character varying(64),
@@ -1576,6 +1578,9 @@ ALTER TABLE ONLY public.announcements
 
 ALTER TABLE ONLY public.announcements
     ADD CONSTRAINT announcements_created_by_seat_id_fkey FOREIGN KEY (created_by_seat_id) REFERENCES public.seats(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.announcements
+    ADD CONSTRAINT announcements_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.assessment_events
     ADD CONSTRAINT assessment_events_bill_cycle_id_fkey FOREIGN KEY (bill_cycle_id) REFERENCES public.bill_cycles(id) ON DELETE SET NULL;
