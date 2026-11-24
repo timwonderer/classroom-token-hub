@@ -186,5 +186,6 @@ def test_teacher_session_refresh_does_not_extend_retention(client, app):
         classroom.teacher_user.last_signed_in_at = utc_now()-timedelta(days=10)
     before = classroom.teacher_user.last_signed_in_at
     with app.test_request_context():
-        establish_teacher_session(classroom.teacher_user)
+        with FEATContext('FEAT-IDEN-009', idempotency_key='refresh:establish'):
+            establish_teacher_session(classroom.teacher_user)
     assert classroom.teacher_user.last_signed_in_at == before

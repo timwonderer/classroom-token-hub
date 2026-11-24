@@ -4,11 +4,22 @@ from __future__ import annotations
 
 import pyotp
 
+import secrets
+
 from app.extensions import db
 from app.feats.base import get_active_feat_name
 from app.models import ClassEconomy, Seat, User, UserRole
 from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
 from app.utils.encryption import encrypt_totp
+
+
+def _require_feat(*feat_names: str) -> None:
+    active = get_active_feat_name()
+    if active not in feat_names:
+        wanted = feat_names[0] if len(feat_names) == 1 else f"one of {feat_names!r}"
+        raise PermissionError(
+            f"Identity session command requires {wanted}, active={active!r}."
+        )
 
 
 def create_system_principal(username: str) -> str | None:
@@ -147,3 +158,114 @@ def resolve_teacher_target_seat(*, ctx, target_seat_id):
     if actor is None or target is None:
         raise ValueError('UNAUTHORIZED_SCOPE')
     return target
+
+
+# ---------------------------------------------------------------------------
+# FEAT-IDEN-009: Identity Session Lifecycle
+#
+# Establishment, class selection and revocation of a sign-in, for all three
+# roles, as one lifecycle under one contract (#1777). These commands own the
+# ``users`` row writes (``current_session_nonce``, ``current_session_started_at``,
+# ``current_session_expires_at``, ``last_active_class_id``, ``last_active_seat_id``)
+# that FEAT-IDEN-001 (read-only, no authenticated principal, DOM-IDEN-005 §VII)
+# cannot lawfully own. Callers (app.auth, the route layer) decide *when* to
+# call these; the policy of *what* gets written lives here.
+# ---------------------------------------------------------------------------
+
+def establish_teacher_session_fields(user: User, *, started_at, expires_at) -> str:
+    """Write the teacher's fixed session window and a fresh nonce (DOM-IDEN-003).
+
+    ``started_at``/``expires_at`` are supplied by the caller (computed through
+    ``canonical_temporal_resolver``, SPEC-TIME-001) rather than decided here:
+    this command owns *that* the window is written atomically with the nonce,
+    not the clock read itself.
+    """
+    _require_feat("FEAT-IDEN-009")
+    nonce = secrets.token_urlsafe(32)
+    user.current_session_started_at = started_at
+    user.current_session_expires_at = expires_at
+    user.current_session_nonce = nonce
+    return nonce
+
+
+def establish_sysadmin_session_fields(user: User) -> str:
+    """Write a fresh sign-in nonce for a sysadmin. No DB-stored expiry: the
+    sysadmin window is idle-timeout-based and tracked in the signed cookie
+    (``app.auth.SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES``), not on the row."""
+    _require_feat("FEAT-IDEN-009")
+    nonce = secrets.token_urlsafe(32)
+    user.current_session_nonce = nonce
+    return nonce
+
+
+def establish_student_session_fields(
+    user: User, *, started_at, expires_at, class_id: str | None = None, seat_id: int | None = None,
+) -> str:
+    """Write the student's fixed session window and a fresh nonce.
+
+    ``class_id``/``seat_id`` are omitted when login has no valid persisted
+    class selection yet (the session is established in a class-less state
+    pending ``student.select_class_context``) — only the sign-in fields are
+    written in that case, matching the existing established behavior.
+    """
+    _require_feat("FEAT-IDEN-009")
+    nonce = secrets.token_urlsafe(32)
+    user.current_session_started_at = started_at
+    user.current_session_expires_at = expires_at
+    user.current_session_nonce = nonce
+    if class_id is not None and seat_id is not None:
+        user.last_active_class_id = class_id
+        user.last_active_seat_id = seat_id
+    return nonce
+
+
+def select_student_class_fields(user: User, *, class_id: str, seat_id: int) -> None:
+    """Move an already-authenticated student's canonical active-class pointers.
+
+    Unlike establishment, this does not rotate the sign-in nonce: the existing
+    session is simply repointed at a different already-bound Seat.
+
+    Callable under FEAT-IDEN-009 (an explicit class switch: ``select_class_context``,
+    ``switch_class``) or FEAT-IDEN-005 (activating a class a student just bound via
+    ``add_class`` — the pointer move is the last step of that same bind, not a
+    separate switch).
+    """
+    _require_feat("FEAT-IDEN-009", "FEAT-IDEN-005")
+    user.last_active_class_id = class_id
+    user.last_active_seat_id = seat_id
+
+
+def select_teacher_class_fields(user: User, *, class_id: str, seat_id: int) -> None:
+    """Move an already-authenticated teacher's canonical active-class pointers."""
+    _require_feat("FEAT-IDEN-009")
+    user.last_active_class_id = class_id
+    user.last_active_seat_id = seat_id
+
+
+def clear_student_class_fields(user: User) -> None:
+    """Clear a student's canonical active-class pointers (e.g. a persisted
+    class_id that no longer names a claimed seat), without touching the
+    sign-in nonce or window."""
+    _require_feat("FEAT-IDEN-009")
+    user.last_active_class_id = None
+    user.last_active_seat_id = None
+
+
+def revoke_signed_in_session(user_id, nonce: str) -> bool:
+    """Void the sign-in on ``users`` for exactly the session ``nonce`` names.
+
+    Locked (``FOR UPDATE``) and nonce-conditional: a stale or replayed
+    revocation must not end a newer sign-in that has since replaced the
+    nonce (DOM-IDEN-002/003 §Session Establishment). Returns whether this
+    call actually voided a row (``False`` means a newer sign-in already
+    holds a different nonce, or the user no longer exists).
+    """
+    _require_feat("FEAT-IDEN-009")
+    if not nonce:
+        return False
+    user = User.query.filter_by(id=user_id).with_for_update().one_or_none()
+    if user is None or user.current_session_nonce != nonce:
+        return False
+    user.current_session_nonce = None
+    user.current_session_expires_at = None
+    return True
