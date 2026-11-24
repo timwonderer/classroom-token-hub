@@ -14,6 +14,7 @@ audits, and superseded plans live in [`docs/archive/v2-tracking-2026/`](https://
 |---|---|
 | [`BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md`](BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md) | Approved Operations verifier policy decisions, cited by SOP-DOC-001. |
 | [`FEAT_REGISTRY_RECONCILIATION_2026-09-19.md`](FEAT_REGISTRY_RECONCILIATION_2026-09-19.md) | FEAT registry against implementation, cited from `app/feats/`. |
+| [`HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`](HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md) | Unratified draft contract for the HTTP error pages and the owner decisions it needs. |
 | [`DOCS_PLATFORM_ROADMAP.md`](DOCS_PLATFORM_ROADMAP.md) | Documentation platform plan. |
 | [`DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md`](DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md) | Reusable SOP-DEV-002 plan template for a single domain. |
 
