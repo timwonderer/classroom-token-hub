@@ -740,11 +740,17 @@ def get_class_attendance_status(student, *, class_id: str, ctx=None):
         seat.id, class_id, ctx=ctx
     )
 
+    # Local import: app.services.payroll.pricing imports this module, so a
+    # top-level import here would be circular.
+    from app.services.payroll.pricing import estimate_unpaid_amount
+
+    projected_pay = estimate_unpaid_amount(seat.id, class_id, ctx=ctx)
+
     return {
         "active": is_active,
         "done": done,
         "duration": duration,
         "duration_today": duration_today,
-        "projected_pay": None,
+        "projected_pay": projected_pay,
         "hall_pass": _derive_hall_pass_state(seat.id, class_id, ctx=ctx),
     }
