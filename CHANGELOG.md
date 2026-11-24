@@ -26,6 +26,10 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: security-reliability -->
 
+  **The banking page's Student filter no longer puts a name in the URL** (INV-ARC-005 §V, DOM-OPS-001 §7). It was a free-text name box on a GET form, so a typed name travelled in `/admin/banking?student=…` into the nginx access log, browser history and any Referer, and the pagination links carried it forward. It is now a dropdown of the class's claimed students whose value is the seat's `public_id`; the route filters by `Seat.public_id` within the selected `class_id` and no longer accepts a name or an internal seat id. A sweep of the other GET forms and query-string builders found no other name or PII in a URL.
+
+- <!-- notes: security-reliability -->
+
   **A failed database statement no longer writes its values into the logs** (INV-ARC-005 §V, DOM-OPS-001 §7). The engine now runs with `hide_parameters=True`, so a statement error's text keeps the SQL and drops the `[parameters: ...]` dump. That dump carried plaintext free text (support ticket explanations and notes, claim explanations, announcements, transaction descriptions, recovery usernames) and internal ids into every `logger.exception(...)` and f-string that quoted the exception. Postgres can still echo values itself (`DETAIL: Failing row contains (...)`), so the eight handlers that write free text — student issue submission (general, transaction, attendance), announcement create and update, manual payment, and sysadmin ticket update and resolution — log the exception class only.
 
 ### Fixed

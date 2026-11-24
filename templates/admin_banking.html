@@ -218,8 +218,12 @@
             </div>
             <div class="col-md-2">
               <label for="student" class="form-label fw-bold">Student:</label>
-              <input type="text" name="student" id="student" class="form-control form-control-sm" placeholder="Name..."
-                value="{{ request.args.get('student', '') }}">
+              <select name="student" id="student" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% for public_id, name in student_filter_options %}
+                <option value="{{ public_id }}" {% if request.args.get('student')==public_id %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+              </select>
             </div>
           </div>
           <div class="row mt-3">

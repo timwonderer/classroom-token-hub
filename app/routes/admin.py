@@ -8796,21 +8796,11 @@ def banking():
         )
     )
 
+    # The student filter is a seat public_id picked from the roster dropdown, never a
+    # typed name: a GET query string reaches access logs, history and Referer
+    # (INV-ARC-005 §V; DOM-OPS-001 §7 names an actor in a URL by seats.public_id).
     if student_q:
-        matching_seat_ids = []
-        if student_q.isdigit():
-            matching_seat_ids.append(int(student_q))
-        for seat in Seat.query.filter(
-            Seat.class_id == selected_class_id,
-            Seat.claimed_at.isnot(None),
-        ).all():
-            _ip = seat.identity_profile
-            if student_q.lower() in (_ip.full_name if _ip else "").lower():
-                matching_seat_ids.append(seat.id)
-        if matching_seat_ids:
-            query = query.filter(Seat.id.in_(matching_seat_ids))
-        else:
-            query = query.filter(sa.false())
+        query = query.filter(Seat.public_id == student_q)
 
     if account_q:
         query = query.filter(Transaction.account_type == account_q)
@@ -8914,6 +8904,13 @@ def banking():
         total_deposits=total_deposits,
         students_with_savings=students_with_savings,
         total_students=len(students),
+        student_filter_options=sorted(
+            (
+                (seat.public_id, seat.identity_profile.full_name if seat.identity_profile else seat.public_id)
+                for seat in students
+            ),
+            key=lambda option: option[1].lower(),
+        ),
         average_savings_balance=average_savings_balance,
         transaction_types=transaction_types,
         page=page,
