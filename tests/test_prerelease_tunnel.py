@@ -60,10 +60,24 @@ def env():
     stub("docker", "exit 0")
     stub("sleep", "exit 0")
     stub("pg_dump", "echo 'pg_dump (PostgreSQL) 14.0'")
+    # `docker` is a no-op stub that never actually starts a server, so the readiness poll must be told
+    # the (fake) container is up immediately; exit "${FAKE_PG_NOT_READY:-0}" lets a test simulate the
+    # container never becoming ready within the bound.
+    stub("pg_isready", 'exit "${FAKE_PG_NOT_READY:-0}"')
     stub("lsof", 'exit "${FAKE_PORT_BUSY:-1}"')
     stub("age-keygen", 'echo "${FAKE_RECIPIENT:-age1fake}"')
     tool = home / "cth-backup-venv" / "bin" / "python"
-    tool.write_text('#!/bin/bash\necho "tool $*"\nexit "${FAKE_TOOL_FAILS:-0}"\n')
+    # FAKE_TOOL_FAILS must fail only the actual backup invocation (`$TOOL backup --reason manual`), not
+    # the `--version` / `-c import psycopg2` prerequisite checks prerelease.sh now runs first — otherwise
+    # a test using it to simulate the backup tool failing never gets past the prerequisite check at all.
+    tool.write_text(
+        '#!/bin/bash\n'
+        'echo "tool $*"\n'
+        'case "$*" in\n'
+        '  *"backup --reason manual"*) exit "${FAKE_TOOL_FAILS:-0}" ;;\n'
+        '  *) exit 0 ;;\n'
+        'esac\n'
+    )
     tool.chmod(0o755)
 
     base = {
@@ -71,6 +85,12 @@ def env():
         "PATH": f"{stubs}:/usr/bin:/bin:/usr/sbin:/sbin",
         "STUB_LOG": str(state / "calls.log"),
         "STUB_STATE": str(state),
+        # prerelease.sh prepends a hardcoded Homebrew postgresql@14 bin dir to PATH. On a machine where
+        # that package is actually installed, its real pg_isready would resolve ahead of the stub above
+        # and fail every poll (nothing is listening on 127.0.0.1:55432 in these tests), breaking the
+        # success-path tests on such a host. Override it to the stub directory so the stub always wins
+        # regardless of what is installed on the host running the tests.
+        "CTH_BACKUP_PG_BIN": str(stubs),
     }
     yield {"root": root, "home": home, "state": state, "base": base}
     shutil.rmtree(root, ignore_errors=True)
@@ -116,7 +136,11 @@ def test_backup_closes_the_tunnel_when_the_app_will_not_stop(env):
 def test_backup_closes_the_tunnel_when_the_backup_tool_fails(env):
     result = run(env, "backup", FAKE_TOOL_FAILS=1)
     assert result.returncode != 0
+    # The tunnel must actually have been opened (i.e. the prerequisite checks and app-stop passed, and
+    # the failure is the backup tool invocation itself), then closed by the ERR trap.
+    assert opened_with_control_socket(env)
     assert not tunnel_open(env)
+    assert any("-O exit" in c for c in ssh_calls(env))
 
 
 def test_restore_closes_the_tunnel_and_deletes_the_identity(env):
@@ -172,6 +196,40 @@ def test_a_stale_control_socket_is_replaced_not_reused(env):
     assert result.returncode == 0, result.stdout + result.stderr
     assert opened_with_control_socket(env) and tunnel_open(env)
     assert run(env, "close-tunnel").returncode == 0 and not tunnel_open(env)
+
+
+def test_backup_fails_closed_when_cth_verify_never_becomes_ready(env):
+    # Issue #1819: a fixed `sleep 5` either wasted time or lost the race against postgres:14's real
+    # init time. The bounded pg_isready poll must fail closed, before the tunnel opens or the app stops,
+    # rather than proceed to createdb/backup against a server that was never confirmed ready.
+    result = run(env, "backup", FAKE_PG_NOT_READY=1)
+    assert result.returncode != 0
+    assert "did not become ready" in result.stdout
+    assert not tunnel_open(env)
+    assert not any("systemctl stop" in c for c in ssh_calls(env))
+
+
+def test_backup_aborts_before_stopping_the_app_when_the_backup_venv_python_is_missing(env):
+    # Issue #1819: prerelease.sh stopped the gated app before discovering the backup venv's python was
+    # gone (removed Homebrew Python it had been built against). The check must run, and fail, before
+    # anything touches production.
+    (env["home"] / "cth-backup-venv" / "bin" / "python").unlink()
+    result = run(env, "backup")
+    assert result.returncode != 0
+    assert "not found or not executable" in result.stdout
+    assert not any("systemctl stop" in c for c in ssh_calls(env))
+    assert not tunnel_open(env)
+
+
+def test_backup_aborts_before_stopping_the_app_when_the_backup_venv_python_cannot_import_psycopg2(env):
+    tool = env["home"] / "cth-backup-venv" / "bin" / "python"
+    tool.write_text('#!/bin/bash\ncase "$*" in\n  *"-c import psycopg2"*) exit 1 ;;\nesac\necho "tool $*"\n')
+    tool.chmod(0o755)
+    result = run(env, "backup")
+    assert result.returncode != 0
+    assert "cannot import psycopg2" in result.stdout
+    assert not any("systemctl stop" in c for c in ssh_calls(env))
+    assert not tunnel_open(env)
 
 
 def test_restore_without_an_identity_still_closes_the_tunnel(env):
