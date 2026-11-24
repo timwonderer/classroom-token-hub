@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.10 | 2026-10-27 | 1.9 | Constitutional |
+| DOM-SUP-001 | 1.11 | 2026-11-24 | 1.10 | Constitutional |
+
+> [!IMPORTANT]
+> **v1.11 (2026-11-24), issue #1678.** `issues.eligible_for_reward` is physically dropped by migration `4fad9d362d0d`, completing the v1.10 ruling below. `Issue.eligible_for_reward` no longer exists on the model; there is nothing left to read, set, or migrate.
 
 > [!IMPORTANT]
 > **v1.10 (2026-10-27), owner ruling 2026-10-27.** The sysadmin bug reward is retired until badges are formally implemented. Resolving an escalated issue records the technical fix and returns the ticket to the teacher; it moves no money. `issues.eligible_for_reward` is no longer set and is dropped by a later contract migration; `user_reports` loses its reward status and fields.
@@ -151,7 +154,6 @@ Key fields:
   - `resolved_at`
   - `support_permissions` — per-ticket boolean grants for individual diagnostic categories (§X)
   - `share_class_name_with_sysadmin` — explicit teacher consent for escalation context
-  - `eligible_for_reward` — retired 2026-10-27 with the bug reward; always false, dropped by a later contract migration
   - `escalated_at`
   - `escalation_reason`
   - `diagnostic_note`
