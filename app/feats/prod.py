@@ -443,6 +443,23 @@ def _record_payroll_event_impl(
     # here — pay rate is resolved from `class_id` alone (INV-ARC-014 §V).
     _resolve_class_economy(ctx.class_id)
 
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): the PayrollEvent insert
+    # below carries a foreign key to actor_seat_id (the acting teacher's or
+    # system actor's seat), so Postgres takes an implicit FOR KEY SHARE lock on
+    # it at insert time. Since #1640 widened rent reconciliation's lock set to
+    # every seat in the class -- the actor's seat included, which reconciliation
+    # previously never touched -- an unlocked actor seat can complete the same
+    # circular wait against reconciliation that #1640 otherwise closed (Codex
+    # review on PR #1832). This must run before ANY seat-specific work below,
+    # not just before the insert: for payroll_event_type == "payroll",
+    # close_due_attendance_intervals() below locks the target seat on its own,
+    # well before an earlier version of this fix locked the actor seat --
+    # which left the same half-open window Codex's review caught. Lock every
+    # seat this call can touch or this insert's foreign keys will reference,
+    # ascending by id, before any of that.
+    for sid in sorted({target_seat_id, ctx.seat_id}):
+        lock_attendance_seat(sid, ctx.class_id)
+
     if payroll_event_type == "payroll":
         if amount is not None:
             raise ValueError("FEAT-PROD-003 derives a payroll event's amount; it cannot be supplied.")
@@ -481,17 +498,6 @@ def _record_payroll_event_impl(
     if target_seat.claimed_at is None or target_seat.user_id is None:
         raise ValueError("A payroll event target seat must be claimed.")
 
-    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): the PayrollEvent insert
-    # below carries a foreign key to actor_seat_id (the acting teacher's or
-    # system actor's seat), so Postgres takes an implicit FOR KEY SHARE lock on
-    # it at insert time. Since #1640 widened rent reconciliation's lock set to
-    # every seat in the class -- the actor's seat included, which reconciliation
-    # previously never touched -- an unlocked actor seat here can complete the
-    # same circular wait against reconciliation that #1640 otherwise closed
-    # (Codex review on PR #1832). Lock every seat this insert's foreign keys
-    # will reference, ascending by id, before the class.
-    for sid in sorted({target_seat_id, ctx.seat_id}):
-        lock_attendance_seat(sid, ctx.class_id)
     ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     event = PayrollEvent(
         class_id=ctx.class_id,

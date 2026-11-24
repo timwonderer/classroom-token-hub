@@ -23,8 +23,12 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict:
     Sweep each seat/class context with unsettled ledger activity.
 
     Each context is settled inside its own FEAT-LED-003 (Settlement Sweep)
-    transaction boundary, so the settlement is durably committed and one
-    context's failure does not stop the run. Establishing the FEAT context is
+    transaction boundary, so one context's failure does not stop the run.
+    Settlement is durably committed only when this is invoked with no caller
+    transaction already open, as documented below: FEATContext otherwise
+    takes a savepoint (app/feats/base.py), and releasing a savepoint is not a
+    commit -- a caller-owned outer transaction that later rolls back undoes
+    every context this run reported as settled. Establishing the FEAT context is
     mandatory: settlement mutates Transaction and LedgerBalanceSnapshot rows,
     and FEAT-INTEGRITY blocks any flush/commit of mutated state outside a
     verified FEAT context (see app/feats/base.py). Without this boundary the
