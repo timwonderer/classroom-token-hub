@@ -448,7 +448,9 @@ def resolve_actor_context(context: CanonicalContext | None, *, observation: dict
     actor_public_id = seat.public_id
     class_public_id = _class_public_id(class_id)
 
-    endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
+    from app.utils.helpers import loggable_route
+
+    endpoint = loggable_route()
     return {
         "actor_type": actor_type,
         "actor_public_id": actor_public_id,

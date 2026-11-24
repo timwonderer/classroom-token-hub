@@ -17,7 +17,7 @@ import os
 import re
 from pathlib import Path
 
-from flask import request, current_app, g, session, render_template, url_for
+from flask import request, current_app, g, session, render_template, url_for, has_request_context
 # TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
 # - soft_str and soft_unicode removed (deprecated since 2.0)
 # - Markup.striptags() behavior may differ
@@ -337,6 +337,21 @@ def sanitize_for_log(value) -> str:
     return "".join(
         c if c.isprintable() else f"\\x{ord(c):02x}" for c in text
     )
+
+
+def loggable_route() -> str:
+    """The request's route, safe to write to a log or a trace row.
+
+    The registered pattern (``/admin/students/<int:seat_id>``), never the raw
+    path or URL: path segments and query values can carry a student's name, an
+    internal id or anything a caller typed (INV-ARC-005 §V, DOM-OPS-001 §7). A
+    request that matched no route has no pattern and is logged as
+    ``<unmatched>``.
+    """
+    if not has_request_context():
+        return "-"
+    rule = request.url_rule
+    return rule.rule if rule is not None and rule.rule else "<unmatched>"
 
 
 _RANDOM_CORRELATION_ID = re.compile(r"corr_[0-9a-f]{32}")

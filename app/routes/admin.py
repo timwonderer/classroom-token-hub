@@ -78,7 +78,7 @@ from app.forms import (
     ManualPaymentForm, TeacherFineForm
 )
 # Import utility functions
-from app.utils.helpers import safe_redirect_target, generate_anonymous_code, loggable_token, render_template_with_fallback as render_template
+from app.utils.helpers import safe_redirect_target, generate_anonymous_code, loggable_route, loggable_token, render_template_with_fallback as render_template
 from app.utils.join_code import generate_join_code, get_display_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.services.payroll.builders import (
@@ -488,7 +488,7 @@ def _handle_mismatched_admin_class_context():
         extra={
             'endpoint': request.endpoint,
             'method': request.method,
-            'path': request.path,
+            'route': loggable_route(),
             'session_join_code': _get_teacher_user_join_code(canonical_context),
             'requested_class': class_log_ref(_get_requested_admin_class_id()),
         },
@@ -518,7 +518,7 @@ def _handle_missing_admin_class_context():
         extra={
             'endpoint': request.endpoint,
             'method': request.method,
-            'path': request.path,
+            'route': loggable_route(),
         },
     )
 
@@ -9983,7 +9983,7 @@ def api_economy_analyze():
                 event_type="INVALID_CLASS_SCOPE",
                 severity="warning",
                 domain="economy",
-                route=request.path,
+                route=loggable_route(),
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={
@@ -10092,7 +10092,7 @@ def api_economy_validate(feature):
                 event_type="INVALID_CLASS_SCOPE",
                 severity="warning",
                 domain="economy",
-                route=request.path,
+                route=loggable_route(),
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={

@@ -62,7 +62,7 @@ if missing_vars:
 
 # -------------------- UTILITIES --------------------
 from app.utils.encryption import PIIEncryptedType
-from app.utils.helpers import is_safe_url, render_markdown, docs_url_for, sanitize_for_log
+from app.utils.helpers import is_safe_url, render_markdown, docs_url_for, loggable_route, sanitize_for_log
 from app.utils.constants import THEME_PROMPTS
 
 
@@ -93,9 +93,6 @@ def nl2br_filter(s):
 
 
 # -------------------- APPLICATION FACTORY --------------------
-
-REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
-
 
 # Every field is public: the class appears only as its class_public_id (DOM-OPS-001 §7).
 DEFAULT_LOG_FORMAT = (
@@ -129,21 +126,7 @@ class RequestIdFilter(logging.Filter):
             # Never the internal class_id: it does not leave the database (DOM-OPS-001 §7).
             record.class_public_id = context.get("class_public_id", "-") if context else "-"
         if not hasattr(record, "endpoint"):
-            if has_request_context():
-                if request.url_rule and request.url_rule.rule:
-                    record.endpoint = request.url_rule.rule
-                else:
-                    # request.url_rule is None for any unmatched route (every
-                    # 404), so this falls back to the raw, attacker-supplied
-                    # path -- unlike url_rule.rule, which is always one of
-                    # this app's own registered route patterns. Every log
-                    # record on every request carries this field, so an
-                    # unsanitized path here is log injection on a much wider
-                    # surface than the few explicit logger.warning(request.url)
-                    # call sites CodeQL's py/log-injection query flagged.
-                    record.endpoint = request.path
-            else:
-                record.endpoint = "-"
+            record.endpoint = loggable_route()
         record.endpoint = sanitize_for_log(record.endpoint)
         if not hasattr(record, "method"):
             record.method = request.method if has_request_context() else "-"
@@ -157,13 +140,10 @@ class RequestIdFilter(logging.Filter):
 
 
 def _get_request_id():
-    for header in REQUEST_ID_HEADERS:
-        header_value = request.headers.get(header)
-        if not header_value:
-            continue
-        header_value = header_value.strip()
-        if 0 < len(header_value) <= 128:
-            return header_value
+    # Generated here, never taken from the caller's X-Request-Id or
+    # X-Correlation-Id: a request's identity is created at the entry point
+    # (DOM-OPS-001 INV-OPS-004), so nothing a caller sends is adopted, echoed,
+    # logged or persisted as it.
     return uuid.uuid4().hex
 
 
@@ -177,12 +157,12 @@ def register_error_handlers(app):
         from app.services.tlcp import CORRELATION_VERSION, save_error_event
 
         context = getattr(g, "correlation_context", None) or {}
-        endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
+        endpoint = loggable_route()
         sanitized_message = " ".join(str(e).split())[:500]
         app.logger.exception(
             "Unhandled exception",
             extra={
-                "route": request.path,
+                "route": endpoint,
                 "method": request.method,
                 "request_id": getattr(g, "request_id", None),
                 "actor_type": context.get("actor_type"),
@@ -671,10 +651,10 @@ def create_app():
                 if not validate_cloudflare_request():
                     real_ip = get_real_ip()
                     app.logger.warning(
-                        "Request not from Cloudflare IP: %s (real_ip: %s, path: %s, method: %s)",
+                        "Request not from Cloudflare IP: %s (real_ip: %s, route: %s, method: %s)",
                         sanitize_for_log(request.remote_addr),
                         sanitize_for_log(real_ip),
-                        sanitize_for_log(request.path),
+                        sanitize_for_log(loggable_route()),
                         sanitize_for_log(request.method),
                     )
             except Exception as e:
