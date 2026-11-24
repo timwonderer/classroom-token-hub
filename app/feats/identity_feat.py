@@ -760,20 +760,33 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
     # inversion #1640/PR #1832 closed for unclaim_student_seat and the other
     # identity-domain writers (#1835). Newly-inserted seats need no pre-lock:
     # a row this same transaction just created cannot be held by anyone else.
+    # The discovery query above and the lock below are two statements, not
+    # one: a seat matching one of these claim-name hashes that is inserted
+    # and committed by another transaction strictly between them would be
+    # locked only later, by _ensure_distinct_claim_codes, after the class is
+    # already locked -- recreating the inversion for that one seat. Re-query
+    # after locking and lock any newly-discovered match too, until a pass
+    # finds nothing new, so no unlocked matching seat survives to the class
+    # lock below.
     distinct_hashes = {(entry["first_hash"], entry["last_hash"]) for entry in prepared}
-    existing_seat_ids = set()
-    for first_hash, last_hash in distinct_hashes:
-        existing_seat_ids.update(
-            row[0] for row in db.session.query(Seat.id).filter(
-                Seat.class_id == ctx.class_id, Seat.role == "student", Seat.user_id.is_(None),
-                Seat.claim_first_name_hash == first_hash, Seat.claim_last_name_hash == last_hash,
-            ).all()
-        )
-    if existing_seat_ids:
+    locked_seat_ids = set()
+    while True:
+        found_seat_ids = set()
+        for first_hash, last_hash in distinct_hashes:
+            found_seat_ids.update(
+                row[0] for row in db.session.query(Seat.id).filter(
+                    Seat.class_id == ctx.class_id, Seat.role == "student", Seat.user_id.is_(None),
+                    Seat.claim_first_name_hash == first_hash, Seat.claim_last_name_hash == last_hash,
+                ).all()
+            )
+        newly_found = found_seat_ids - locked_seat_ids
+        if not newly_found:
+            break
         (
-            Seat.query.filter(Seat.id.in_(existing_seat_ids), Seat.class_id == ctx.class_id)
+            Seat.query.filter(Seat.id.in_(newly_found), Seat.class_id == ctx.class_id)
             .order_by(Seat.id.asc()).with_for_update().all()
         )
+        locked_seat_ids |= newly_found
 
     # Serialize with claims, unclaims, and concurrent imports touching the same names.
     ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()

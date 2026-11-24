@@ -94,7 +94,6 @@ def test_import_student_seats_does_not_deadlock_concurrent_settlement(app):
     def import_scope():
         with app.app_context():
             try:
-                pids["import"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
                 attempted.set()
                 import_student_seats(
                     canonical_context=teacher_ctx,
@@ -116,12 +115,33 @@ def test_import_student_seats_does_not_deadlock_concurrent_settlement(app):
             # The import must be the one waiting, blocked specifically on the
             # pre-existing namesake seat the holder already holds, and must
             # NOT already hold the class row while the holder waits on it.
+            #
+            # Find the blocked backend by polling for whoever the holder is
+            # blocking, rather than capturing import_scope's pg_backend_pid()
+            # up front: import_student_seats opens its own FEATContext, whose
+            # __enter__ rolls back any prior incidental transaction and
+            # starts a fresh one, which can hand back a different pooled
+            # connection (and thus a different backend pid) than the one a
+            # pre-call SELECT pg_backend_pid() observed (CodeRabbit review on
+            # PR #1838). A dedicated, short-lived db.engine.connect() is used
+            # for the poll itself too, rather than the test's own db.session:
+            # reusing db.session here (across many iterations, no commit
+            # between them) observed a stale pg_stat_activity view that never
+            # showed the importer's backend at all, even while it was
+            # genuinely blocked -- a separate connection avoids that.
             deadline = monotonic() + 5
             while True:
-                blockers = db.session.execute(
-                    text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["import"]}
-                ).scalar_one()
-                if pids["holder"] in blockers:
+                with db.engine.connect() as poll_conn:
+                    blocked_pid = poll_conn.execute(
+                        text(
+                            "SELECT pid FROM pg_stat_activity "
+                            "WHERE pid != pg_backend_pid() "
+                            "AND :holder = ANY(pg_blocking_pids(pid))"
+                        ),
+                        {"holder": pids["holder"]},
+                    ).scalar()
+                if blocked_pid is not None:
+                    pids["import"] = blocked_pid
                     break
                 assert monotonic() < deadline, (
                     "import_student_seats never blocked on the pre-existing "
