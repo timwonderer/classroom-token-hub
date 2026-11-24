@@ -1,10 +1,11 @@
-# HTTP error pages: draft contract and owner decisions
+# HTTP error pages: draft contracts and owner decisions
 
 Date: November 24, 2026 (America/Los_Angeles). Status: **UNRATIFIED DRAFT — governs nothing.**
 This is an informative tracking package under [SOP-DOC-000](../STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md)
-§V–VI, not a SPEC. It holds a proposed normative text (Part D) and the decisions the owner must make
-before any of it can be ratified (Part E). Nothing here changes a template, stylesheet or handler.
-On ratification the text in Part D becomes a numbered document, is registered through
+§V–VI, not a SPEC. It holds two proposed normative texts — **Draft 1, design** (Part D) and
+**Draft 2, content and actions** (Part E) — each followed by the decisions the owner must make before
+it can be ratified. Nothing here changes a template, stylesheet or handler. On ratification each draft
+becomes a numbered document, is registered through
 [SOP-DOC-001](../STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX.md), and this package
 moves to `docs/archive/v2-tracking-2026/`.
 
@@ -26,32 +27,34 @@ the pages:
 Structure, content, buttons, response format and logging are each decided per template and per
 handler, and they have drifted (Part B).
 
-## Where the contract should live
+## Where the contracts live
 
-**Recommendation: a new `SPEC-UI-002` — HTTP Error Responses.** Placement is itself owner decision D1.
+**Owner ruling (2026-11-24): two documents, not one.** In the owner's words: "we define two docs,
+SPEC-DES level for the design of the error page, SPEC-OPS for the content errors pages should convey,
+should not convey, and user actions".
 
-- Not an amendment to SPEC-DES-001. Its §II limits it to tokens, CSS and templates' visual layer and
-  excludes "page rendering structure" (to SPEC-UI-001) and any persistence or response behaviour. An
-  error-page contract has to govern handler output (HTML vs JSON, status codes, logging), which
-  SPEC-DES-001 cannot hold without widening its scope.
-- Not an amendment to SPEC-UI-001. Its §II and §V govern *authenticated* page routes through the
-  INV-ARC-022 view-model pipeline. Error pages are standalone (they extend no layout and have no view
-  model) and are served to signed-out visitors.
-- A SPEC, not a FEAT: an error page performs no domain mutation (SOP-DOC-000 §V, §VI).
-- `UI` area, because the subject is what a visitor receives. SPEC-DES-001 would keep its one sentence
-  on shared CSS and cite the new SPEC for anatomy.
+| Draft | Proposed id | Governs |
+|---|---|---|
+| 1 — Design (Part D) | `SPEC-DES-002` HTTP Error Page Design | Layout and anatomy, shared vs per-page styling, icons, headings, accessibility of the presentation |
+| 2 — Content and actions (Part E) | `SPEC-OPS-007` HTTP Error Page Content and Actions | What a page conveys, what it must not convey, and the actions it offers (buttons, guidance list, status-page link) |
+
+Both ids are the next free number in their area (no `SPEC-DES-002` or `SPEC-OPS-007` is cited
+anywhere in `docs/`, `app/` or `tests/`). Whether Draft 1 is a new `SPEC-DES-002` or a new section of
+`SPEC-DES-001` is decision **DES-1**. Where response format (HTML vs JSON) and recording (logging,
+persistence) belong is decision **OPS-1**: the ruling names content and actions for the SPEC-OPS
+document, and these two subjects are neither. Draft 2 carries them provisionally, marked as such.
 
 Per SOP-DOC-000 §V, a SPEC binds implementation only when incorporated by an `INV-*`, `DOM-*` or
-`FEAT-*` contract. The natural incorporating documents are INV-ARC-020 (accessibility of the pages)
-and DOM-OPS-001 (logging), which is decision D2.
+`FEAT-*` contract. The natural incorporating documents are INV-ARC-020 for Draft 1 and DOM-OPS-001
+for Draft 2 (decisions DES-2, OPS-2).
 
-### Why this draft is not registered now
+### Why the drafts are not registered now
 
 SOP-DOC-000 does not provide for registering a draft. `tests/dom/docs/test_documentation_index_complete.py`
 requires every numbered file in a normative root to appear in SOP-DOC-001, so a numbered draft would
 have to be indexed beside ratified documents. The repository already shows the cost of that: an
-unratified `FEAT-OBL-004` DRAFT was indexed and later read as authority. This package therefore stays
-unnumbered in `docs/TRACKING/`, following the precedent of
+unratified `FEAT-OBL-004` DRAFT was indexed and later read as authority. The drafts therefore stay
+unnumbered in this `docs/TRACKING/` package, following the precedent of
 [HISTORICAL_ATTENDANCE_PROOF_DECISION_PACKAGE_20261003.md](HISTORICAL_ATTENDANCE_PROOF_DECISION_PACKAGE_20261003.md).
 
 ---
@@ -166,161 +169,219 @@ owner decision.
 
 ---
 
-## Part D — Proposed contract (UNRATIFIED)
+## Part D — Draft 1: `SPEC-DES-002` HTTP Error Page Design (UNRATIFIED)
 
-> Draft text for the numbered SPEC. Every bracketed `[Dn]` marks a rule that depends on an owner
-> decision in Part E; the text shows the **current behaviour** as a placeholder, not a choice.
-> Unbracketed rules restate Part C or describe behaviour every page already shares.
+> Draft text. Every bracketed `[DES-n]` marks a rule that depends on an owner decision in D.2; the
+> text shows the **current behaviour** as a placeholder, not a choice. Unbracketed rules restate
+> Part C or describe what every page already shares.
 
-### I. Purpose
+### D.1 Draft text
 
-Define what Classroom Token Hub returns when a request ends in an HTTP error status: the page a
-browser receives, the body a script receives, and what is recorded, so that every error status is
-answered the same way and a new one can be added without inventing a layout.
+#### I. Purpose
 
-### II. Scope
+Define how an HTTP error page looks and is built: its layout, the parts every page shares, what a
+page may style for itself, and the accessibility of its presentation, so that every error page reads
+as one surface and a new one is built from the same parts.
 
-Applies to every response the application itself produces with a 4xx or 5xx status through an
-error handler: the `error_<code>.html` templates, the handlers that render them, the JSON bodies
-returned in their place, and the shared Error Pages CSS. Does not govern: form validation errors
-shown inside a working page, flash messages, redirects, responses produced in front of the
-application (proxy, Cloudflare, maintenance gate), or the status site.
+#### II. Scope
 
-### III. Authority Level
+Applies to the `templates/error_<code>.html` templates, the macros they call, and the Error Pages
+section of `static/css/style.css`. Does not govern what a page says or which actions it offers
+(`SPEC-OPS-007`), handler behaviour, or responses produced in front of the application.
 
-Normative (Tier 2), technical contract. Subordinate to INV-CORE-000, INV-ARC-005, INV-ARC-007,
-INV-ARC-020 and SPEC-DES-001's token and shared-surface rules. Binding when incorporated by `[D2]`.
+#### III. Authority Level
 
-### IV. Dependencies
+Normative (Tier 2), technical contract. Subordinate to INV-CORE-000, INV-ARC-020 and SPEC-DES-001,
+whose tokens and shared-surface rule it applies and must not weaken. Binding when incorporated by
+`[DES-2]`.
 
-INV-ARC-005, INV-ARC-007, INV-ARC-020, SPEC-DES-001, SPEC-OPS-003, SPEC-OPS-004, SPEC-OPS-006,
-SOP-TEST-002, REF-TERM-002 (informative).
+#### IV. Dependencies
 
-### V. Statuses with a page
+INV-ARC-020, SPEC-DES-001, SOP-TEST-002, SPEC-OPS-007.
 
-1. A status with its own page has exactly one template, `templates/error_<code>.html`, and exactly
-   one application-level handler. The set today is 400, 401, 403, 404, 429, 500, 503 `[D13: 418]`.
-2. A status without its own page `[D12]`.
+#### V. Page anatomy
 
-### VI. Page anatomy
+Every error page is a standalone document (it extends no layout) with, in this order:
 
-Every error page is a standalone document with, in this order:
+1. **Shell.** `<html lang="en">`; the stylesheets Bootstrap, `fonts.css`, `tokens.css`, `style.css`
+   in that order; `<title>` of the form `<code> - <Label>`; `<body class="error-page">`;
+   `<main id="main-content" aria-labelledby="error-heading">` holding everything below.
+2. **Header** (`.error-header`, on the role-themed `var(--primary)` band). A decorative Material
+   Symbol `[DES-4: required on every page?]`, the status code as the page's only `h1` with
+   `id="error-heading"`, and the status label as a `<p>`.
+3. **Explanation card.** One `alert_card` with `heading_tag='h2'` and `role='alert'`. Its level
+   is `[DES-5]`.
+4. **Detail block** (only where SPEC-OPS-007 calls for one). Presented as `[DES-3]`.
+5. **Guidance block** (where SPEC-OPS-007 calls for one). A heading at `h2` and a real `<ul>` whose
+   list semantics are kept. Presented as `[DES-3]`; markers are `[DES-3]`.
+6. **Actions** (`.actions`): centred, wrapping row of buttons; the set and order are SPEC-OPS-007's.
 
-1. **Shell.** `<html lang="en">`, the four shared stylesheets in the order Bootstrap, `fonts.css`,
-   `tokens.css`, `style.css`; `<title>` of the form `<code> - <Label>`; `<body class="error-page">`;
-   `<main id="main-content" aria-labelledby="error-heading">`.
-2. **Header** (`.error-header`). A decorative Material Symbol (`aria-hidden="true"`) `[D5: required
-   on every page?]`, the status code as the page's only `h1` with `id="error-heading"`, and the
-   status label as a `<p>`.
-3. **Explanation card.** One `alert_card` with `heading_tag='h2'` and `role='alert'`, stating in plain
-   language what happened. Its level is `[D6]`.
-4. **Status detail** (optional, per status). Facts about this request that help the visitor: the
-   requested URL (404), the limit (429), a reference to quote to support (500) `[D8]`, the request's
-   error description (400) `[D9]`. Presented as `[D4]`.
-5. **Guidance.** A heading at the next level below the card heading (`h2`) and a list of what the
-   visitor can do, rendered as a real `<ul>` with list semantics preserved. Required on every page
-   `[D3: including 500?]`; heading text, element and styling are `[D4]`.
-6. **Actions** (`.actions`). Per §VII.
+#### VI. Shared and per-page styling
 
-Rules:
+1. Everything in §V is styled once under `body.error-page` in the Error Pages section of
+   `style.css` (SPEC-DES-001 §IX). A rule two error pages need is promoted there, never copied.
+2. A page-local `<style>` block holds only rules that no other error page uses. Design values in it
+   come from tokens; structural values may be literals (SPEC-DES-001 §IX).
+3. Per-page variation is limited to the header icon, the card level and any panel unique to that
+   status (e.g. 401's sign-in choices) `[DES-3]`.
 
-- One `h1`, and no heading level is skipped (INV-ARC-020 §VI.1–2). Nothing styled as a heading that is
-  not one, and no heading chosen for its size.
-- Shared presentation lives once under `body.error-page` in `style.css` (SPEC-DES-001 §IX). A
-  page-local `<style>` block holds only rules no other error page uses; a rule needed by two pages
-  is promoted.
-- Icons are decorative and hidden from assistive technology in the markup itself `[D11: drop the
-  inline aria-hidden script?]`.
-- Wording follows REF-TERM-002 where it does not conflict with INV-ARC-020 `[D10]`.
-- A page shows no stack trace, exception class, internal identifier other than the support
-  reference, or PII (INV-ARC-005).
-- No page changes the location or reloads itself on a timer the visitor cannot stop, extend or turn
-  off `[D7]`.
+#### VII. Headings and accessibility
 
-### VII. Actions
+1. One `h1`; card and block headings are `h2`; nothing skips a level and nothing is a heading for
+   its size (INV-ARC-020 §VI.1–2, §IX.3).
+2. Icons are decorative and carry `aria-hidden="true"` in the markup `[DES-6: drop the runtime
+   script that re-applies it?]`.
+3. A link that opens a new tab says so in its accessible name.
+4. Contrast meets WCAG 2.1 AA in the rendered role theme; meaning is never carried by colour alone.
+5. A visible countdown or timed change on the page can be stopped by the visitor (WCAG 2.2.1).
+6. Every template has a SOP-TEST-002 render fixture, with a state for each optional block that changes
+   the rendered surface.
 
-| Action | Element | Present on |
-|---|---|---|
-| Leave to a safe page `[D10: label and destination]` | link to `/` | every page |
-| Go back | `<button type="button">`, `history.back()` | every page except 503 `[D3]` |
-| Try again | `<button type="button">`, reload | 503 `[D7]` |
-| Sign in | links to the student and teacher sign-in pages | 401 `[D10]` |
-| Status page | link, new tab, with "(opens in a new tab)" in its accessible name and a decorative `open_in_new` icon | `[D4b: which statuses]` |
+#### VIII. Building a new status page
 
-- Button order is the same on every page `[D10]`.
-- The status link's destination is `[D4b: hard-coded vs get_validated_status_page_url()]`.
+Create `templates/error_<code>.html` from §V using only shared classes plus rules unique to the page,
+add its render fixture, and add the status to SPEC-OPS-007 in the same change.
 
-### VIII. Response format
+#### IX. Amendment
 
-1. A browser receives the HTML page. A JSON client receives a JSON body with the same status code.
-2. How the handler decides a client wants JSON is `[D14]`.
-3. The JSON body shape is `[D14]`.
-4. 429 responses carry `Retry-After` when the limiter knows the reset time.
-5. If rendering the error page itself fails, the handler returns a plain-text body with the same
-   status rather than raising.
+SOP-DOC-000 §XIII; register through SOP-DOC-001.
 
-### IX. Disclosure
-
-1. A request for class-scoped data the actor may not see is answered 404, not 403, wherever the
-   owning blueprint already maps context errors that way (student blueprint, API). `[D15: make this
-   the rule everywhere?]`
-2. The 400 page shows the request's error description `[D9]`.
-
-### X. Recording
-
-1. Every handled error status writes one application log line carrying the request id, method, path
-   (sanitised) and status, without PII. Level: `[D2b]`.
-2. Persistence beyond the log `[D2]`.
-3. Recording never raises and never turns the original response into a different status.
-4. An error that ends a GET may not commit or flush application state (INV-ARC-007). Any persistent
-   record is written outside the request's unit of work `[D2]`.
-
-### XI. Diagnostics and tests
-
-1. Every status in §V.1 has a sysadmin probe at `/sysadmin/test-errors/<code>` `[D16: add 429]`.
-2. Every error template has a SOP-TEST-002 render fixture, with a state for each optional section that
-   changes the rendered surface.
-3. Each handler has a test asserting its status code, its HTML/JSON choice and its log line.
-
-### XII. Adding a status page
-
-1. Confirm the status is produced by the application, not by the proxy or limiter in front of it.
-2. Create `templates/error_<code>.html` from the anatomy in §VI, using only shared classes plus
-   rules unique to the page.
-3. Register one handler following §VIII–X.
-4. Add the probe (§XI.1), the render fixture and the handler test.
-5. Amend §V.1 of this document in the same change.
-
-### XIII. Amendment
-
-Standard SOP-DOC-000 §XIII procedure; register through SOP-DOC-001.
-
----
-
-## Part E — Owner decisions
-
-Each item gives the current behaviour first. Where I lean one way it says so, as a proposal only.
+### D.2 Design decisions for the owner
 
 | # | Decision | Current behaviour | Options |
 |---|---|---|---|
-| **D1** | Where does the contract live? | Nowhere | (a) new `SPEC-UI-002` *(proposed — see "Where the contract should live")*; (b) amendment section in SPEC-DES-001, widening its §II; (c) new `SPEC-OPS-*` |
-| **D2** | Which statuses persist a record beyond the log, and where? Which document incorporates the SPEC? | None persist: `log_error_to_db` is a stub and `error_events` no longer exists. Log lines only, read in Grafana. | (a) log only, delete `log_error_to_db`, the 404 dedupe cache and the `error_events` insert; (b) persist 5xx only to `operational_events` (DOM-OPS-001); (c) persist all statuses, 404 deduped. Incorporation by INV-ARC-020 + DOM-OPS-001, or DOM-OPS-001 alone |
-| **D2b** | Log level per status | warning for 400/401/403/404/429, error for 503, exception for 500 | keep; or align with SPEC-OPS-006 (4xx warning/info, 5xx error) |
-| **D3** | Guidance list and Back button on every page? | 500 has no guidance list; 503 has no Back (has Try Again) | (a) every page has both; (b) 500 and 503 exempt |
-| **D4** | How is the guidance (and detail box) styled? | Five pages use an info/warning `alert_card` with `h2`; 404 uses `.troubleshooting` with `h5`, `list-style: none` and typed `•`; 503 uses `.status-box` with two `h5`s | (a) all use `alert_card` (no page CSS); (b) all use one shared `.troubleshooting` block in `style.css`, `h2`, browser bullets; (c) keep per page |
-| **D4b** | Status-page link: which pages, and which URL? | All seven, hard-coded `status.classroomtokenhub.com`; `status_page_url` passed by 500/503 and unused | Pages: all / 5xx and 429 only / 5xx only. URL: hard-coded / `get_validated_status_page_url()`, link omitted when unset (self-hosting) |
-| **D5** | Header icon required on every page? | 503 has none | required / optional |
-| **D6** | Explanation-card level per status | 400/429/500/503 warning, 401/404 info, 403 danger | keep; or a rule (4xx caused by visitor = info, 403 = warning, 5xx = warning) |
-| **D7** | 503 auto-refresh | Reloads after a 30 s countdown with no way to stop it | (a) keep; (b) remove, keep Try Again; (c) keep with a Stop control (WCAG 2.2.1) |
-| **D8** | 500 support reference | "Error ID" block can never render (`error_id` always `None`); `g.request_id` exists and is in every log line | (a) show the request id as the reference; (b) remove the block and fixture state |
-| **D9** | Should 400 show `error.description`? | Yes, in `<code>`; probes show test text, `abort(400, description=...)` text reaches users | show / show only a fixed allowlist / never |
-| **D10** | Wording and labels | "Return to Login Page" goes to `/`, which is not a login page; 401 offers "Admin Login" (REF-TERM-002 says teacher); "log in" vs "sign in"; button order varies | settle the label, the 401 button names and one button order |
-| **D11** | Remove the inline script that sets `aria-hidden` on icons? | Present on every page, and redundant: every icon in the templates carries `aria-hidden="true"` in markup, and so does the icon `alert_card` renders (`templates/macros/cards.html`) | keep / remove |
-| **D12** | What does a 4xx/5xx without its own page return? | Werkzeug's default page (e.g. 405, 409, 413) | Werkzeug default / a generic `error.html` from the same anatomy |
-| **D13** | Is 418 (`/teapot`) a governed status page? | Unmerged branch | include in §V.1 / treat as an easter egg outside the contract |
-| **D14** | JSON: how chosen, and what shape? | 429: path starts `/api/`; unhandled 500: `Accept` best match; others never. Shapes `{status, error, message}`, `{error}`, `{verified, message}` | Choose one switch (path, `Accept`, or either) and one shape (e.g. `{status: "error", error, message}` as the API already uses) |
-| **D15** | 403 shown as 404 for out-of-scope data, everywhere? | Student blueprint and API map context errors to 404; admin routes `abort(403)` in 7 places | per blueprint as now / one rule |
-| **D16** | Add a 429 probe? | None | add / not needed |
+| **DES-1** | New document or a section of SPEC-DES-001? | Only SPEC-DES-001 §IX's one sentence exists | (a) new `SPEC-DES-002` *(proposed: keeps SPEC-DES-001 about tokens and the system)*; (b) new section in SPEC-DES-001 |
+| **DES-2** | What incorporates it? | Nothing | INV-ARC-020 (proposed) / SPEC-DES-001 only |
+| **DES-3** | How are the guidance and detail blocks styled, and what may a page style for itself? | Five pages use an `alert_card` with `h2`; 404 uses `.troubleshooting` with `h5`, `list-style: none` and typed `•`; 503 uses `.status-box` with two `h5`s; 400 and 429 each define `.error-message` | (a) all use `alert_card`, no page CSS; (b) one shared `.troubleshooting` block and one shared detail block in `style.css`, `h2`, browser bullets; (c) per page as now (needs the Part F fixes regardless) |
+| **DES-4** | Header icon required on every page? | 503 has none | required / optional |
+| **DES-5** | Explanation-card level per status | 400/429/500/503 warning, 401/404 info, 403 danger | keep; or a rule (e.g. visitor-caused 4xx = info, refused = warning, 5xx = warning) |
+| **DES-6** | Remove the inline script that sets `aria-hidden` on icons? | On every page; redundant — every icon in the templates and the one `alert_card` renders (`templates/macros/cards.html`) already carry `aria-hidden="true"` | keep / remove |
+
+---
+
+## Part E — Draft 2: `SPEC-OPS-007` HTTP Error Page Content and Actions (UNRATIFIED)
+
+> Draft text. `[OPS-n]` marks a rule that depends on an owner decision in E.2; the text shows the
+> **current behaviour** as a placeholder. §VIII–X (response format, recording, diagnostics) are
+> here provisionally pending OPS-1.
+
+### E.1 Draft text
+
+#### I. Purpose
+
+Define what an HTTP error response tells the person or script that receives it, what it must never
+tell them, and what they can do next, so that every error status answers the same three questions:
+what happened, is it my fault or the system's, and what do I do now.
+
+#### II. Scope
+
+Applies to every 4xx or 5xx response the application produces through an error handler: the words
+on the page, the facts it reports, the actions it offers, and the JSON body returned in its place.
+Does not govern layout or styling (`SPEC-DES-002`), validation errors inside a working page, flash
+messages, redirects, or responses produced in front of the application (proxy, Cloudflare,
+maintenance gate).
+
+#### III. Authority Level
+
+Normative (Tier 2), technical contract. Subordinate to INV-CORE-000, INV-ARC-005, INV-ARC-007 and
+INV-ARC-020. Binding when incorporated by `[OPS-2]`.
+
+#### IV. Dependencies
+
+INV-ARC-005, INV-ARC-007, INV-ARC-020, DOM-OPS-001, SPEC-OPS-003, SPEC-OPS-004, SPEC-OPS-006,
+SPEC-DES-002, REF-TERM-002 (informative).
+
+#### V. Statuses with a page
+
+1. These statuses have a page and exactly one application-level handler: 400, 401, 403, 404, 429,
+   500, 503 `[OPS-14: 418]`.
+2. Any other status returns `[OPS-13]`.
+
+#### VI. What a page conveys
+
+Every page tells the visitor, in plain language and REF-TERM-002 vocabulary where it does not
+conflict with INV-ARC-020 `[OPS-11]`:
+
+1. **What happened**, in the explanation card, without blame.
+2. **Whose side the problem is on**: the request (4xx) or the service (5xx).
+3. **What to try**, as a guidance list `[OPS-3: on every page, including 500?]`.
+4. **Status-specific facts** where they help: the requested URL (404); the limit that was reached
+   (429); a reference to quote when asking for help (500) `[OPS-7]`; the reason the request was
+   refused (400) `[OPS-8]`.
+
+#### VII. What a page must not convey
+
+1. No stack trace, exception class or message, SQL, file path, configuration value, internal
+   identifier other than the reference in §VI.4, or PII (INV-ARC-005).
+2. No statement that a resource exists to an actor who may not see it: class-scoped data the actor
+   may not access is answered as not found `[OPS-12: on every blueprint?]`.
+3. No promise the system does not keep (e.g. "this error was logged" when nothing is recorded)
+   `[OPS-7]`.
+4. No developer vocabulary that REF-TERM-002 lists as not for user-facing text.
+
+#### VIII. User actions
+
+| Action | Present on |
+|---|---|
+| Leave to a safe page `[OPS-9: label and destination]` | every page |
+| Go back (`history.back()`) | every page except 503 `[OPS-3]` |
+| Try again (reload) | 503 |
+| Sign in, one choice per role | 401 `[OPS-9]` |
+| Status page (new tab) | `[OPS-4: which statuses]`, destination `[OPS-4]` |
+
+1. Actions appear in one order on every page `[OPS-9]`.
+2. No action reloads or navigates on a timer the visitor cannot stop `[OPS-6]`.
+
+#### IX. Response format (provisional — OPS-1)
+
+1. A browser receives the HTML page; a JSON client receives a JSON body with the same status.
+2. How JSON is chosen, and its shape: `[OPS-10]`.
+3. 429 responses carry `Retry-After` when the limiter knows the reset time.
+4. If the page itself fails to render, the handler returns plain text with the same status.
+
+#### X. Recording (provisional — OPS-1)
+
+1. Every handled error writes one log line with request id, method, sanitised path and status, no
+   PII, at `[OPS-5b]`.
+2. Persistence beyond the log: `[OPS-5]`.
+3. Recording never raises and never changes the response's status.
+4. An error ending a GET does not commit or flush application state (INV-ARC-007); any persistent
+   record is written outside the request's unit of work.
+
+#### XI. Diagnostics
+
+1. Every status in §V.1 has a sysadmin probe at `/sysadmin/test-errors/<code>` (SPEC-OPS-004)
+   `[OPS-15: add 429]`.
+2. Each handler has a test asserting its status, its HTML/JSON choice and its log line.
+3. Adding a status: amend §V.1, register one handler following §IX–X, add the probe and test, and
+   build the page per SPEC-DES-002 §VIII in the same change.
+
+#### XII. Amendment
+
+SOP-DOC-000 §XIII; register through SOP-DOC-001.
+
+### E.2 Content and action decisions for the owner
+
+| # | Decision | Current behaviour | Options |
+|---|---|---|---|
+| **OPS-1** | Do response format (HTML vs JSON) and recording belong in this document? | Governed nowhere | (a) yes, as drafted; (b) amend SPEC-OPS-003 (observability) for recording and keep only response format here; (c) a third document |
+| **OPS-2** | What incorporates it? | Nothing | DOM-OPS-001 (proposed) / INV-ARC-005 + DOM-OPS-001 |
+| **OPS-3** | Guidance list and Back button on every page? | 500 has no guidance list; 503 has Try Again instead of Back | (a) both everywhere; (b) 500 and 503 exempt |
+| **OPS-4** | Status-page link: which pages, and which URL? | All seven, hard-coded `status.classroomtokenhub.com`; the `status_page_url` the 500/503 handlers pass is never read | Pages: all / 5xx and 429 / 5xx only. URL: hard-coded / `get_validated_status_page_url()`, omitted when unset (self-hosting) |
+| **OPS-5** | Which statuses persist a record beyond the log, and where? | None: `log_error_to_db` is a stub and `error_events` was dropped | (a) log only — delete `log_error_to_db`, the 404 dedupe cache and the `error_events` insert; (b) 5xx to `operational_events` (DOM-OPS-001); (c) all statuses, 404 deduped |
+| **OPS-5b** | Log level per status | warning 400/401/403/404/429; error 503; exception 500 | keep / 4xx warning (or info), 5xx error |
+| **OPS-6** | 503 auto-refresh | Reloads after 30 s, cannot be stopped | (a) keep; (b) remove, keep Try Again; (c) keep with a Stop control |
+| **OPS-7** | 500 support reference | "Error ID" block can never render (`error_id` always `None`), and it claims the error "has been automatically logged"; `g.request_id` is in every log line | (a) show the request id as the reference, reworded; (b) remove the block and its fixture state |
+| **OPS-8** | Does 400 show `error.description`? | Yes, verbatim in `<code>`, so `abort(400, description=...)` text reaches visitors | show / fixed allowlist / never |
+| **OPS-9** | Labels, destinations and order of actions | "Return to Login Page" links to `/` (dashboard or marketing site, never login); 401 offers "Student Login" / "Admin Login"; "log in" vs "sign in"; order differs (Back first on 400/429) | settle the safe-page label and target, the 401 role names (REF-TERM-002 says teacher), and one order |
+| **OPS-10** | JSON: how chosen, and what shape? | 429 by `/api/` prefix; unhandled 500 by `Accept`; others never (an `abort(404)` in `/api/` returns HTML). Shapes `{status, error, message}`, `{error}`, `{verified, message}` | one switch (path, `Accept`, or either) and one shape (e.g. the API's `{status: "error", error, message}`) |
+| **OPS-11** | Tone and wording standard | Per page ("Pardon the interruption", "bug in our codes", "Troubleshooting steps") | REF-TERM-002 + plain-language rule only / a fixed heading set (e.g. "What happened", "What you can do") |
+| **OPS-12** | 403 shown as 404 for out-of-scope data, everywhere? | Student blueprint and API map context errors to 404; admin routes `abort(403)` in 7 places | per blueprint as now / one rule |
+| **OPS-13** | What do statuses without a page return? | Werkzeug's default page (e.g. 405, 409, 413) | Werkzeug default / a generic page built per SPEC-DES-002 |
+| **OPS-14** | Is 418 (`/teapot`) a governed status? | Unmerged branch | include in §V.1 / an easter egg outside the contract |
+| **OPS-15** | Add a 429 probe? | None | add / not needed |
+
+---
 
 ## Part F — Departures from rules already in force
 
