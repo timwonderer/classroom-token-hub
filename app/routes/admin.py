@@ -1944,24 +1944,31 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
     # silently alter an insurance contract. Surface only out-of-band policies
     # and send the teacher to the owning management flow.
     if insurance_policies:
-        from app.services.economic_engine import resolve_insurance
+        from app.services.economic_engine import premium_currency_band, resolve_insurance
         from app.services.insurance_policy_service import normalize_insurance_type
+        from app.services.insurance_premium_helper import _AUTHORING_DAYS
 
         for policy in insurance_policies:
             if policy.premium is None:
                 continue
             current = Decimal(str(policy.premium))
             product = normalize_insurance_type(policy.insurance_type)
+            # The policy's own billing cadence, not a hardcoded weekly period: a
+            # MONTHLY-billed premium must be compared against a MONTHLY-scaled band
+            # (SPEC-ECON-003 §4.5.2), the same normalization
+            # build_insurance_premium_helper() uses for the authoring form.
+            charge_frequency = (str(getattr(policy, 'charge_frequency', None) or 'WEEKLY')).strip().upper()
+            authoring_days = _AUTHORING_DAYS.get(charge_frequency, _AUTHORING_DAYS['WEEKLY'])
             recommendation = resolve_insurance(
                 product=product,
                 cwi=cwi,
                 mode=getattr(checker, 'policy_mode', 'default'),
+                coverage_period=charge_frequency.lower(),
+                covered_calendar_days=None if charge_frequency == 'WEEKLY' else authoring_days,
             )
             if recommendation.cwi is None:
                 continue
-            rate_min, rate_max = recommendation.recommended_ranges['premium_rate']
-            minimum = (recommendation.cwi * Decimal(str(rate_min))).quantize(Decimal('0.01'))
-            maximum = (recommendation.cwi * Decimal(str(rate_max))).quantize(Decimal('0.01'))
+            minimum, maximum = premium_currency_band(recommendation)
             if minimum <= current <= maximum:
                 continue
             preview_items.append({
@@ -6784,6 +6791,10 @@ def economic_engine():
             product=TRANSACTION,
             cwi=cwi_calc.cwi,
             mode=policy_summary['mode'],
+            # This is a representative weekly figure for the dashboard summary card,
+            # not tied to any one policy's own billing cadence (see comment above) —
+            # "weekly" is a deliberate, explicit choice here, not the engine's default.
+            coverage_period="weekly",
         )
         _rate_lo, _rate_hi = _ins.recommended_ranges['premium_rate']
         insurance_recommendation = {
