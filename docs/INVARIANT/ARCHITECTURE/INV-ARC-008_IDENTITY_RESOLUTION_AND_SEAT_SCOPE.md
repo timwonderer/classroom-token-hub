@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-008      | 1.3     | 2026-10-14     | 1.2        | Constitutional   |
 
-> [!IMPORTANT]
-> **v1.3 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
-
 ## I. Purpose
 
 Define the execution-layer rules for resolving authenticated identity into active class
@@ -79,6 +76,11 @@ Teacher-facing participant navigation, class restoration, and claim-adjacent flo
 all fail closed on scope mismatch.
 
 ## IX. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.3 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions must preserve fail-closed active-class resolution and the prohibition on
 alias-based participant lookup.
