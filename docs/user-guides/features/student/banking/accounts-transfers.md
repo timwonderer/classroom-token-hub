@@ -53,6 +53,8 @@ Beneath the form, a tip spells out what your savings actually earns — the annu
 
 The **Transactions** tab splits into **Checking** and **Savings**, each with a count badge. Both tables show **Date**, **Type**, **Amount**, **Description**, **Status**, and **Report**.
 
+A fine from your teacher shows **Type** *Penalty* in your checking history, with your teacher's reason as the description: **Fine: *their reason***. It comes out of checking. If your teacher has overdraft protection on and your savings can cover the whole shortfall, that amount moves from savings first. A fine never adds a fee, and it never becomes a bill. If you think a fine is a mistake, report it from its row.
+
 **Status** is either **Active** or **Voided**. A voided entry is struck through and greyed out — your teacher cancelled it, and it no longer counts toward your balance. It stays visible on purpose so the record is honest.
 
 The **Report** column has a help icon on each row. If an entry is wrong, use it — the report arrives with the transaction attached. See [Report Issues](../support/report-issues.md).

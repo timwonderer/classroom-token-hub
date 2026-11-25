@@ -52,6 +52,10 @@ A confirmation screen greets you by name. Select **Thanks, Let's Go!** to reach 
 
 Enter your **Username** and **Passphrase** on the student sign-in page. That is all.
 
+**You stay signed in for 10 minutes from the moment you log in.** Using the app does not extend it, so after 10 minutes you are asked to log in again. **Sign Out** ends your sign-in right away. If a form you left open says your session expired, log in again and redo it.
+
+Signing out, or your 10 minutes running out, does **not** clock you out. A work session keeps running until you clock out or the day ends, and a hall pass you are on stays open. Log back in to clock out or check in.
+
 ## Important notes
 
 > [!CAUTION]

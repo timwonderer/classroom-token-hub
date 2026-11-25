@@ -21,6 +21,7 @@ If something doesn't look right with your Login and Setup, check this guide firs
 - Are you typing your passphrase exactly? It is case-sensitive, and the spaces between words count.
 
 ## This is normal and expected when:
+- You are asked to log in again about 10 minutes after you logged in, even while you were using the app. Student sign-ins last 10 minutes from login, however active you are.
 - You are asked to finish setup if your claimed seat does not have active login credentials yet.
 - Login is temporarily blocked after too many attempts (rate limit).
 - You see **I need a student account** on the sign-in page. That is where you claim the roster seat your teacher created.
