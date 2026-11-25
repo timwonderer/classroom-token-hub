@@ -22,9 +22,7 @@ import pathlib
 import re
 
 MIGRATIONS = pathlib.Path(__file__).resolve().parents[3] / "migrations" / "versions"
-
-# The revision whose entire purpose is removing these keys still names them.
-_REMOVAL_REVISION = "d9e1f3a5b7c9"
+BASELINES = pathlib.Path(__file__).resolve().parents[3] / "migrations" / "baseline"
 
 _CREATE_FK = re.compile(
     r"create_foreign_key\([^)]*actor_public_id[^)]*\)", re.DOTALL
@@ -47,8 +45,6 @@ def _forbidden_keys(source: str) -> list[str]:
 def test_no_migration_creates_a_foreign_key_on_actor_public_id():
     offenders = []
     for path in sorted(MIGRATIONS.glob("*.py")):
-        if path.name.startswith(_REMOVAL_REVISION):
-            continue
         for found in _forbidden_keys(path.read_text(encoding="utf-8")):
             offenders.append(f"{path.name}: {found}")
     assert offenders == [], (
@@ -90,8 +86,29 @@ def test_the_guard_catches_a_migration_that_adds_the_key():
     assert not _forbidden_keys(permitted)
 
 
-def test_the_removal_revision_does_not_restore_the_key_on_downgrade():
-    """Downgrade must not build a schema no upgrade path produces."""
-    path = next(MIGRATIONS.glob(f"{_REMOVAL_REVISION}*.py"))
-    downgrade = path.read_text(encoding="utf-8").split("def downgrade()", 1)[1]
-    assert "create_foreign_key" not in downgrade
+_SQL_FK = re.compile(
+    r"FOREIGN KEY \(actor_public_id\) REFERENCES (?:public\.)?seats\b", re.IGNORECASE
+)
+
+
+def _forbidden_sql_keys(ddl: str) -> list[str]:
+    """The same forbidden key, spelled as the DDL an era baseline executes."""
+    return [match.group(0) for match in _SQL_FK.finditer(ddl)]
+
+
+def test_no_era_baseline_creates_a_foreign_key_on_actor_public_id():
+    """The supported lineage starts from SQL, not only from revisions (SOP-DB-001 §V.C)."""
+    baselines = sorted(BASELINES.glob("*.sql"))
+    assert baselines, "no era baseline found; the guard would pass vacuously"
+    offenders = [f"{path.name}: {found}" for path in baselines
+                 for found in _forbidden_sql_keys(path.read_text(encoding="utf-8"))]
+    assert offenders == []
+
+
+def test_the_guard_catches_a_baseline_that_adds_the_key():
+    violation = ("ALTER TABLE ONLY public.issues\n    ADD CONSTRAINT fk_issues_actor_public_id_seats "
+                 "FOREIGN KEY (actor_public_id) REFERENCES public.seats(public_id) ON DELETE CASCADE;")
+    assert _forbidden_sql_keys(violation)
+    permitted = ("ALTER TABLE ONLY public.actor_request_trace\n    ADD CONSTRAINT fk_actor_request_trace_class_id_classes "
+                 "FOREIGN KEY (class_id) REFERENCES public.classes(class_id) ON DELETE CASCADE;")
+    assert not _forbidden_sql_keys(permitted)

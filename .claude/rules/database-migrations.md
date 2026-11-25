@@ -10,7 +10,7 @@
 
 1. **NEVER modify `app/models.py` without creating a migration**
 2. **ALWAYS test migrations before committing** (upgrade AND downgrade)
-3. **NEVER edit old migrations after they're merged to main** — the only exceptions are a Replay-Safety Correction under `SOP-DB-001` §V.A (all six conditions proven and recorded) and the narrower Bootstrap-Replay Correction under §V.B (an existence guard only, all seven conditions proven). Neither is a license to improve an old migration or change what it intends; read the section before relying on it.
+3. **NEVER edit a migration in the supported lineage after it's merged to main** — the only exception is a Replay-Safety Correction under `SOP-DB-001` §V.A (all six conditions proven and recorded). It is not a license to improve an old migration or change what it intends; read the section before relying on it. §V.B (Bootstrap-Replay Correction) is retired. The lineage starts at the v2 launch baseline `d7a3e9b1c5f2` (§V.C); pre-launch revisions are provenance under `migrations/archive/v2_prelaunch/` and are never edited, executed or linked to.
 4. **ALWAYS review auto-generated migrations** before committing
 5. **NEVER skip migrations** - each schema change needs its own migration
 6. **ALWAYS include idempotency helpers** in every migration (table_exists, column_exists, index_exists, foreign_key_exists)
@@ -143,7 +143,7 @@ def get_foreign_keys_by_column(table_name, column_name):
         return []
 ```
 
-**Why this is critical:** 27 historical migrations still fail the idempotency linter; they are frozen in `migrations/lint_baseline.txt` as accepted pre-gate debt and are not rewritten. Re-running a non-idempotent migration is what causes deployment failures.
+**Why this is critical:** re-running a non-idempotent migration is what causes deployment failures. The 27 historical migrations that failed the linter were all pre-launch and are now provenance, so `migrations/lint_baseline.txt` is empty and must stay so.
 
 ### Step 6: IMMEDIATELY Verify the Migration
 

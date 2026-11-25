@@ -16,6 +16,12 @@ and this project follows semantic versioning principles.
 
 - An easter egg: the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
 
+### Changed
+
+- <!-- notes: internal -->
+
+  **The supported v2 migration lineage now starts at the v2.0.0 public launch** (SOP-DB-001 v1.9 §V.C, SOP-DB-004 v1.4; owner rulings 2026-11-24). Revision `d7a3e9b1c5f2` is now the era baseline: it executes the frozen, hashed launch schema (`migrations/baseline/d7a3e9b1c5f2_v2_launch_schema.sql`) and refuses any database that already holds an application-owned object. The 171 pre-launch revisions, the 2026-09-28 frozen SQL and the prior registers move unchanged to `migrations/archive/v2_prelaunch/` as provenance; the 21 post-launch revisions are byte-identical, so production (`a0faf8b2a35d`) and every installation at or after launch keep their revision with no re-stamp, schema change or data change. **Retired revisions:** a database recorded at any of the 170 pre-launch revisions other than `d7a3e9b1c5f2` (for example `0001`, `7c3d4e5f6a7b`, `c7a7b8c9d0e1`) is refused by `flask db upgrade`; no known supported installation is at one. The 27-entry lint baseline is now empty, the forward-only register drops its pre-launch entries and adds the baseline, SOP-DB-001 §V.B is retired as an exception, and tests that replayed pre-launch revisions are retired with their lasting schema assertions moved to `tests/dom/core/test_v2_era_baseline.py`. Classified `M4` / `H0` / High, MINOR. Supersedes PR #1834 and issue #1649. Evidence: `docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`.
+
 ### Removed
 
 - <!-- notes: internal -->

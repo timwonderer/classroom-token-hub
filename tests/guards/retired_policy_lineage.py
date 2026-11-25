@@ -32,28 +32,15 @@ RETIRED_NAME = re.compile(
     r"(?<![A-Za-z0-9_])(?:Policy(?:Version|Transition)s?|policy_(?:version|transition)s?(?:_id)?)(?![A-Za-z0-9_])"
 )
 
-# Migrations written before the retirement, and the retirement itself. They are
-# history (SOP-DB-001 Golden Rule 3): they name the tables because they created,
-# altered, remapped or dropped them.
+# The v2 launch baseline (the tables existed at launch), the migrations written
+# before the retirement, and the retirement itself. They are history (SOP-DB-001
+# Golden Rule 3): they name the tables because they created, altered, remapped or
+# dropped them. Pre-launch revisions are provenance under migrations/archive/,
+# which the guard does not scan.
 HISTORICAL_MIGRATIONS = frozenset({
-    "migrations/baseline/0001_baseline_schema.sql",
-    "migrations/versions/0007_obligations_schema_contract.py",
-    "migrations/versions/3bb29ef4e874_payroll_hall_pass_settings_append_only.py",
-    "migrations/versions/7c3d4e5f6a7b_drop_all_unauthorized_tables.py",
-    "migrations/versions/8f1a2c3d4b5e_add_policy_transition_created_by_fk.py",
-    "migrations/versions/a1b2c3d4e5f6_repoint_obligation_assessment_policy_version_.py",
+    "migrations/baseline/d7a3e9b1c5f2_v2_launch_schema.sql",
     "migrations/versions/a7e3c9d1f5b2_payroll_settings_effective_dated_authority.py",
-    "migrations/versions/b2c3d4e5f8a_align_prod_domain_schema_contract.py",
-    "migrations/versions/b3c4d5e6f7a8_manual_credit_without_payroll_policy.py",
-    "migrations/versions/b7d3e2064c15_drop_prohibited_policy_version_pointer_from_payroll_settings.py",
-    "migrations/versions/c3d4e5f8a9b_align_prod_domain_schema_contract_v2.py",
-    "migrations/versions/c4e36a4ab2f1_add_policy_lineage_tables.py",
-    "migrations/versions/c7a7b8c9d0e1_seat_owned_records.py",
-    "migrations/versions/d4e5f6a7b8c9_normalize_insurance_claim_type_taxonomy.py",
-    "migrations/versions/dd4e5f6a7b8c_add_policy_uuid_to_payroll_provenance.py",
     "migrations/versions/dd52b19d48d8_retire_policy_versions_and_transitions.py",
-    "migrations/versions/e5f6a7b8c9d0_align_prod_indexes_with_orm.py",
-    "migrations/versions/f6a7b8c9d0e2_restrict_payroll_event_policy_fk.py",
 })
 
 # Words that make a paragraph a record of the retirement rather than a use.

@@ -93,8 +93,12 @@ def downgrade():
     "e6f7a8b9c0d1_canonicalize_ledger_persistence.py",
 ])
 def test_committed_guard_clause_migrations_are_accepted(name):
-    """Regression: these two used the early-return form and were falsely flagged."""
-    path = ROOT / "migrations" / "versions" / name
+    """Regression: these two used the early-return form and were falsely flagged.
+
+    Both are pre-launch revisions kept as provenance (SOP-DB-001 §V.C); the
+    validator reads them as text, which is all this regression needs.
+    """
+    path = ROOT / "migrations" / "archive" / "v2_prelaunch" / "versions" / name
     errors = [e for e in validator.check_idempotency(path) if e.startswith("❌")]
     assert errors == []
 

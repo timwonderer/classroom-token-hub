@@ -38,8 +38,11 @@
   The full suite runs nightly in [full-suite.yml](.github/workflows/full-suite.yml); request an
   owner-run full suite when broader validation is needed. Always set `TEST_DATABASE_URL` to a
   disposable local test database; see [CONTRIBUTING.md](CONTRIBUTING.md).
-- New databases build step 0 from the frozen baseline `migrations/baseline/0001_baseline_schema.sql`
-  (2026-09-28); model changes no longer reach the bootstrap.
+- The supported migration lineage starts at the v2.0.0 launch baseline, revision `d7a3e9b1c5f2`, which
+  executes the frozen, hashed `migrations/baseline/d7a3e9b1c5f2_v2_launch_schema.sql`
+  (`SOP-DB-001` §V.C). The 171 pre-launch revisions are provenance in
+  `migrations/archive/v2_prelaunch/`; a database at one of them is refused. New production-style
+  installations initialize from their release schema bundle (`migrations/fresh/<revision>/`).
 
 ## Git Hooks
 
