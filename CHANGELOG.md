@@ -10,6 +10,10 @@ and this project follows semantic versioning principles.
 
 ### Added
 
+- <!-- notes: internal -->
+
+  **Draft contracts for the HTTP error pages, for owner ratification** (`docs/TRACKING/HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`, revision 5, final for ratification). Proposes `SPEC-DES-002` (presentation, through INV-ARC-020) and `SPEC-OPS-007` (communication, disclosure, outcome-safe recovery and response semantics for every application-generated error response, through DOM-OPS-001), a `SPEC-OPS-003` amendment for privacy-safe error-response logging, and the incorporation amendments. Findings are classified as invariant violations, implementation inconsistencies, new requirements and unverified findings; two confirmed violations (full request URLs in error log lines; a caller-supplied request identifier adopted, logged and persisted) are remediated separately under existing authority, and a read-only production check of the retained database stores found no trace endpoint with a numeric segment or a character a route pattern cannot contain, and no request id outside the generated shape; both are indicators only, so neither question is closed (an all-letter raw path, or a well-formed caller id encoding personal data, would pass); logs not yet examined. No owner decision remains; four conflicts with ratified documents are listed with the amendments that resolve them. Unratified and unnumbered: it governs nothing and changes no template, handler or ratified document.
+
 - An easter egg: the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
 
 ### Removed
