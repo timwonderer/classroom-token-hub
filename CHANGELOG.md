@@ -38,6 +38,10 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 
+- <!-- notes: internal -->
+
+  **The documentation index lists FEAT-IDEN-009 and FEAT-LED-003.** Both FEAT contracts (Identity Session Lifecycle, Ledger Settlement Sweep) were committed without an entry in `SOP-DOC-001`, so `test_every_numbered_document_is_indexed` failed on `main`. SOP-DOC-001 v3.66 registers them; the contracts themselves are unchanged.
+
 - The 404 page's "What can you do?" list uses real bullets, like the other error pages, so wrapped lines on phones line up with the text instead of starting under the bullet.
 
 - <!-- notes: fixed, highlight -->
