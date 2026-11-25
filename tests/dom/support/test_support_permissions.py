@@ -1,11 +1,8 @@
 """Per-ticket disclosure grants are independent and enforced before rendering."""
 from copy import deepcopy
 from types import SimpleNamespace
-import importlib.util
-from pathlib import Path
 
 import pytest
-import sqlalchemy as sa
 from bs4 import BeautifulSoup
 
 from app import db
@@ -114,25 +111,6 @@ def test_alternate_operator_detail_cannot_bypass_report_permission(client):
         assert 'WITHHELD REPORT CONTENT' not in response.text, url
 
 
-def test_permission_migration_defaults_old_rows_to_no_consent(monkeypatch):
-    path = Path(__file__).resolve().parents[3] / 'migrations/versions/d2b2c3d4e5f6_support_disclosure_permissions.py'
-    spec = importlib.util.spec_from_file_location('support_permissions_migration', path)
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
-    from alembic.migration import MigrationContext
-    from alembic.operations import Operations
-    with sa.create_engine('sqlite://').begin() as conn:
-        conn.execute(sa.text('CREATE TABLE issues (id INTEGER PRIMARY KEY)'))
-        conn.execute(sa.text('INSERT INTO issues VALUES (1)'))
-        monkeypatch.setattr(migration, 'op', Operations(MigrationContext.configure(conn)))
-        migration.upgrade()
-        migration.upgrade()
-        assert conn.execute(sa.text('SELECT support_permissions FROM issues')).scalar_one() == '{}'
-        migration.downgrade()
-        migration.downgrade()
-        assert [c['name'] for c in sa.inspect(conn).get_columns('issues')] == ['id']
-
-
 @pytest.mark.parametrize('grant', [False, True])
 def test_operator_page_renders_balances_only_after_teacher_selection(client, monkeypatch, grant):
     from decimal import Decimal
@@ -200,7 +178,7 @@ def test_persisted_pack_keeps_route_diagnostics_without_class_data_permission(cl
 
 def test_snapshot_is_frozen_and_seat_deletion_removes_support_rows(client, monkeypatch):
     from app.feats.base import FEATContext
-    from app.models import TicketCorrelationPack, IssueStatusHistory, Seat
+    from app.models import TicketCorrelationPack, IssueStatusHistory
     from app.services.classroom_setup import delete_seat_with_profile
     from app.services.issue_service import attach_correlation_pack
     from app.utils import issue_helpers
@@ -254,51 +232,6 @@ def test_teacher_account_deletion_removes_seat_scoped_ticket_and_pack(client):
     assert db.session.get(User, teacher_id) is None
     assert db.session.get(Issue, issue_id) is None
     assert db.session.get(TicketCorrelationPack, issue_id) is None
-
-
-def test_support_seat_revision_scopes_the_ticket_without_a_key_to_seats(monkeypatch):
-    """`class_public_id` becomes required; `actor_public_id` gains no foreign key.
-
-    This revision used to create `fk_issues_actor_public_id_seats` and cascade a
-    ticket away with its seat. INV-ARC-021 §V.7 permits a cross-domain key only
-    to `class_id`, `seat_id` or `user_id`, so `d9e1f3a5b7c9` removes it, and
-    building it here only to drop it a few revisions later was both
-    contradictory and unsafe: nothing reconciled `issues` first, so one ticket
-    pointing at a seat that no longer exists failed the upgrade outright.
-
-    Ticket lifetime is enforced by the explicit sweep in
-    `app/utils/student_deletion.py` (DOM-SUP-001 §X), which is also what allows
-    an unclaimed seat to keep an earlier claimant's tickets — a state a cascade
-    cannot express.
-    """
-    from alembic.migration import MigrationContext
-    from alembic.operations import Operations
-    path = Path(__file__).resolve().parents[3] / 'migrations/versions/e3c3d4e5f6a7_support_seat_deletion_cascade.py'
-    spec = importlib.util.spec_from_file_location('support_seat_cascade', path)
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
-    with sa.create_engine('sqlite://').begin() as conn:
-        conn.execute(sa.text('PRAGMA foreign_keys = ON'))
-        conn.execute(sa.text('CREATE TABLE seats (public_id VARCHAR(36) PRIMARY KEY)'))
-        conn.execute(sa.text('CREATE TABLE issues (id INTEGER PRIMARY KEY, actor_public_id VARCHAR(64), class_public_id VARCHAR(36))'))
-        conn.execute(sa.text("INSERT INTO seats VALUES ('seat-reference')"))
-        conn.execute(sa.text("INSERT INTO issues VALUES (1, 'seat-reference', 'class-reference')"))
-        monkeypatch.setattr(migration, 'op', Operations(MigrationContext.configure(conn)))
-        migration.upgrade()
-        migration.upgrade()  # idempotent
-        columns = {c['name']: c for c in sa.inspect(conn).get_columns('issues')}
-        assert columns['class_public_id']['nullable'] is False
-        assert sa.inspect(conn).get_foreign_keys('issues') == []
-
-        # The ticket outlives its seat here; the deletion path removes it.
-        conn.execute(sa.text("DELETE FROM seats WHERE public_id = 'seat-reference'"))
-        assert conn.execute(sa.text('SELECT count(*) FROM issues')).scalar_one() == 1
-
-        migration.downgrade()
-        migration.downgrade()  # idempotent
-        assert sa.inspect(conn).get_foreign_keys('issues') == []
-        columns = {c['name']: c for c in sa.inspect(conn).get_columns('issues')}
-        assert columns['class_public_id']['nullable'] is True
 
 
 def test_teacher_ticket_keeps_original_class_label_after_class_rename(client):

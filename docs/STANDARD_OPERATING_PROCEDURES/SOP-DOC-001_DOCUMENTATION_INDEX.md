@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.66 | 2026-11-25 | 3.65 | Normative |
+| SOP-DOC-001 | 3.67 | 2026-11-25 | 3.66 | Normative |
 
 ---
 
@@ -284,6 +284,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.67 (2026-11-25):**
+- Register SOP-DB-001 v1.9 and SOP-DB-004 v1.4: schema eras and the v2 launch baseline (owner rulings 2026-11-24). The supported v2 lineage begins at the v2.0.0 launch revision `d7a3e9b1c5f2`; the 171 pre-launch revisions are provenance in `migrations/archive/v2_prelaunch/`; SOP-DB-001 §V.B is retired as an exception; SOP-DB-004 §V.1 now separates what production executed, what the lineage contains and what a new installation executes. Evidence: `docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`.
 
 **Version 3.66 (2026-11-25):**
 - Register FEAT-IDEN-009 (Identity Session Lifecycle) and FEAT-LED-003 (Ledger Settlement Sweep):

@@ -54,12 +54,3 @@ def test_unknown_or_missing_defaults_to_transaction(bad):
     inventing a PRODUCTIVITY reinterpretation."""
     assert normalize_insurance_type(bad) == TRANSACTION
 
-
-def test_migration_mapping_matches_canonical_taxonomy():
-    """The data migration's inlined mapping must agree with the canonical taxonomy."""
-    from migrations.versions.d4e5f6a7b8c9_normalize_insurance_claim_type_taxonomy import (
-        _TO_CANONICAL,
-    )
-
-    for token, expected in _TO_CANONICAL.items():
-        assert normalize_insurance_type(token) == expected

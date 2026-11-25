@@ -49,9 +49,9 @@ def test_register_equals_forward_only_revisions_in_chain():
 def test_detector_still_finds_the_known_forward_only_revisions():
     """A rename or refactor must not turn the guard into a no-op that keeps passing."""
     derived = derive_forward_only(VERSIONS)
-    for revision in ("f9a3c7d1e620", "f8b2d6e0a410", "e7c2a9d4f610", "c7a7b8c9d0e1"):
+    for revision in ("f9a3c7d1e620", "f8b2d6e0a410", "e7c2a9d4f610", "d7a3e9b1c5f2"):
         assert revision in derived, revision
-    assert len(derived) >= 30
+    assert len(derived) >= 8
 
 
 def test_sop_documents_point_at_the_register():
