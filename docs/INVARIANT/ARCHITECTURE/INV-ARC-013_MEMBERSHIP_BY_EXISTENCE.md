@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-013      | 1.1     | 2026-10-14     | 1.0        | Constitutional   |
 
-> [!IMPORTANT]
-> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
-
 ## I. Purpose
 
 Define the membership rule that governs runtime access.
@@ -41,5 +38,10 @@ control to rest on actual surviving class association.
 `DOM` and `FEAT` must not branch on active/inactive-style membership flags as authority.
 
 ## VIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions must preserve existence-based membership.

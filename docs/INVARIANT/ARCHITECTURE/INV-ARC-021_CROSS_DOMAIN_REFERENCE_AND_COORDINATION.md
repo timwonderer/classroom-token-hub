@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-021      | 1.1     | 2026-10-14     | 1.0        | Constitutional   |
 
-> [!IMPORTANT]
-> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
-
 ## I. Purpose
 
 Define the canonical rules governing how domains reference, read from, and coordinate with one another at runtime.
@@ -79,5 +76,10 @@ This rule exists to eliminate cross-domain coupling patterns identified in the a
 `DOM` specifications MUST NOT declare dependencies on other `DOM` specifications. `FEAT` specifications MUST declare all domains they coordinate across. Routes and background jobs MUST delegate all multi-domain logic to a FEAT.
 
 ## VIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions must preserve strict domain isolation and FEAT-only coordination.

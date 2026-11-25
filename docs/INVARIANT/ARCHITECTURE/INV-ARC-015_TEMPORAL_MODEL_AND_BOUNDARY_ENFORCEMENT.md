@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-015      | 2.2     | 2026-10-14     | 2.1        | Constitutional   |
 
-> [!IMPORTANT]
-> **v2.2 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
-
 ---
 
 ## I. Purpose
@@ -246,6 +243,11 @@ The display corollary (SS X.2):
 ---
 
 ## XIV. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v2.2 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions to this document must:
 

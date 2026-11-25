@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-005      | 1.1     | 2026-10-14     | 1.0        | Constitutional   |
 
-> [!IMPORTANT]
-> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
-
 ## I. Purpose
 
 Restrict PII exposure in execution-time context and observability artifacts.
@@ -41,5 +38,10 @@ more PII into request context, logs, or platform tooling.
 PII, not an excuse to widen data exposure.
 
 ## VIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions must preserve minimal PII exposure in execution paths.

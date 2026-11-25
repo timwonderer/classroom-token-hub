@@ -4,16 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-020      | 1.2     | 2026-10-14     | 1.1        | Constitutional |
 
-> [!IMPORTANT]
-> **Review correction (2026-10-14, v1.2):** a later edit reintroduced `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md`
-> as a Dependency — the same citation v1.1 had already dropped for the same reason. That file no longer exists
-> at that path; it was moved to `docs/archive/v2-tracking-2026/V2_REBUILD_VALIDATION_REPORT.md` (archived) during the v2
-> tracking archival, and its content (a general migration-validation log) never discussed this document's
-> subject matter (it contains no mention of `INV-ARC-020`, WCAG, axe, or accessibility conformance). Per
-> `SOP-DOC-000` §V, a live document must not cite archived material in a Dependencies section, and the stated
-> remedy is to remove the entry when no live replacement exists. The entry is removed below; the `SPEC-DES-001`
-> addition from the same edit is retained, since that target exists at the cited path.
-
 ## I. Purpose
 
 This document defines the canonical accessibility requirements for user-facing templates, shared UI shells, template-driven JavaScript interactions, and template-supporting CSS in the v2 codebase.
@@ -131,5 +121,17 @@ When a PR touches a covered template/UI surface:
 3. If accessibility issues remain intentionally unresolved, they must be explicitly listed as follow-up risk in the PR.
 
 ## XI. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **Review correction (2026-10-14, v1.2):** a later edit reintroduced `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md`
+> as a Dependency — the same citation v1.1 had already dropped for the same reason. That file no longer exists
+> at that path; it was moved to `docs/archive/v2-tracking-2026/V2_REBUILD_VALIDATION_REPORT.md` (archived) during the v2
+> tracking archival, and its content (a general migration-validation log) never discussed this document's
+> subject matter (it contains no mention of `INV-ARC-020`, WCAG, axe, or accessibility conformance). Per
+> `SOP-DOC-000` §V, a live document must not cite archived material in a Dependencies section, and the stated
+> remedy is to remove the entry when no live replacement exists. The entry is removed below; the `SPEC-DES-001`
+> addition from the same edit is retained, since that target exists at the cited path.
 
 Changes to this document must update the version and effective date, remain aligned with `INV-ARC-017` and `SOP-TEST-003`, and update any dependent SOP or PR-process document that references this accessibility contract.
