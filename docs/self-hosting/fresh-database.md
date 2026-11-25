@@ -155,7 +155,7 @@ From the repository with release dependencies installed, place the reviewed
 PostgreSQL 14 binaries first on PATH. The output path must not exist:
 
 ```sh
-revision=a0faf8b2a35d  # the bundle to check: the checkout's sole head
+revision=a0faf8b2a35d  # the committed bundle to re-derive
 python scripts/generate_fresh_database.py \
   --source-sha "$(git rev-parse HEAD)" --revision "$revision" \
   --output /tmp/cth-reviewed-bundle
