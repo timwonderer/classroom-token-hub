@@ -26,7 +26,7 @@ The controls live in the **Savings Interest** block on the **Settings** tab of *
 | Control | What it does |
 | --- | --- |
 | **Annual Percentage Yield (APY %)** | *Annual yield applied to savings balances. Set 0 to disable interest.* |
-| **Interest Type** | **Simple** or **Compound**. *Compound interest also earns on interest that has built up but not been paid yet. Simple interest does not.* The page also shows a **Known issue** note about Simple; see below. |
+| **Interest Type** | **Simple** or **Compound**. *Compound interest also earns on interest that has built up but not been paid yet. Simple interest does not.* |
 | **Compound Frequency** | **Daily**, **Weekly**, or **Monthly**. *How often compound interest is applied. Ignored for simple interest.* |
 | **Payout Frequency** | **Weekly** or **Monthly**. *How often interest is paid into savings accounts.* |
 
