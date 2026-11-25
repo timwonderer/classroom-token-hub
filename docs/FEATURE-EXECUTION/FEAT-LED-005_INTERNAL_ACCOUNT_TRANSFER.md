@@ -6,13 +6,6 @@
 
 ---
 
-> [!IMPORTANT]
-> **v1.3 (2026-10-18).** Both halves of the 2026-10-18 work landed independently, on separate PRs, and are recorded together here. The route/registry cutover (PR #1599): `FEAT-LED-005` is registered in `app/feats/base.py`'s FEAT registry, and `app/routes/student.py`'s internal-transfer route now opens `FEATContext("FEAT-LED-005", ...)`. A structural guard (`tests/guards/feat_led_000_route_usage.py`, `tests/test_feat_led_000_route_guard.py`) fails the build if any `app/routes/` file reopens `FEAT-LED-000`. §VIII's invariants now describe live runtime behavior, not a target state. Separately, §IX's DB `CHECK` constraint has landed (migration `a4d7e9c2f1b6`); its write-time casing validator has not — see §IX below.
->
-> **v1.2 (2026-10-18).** Recorded the two halves separately while only one had landed. Superseded by v1.3 above, which records both as landed.
->
-> **v1.1 (2026-10-18).** This contract is prospective: it establishes the design this FEAT must satisfy once a later PR performs the runtime cutover. As of this revision, `app/routes/student.py`'s internal-transfer route still opens `FEATContext("FEAT-LED-000")`, and `FEAT-LED-005` is not yet registered in `app/feats/base.py`'s FEAT registry. Attempting to open `FEATContext("FEAT-LED-005")` today raises `FEATContextError` (unregistered FEAT). §VIII's invariants describe the target state this FEAT's cutover PR must achieve, not current runtime behavior. Also restructures this document to the required section order (`SOP-DOC-000` §VIII): Purpose, Scope, Authority Level, Dependencies, content, Amendment — v1.0 omitted Scope and Authority Level and ended with Change Notes instead of Amendment.
-
 ## I. Purpose
 
 This FEAT is the top-level orchestration identity for a student's own voluntary checking/savings transfer.
@@ -104,6 +97,15 @@ The route/registry cutover above is independent of this section's enforcement. T
 The write-time casing validator — rejecting a legacy-cased value on a *new* row while the CHECK constraint continues to accept it on historical rows — remains undeployed. It is separate, later scope: it requires every current legacy-cased writer (`ledger_transfer_service.py`, `ledger_interest_service.py`, `ledger_recovery_service.py`, `ledger_correction_service.py`) to switch to canonical spelling, and every read/comparison site that still expects the legacy spelling — most critically `app/utils/transaction_idempotency.py`'s `IDEMPOTENT_TRANSACTION_TYPES` and `_AMOUNT_EXCLUDED_FROM_FINGERPRINT_TYPES`, whose silent mis-update would break interest-posting idempotency — to accept both spellings or be updated in lockstep. That PR's allow-list MUST still be drawn from INV-LED-017's canonical/legacy enumeration table, not re-derived from current writers.
 
 ## X. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.3 (2026-10-18).** Both halves of the 2026-10-18 work landed independently, on separate PRs, and are recorded together here. The route/registry cutover (PR #1599): `FEAT-LED-005` is registered in `app/feats/base.py`'s FEAT registry, and `app/routes/student.py`'s internal-transfer route now opens `FEATContext("FEAT-LED-005", ...)`. A structural guard (`tests/guards/feat_led_000_route_usage.py`, `tests/test_feat_led_000_route_guard.py`) fails the build if any `app/routes/` file reopens `FEAT-LED-000`. §VIII's invariants now describe live runtime behavior, not a target state. Separately, §IX's DB `CHECK` constraint has landed (migration `a4d7e9c2f1b6`); its write-time casing validator has not — see §IX below.
+>
+> **v1.2 (2026-10-18).** Recorded the two halves separately while only one had landed. Superseded by v1.3 above, which records both as landed.
+>
+> **v1.1 (2026-10-18).** This contract is prospective: it establishes the design this FEAT must satisfy once a later PR performs the runtime cutover. As of this revision, `app/routes/student.py`'s internal-transfer route still opens `FEATContext("FEAT-LED-000")`, and `FEAT-LED-005` is not yet registered in `app/feats/base.py`'s FEAT registry. Attempting to open `FEATContext("FEAT-LED-005")` today raises `FEATContextError` (unregistered FEAT). §VIII's invariants describe the target state this FEAT's cutover PR must achieve, not current runtime behavior. Also restructures this document to the required section order (`SOP-DOC-000` §VIII): Purpose, Scope, Authority Level, Dependencies, content, Amendment — v1.0 omitted Scope and Authority Level and ended with Change Notes instead of Amendment.
 
 Increment the version and effective date, identify superseded rules, and preserve the governing INV and DOM hierarchy. The §IX DB `CHECK` constraint and write-time casing validator are separate code work, tracked by their own not-yet-landed PR.
 

@@ -4,11 +4,6 @@
 |---|---|---|---|---|
 | FEAT-OBL-004 | 1.0 | 2026-10-14 | 0.5 (DRAFT) | Normative |
 
-> [!IMPORTANT]
-> **v1.0 (2026-10-14), owner ruling.** Promoted from DRAFT to final, resolving §XIII's open question: `FEAT-STOR-001` v3.2 already shipped assuming this document's authority, and the owner ruled this document final rather than the other way around. Incorporates v0.5 below.
->
-> **v0.5 (2026-10-14), documentation modernization.** Fixed two Dependencies/body citations that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change.
-
 ## I. Purpose
 
 Define the single lawful path by which a student enters into (purchases) an
@@ -299,3 +294,13 @@ Version 0.3 supersedes the obsolete checking-affordability denial in §XII. Chec
 ## Amendment — 0.4
 
 **0.4 (2026-10-10)** reconciles this FEAT with `DOM-OBL-001` 3.3 §II.C and `SPEC-ECON-003` 2.3 §4.5.1.1 (owner ruling 2026-10-07), both effective after this FEAT's 0.3 draft text was written. The first premium is **acquisition**, not an independently authorized charge: the owner ruling's universal affordability rule governs it exactly as it governs a Store purchase (`FEAT-STOR-001` §VI.E), and 0.3's "checking-only affordability rejection does not apply" / "affordability is not pre-decided here" wording is withdrawn. §VII gains an explicit affordability check (read-only, before mutation) and §XII gains `INSUFFICIENT_FUNDS`. No other authority in this FEAT changes: policy availability, tier-group exclusion, duplicate acquisition, coverage timing and independently authorized fee applicability remain owning-domain decisions, and §4.5.1.1A's shared protection-transfer funding mechanics are unchanged — only whether a resulting negative checking balance is lawful for *this* charge.
+
+## Amendment — 0.5
+
+> [!IMPORTANT]
+> **v0.5 (2026-10-14), documentation modernization.** Fixed two Dependencies/body citations that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change.
+
+## Amendment — 1.0
+
+> [!IMPORTANT]
+> **v1.0 (2026-10-14), owner ruling.** Promoted from DRAFT to final, resolving §XIII's open question: `FEAT-STOR-001` v3.2 already shipped assuming this document's authority, and the owner ruled this document final rather than the other way around. Incorporates v0.5 below.
