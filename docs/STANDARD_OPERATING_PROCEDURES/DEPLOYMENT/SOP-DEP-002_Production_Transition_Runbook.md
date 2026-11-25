@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.24 | 2026-11-25 | 1.23 | Normative |
+| SOP-DEP-002 | 1.25 | 2026-11-25 | 1.24 | Normative |
 
 ## I. Purpose
 
@@ -208,9 +208,12 @@ advisory and are recorded as such, never as the independent verifier.
     baseline's fingerprint. A different fingerprint is explained by what the release itself is meant to change,
     or by activity after the application restarted (rows timestamped after the restart, by type), and the record
     says which. The operator runs the browser checks in §VIII.
+10a. **Publish the release's user guides**, where production serves guides from a documentation artifact
+    (`SOP-DEP-003`). Dispatch `docs-deploy.yml` with the release SHA, and confirm its summary shows that
+    revision published and served, **before** reopening, so no one sees new behavior with old instructions.
 11. **Reopen** by changing the Access policy (§VI).
 12. **Release record PR.** `docs/ops/audits/DEPLOY_<UTC date>_<short SHA>.md`, in the shape of the previous one:
-    identity table, contents, migrations, §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
+    identity table, contents, migrations, user-guide revisions published since the previous release (`SOP-DEP-003`), §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
     restore results), the step 8 summary row, release run, §VIII results, rollback, follow-ups. Each follow-up is an issue on the
     [CTH Backlog](https://github.com/users/timwonderer/projects/6) project, opened before the record merges, and the record links it rather than
     describing open work in prose. In the same PR, update the
@@ -298,6 +301,7 @@ browser.
 - If migration fails before app reopen, rollback to the pre-deploy backup/snapshot.
 - If post-deploy smoke checks fail and cannot be corrected within the maintenance window, rollback.
 - If migration is structurally successful but business behavior is incorrect, keep Cloudflare Access restricted until rollback or fix-forward is approved.
+- An application rollback also publishes the user guides of the release rolled back to (`SOP-DEP-003` §VII.3), before reopening.
 
 ### IX.1 Exact-SHA Release Failure Handling
 
@@ -393,6 +397,10 @@ Record:
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.25 (2026-11-25):** §VII.A step 10a publishes a release's user guides through `SOP-DEP-003` before the gate
+reopens, and §IX makes an application rollback publish the guides of the release rolled back to. The release record
+lists docs revisions published since the previous release. Owner ruling 2026-11-25.
 
 **Version 1.24 (2026-11-25):** §VII.B: the supported fresh-install release is declared once
 (`migrations/fresh/supported_release.json`) and kept separate from the latest stable release; bundles are generated
