@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-005 | 1.3 | 2026-10-18 | 1.2 | Normative |
+| FEAT-LED-005 | 1.4 | 2026-11-25 | 1.3 | Normative |
 
 ---
 
@@ -82,17 +82,17 @@ This FEAT SHALL NOT persist a transfer "status," "history summary," or any proje
 
 ## VIII. Invariants
 
-These describe live runtime behavior as of v1.2; see the v1.2 note above.
+These describe live runtime behavior as of v1.2; see the v1.2 note in §X.
 
 1. An internal transfer's two legs share exactly one `correlation_id` and are created and committed atomically (`DOM-LED-001` INV-LED-014).
 2. `mechanism = SELF` on both legs — this is always a student's own voluntary act; this FEAT supplies that value explicitly, never inferring it (`DOM-LED-001` INV-LED-016).
 3. An internal transfer never crosses seats: `target_seat_id == actor_seat_id == seat_id` for both legs.
 4. No protection transfer, fee, or obligation is evaluated or created by this FEAT.
-5. This FEAT is the only lawful top-level `FEATContext` for the internal-transfer route; no code path may open `FEAT-LED-000` for this purpose (enforced by the structural guard named in the v1.2 note above).
+5. This FEAT is the only lawful top-level `FEATContext` for the internal-transfer route; no code path may open `FEAT-LED-000` for this purpose (enforced by the structural guard named in the v1.2 note in §X).
 
 ## IX. Enforcement Scope for the DB `CHECK` Constraint and Write-Time Validator
 
-The route/registry cutover above is independent of this section's enforcement. The DB `CHECK` constraint for `Transaction.type` (`DOM-LED-001` INV-LED-017) is deployed: migration `a4d7e9c2f1b6` adds `ck_ledger_transaction_type_closed_vocabulary`, enumerating INV-LED-017's full canonical/legacy table (`NULL` still permitted). It accepts either spelling of an aliased value (`Interest`/`interest`, `REVERSAL`/`reversal`, `Withdrawal`/`withdrawal`, `Deposit`/`deposit`) on a new row — it closes the set of lawful values, not the spelling a new row must use within that set.
+The route/registry cutover described in the v1.3 note in §X is independent of this section's enforcement. The DB `CHECK` constraint for `Transaction.type` (`DOM-LED-001` INV-LED-017) is deployed: migration `a4d7e9c2f1b6` adds `ck_ledger_transaction_type_closed_vocabulary`, enumerating INV-LED-017's full canonical/legacy table (`NULL` still permitted). It accepts either spelling of an aliased value (`Interest`/`interest`, `REVERSAL`/`reversal`, `Withdrawal`/`withdrawal`, `Deposit`/`deposit`) on a new row — it closes the set of lawful values, not the spelling a new row must use within that set.
 
 The write-time casing validator — rejecting a legacy-cased value on a *new* row while the CHECK constraint continues to accept it on historical rows — remains undeployed. It is separate, later scope: it requires every current legacy-cased writer (`ledger_transfer_service.py`, `ledger_interest_service.py`, `ledger_recovery_service.py`, `ledger_correction_service.py`) to switch to canonical spelling, and every read/comparison site that still expects the legacy spelling — most critically `app/utils/transaction_idempotency.py`'s `IDEMPOTENT_TRANSACTION_TYPES` and `_AMOUNT_EXCLUDED_FROM_FINGERPRINT_TYPES`, whose silent mis-update would break interest-posting idempotency — to accept both spellings or be updated in lockstep. That PR's allow-list MUST still be drawn from INV-LED-017's canonical/legacy enumeration table, not re-derived from current writers.
 
@@ -101,7 +101,13 @@ The write-time casing validator — rejecting a legacy-cased value on a *new* ro
 ### Revision History
 
 > [!IMPORTANT]
-> **v1.3 (2026-10-18).** Both halves of the 2026-10-18 work landed independently, on separate PRs, and are recorded together here. The route/registry cutover (PR #1599): `FEAT-LED-005` is registered in `app/feats/base.py`'s FEAT registry, and `app/routes/student.py`'s internal-transfer route now opens `FEATContext("FEAT-LED-005", ...)`. A structural guard (`tests/guards/feat_led_000_route_usage.py`, `tests/test_feat_led_000_route_guard.py`) fails the build if any `app/routes/` file reopens `FEAT-LED-000`. §VIII's invariants now describe live runtime behavior, not a target state. Separately, §IX's DB `CHECK` constraint has landed (migration `a4d7e9c2f1b6`); its write-time casing validator has not — see §IX below.
+> **v1.4 (2026-11-25), documentation modernization.** Moved the v1.3 note below (and the ones before it) from
+> the top of the document into this Revision History subsection, per `SOP-DOC-000` §VIII. Updated the
+> directional references in §VIII and §IX (`above`/`below`) to stable section references, since this move
+> changed their position relative to the body text that cites them. No other content change.
+
+> [!IMPORTANT]
+> **v1.3 (2026-10-18).** Both halves of the 2026-10-18 work landed independently, on separate PRs, and are recorded together here. The route/registry cutover (PR #1599): `FEAT-LED-005` is registered in `app/feats/base.py`'s FEAT registry, and `app/routes/student.py`'s internal-transfer route now opens `FEATContext("FEAT-LED-005", ...)`. A structural guard (`tests/guards/feat_led_000_route_usage.py`, `tests/test_feat_led_000_route_guard.py`) fails the build if any `app/routes/` file reopens `FEAT-LED-000`. §VIII's invariants now describe live runtime behavior, not a target state. Separately, §IX's DB `CHECK` constraint has landed (migration `a4d7e9c2f1b6`); its write-time casing validator has not — see §IX.
 >
 > **v1.2 (2026-10-18).** Recorded the two halves separately while only one had landed. Superseded by v1.3 above, which records both as landed.
 >
