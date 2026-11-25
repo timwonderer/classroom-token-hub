@@ -261,8 +261,11 @@ Proven by execution, not by argument, and reported with its exact command and sc
 >
 > Evidence (`docs/ops/audits/BASELINE_RECONSTRUCTION_2026-11-24.md`): a fresh chain through the
 > reconstructed baseline reaches a `pg_dump --schema-only` schema at head that is byte-identical
-> (same SHA-256) to a fresh chain through the pre-reconstruction baseline — the two only differ at
-> step 0, by exactly the two added elements. `3a69db4907b4`'s `alter_column('user_id',
+> (same SHA-256) to a fresh chain through the pre-reconstruction baseline — the two start differing
+> at step 0 by exactly the two added elements, stay different while `3a69db4907b4` and
+> `8f1a2c3d4b5e` act on them, and reconverge only once `c7a7b8c9d0e1` removes both elements later in
+> the chain. Head-schema equality is verified directly; intermediate-schema equality is not claimed.
+> `3a69db4907b4`'s `alter_column('user_id',
 > nullable=False)` and `8f1a2c3d4b5e`'s `create_foreign_key('fk_policy_transitions_created_by', …)`
 > were confirmed, by direct inspection of an intermediate database stopped at each revision, to take
 > their *present* branch rather than the guard's skip branch — the literal "corrections no longer

@@ -12,9 +12,14 @@ practice (`INV-ARC-017` §V): exact commands, scope and results.
    elements the register names: `announcements.user_id` and `policy_transitions.created_by`, added
    back in the form they had immediately before the commit that removed each one.
 2. A fresh chain through the reconstructed baseline reaches, at head, a schema byte-identical to a
-   fresh chain through the pre-reconstruction (frozen) baseline. The two chains diverge only at step
-   0, by exactly the two added elements, and converge again by the time either of the two corrected
-   revisions has run.
+   fresh chain through the pre-reconstruction (frozen) baseline. The two chains start by differing at
+   step 0, by exactly the two added elements, and stay different through `3a69db4907b4` and
+   `8f1a2c3d4b5e` — each now executes its originally-intended statement
+   (`alter_column(nullable=False)`, `create_foreign_key(...)`) on the restored element, which the
+   prior chain still lacks. They reconverge only once `c7a7b8c9d0e1` removes both restored elements
+   (`_replace_author`) later in the chain, and stay identical from there to head. Head-schema
+   equality is the property verified directly below; it does not establish intermediate-schema
+   equality, which is not claimed.
 3. Where the element is present, `3a69db4907b4` and `8f1a2c3d4b5e` execute the branch their
    `column_exists`/`foreign_key_exists` guard was written to protect — not the skip branch — so the
    two corrections registered under `SOP-DB-001` §V.B no longer carry the chain on a fresh database.
@@ -45,15 +50,34 @@ migration that performed each rename:
 Commit `27c2a7f0` (which authored `c7a7b8c9d0e1`) also renamed `store_products.user_id` to
 `created_by_seat_id`, and dropped (not renamed) `ledger_transaction.user_id`,
 `attendance_sessions.target_user_id`, `payroll_event.target_user_id`, `issues.sysadmin_id`, and
-`audit_events.teacher_id`. Each of the migrations that still names one of these six elements
-(`b7c41e9a2f30`, `93de308c02c0`, `b2c3d4e5f8a`, `c3d4e5f8a9b`, `d4e5f6a7b8c`, `f83ba4e63062`,
-`042824e29710`) was confirmed, by walking the `down_revision` graph from each candidate to
-`c7a7b8c9d0e1`, to be its **ancestor** — it ran while the element still existed, before
-`c7a7b8c9d0e1` removed it in the same migration chain. None of them needs a §V.B correction.
-`store_products` additionally recreates itself from scratch behind its own pre-existing
-`table_exists` guard (`b7c41e9a2f30`), which already no-ops once the table exists in the
-frozen/reconstructed baseline shape, independent of this reconstruction. The register's two rows are
-therefore the complete set; no further gap was found.
+`audit_events.teacher_id`. Being an ancestor of `c7a7b8c9d0e1` in the revision graph does not by
+itself show a migration needs no correction — the frozen bootstrap already omits elements removed
+before 2026-09-28 regardless of ancestry, which is exactly how the two registered gaps arose. Each
+migration that still names one of these six elements was instead read directly for how it handles
+the element's absence:
+
+- `10a2b3c4d5e7` (`ledger_transaction.user_id`, also touches `issues`/`announcements`/`store_items`)
+  only renames an existing `teacher_id` column, guarded by `if column_exists(table, 'teacher_id')`;
+  it no-ops, rather than fails, when the column is absent, and `ledger_transaction` never carries a
+  bare `user_id` at any point in the frozen or reconstructed baseline.
+- `042824e29710` (`issues.sysadmin_id`) guards its entire body on `table_exists('system_admins')`
+  and each FK retarget on `table_exists(table)`; absent the column, the backfill/retarget for that
+  table simply does not run.
+- `b7c41e9a2f30` (`store_products.user_id`) recreates the table from scratch behind its own
+  pre-existing `table_exists` guard, independent of this reconstruction.
+- `b2c3d4e5f8a` / `c3d4e5f8a9b` (`attendance_sessions.target_user_id`, `payroll_event.target_user_id`)
+  branch on `column_exists(...)`: when the historical source column (`user_id`) is present it
+  renames it, and when it is not — the baseline's actual case — it falls through to
+  `add_column(...)` and builds the column fresh instead. Either branch reaches the same intended end
+  state.
+- `93de308c02c0`, `d4e5f6a7b8c`, and `f83ba4e63062` (the remaining attendance/payroll revisions) are
+  likewise `index_exists`/`column_exists`-guarded no-ops or fresh-adds, not operations that assume
+  historical presence of the element.
+
+None of these six elements' migrations unconditionally requires the element to already exist the way
+`3a69db4907b4` and `8f1a2c3d4b5e` did before correction — each either no-ops safely or adds the
+column fresh, so none needs a §V.B correction. The register's two rows are therefore the complete
+set; no further gap was found.
 
 ## Baseline edit
 
@@ -87,8 +111,11 @@ No other line of the baseline file changed.
 ## Procedure
 
 ```bash
-# 0. Save both baseline variants
-git show HEAD:migrations/baseline/0001_baseline_schema.sql > old_baseline.sql   # pre-reconstruction
+# 0. Save both baseline variants. Pin the "old" file to the merge-base commit, not to a checkout
+# that already contains this PR's baseline — HEAD after this PR merges carries the reconstructed
+# file under both names otherwise, and the diffs below report no difference.
+git show 14c56cd538b6217d74dfbc733431c072c480a7c0:migrations/baseline/0001_baseline_schema.sql \
+  > old_baseline.sql                                                           # pre-reconstruction
 cp migrations/baseline/0001_baseline_schema.sql new_baseline.sql               # reconstructed
 
 # 1. Old baseline: step 0 and full chain
@@ -150,7 +177,7 @@ database that was migrated before this reconstruction landed.
 ### Downgrade reachability
 
 Per `SOP-DB-001` §V.B condition 7, a downgrade across a corrected revision is proven only when it is
-reachable from head. It is not, for either correction: `c7a7b8c9d0e1` (an ancestor of both
+reachable from head. It is not, for either correction: `c7a7b8c9d0e1` (a descendant of both
 `3a69db4907b4` and `8f1a2c3d4b5e` in the revision graph) refuses its own downgrade
 (`raise RuntimeError('Irreversible schema cleanup...')`), so no downgrade walk starting at head can
 reach either corrected revision. This was already true before the reconstruction and is unchanged by

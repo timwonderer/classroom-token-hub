@@ -28,7 +28,8 @@ and this project follows semantic versioning principles.
   stopped at each revision); they remain in place, correct for any database migrated before this
   change, per Golden Rule 3. A fresh chain through the reconstructed baseline reaches a
   `pg_dump --schema-only` schema at head that is byte-identical to one through the prior baseline —
-  the two differ only at step 0, by exactly the two added elements. Git archaeology
+  the two start differing at step 0, by exactly the two added elements, stay different while the two
+  corrections act on them, and reconverge once a later migration removes both elements. Git archaeology
   (`docs/ops/audits/BASELINE_RECONSTRUCTION_2026-11-24.md`) found no other element affected by the
   gap the 2026-09-28 freeze (`docs/ops/audits/BASELINE_FREEZE_2026-09-28.md`) left open.
 
