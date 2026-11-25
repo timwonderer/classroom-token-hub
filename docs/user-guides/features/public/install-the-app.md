@@ -1,22 +1,22 @@
 ---
-title: Installing the App and Working Offline
+title: Installing the App (Internet Required)
 category: features
 subcategory: public
 roles: [teacher, student]
-description: Install Classroom Token Hub to a phone or desktop, and understand why the app needs a live connection to do anything.
-keywords: [install, PWA, app, home screen, offline, service worker, connection, You are offline, add to home screen]
+description: Install Classroom Token Hub to a phone or desktop as an app. It still needs an internet connection for everything; it does not work offline.
+keywords: [install, PWA, app, home screen, add to home screen, internet required, no offline mode, offline, You are offline, connection]
 related:
   - user-guides/features/public/access-gate
   - user-guides/diagnostics/error-pages
 ---
 
-# Installing the App and Working Offline
+# Installing the App (Internet Required)
 
 ## Overview
 
-Classroom Token Hub runs in a browser, but it can be installed so it looks and launches like an app — its own icon, its own window, no address bar.
+Classroom Token Hub runs in a browser, and you can install it so it looks and launches like an app (a PWA, or progressive web app): its own icon, its own window, no address bar.
 
-Installing changes how it *launches*. It does not let it work without internet. That distinction is the whole of this guide.
+**The installed app does not work offline at all.** Installing changes how it *launches*, nothing else. Every page, installed or not, needs a live internet connection. Without one you see only a *You are offline* page.
 
 ## Step-by-step instructions
 
