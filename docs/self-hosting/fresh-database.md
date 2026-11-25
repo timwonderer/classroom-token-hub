@@ -47,12 +47,26 @@ run on both on 2026-11-24 found:
   character classes. Under `C`, `lower('Émile')` is `Émile` and `[[:alpha:]]` matches
   only ASCII letters; under `C.UTF-8`, `lower('Émile')` is `émile`.
 
-CTH depends only on the identical behaviors. The schema uses no `lower`, `upper`,
-`ILIKE`, regular expression or `COLLATE`. The application's only database-side
-case-insensitive matches are two `ILIKE` prefixes with ASCII literals, on
-descriptions the application writes itself. Names are encrypted and never
-compared in SQL. A change that adds database-side case mapping, `ILIKE` or a
-regex character class over user text must re-qualify both collations. This database check is not a completed host or
+CTH's database-side text operations, all inventoried:
+
+- **Schema.** It uses no `lower`, `upper`, `ILIKE` or `COLLATE`. It has one
+  regular expression: the `ledger_compensation` trigger (from migration
+  `f8b2d6e0a410`) requires `compensation_origin_locator !~
+  '^ledger-credit:v1:[1-9][0-9]*$'` to be false. The pattern is ASCII literals
+  and ASCII code-point ranges, with no character class, case-insensitive flag or
+  collation-dependent element. A second probe
+  (`docs/ops/audits/evidence/2026-11-24_bundle-collation/regex_probe.sql`) gave
+  identical results for all 11 inputs under both collations, including
+  Arabic-Indic and fullwidth digits, superscripts and changed case.
+- **Application.** Its only case-insensitive matches are two `ILIKE` prefixes
+  with ASCII literals (`'Transfer%'` and `'Overdraft protection%'`) on
+  descriptions it writes itself.
+- **Names.** Encrypted, and never compared in SQL.
+
+Each of these falls within the behavior measured identical. A change that adds
+database-side case mapping, `ILIKE`, or a regular expression with a character
+class, a case-insensitive flag or non-ASCII content must re-qualify both
+collations. This database check is not a completed host or
 independently verified handbook installation.
 
 ## Reference-host installation
@@ -142,10 +156,21 @@ PostgreSQL 14 binaries first on PATH. The output path must not exist:
 
 ```sh
 python scripts/generate_fresh_database.py \
-  --source-sha 1e446b0ba0507df5a5075ec5c15e76b6502d6a01 \
-  --output /tmp/cth-reviewed-a0faf8b2a35d
-diff -ru migrations/fresh/a0faf8b2a35d /tmp/cth-reviewed-a0faf8b2a35d
+  --source-sha "$(git rev-parse HEAD)" \
+  --output /tmp/cth-reviewed-bundle
+diff migrations/fresh/<revision>/schema.sql /tmp/cth-reviewed-bundle/schema.sql
 ```
+
+To check every committed bundle against the checked-out lineage, comparing the
+schema and each derived manifest field, run the same check CI runs:
+
+```sh
+python scripts/verify_fresh_bundles.py --source-sha "$(git rev-parse HEAD)"
+```
+
+Do not `diff` whole manifests. They also record provenance (`source_sha`, or
+`release_sha` in bundles generated before that rename) and the server and
+`pg_dump` version strings, which legitimately differ between derivations.
 
 **Derivation is enforced by CI.** The `fresh-bundle-derivation` job in
 `.github/workflows/check-migrations.yml` runs `scripts/verify_fresh_bundles.py`
@@ -154,8 +179,7 @@ scripts. It re-derives each committed bundle from that commit's lineage
 (`generate_fresh_database.py --revision <bundle>`) and fails unless `schema.sql`
 and every derived manifest field (`revision`, `schema_sha256`, `ddl_sha256`,
 `empty_schema_sha256`, `categories`, `sequences`) match exactly. A bundle can
-therefore never be a hand-maintained schema. The manual `diff` above remains the
-reviewer's local check.
+therefore never be a hand-maintained schema.
 
 **Provenance.** A manifest records `revision`, the Alembic revision the bundle
 installs, and `source_sha`, the commit the bundle was derived from. The release
@@ -183,8 +207,11 @@ categories. The generator refuses other populated application tables. The seed
 migration gives all categories its transaction timestamp: the installer uses
 its own transaction timestamp and checks all 15 share it. Absolute creation
 time is the only excluded seed field. The Alembic row is verified separately.
-The generator runs the direct installer on a second database with an ordinary
-database owner and compares both results before writing the output. The
+When it derives the checkout's sole head, the generator also runs the direct
+installer on a second database with an ordinary database owner and compares
+both results before writing the output. With `--revision` for any other
+revision, as CI uses it, there is no installer round trip: the installer only
+installs a checkout's sole head. That output proves derivation only. The
 temporary server stops on completion. Review artifact and manifest changes
 against the exact migrations; a new seed or object class requires explicit
 review. Never regenerate from production, a developer database or ORM metadata.
