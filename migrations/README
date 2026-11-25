@@ -39,6 +39,12 @@ See: [docs/development/MIGRATION_GUIDE.md](../docs/development/MIGRATION_GUIDE.m
 - Use descriptive migration messages
 - Check for data loss before applying destructive changes
 
-## Current Head Status
+## Lineage
 
-The migration graph currently has a single head at revision `a1b2c3d4e5f7` (`a1b2c3d4e5f7_add_student_blocks_and_tap_deletion.py`).
+The supported lineage starts at the v2 era baseline, revision `d7a3e9b1c5f2` (the v2.0.0 launch
+schema, `baseline/d7a3e9b1c5f2_v2_launch_schema.sql`), and continues through `versions/`. A new
+production-style database is installed from its release bundle in `fresh/<revision>/`
+(`docs/self-hosting/fresh-database.md`). `archive/` holds provenance that is never executed. See
+`docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md` §V.C.
+
+`flask db heads` must report exactly one head.
