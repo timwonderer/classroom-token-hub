@@ -34,34 +34,34 @@ background reading if you want it.
 
 ## Which release this guide matches
 
-This walkthrough targets the self-hosting installer changes prepared for
-**v2.5.0**. The version number tells you which instructions and application
-belong together; using the newest documentation with an older installer can
-produce different results.
+**Supported fresh-install release:** [v2.5.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.5.0)
 
-**As checked on November 23, 2026:**
+Two release names matter, and they can differ:
 
-| Version | Status | What that means for this guide |
+| Name | What it is | Where to find it |
 | --- | --- | --- |
-| v2.5.0 | Release candidate in the project's changelog; not yet tagged or published. | This is the planned release for the installer described here. Wait for its published stable release and confirm it includes the fixes below before renting a server. |
-| v2.4.5 | Latest published stable release. | It predates the required installer fixes. Don't use it with this walkthrough. |
+| **Supported fresh-install release** | The tagged release this handbook and its fresh-install database bundle were validated against. Every new installation starts from it. | The line above, the project README, and `migrations/fresh/supported_release.json` in the repository, which is the authoritative declaration; CI checks that all three agree. |
+| **Latest stable release** | The newest published stable version of CTH. | The [Releases page](https://github.com/timwonderer/classroom-token-hub/releases) and the project README |
 
-Check the [Releases page](https://github.com/timwonderer/classroom-token-hub/releases)
-when you are ready to start. Merging a fix into `main` makes it part of the
-project's source; it does **not** publish a release or change an existing
-release tag. The planned version becomes an installation choice only when its
-stable release is published. [Part 3](part-3-get-cth.md) explains how to save
-that release's exact identifier.
+**Install the supported fresh-install release, then upgrade.** Parts 3 to 6
+install the supported fresh-install release exactly and check it with practice
+data. Once Part 7's backup and restore drill passes, and **before real students
+join**, follow the [upgrade walkthrough](upgrades.md) to the latest stable
+release. If the two are the same, there is nothing to upgrade. With only
+practice data in it, the installation is at its safest point for a first
+upgrade.
 
-The release must include the installer fixes in
-[#1787](https://github.com/timwonderer/classroom-token-hub/pull/1787), the
-student-setup Redis fix in
-[#1789](https://github.com/timwonderer/classroom-token-hub/pull/1789), and
-[#1795](https://github.com/timwonderer/classroom-token-hub/pull/1795), which
-removes the Cloudflare Access requirement. An older installer still expects
-an Access gate during `ingress` and `readiness`. If no compatible stable
-release is available, pause here. Testing an exact unreleased commit is a
-separate maintainer rehearsal.
+Install no other release from scratch. A release that isn't the supported
+fresh-install release has no validated fresh-install bundle in this guide, and
+the database stage refuses a checkout whose release has no bundle. Do not use a
+branch such as `main`, a pre-release, or an untagged commit. Testing an exact
+unreleased commit is a separate maintainer rehearsal.
+
+**If the supported release becomes unsafe.** The supported fresh-install release
+must stay a safe place to start, even briefly. If a security defect makes it
+unsafe to run even until the upgrade, the project either advances the supported
+release or suspends these installation instructions and says so here and in the
+README. Do not start an installation while a suspension notice is shown.
 
 **Plan for ongoing care.** You'll renew the HTTPS certificate, check security
 updates and keep usable backups. Part 7 explains those jobs. [Upgrades](upgrades.md)

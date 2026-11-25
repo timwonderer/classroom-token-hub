@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.14    | 2026-11-15     | 2.13 | Normative |
+| SOP-DEP-001      | 2.15    | 2026-11-25     | 2.14 | Normative |
 
 ## I. Purpose
 
@@ -242,15 +242,19 @@ service is restarted only after the completeness check passes.
 2. Confirm the connection target is not a local, test, or legacy database.
 3. Confirm PostgreSQL version and required extensions match the rehearsal.
 4. Confirm no application process is writing to the database.
-5. For a new installation of a release with a reviewed fresh baseline, follow the
-   [fresh database installation procedure](../../self-hosting/fresh-database.md).
-   Install only on an explicitly identified, enrolled, offline, empty target.
+5. A new installation starts from the **supported fresh-install release** (`SOP-DEP-002`
+   §VII.B), declared in `migrations/fresh/supported_release.json`. Follow the
+   [fresh database installation procedure](../../self-hosting/fresh-database.md) with a checkout
+   of that release. Install only on an explicitly identified, enrolled, offline, empty target.
    Verify the complete installed schema and required initial data before recording
    its single Alembic revision. If verification fails, keep the database offline
-   and unversioned; do not stamp or serve it. For releases without a reviewed
-   baseline, the supported migration path is `flask db upgrade` against the
-   confirmed target. Existing installations continue to use the migration path
-   under SOP-DB-004 and SOP-DEP-002; never enroll or initialize them as new.
+   and unversioned; do not stamp or serve it. When the intended release is newer, the
+   installation then reaches it by `flask db upgrade` through the supported lineage, as an
+   ordinary upgrade, before any classroom use. No other release is initialized from empty:
+   replaying the lineage from the era baseline is the CI and test path, not an installation
+   path. If no safe supported fresh-install release is declared, no new installation starts.
+   Existing installations continue to use the migration path under SOP-DB-004 and
+   SOP-DEP-002; never enroll or initialize them as new.
 
 6. Confirm `flask db current` reports the expected single head.
 7. Confirm the schema contains no v1-only objects. The v1 identity tables
@@ -492,6 +496,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.15 | 2026-11-25 | §IX.5: a new installation starts from the declared supported fresh-install release (`SOP-DEP-002` §VII.B) and reaches a newer intended release by ordinary upgrade before classroom use. Initializing any other release from empty is withdrawn; replaying the lineage is the CI/test path. Owner ruling 2026-11-25. |
 | 2.14 | 2026-11-15 | §IX: distinguish the release-specific, verified empty-database installation from Alembic upgrades of existing installations. |
 | 2.13 | 2026-11-04 | Clarify initial-host/rehearsal scope after the completed v2 launch, replace the stale holding-page assumption with target verification, and point recurring releases to SOP-DEP-002. |
 | 2.12 | 2026-10-26 | §VI secrets: add `CONFIGURATION_EXPORT_KEY`, required by class configuration export/import (SPEC-CLASS-001). If it is missing or blank, the page loads but every transfer is refused, which the browser check before release found. |

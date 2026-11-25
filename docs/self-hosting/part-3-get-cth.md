@@ -28,11 +28,14 @@ know which one, so you can tell later what's running and what to upgrade from.
 
 **Steps.**
 
-1. Open the [Releases page](https://github.com/timwonderer/classroom-token-hub/releases)
-   and pick a stable release that includes all the fixes below. Do this
-   before Part 2 if you have not yet rented a server. See
+1. Find the **supported fresh-install release** in
    [which release this guide matches](before-you-begin.md#which-release-this-guide-matches).
-2. Note its **tag**, such as `v2.5.0`.
+   Use that release, not simply the newest one: it is the release this guide
+   and its database bundle were validated against. Do this before Part 2 if you
+   have not yet rented a server. You upgrade to the latest stable release after
+   Part 7's backup drill, before real students join.
+2. Open that release on the [Releases page](https://github.com/timwonderer/classroom-token-hub/releases)
+   and note its **tag**, such as `v2.5.0`.
 3. Click the commit link on the release (a short code like `1d74ea8`). The
    commit page shows the **full 40-character SHA**.
 
@@ -43,9 +46,9 @@ characters using only `0`–`9` and `a`–`f`.
 
 **If something looks wrong.** Don't use a branch such as `main` or a
 pre-release for this tutorial. Branch names move; an exact commit SHA can
-identify a rehearsal build, but it does not make it a supported release. If no
-compatible release is published, wait rather than installing v2.4.5 with
-instructions for newer code.
+identify a rehearsal build, but it does not make it a supported release. If the
+tag you noted is not the supported fresh-install release, start over at step 1.
+If the installation instructions are marked suspended, wait.
 
 ## 3.2 Download it to the server
 
