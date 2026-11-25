@@ -50,8 +50,10 @@ command, which executes no client-supplied text:
 2. The artifact contains only regular files under `docs/user-guides/` with an allowed suffix. Symlinks,
    submodules and any other file type are refused.
 3. **Screening.** Every commit since the deployed application release that changed `docs/user-guides/`
-   changed nothing else (`CHANGELOG.md` excepted). A guide changed together with code most likely describes
-   code that is not deployed yet, so it waits for that release.
+   changed nothing else (`CHANGELOG.md` and `github-pages/` excepted; the public site deploys separately). A
+   merge is judged by its diff against its first parent, so a pull request that changed code and guides in
+   separate commits is caught when it lands. A guide changed together with code most likely describes code
+   that is not deployed yet, so it waits for that release.
 4. A publication and a formal release never run at once: both take the same droplet lock.
 
 Rendering is unchanged: artifact guides pass through the same Markdown renderer and HTML sanitizer as guides

@@ -16,7 +16,9 @@ Checks, all before the switch:
   2. the artifact holds only regular files under docs/user-guides/ with allowed suffixes: no
      symlinks, submodules or other file types;
   3. screening: every commit since the deployed application release that touched docs/user-guides/
-     touched nothing else (CHANGELOG.md excepted). A guide written together with code most likely
+     touched nothing else (CHANGELOG.md and github-pages/ excepted). A merge is judged by its diff
+     against its first parent, so a pull request that changed code and guides in separate commits
+     is still caught when it lands. A guide written together with code most likely
      describes code that is not deployed yet. This screens; it does not prove compatibility, which
      the publisher attests to under SOP-DEP-003.
 After extraction, and again after the switch, every published file's git blob hash must equal the
@@ -29,13 +31,14 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import shutil
 import sys
-import tempfile
 
 APP_DIR = Path("/root/classroom-economy")
 DOCS_HOME = Path("/srv/cth-docs")
 SCOPE = "docs/user-guides/"
 SCREEN_EXEMPT = {"CHANGELOG.md"}
+SCREEN_EXEMPT_PREFIXES = ("github-pages/",)  # deployed by GitHub Pages, never served by the app
 ALLOWED_SUFFIXES = {".md", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
 REGULAR_MODES = {"100644", "100755"}
 SERVICE = "classroom-economy"
@@ -70,7 +73,8 @@ def screening_problems(commits):
     for sha, paths in commits:
         if not any(p.startswith(SCOPE) for p in paths):
             continue
-        others = sorted(p for p in paths if not p.startswith(SCOPE) and p not in SCREEN_EXEMPT)
+        others = sorted(p for p in paths if not p.startswith(SCOPE) and p not in SCREEN_EXEMPT
+                        and not p.startswith(SCREEN_EXEMPT_PREFIXES))
         if others:
             problems.append(f"{sha[:12]} changes user guides together with {', '.join(others[:5])}"
                             + (" …" if len(others) > 5 else ""))
@@ -124,8 +128,14 @@ def listing(sha, with_blob=False):
 
 
 def screened_commits(app_sha, sha):
-    shas = git("log", "--format=%H", "--no-merges", f"{app_sha}..{sha}", "--", SCOPE).split()
-    return [(c, git("diff-tree", "--no-commit-id", "--name-only", "-r", c).split()) for c in shas]
+    # No path limiting and no --no-merges: history simplification can hide a merge, and a merge's
+    # own changes (its diff against the first parent) are what landed on main.
+    commits = []
+    for c in git("rev-list", f"{app_sha}..{sha}").split():
+        paths = git("diff", "--name-only", f"{c}^1", c).split()
+        if any(p.startswith(SCOPE) for p in paths):
+            commits.append((c, paths))
+    return commits
 
 
 def served_root():
@@ -174,7 +184,11 @@ def deploy(sha, run_id):
     releases.mkdir(parents=True, exist_ok=True)
     final = releases / sha
     if not final.exists():
-        staging = Path(tempfile.mkdtemp(prefix=f".{sha[:12]}-", dir=releases))
+        staging = releases / f".{sha}.staging"
+        if staging.exists():
+            shutil.rmtree(staging)
+        # Owner-writable, readable by the service user: the guides are public pages.
+        staging.mkdir(mode=0o755)
         archive = subprocess.run(["git", "-C", str(APP_DIR), "archive", "--format=tar", sha, "--", SCOPE],
                                  check=True, capture_output=True).stdout
         subprocess.run(["tar", "-x", "--no-same-owner", "-C", str(staging)], input=archive, check=True)
@@ -183,7 +197,6 @@ def deploy(sha, run_id):
             raise Refused("extracted tree differs from the commit: " + "; ".join(problems[:5]))
         (staging / "SOURCE").write_text(json.dumps({"docs_sha": sha, "app_sha_at_publish": app_sha,
                                                     "run_id": run_id or None}, sort_keys=True) + "\n")
-        os.chmod(staging, 0o755)
         os.rename(staging, final)
     elif extraction_problems(final, entries, provenance=True):
         raise Refused(f"existing artifact for {sha} differs from the commit; remove it by hand and retry")

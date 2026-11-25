@@ -45,7 +45,8 @@ def test_empty_artifact_is_refused():
 # ---- screening ----
 
 def test_guide_only_and_unrelated_commits_pass():
-    commits = [("a" * 40, ["docs/user-guides/x.md", "CHANGELOG.md"]), ("b" * 40, ["app/models.py"])]
+    commits = [("a" * 40, ["docs/user-guides/x.md", "CHANGELOG.md", "github-pages/timeline.html"]),
+               ("b" * 40, ["app/models.py"])]
     assert dp.screening_problems(commits) == []
 
 
@@ -93,14 +94,15 @@ def _git(cwd, *args):
     return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
-def _commit(repo, files, message):
+def _commit(repo, files, message, push=True):
     for path, text in files.items():
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
     _git(repo, "add", "-A")
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", message)
-    _git(repo, "push", "-q", "origin", "HEAD:main")
+    if push:
+        _git(repo, "push", "-q", "origin", "HEAD:main")
     return _git(repo, "rev-parse", "HEAD")
 
 
@@ -138,6 +140,20 @@ def test_guide_written_with_code_is_refused(droplet):
     mixed = _commit(work, {"docs/user-guides/a.md": "# A new feature\n", "app/x.py": "x = 2\n"}, "feature")
     with pytest.raises(dp.Refused, match="together with app/x.py"):
         dp.deploy(mixed, "")
+    assert not (home / "current").exists()
+
+
+def test_merge_landing_code_and_guides_in_separate_commits_is_refused(droplet):
+    work, _app, home, _release = droplet
+    _git(work, "checkout", "-q", "-b", "feature")
+    _commit(work, {"app/x.py": "x = 2\n"}, "code", push=False)
+    _commit(work, {"docs/user-guides/a.md": "# A new feature\n"}, "guide", push=False)
+    _git(work, "checkout", "-q", "main")
+    _git(work, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "merge", "-q", "--no-ff",
+         "-m", "merge feature", "feature")
+    _git(work, "push", "-q", "origin", "HEAD:main")
+    with pytest.raises(dp.Refused, match="together with app/x.py"):
+        dp.deploy(_git(work, "rev-parse", "HEAD"), "")
     assert not (home / "current").exists()
 
 
