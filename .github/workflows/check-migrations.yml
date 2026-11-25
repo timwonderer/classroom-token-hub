@@ -22,6 +22,10 @@ on:
       - 'scripts/validate-migrations.py'
       - 'scripts/lint_migrations.py'
       - 'migrations/fresh/**'
+      - 'scripts/check_supported_release.py'
+      - 'tests/test_supported_release_declaration.py'
+      - 'README.md'
+      - 'docs/self-hosting/before-you-begin.md'
       - 'migrations/env.py'
       - 'migrations/alembic.ini'
       - 'migrations/baseline/**'
@@ -42,6 +46,10 @@ on:
       - 'scripts/validate-migrations.py'
       - 'scripts/lint_migrations.py'
       - 'migrations/fresh/**'
+      - 'scripts/check_supported_release.py'
+      - 'tests/test_supported_release_declaration.py'
+      - 'README.md'
+      - 'docs/self-hosting/before-you-begin.md'
       - 'migrations/env.py'
       - 'migrations/alembic.ini'
       - 'migrations/baseline/**'
@@ -129,6 +137,11 @@ jobs:
       # SOP-DB-004 §V.5: every revision whose downgrade() raises or does nothing is in
       # migrations/forward_only_register.txt, so the operator knows before the window
       # which revisions make code-only rollback impossible. The test needs no database.
+      - name: Check the supported fresh-install release declaration
+        # SOP-DEP-002 §VII.B. No database: tags, the release's migration head and
+        # its shipped bundle are read from git (this job checks out with full history).
+        run: python scripts/check_supported_release.py
+
       - name: Check forward-only revision register
         run: |
           pip install pytest

@@ -24,10 +24,16 @@ initialized installation upgrades through Alembic. A backup restores through
 the backup procedure. Neither is a fresh installation. The external database
 owner runs this procedure; it grants no application capability.
 
-The reviewed artifact is under `migrations/fresh/a0faf8b2a35d/`. Its source is
-Git commit `1e446b0ba0507df5a5075ec5c15e76b6502d6a01`. Use a trusted checkout
-containing the reviewed installer, manifest and schema together. The installer
-selects the bundle for the checkout's sole Alembic head. Checksums detect
+Only the **supported fresh-install release** has a bundle for this procedure.
+It is declared once, in `migrations/fresh/supported_release.json` (tag, commit
+and Alembic revision), and named in the README and in
+[which release this guide matches](before-you-begin.md#which-release-this-guide-matches).
+It is currently v2.5.0, whose bundle is `migrations/fresh/a0faf8b2a35d/`,
+derived from Git commit `1e446b0ba0507df5a5075ec5c15e76b6502d6a01`. Other
+releases have no bundle of their own. Install the supported release, then
+upgrade. Use a trusted checkout of that release, containing the reviewed
+installer, manifest and schema together. The installer selects the bundle for
+the checkout's sole Alembic head and refuses a checkout without one. Checksums detect
 corruption; authenticating the release itself remains the operator's job.
 
 **Tested database profile:** PostgreSQL server and `pg_dump` 14.24, local Unix
