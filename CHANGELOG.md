@@ -10,7 +10,7 @@ and this project follows semantic versioning principles.
 
 ## [2.6.0] - 2026-11-25 — Privacy-safe logs, true simple interest, and a launch-anchored migration baseline
 
-Release candidate; not yet tagged, deployed or published. Migration `4fad9d362d0d`.
+Released as `6f0089f` on 2026-11-25 at 20:04 UTC by release run [45691308002](https://github.com/timwonderer/classroom-token-hub/actions/runs/45691308002). Migration `4fad9d362d0d`. Record: [DEPLOY_2026-11-25_6f0089f.md](docs/ops/audits/DEPLOY_2026-11-25_6f0089f.md).
 
 ### Added
 
@@ -18,7 +18,9 @@ Release candidate; not yet tagged, deployed or published. Migration `4fad9d362d0
 
   **Draft contracts for the HTTP error pages, for owner ratification** (`docs/TRACKING/HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`, revision 5, final for ratification). Proposes `SPEC-DES-002` (presentation, through INV-ARC-020) and `SPEC-OPS-007` (communication, disclosure, outcome-safe recovery and response semantics for every application-generated error response, through DOM-OPS-001), a `SPEC-OPS-003` amendment for privacy-safe error-response logging, and the incorporation amendments. Findings are classified as invariant violations, implementation inconsistencies, new requirements and unverified findings; two confirmed violations (full request URLs in error log lines; a caller-supplied request identifier adopted, logged and persisted) are remediated separately under existing authority, and a read-only production check of the retained database stores found no trace endpoint with a numeric segment or a character a route pattern cannot contain, and no request id outside the generated shape; both are indicators only, so neither question is closed (an all-letter raw path, or a well-formed caller id encoding personal data, would pass); logs not yet examined. No owner decision remains; four conflicts with ratified documents are listed with the amendments that resolve them. Unratified and unnumbered: it governs nothing and changes no template, handler or ratified document.
 
-- An easter egg: the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
+- <!-- notes: new -->
+
+  **An easter egg** (#1839): the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
 
 - <!-- notes: internal -->
 
@@ -50,7 +52,9 @@ Release candidate; not yet tagged, deployed or published. Migration `4fad9d362d0
 
 ### Fixed
 
-- The 404 page's "What can you do?" list uses real bullets, like the other error pages, so wrapped lines on phones line up with the text instead of starting under the bullet.
+- <!-- notes: fixed -->
+
+  **The 404 page's list uses real bullets** (#1839): the 404 page's "What can you do?" list uses real bullets, like the other error pages, so wrapped lines on phones line up with the text instead of starting under the bullet.
 
 - <!-- notes: fixed, highlight -->
 
@@ -72,7 +76,7 @@ Release candidate; not yet tagged, deployed or published. Migration `4fad9d362d0
 
   **Two concurrent bill-cycle succession commands racing for the same lineage could both succeed, one creating a duplicate, overlapping-period cycle instead of being refused** (#1667; `DOM-OBL-001` §V.7 case 3). `schedule_next_bill_cycle` read eligibility and derived the next cycle number with no lock: two commands reading before either committed correctly collided on `uq_bill_cycles_ref_cycle` and the loser failed closed, but a loser whose read merely landed after the winner's commit instead saw the already-advanced lineage and legitimately derived — and wrote — a further cycle carrying the exact terms it had originally raced for, in violation of the rule that a losing command "MUST NOT re-evaluate against the advanced lineage and create a later successor instead." `schedule_next_bill_cycle` now takes a transaction-scoped Postgres advisory lock on `(class_id, internal_ref)` before reading eligibility. The deciding question after acquiring it is never whether this call had to wait — a losing command and a command that starts after the winner has already fully committed are indistinguishable by lock-wait timing alone, and an earlier revision of this fix only caught the former. Instead, every call compares its own `cycle_boundary_at` against the freshly-read latest cycle's: if the lineage has already reached or passed the exact boundary this call targeted, it is a conflict regardless of contention, and if the lock-holder ahead of it rolled back without changing the lineage (`pg_advisory_xact_lock` releases on rollback exactly as on commit), it is not. `tests/dom/obligations/test_bill_cycle_succession.py::test_distinct_commands_racing_for_one_successor_conflict_without_falling_forward` failed nondeterministically and now passes consistently — alone, in the full file (30 repeated runs), and alongside three new tests covering a rollback while waiting, a same-command replay race, and a zero-contention duplicate attempt — across 150+ combined repeated runs. The test's own blocking barrier is also scoped to the exact lineage lock and the racing command's own backend PID, rather than any ungranted lock cluster-wide, which could previously release the winning command before the race was actually exercised.
 
-- <!-- notes: fixed, security -->
+- <!-- notes: fixed -->
 
   **The Economic Engine rebalance preview judges insurance premiums against their own billing cadence.** `resolve_insurance()` always resolved a WEEKLY coverage period regardless of a policy's actual `charge_frequency`, so a correctly-priced MONTHLY-billed policy's premium was compared against a weekly-scaled recommended band (~30/7 too narrow) and could be wrongly flagged "out of range" in `/admin/economic-engine?review_rebalance=1`. `coverage_period` is no longer defaulted — every caller now states the policy's own cadence explicitly, the same way rent already has no engine-side default (#1762). Advisory-only; this page never applies insurance changes and no ledger or money data is affected.
 
