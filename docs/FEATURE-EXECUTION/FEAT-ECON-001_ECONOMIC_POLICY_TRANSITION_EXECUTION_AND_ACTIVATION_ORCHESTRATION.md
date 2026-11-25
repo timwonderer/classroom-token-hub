@@ -2,12 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-ECON-001 | 3.0 | 2026-09-30 | 2.1 | FEAT |
-
-> [!IMPORTANT]
-> **3.0 (2026-09-30), operator ruling.** Versions 1.x–2.x executed economic changes by creating rows in the class-wide `policy_versions` / `policy_transitions` tables and activating them at operational boundaries. Those tables were never authorized as canonical and are retired (`DOM-CLASS-003` §V, v2.4). This version replaces transition creation, activation, supersession and cancellation with one rule: each change is a new row in its owning domain's table, carrying the instant from which it governs. The file keeps its former name so existing references resolve.
->
-> **Owner decisions 2026-09-30 (incorporated in 3.0 before release).** (a) The teacher no longer chooses an activation mode. "Apply Immediately" for rent is removed: a rent period already billed keeps its frozen terms either way, so it did exactly what the next-cycle option did, and offering both was misleading. Each change now takes effect the one way its owner defines (§VI–§VIII). (b) A policy-mode change never revokes a scheduled rebalance (§X).
+| FEAT-ECON-001 | 3.1 | 2026-11-25 | 3.0 | FEAT |
 
 ## I. Purpose
 
@@ -245,3 +240,22 @@ The FEAT layer therefore acts as constitutional execution orchestrator rather th
 
 Policy/product authors are recorded as `created_by_seat_id` within the explicit `class_id`
 where the owning table carries an author. No User foreign key or principal author alias is permitted.
+
+---
+
+## XVI. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v3.1 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the notes below from the top of the document into it,
+> per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the header
+> table and §I Purpose. No content change.
+>
+> **v3.0 (2026-09-30), operator ruling.** Versions 1.x–2.x executed economic changes by creating rows in the class-wide `policy_versions` / `policy_transitions` tables and activating them at operational boundaries. Those tables were never authorized as canonical and are retired (`DOM-CLASS-003` §V, v2.4). This version replaces transition creation, activation, supersession and cancellation with one rule: each change is a new row in its owning domain's table, carrying the instant from which it governs. The file keeps its former name so existing references resolve.
+>
+> **Owner decisions 2026-09-30 (incorporated in 3.0 before release).** (a) The teacher no longer chooses an activation mode. "Apply Immediately" for rent is removed: a rent period already billed keeps its frozen terms either way, so it did exactly what the next-cycle option did, and offering both was misleading. Each change now takes effect the one way its owner defines (§VI–§VIII). (b) A policy-mode change never revokes a scheduled rebalance (§X).
+
+Revisions to this document must increment the version number, update the Effective Date, and
+remain consistent with `DOM-CLASS-003` and `DOM-OPS-001`.

@@ -5,11 +5,6 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | FEAT-IDEN-101 | 1.3 | 2026-10-14 | 1.2 | Normative | NEW |
 
-> [!IMPORTANT]
-> **v1.3 (2026-10-14), review correction.** v1.2 named the algorithm ("scrypt via werkzeug") at three places, which `SPEC-SEC-001` §V.5 forbids: "Algorithm and parameters MUST be centralized in the canonical primitive, not duplicated in FEAT documents or route code." Reworded to name only `HASH_PASSWORD()`, matching `FEAT-IDEN-106`'s phrasing. No behavior change.
->
-> **v1.2 (2026-10-14), documentation modernization.** §III.B.3 and the review checklist described backup-code hashing as "bcrypt + pepper." The canonical primitive is `HASH_PASSWORD()` (salted, NOT peppered, per `SPEC-SEC-001`); sibling `FEAT-IDEN-106` already used corrected wording. No behavior change.
-
 ---
 
 ## I. Purpose
@@ -310,6 +305,13 @@ Before code review, verify:
 ---
 
 ## XII. Amendments
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.3 (2026-10-14), review correction.** v1.2 named the algorithm ("scrypt via werkzeug") at three places, which `SPEC-SEC-001` §V.5 forbids: "Algorithm and parameters MUST be centralized in the canonical primitive, not duplicated in FEAT documents or route code." Reworded to name only `HASH_PASSWORD()`, matching `FEAT-IDEN-106`'s phrasing. No behavior change.
+>
+> **v1.2 (2026-10-14), documentation modernization.** §III.B.3 and the review checklist described backup-code hashing as "bcrypt + pepper." The canonical primitive is `HASH_PASSWORD()` (salted, NOT peppered, per `SPEC-SEC-001`); sibling `FEAT-IDEN-106` already used corrected wording. No behavior change.
 
 Revisions to this document SHALL:
 

@@ -2,16 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.10 | 2026-11-04 | 5.9 | Constitutional |
-
-> [!IMPORTANT]
-> **v5.9 (2026-11-03), insurance filing (owner ruling).** Weekly filing limits apply independently of billing cadence. Rejection releases the claimed target, but never restores the filing allowance. Failed submissions leave no partial claim.
->
-> **v5.8 (2026-11-01), hall-pass requests close with their day (owner ruling 2026-11-01).** §VII.B and §IX: a pending hall-pass request still open at the end of the class-local day it was submitted on is resolved by `FEAT-PROD-002` like a denial: the row is deleted, nothing is consumed, and its pass is available again. This supersedes "it has no TTL" for hall-pass requests only; other pending actions are unchanged.
->
-> **v5.7 (2026-10-14), insurance continuation (owner ruling 2026-10-14).** §VIII.E.1 adds *Continuation after a policy edit* and *Withdrawn offering*. When the teacher supersedes the version an entitlement was granted under, the entitlement still ends at its coverage boundary, and a new entitlement under the successor version begins there; the old entitlement's terms never change (`DOM-POL-001` §VII). When the offering is withdrawn with no successor on sale, renewal stops and coverage ends at the boundary. Previously the code renewed a superseded or withdrawn version indefinitely, and nothing in this document said otherwise.
->
-> **v5.6 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: the header table said Normative while §III (below) already, correctly, says "Tier 1 — Constitutional." The header now matches the body. No substantive rule in this document changed.
+| DOM-STORE-001 | 5.11 | 2026-11-25 | 5.10 | Constitutional |
 
 ## I. Purpose
 
@@ -620,3 +611,26 @@ This domain guarantees:
 - other domains retain authority over their own exercise or settlement records;
 - availability is derived, not stored;
 - no compatibility bridge is required for v5 canonical behavior.
+
+---
+
+## XIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v5.11 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the notes below from the top of the document into it,
+> per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the header
+> table and §I Purpose. No content change.
+>
+> **v5.9 (2026-11-03), insurance filing (owner ruling).** Weekly filing limits apply independently of billing cadence. Rejection releases the claimed target, but never restores the filing allowance. Failed submissions leave no partial claim.
+>
+> **v5.8 (2026-11-01), hall-pass requests close with their day (owner ruling 2026-11-01).** §VII.B and §IX: a pending hall-pass request still open at the end of the class-local day it was submitted on is resolved by `FEAT-PROD-002` like a denial: the row is deleted, nothing is consumed, and its pass is available again. This supersedes "it has no TTL" for hall-pass requests only; other pending actions are unchanged.
+>
+> **v5.7 (2026-10-14), insurance continuation (owner ruling 2026-10-14).** §VIII.E.1 adds *Continuation after a policy edit* and *Withdrawn offering*. When the teacher supersedes the version an entitlement was granted under, the entitlement still ends at its coverage boundary, and a new entitlement under the successor version begins there; the old entitlement's terms never change (`DOM-POL-001` §VII). When the offering is withdrawn with no successor on sale, renewal stops and coverage ends at the boundary. Previously the code renewed a superseded or withdrawn version indefinitely, and nothing in this document said otherwise.
+>
+> **v5.6 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: the header table said Normative while §III (below) already, correctly, says "Tier 1 — Constitutional." The header now matches the body. No substantive rule in this document changed.
+
+Revisions to this document must increment the version number, update the Effective Date, and
+remain consistent with `DOM-POL-001` and the Ledger-owned monetary truth this document defers to.

@@ -2,11 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-002 | 1.2 | 2026-11-01 | 1.1 | Normative |
-
-*Revision 1.2 (2026-11-01; owner ruling 2026-11-01): §IV adds the derived Revoked state. §III.A adds the day-boundary close of a pending request, handled like a rejection, and refuses approval of one whose day has ended. §III is unchanged.*
-
-*Revision 1.1 (2026-10-01; ratified by the owner 2026-10-01): adds §III.A, resolution of a pending hall-pass request (approve, reject, student cancel) held in `pending_actions` (DOM-STORE-001 5.3 §IX). §III is unchanged.*
+| FEAT-PROD-002 | 1.3 | 2026-11-25 | 1.2 | Normative |
 
 ---
 
@@ -138,3 +134,22 @@ Reads of pending requests (teacher queue, dashboard, student status) take no loc
 - `app/services/context_resolver.py`
 - `docs/SPEC/SPEC-TIME-001_CANONICAL_TEMPORAL_RESOLVER.md`
 - `app/utils/canonical_temporal_resolver.py`
+
+---
+
+## VII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.3 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the notes below from the top of the document into it,
+> per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the header
+> table and §I Purpose. No content change.
+
+*Revision 1.2 (2026-11-01; owner ruling 2026-11-01): §IV adds the derived Revoked state. §III.A adds the day-boundary close of a pending request, handled like a rejection, and refuses approval of one whose day has ended. §III is unchanged.*
+
+*Revision 1.1 (2026-10-01; ratified by the owner 2026-10-01): adds §III.A, resolution of a pending hall-pass request (approve, reject, student cancel) held in `pending_actions` (DOM-STORE-001 5.3 §IX). §III is unchanged.*
+
+Revisions to this document must increment the version number, update the Effective Date, and
+remain consistent with `DOM-PROD-001`.
