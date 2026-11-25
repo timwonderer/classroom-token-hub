@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.65 | 2026-11-24 | 3.64 | Normative |
+| SOP-DOC-001 | 3.66 | 2026-11-25 | 3.65 | Normative |
 
 ---
 
@@ -108,6 +108,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-IDEN-006 — Provision Student Seat in Existing Class](../FEATURE-EXECUTION/FEAT-IDEN-006_PROVISION_STUDENT_SEAT.md)
 - [FEAT-IDEN-007 — Teacher Account Destruction](../FEATURE-EXECUTION/FEAT-IDEN-007_TEACHER_ACCOUNT_DESTRUCTION.md)
 - [FEAT-IDEN-008 — Operator Sysadmin Bootstrap](../FEATURE-EXECUTION/FEAT-IDEN-008_OPERATOR_SYSADMIN_BOOTSTRAP.md)
+- [FEAT-IDEN-009 — Identity Session Lifecycle](../FEATURE-EXECUTION/FEAT-IDEN-009_IDENTITY_SESSION_LIFECYCLE.md)
 - [FEAT-IDEN-101 — Teacher TOTP Setup](../FEATURE-EXECUTION/FEAT-IDEN-101_TEACHER_TOTP_SETUP.md)
 - [FEAT-IDEN-102 — Teacher Passkey Enrollment](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
 - [FEAT-IDEN-103 — Teacher Recovery Proof and Random Recipient Selection](../FEATURE-EXECUTION/FEAT-IDEN-103_TEACHER_RECOVERY_INITIATION.md)
@@ -118,6 +119,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-000 — Canonical Monetary Resolution Workflow](../FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md)
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
+- [FEAT-LED-003 — Ledger Settlement Sweep](../FEATURE-EXECUTION/FEAT-LED-003_LEDGER_SETTLEMENT_SWEEP.md)
 - [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
 - [FEAT-LED-006 — Apply Teacher Penalty](../FEATURE-EXECUTION/FEAT-LED-006_APPLY_TEACHER_PENALTY.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
@@ -282,6 +284,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.66 (2026-11-25):**
+- Register FEAT-IDEN-009 v1.0 (Identity Session Lifecycle) and FEAT-LED-003 v1.0 (Ledger Settlement Sweep). Both contracts were committed without an index entry; this restores the index's completeness (§I). Neither document changes.
 
 **Version 3.65 (2026-11-24):**
 - Register SPEC-OPS-006 v1.8: the status sampler excludes `/teapot`, the 418 easter egg, from request counts (owner ruling 2026-11-24).
