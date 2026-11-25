@@ -6,15 +6,6 @@
 
 ---
 
-> [!IMPORTANT]
-> **v1.7 (2026-11-10).** §16's status note is corrected: the materialization writer (`materialize_interpretation_cycle`, slice 8.3d) that validates `observations_json` against this specification's serialized shape before writing an `interpretation_cycle_record` is implemented and invoked directly by `FEAT-PROD-004`, not pending. No change to the serialization contract itself.
->
-> **v1.6 (2026-10-18).** §6.6 and P4 (§17) are updated: migration `a4d7e9c2f1b6` deploys the DB `CHECK` constraint (`ck_ledger_transaction_type_closed_vocabulary`) enumerating `DOM-LED-001` INV-LED-017's full canonical/legacy table, so `Transaction.type` now rejects any out-of-vocabulary value at write time (`NULL` still permitted). This closes the *vocabulary*, not the §6.3 classifier itself: as of this revision `ledger_provenance_query_service.py` has not yet cut over from the removed `SYSTEM_ORIGINATED_FEAT_CODES` `feat_code` test to `Transaction.type` (`DOM-ITR-001` §XIII.b KNOWN NONCOMPLIANCE, a separate already-scheduled PR); §6.3's rule describes that cutover's contractual target, not current runtime behavior. The write-time **casing** validator — rejecting a legacy spelling on a *new* row while the constraint still accepts it on existing rows — remains undeployed and is unchanged scope for a later PR; see the revised §6.6 for what is and is not covered today.
->
-> **v1.5 (2026-10-18).** §6.6 and P4 (§17) are corrected: they had claimed the closed `type` vocabulary was already enforced at write time. It is not — `Transaction.type` is still unconstrained pending a later PR (`FEAT-LED-005` §IX). Both are now marked runtime noncompliance until that PR lands, consistent with §6.3's own note that the `type` clause is redundant with, not a substitute for, `mechanism`.
->
-> **v1.4 (2026-10-18), owner ruling.** §6.3's event-origin classifier drops the `feat_code`-based system-FEAT exclusion set and adds a closed `Transaction.type` exclusion instead (`DOM-ITR-001` INV-ITR-015 v1.9, `DOM-LED-001` INV-LED-017). The `type` clause is redundant with, not a replacement for, the `mechanism` clause — see §6.3's note. No candidate quantity, formula, or threshold changes.
-
 ## 1. Purpose
 
 This specification is the single canonical technical source for the observation questions and candidate quantities that the Interpretation Domain answers.
@@ -805,5 +796,16 @@ The following are preconditions to lawful implementation of the candidates in th
 ---
 
 ## 18. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.7 (2026-11-10).** §16's status note is corrected: the materialization writer (`materialize_interpretation_cycle`, slice 8.3d) that validates `observations_json` against this specification's serialized shape before writing an `interpretation_cycle_record` is implemented and invoked directly by `FEAT-PROD-004`, not pending. No change to the serialization contract itself.
+>
+> **v1.6 (2026-10-18).** §6.6 and P4 (§17) are updated: migration `a4d7e9c2f1b6` deploys the DB `CHECK` constraint (`ck_ledger_transaction_type_closed_vocabulary`) enumerating `DOM-LED-001` INV-LED-017's full canonical/legacy table, so `Transaction.type` now rejects any out-of-vocabulary value at write time (`NULL` still permitted). This closes the *vocabulary*, not the §6.3 classifier itself: as of this revision `ledger_provenance_query_service.py` has not yet cut over from the removed `SYSTEM_ORIGINATED_FEAT_CODES` `feat_code` test to `Transaction.type` (`DOM-ITR-001` §XIII.b KNOWN NONCOMPLIANCE, a separate already-scheduled PR); §6.3's rule describes that cutover's contractual target, not current runtime behavior. The write-time **casing** validator — rejecting a legacy spelling on a *new* row while the constraint still accepts it on existing rows — remains undeployed and is unchanged scope for a later PR; see the revised §6.6 for what is and is not covered today.
+>
+> **v1.5 (2026-10-18).** §6.6 and P4 (§17) are corrected: they had claimed the closed `type` vocabulary was already enforced at write time. It is not — `Transaction.type` is still unconstrained pending a later PR (`FEAT-LED-005` §IX). Both are now marked runtime noncompliance until that PR lands, consistent with §6.3's own note that the `type` clause is redundant with, not a substitute for, `mechanism`.
+>
+> **v1.4 (2026-10-18), owner ruling.** §6.3's event-origin classifier drops the `feat_code`-based system-FEAT exclusion set and adds a closed `Transaction.type` exclusion instead (`DOM-ITR-001` INV-ITR-015 v1.9, `DOM-LED-001` INV-LED-017). The `type` clause is redundant with, not a replacement for, the `mechanism` clause — see §6.3's note. No candidate quantity, formula, or threshold changes.
 
 Amendments to this specification require review against `DOM-ITR-001` v1.2 or its successor. Amendments that add a candidate quantity SHALL declare the candidate's Semantic Kind, Subject / Observation Basis / Aggregation, and Reference Dependency per `DOM-ITR-001` §IV. Amendments that add a Reference Dependency of type `Class Configuration observational reference` SHALL cite the owning-domain declaration that authorizes it.

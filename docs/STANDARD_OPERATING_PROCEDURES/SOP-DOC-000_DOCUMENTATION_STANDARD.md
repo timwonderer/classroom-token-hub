@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | SOP-DOC-000      | 3.7     | 2026-10-26     | SOP-DOC-000 v3.6 | Normative |
 
-> [!IMPORTANT]
-> **v3.5 (2026-10-14), review correction.** The header and §III labelled this document "Foundational (Tier 0)," but its own §V places `docs/STANDARD_OPERATING_PROCEDURES/` (Prefix `SOP-*`) in Tier 2, and §VI's Directory Taxonomy says so explicitly for this document by name: "plus the documentation SOPs at its root (Tier 2)." This document never carved itself out as an exception to the scheme it defines — it is a `SOP-*` document at that root, and its own rule places it in Tier 2 like any other. Corrected the header and §III to agree with §V/§VI. No change to the tier definitions themselves, the directory taxonomy, or any other document's classification.
-
 ---
 
 ## I. Purpose
@@ -145,6 +142,17 @@ Formal specifications (INV, DOM, FEAT, SOP) must include the following sections 
 5. **[V+] Content Sections** — Document-specific rules (e.g., capability definitions).
 6. **[Last] Amendment** — Standard revision procedure.
 
+### Where a Revision Note Goes
+
+A per-version revision note (what changed and why, e.g. "`v2.3 (2026-10-14), review
+correction...`") belongs under the document's own **Amendment** section (or an
+equivalent history subsection there, such as "Revision History" or "Change Notes"),
+not between the header table and §I Purpose. A note placed at the top, ahead of
+Purpose, clutters the part of the document a reader opens the file to read, when the
+document already carries a dedicated section for exactly this content. The header
+table itself (Reference Number, Version, Effective Date, Supersedes, Authority Level)
+stays at the top.
+
 ### Crucial Architectural Rules to Document
 
 - **Class Isolation Scoping**: Documents must scope student/seat queries by `class_id` (canonical boundary) rather than teacher ownership or label.
@@ -276,6 +284,11 @@ The following checks enforce this; run them before merging a relocation:
 ---
 
 ## XIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v3.5 (2026-10-14), review correction.** The header and §III labelled this document "Foundational (Tier 0)," but its own §V places `docs/STANDARD_OPERATING_PROCEDURES/` (Prefix `SOP-*`) in Tier 2, and §VI's Directory Taxonomy says so explicitly for this document by name: "plus the documentation SOPs at its root (Tier 2)." This document never carved itself out as an exception to the scheme it defines — it is a `SOP-*` document at that root, and its own rule places it in Tier 2 like any other. Corrected the header and §III to agree with §V/§VI. No change to the tier definitions themselves, the directory taxonomy, or any other document's classification.
 
 Revisions to this standard require:
 1. Incrementing the version number.
