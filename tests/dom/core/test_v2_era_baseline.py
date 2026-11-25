@@ -198,6 +198,17 @@ def test_baseline_permits_only_infrastructure_objects(client):
                 ("CREATE TYPE public.stray_enum AS ENUM ('a')", "type stray_enum"),
                 ("CREATE FUNCTION public.stray_fn() RETURNS int LANGUAGE sql AS 'SELECT 1'", "function stray_fn"),
                 ("CREATE SCHEMA stray_schema", "schema stray_schema"),
+                # Objects that add no relation, type or function of their own.
+                ("CREATE TEXT SEARCH TEMPLATE public.stray_tmpl "
+                 "(INIT = pg_catalog.dsimple_init, LEXIZE = pg_catalog.dsimple_lexize)", "text search template stray_tmpl"),
+                ("CREATE TEXT SEARCH PARSER public.stray_prs (START = pg_catalog.prsd_start, "
+                 "GETTOKEN = pg_catalog.prsd_nexttoken, END = pg_catalog.prsd_end, "
+                 "LEXTYPES = pg_catalog.prsd_lextype)", "text search parser stray_prs"),
+                ("CREATE OPERATOR FAMILY public.stray_fam USING btree", "operator family stray_fam"),
+                ("CREATE OPERATOR CLASS public.stray_opc FOR TYPE int4 USING btree AS "
+                 "OPERATOR 1 <, FUNCTION 1 btint4cmp(int4, int4)", "operator class stray_opc"),
+                ("CREATE TABLE public.stray_t (a int, b int); "
+                 "CREATE STATISTICS public.stray_stx ON a, b FROM public.stray_t", "statistics object stray_stx"),
                 ("INSERT INTO public.alembic_version VALUES ('0001')", "alembic_version holding 1 row(s)"),
             ]:
                 conn.execute(text(ddl))

@@ -300,8 +300,9 @@ precedent: resemblance to a listed correction is not evidence that a candidate q
    - Alembic's `public.alembic_version` table with no rows, its primary key `alembic_version_pkc`,
      and the row and array types PostgreSQL creates for that table.
 
-   Any other schema, extension, event trigger, or any relation, type, function, operator, collation,
-   operator family, conversion or text-search object in `public` is application-owned or unknown,
+   Any other schema, extension, event trigger, or any relation, type, function, operator, operator
+   class, operator family, collation, conversion, extended-statistics object or text-search object
+   (configuration, dictionary, template or parser) in `public` is application-owned or unknown,
    and the baseline refuses, naming what it found. It never skips. A database without a supported
    revision and with objects in it is unknown, not baselined.
 2. The era baseline's `downgrade()` raises and it is listed in `migrations/forward_only_register.txt`.

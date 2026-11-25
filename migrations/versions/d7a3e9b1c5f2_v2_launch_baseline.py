@@ -124,6 +124,14 @@ UNION ALL
 SELECT 'text search configuration ' || cfgname FROM pg_ts_config WHERE cfgnamespace = 'public'::regnamespace
 UNION ALL
 SELECT 'text search dictionary ' || dictname FROM pg_ts_dict WHERE dictnamespace = 'public'::regnamespace
+UNION ALL
+SELECT 'text search template ' || tmplname FROM pg_ts_template WHERE tmplnamespace = 'public'::regnamespace
+UNION ALL
+SELECT 'text search parser ' || prsname FROM pg_ts_parser WHERE prsnamespace = 'public'::regnamespace
+UNION ALL
+SELECT 'operator class ' || opcname FROM pg_opclass WHERE opcnamespace = 'public'::regnamespace
+UNION ALL
+SELECT 'statistics object ' || stxname FROM pg_statistic_ext WHERE stxnamespace = 'public'::regnamespace
 """
 
 
