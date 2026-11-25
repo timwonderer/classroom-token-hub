@@ -53,10 +53,10 @@ A flat line is not a broken chart. It is the app declining to show you growth th
 
 The caption names which one your class uses.
 
-- **Simple** — interest is worked out on your savings balance. Interest that is still building up does not earn anything until it is paid.
+- **Simple** — interest is worked out on the money you have put into savings. Interest never earns interest, whether it is still building up or already paid.
 - **Compound** — interest that is still building up also earns, so the line curves upward faster. The caption also names how often it compounds.
 
-In both cases, once interest is paid into your savings it is part of your balance and earns like the rest of it. For **Simple** that is a known issue: true simple interest would never earn on interest already paid. A fix is being tracked.
+Once interest is paid, it stays in your savings either way. With **Compound**, paid interest earns like the rest of your balance. With **Simple**, it never earns any more interest: only the money you put in earns, so simple interest stays simple from one payout to the next. The projection chart follows the same rule.
 
 Over one term the difference is usually small. Over the whole chart it is visible.
 
