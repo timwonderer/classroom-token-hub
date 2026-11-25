@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | DOM-IDEN-002 | 2.10 | 2026-10-14 | 2.9 | Constitutional |
 
-> [!IMPORTANT]
-> **v2.10 (2026-10-14), documentation modernization.** §IX named "balance cache" among records untouched by recovery. No `BalanceCache` model or table exists in v2 (CLAUDE.md); balances are derived from the ledger. Corrected to "ledger balance snapshot." No behavior change.
-
 ---
 
 ## I. Purpose
@@ -401,6 +398,11 @@ The student recovery system SHALL NOT:
 ---
 
 ## XII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v2.10 (2026-10-14), documentation modernization.** §IX named "balance cache" among records untouched by recovery. No `BalanceCache` model or table exists in v2 (CLAUDE.md); balances are derived from the ledger. Corrected to "ledger balance snapshot." No behavior change.
 
 Revisions to this document SHALL:
 
