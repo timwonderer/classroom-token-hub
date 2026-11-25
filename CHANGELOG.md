@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- <!-- notes: fixed -->
+
+  **User guides catch up with the app** (#1856, #1857, #1858, #1859). The install guide is now *Installing the App (Internet Required)* and says plainly that the installed app (PWA) does not work offline. The Classroom Economy Guide is rewritten against the current Economic Engine ranges: rent at 30% to 55% of weekly pay by mode, store economic roles, insurance price versus coverage, collective-goal amounts and savings-interest ceilings; it no longer mentions a "utilities" charge CTH does not have. The guides now state session lengths (students 10 minutes and teachers 60 minutes from sign-in, not extended by activity; signing out does not clock a student out), how students see a fine, that transaction insurance covers store purchases only, and how projected pay prices a session still running. The public timeline adds v2.4.2 through v2.6.0.
+
 ## [2.6.0] - 2026-11-25 — Privacy-safe logs, true simple interest, and a launch-anchored migration baseline
 
 Released as `6f0089f` on 2026-11-25 at 20:04 UTC by release run [45691308002](https://github.com/timwonderer/classroom-token-hub/actions/runs/45691308002). Migration `4fad9d362d0d`. Record: [DEPLOY_2026-11-25_6f0089f.md](docs/ops/audits/DEPLOY_2026-11-25_6f0089f.md).

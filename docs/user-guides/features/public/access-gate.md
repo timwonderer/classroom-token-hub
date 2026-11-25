@@ -6,7 +6,7 @@ roles: [teacher, student]
 description: What the Cloudflare Access screen means and what to do while access is restricted.
 keywords: [access, maintenance, unavailable, status]
 related:
-  - user-guides/features/public/offline-and-install
+  - user-guides/features/public/install-the-app
   - user-guides/diagnostics/error-pages
 ---
 
@@ -30,5 +30,5 @@ The app has no maintenance bypass link. Refresh the app after access reopens.
 
 ## Related guides
 
-- [Installing the App and Working Offline](offline-and-install.md)
+- [Installing the App (Internet Required)](install-the-app.md)
 - [Error Pages](../../diagnostics/error-pages.md)

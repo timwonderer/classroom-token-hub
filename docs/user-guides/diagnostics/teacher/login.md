@@ -32,6 +32,18 @@ Diagnostic guide for resolving teacher login access, 2FA, and registration issue
 - **Check:** Did you fail login multiple times in a row?
 - **Fix:** Too many attempts trigger a short rate limit. Wait 5-10 minutes before trying again.
 
+## Signed out after an hour
+
+### Symptoms
+- You are sent back to the sign-in page in the middle of your work.
+- A form you submit reports that your session has expired.
+
+### Cause
+A teacher sign-in lasts **60 minutes from the moment you sign in**. Activity does not extend it, so it ends on time even while you are working. Selecting **Sign Out** ends it immediately, on the server as well as in your browser.
+
+### Fix
+Sign in again. Anything you had not saved before the hour ended is not kept, so re-enter it. For long sessions of setup work, save as you go.
+
 ## Cannot sign up
 
 ### Symptoms
