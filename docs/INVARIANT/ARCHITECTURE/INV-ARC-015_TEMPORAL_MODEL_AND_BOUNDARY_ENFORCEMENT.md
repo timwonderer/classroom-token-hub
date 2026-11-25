@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-015      | 2.2     | 2026-10-14     | 2.1        | Constitutional   |
+| INV-ARC-015      | 2.3     | 2026-11-25     | 2.2        | Constitutional   |
 
 ---
 
@@ -245,6 +245,11 @@ The display corollary (SS X.2):
 ## XIV. Amendment
 
 ### Revision History
+
+> [!IMPORTANT]
+> **v2.3 (2026-11-25), documentation modernization.** Relocated the v2.2 note below from the top of the
+> document into this Revision History subsection, per `SOP-DOC-000` §VIII: a per-version revision note belongs
+> under Amendment, not between the header table and §I Purpose. No content change.
 
 > [!IMPORTANT]
 > **v2.2 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.

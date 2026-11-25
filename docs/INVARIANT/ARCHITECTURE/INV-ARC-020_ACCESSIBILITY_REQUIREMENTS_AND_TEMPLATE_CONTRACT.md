@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-020      | 1.2     | 2026-10-14     | 1.1        | Constitutional |
+| INV-ARC-020      | 1.3     | 2026-11-25     | 1.2        | Constitutional |
 
 ## I. Purpose
 
@@ -123,6 +123,11 @@ When a PR touches a covered template/UI surface:
 ## XI. Amendment
 
 ### Revision History
+
+> [!IMPORTANT]
+> **v1.3 (2026-11-25), documentation modernization.** Relocated the v1.2 review-correction note below from the
+> top of the document into this Revision History subsection, per `SOP-DOC-000` §VIII: a per-version revision
+> note belongs under Amendment, not between the header table and §I Purpose. No content change.
 
 > [!IMPORTANT]
 > **Review correction (2026-10-14, v1.2):** a later edit reintroduced `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md`
