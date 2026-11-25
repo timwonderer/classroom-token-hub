@@ -21,6 +21,12 @@ on:
       - 'app/models/**'
       - 'scripts/validate-migrations.py'
       - 'scripts/lint_migrations.py'
+      - 'migrations/fresh/**'
+      - 'migrations/baseline/**'
+      - 'scripts/fresh_database.py'
+      - 'scripts/generate_fresh_database.py'
+      - 'scripts/verify_fresh_bundles.py'
+      - 'tests/test_fresh_bundle_derivation.py'
   pull_request:
     branches: [ '**' ]
     paths:
@@ -33,6 +39,12 @@ on:
       - 'app/models/**'
       - 'scripts/validate-migrations.py'
       - 'scripts/lint_migrations.py'
+      - 'migrations/fresh/**'
+      - 'migrations/baseline/**'
+      - 'scripts/fresh_database.py'
+      - 'scripts/generate_fresh_database.py'
+      - 'scripts/verify_fresh_bundles.py'
+      - 'tests/test_fresh_bundle_derivation.py'
 
   # Also allow manual trigger
   workflow_dispatch:
@@ -202,3 +214,37 @@ jobs:
                 body
               });
             }
+
+  # A committed release bundle (migrations/fresh/<revision>/) must be what the canonical
+  # lineage produces at that revision, never a hand-maintained schema. Re-derive each one from this
+  # commit on PostgreSQL 14, the bundles' qualified profile, and compare byte for byte.
+  # Runs only the migration chain, once per bundle; no test suite.
+  fresh-bundle-derivation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # bundle provenance must be an ancestor of this commit
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install PostgreSQL 14 server and client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-14
+          /usr/lib/postgresql/14/bin/pg_dump --version
+
+      - name: Re-derive every committed release bundle
+        run: |
+          PATH="/usr/lib/postgresql/14/bin:$PATH" python scripts/verify_fresh_bundles.py --source-sha "${{ github.sha }}"

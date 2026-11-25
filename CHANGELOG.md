@@ -16,6 +16,12 @@ and this project follows semantic versioning principles.
 
 - An easter egg: the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
 
+### Changed
+
+- <!-- notes: internal -->
+
+  **CI now proves every committed release bundle is derived from the migration lineage.** A new `fresh-bundle-derivation` job in `check-migrations.yml` re-derives each `migrations/fresh/<revision>/` bundle from the commit under test on PostgreSQL 14 (`scripts/verify_fresh_bundles.py`, using `generate_fresh_database.py --revision`) and fails unless `schema.sql` and every derived manifest field match exactly; manual review alone no longer stands between a bundle and the lineage. New manifests name their derivation commit `source_sha` instead of the ambiguous `release_sha` (the release commit is named in the release record, so neither depends on the other's hash); the existing `a0faf8b2a35d` bundle is unchanged and read under its old field name. `docs/self-hosting/fresh-database.md` records a measured collation comparison: production's `C.UTF-8` and the installer's `C` agree on ordering, equality and `LIKE` but not on non-ASCII case mapping, `ILIKE` or regex classes, none of which CTH uses database-side. A checkout whose head has no validated bundle still refuses to install, now held by `tests/test_fresh_bundle_derivation.py`.
+
 ### Removed
 
 - <!-- notes: internal -->
