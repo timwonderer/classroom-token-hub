@@ -2,10 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-OBL-002 | 2.2 | 2026-10-14 | 2.1 | Normative |
-
-> [!IMPORTANT]
-> **v2.2 (2026-10-14), documentation modernization.** Fixed a Dependencies citation that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change.
+| FEAT-OBL-002 | 2.3 | 2026-11-25 | 2.2 | Normative |
 
 ---
 
@@ -105,3 +102,20 @@ If the authoritative source has terminated, no successor cycle is created. Termi
 - `docs/DOMAIN/DOM-STORE-001_STORE_AND_ENTITLEMENTS_DOMAIN.md`
 - `docs/FEATURE-EXECUTION/FEAT-OBL-001_ASSESS_OBLIGATION.md`
 - `schedule_next_bill_cycle` (Obligations bill-cycle succession command; DOM-OBL-001 §V.7, §VII.2)
+
+---
+
+## VII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v2.3 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the v2.2 note below from the top of the document into
+> it, per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the
+> header table and §I Purpose. No content change.
+>
+> **v2.2 (2026-10-14), documentation modernization.** Fixed a Dependencies citation that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change.
+
+Revisions to this document must increment the version number, update the Effective Date, and
+remain consistent with `DOM-OBL-001`.

@@ -2,10 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|INV-CORE-000| 2.2 | 2026-10-18 | 2.1 |Foundational|
-
-> [!IMPORTANT]
-> **v2.2 (2026-10-18).** §I no longer claims this document is the top-level authority from which all other authority derives. §II now states its precedence directly: within the `INVARIANT` family it outranks `INV-ARC-*` and `INV-CORE-001`. The title gains "of Classroom Token Hub", and the document is reformatted for markdownlint. No invariant in §III changed.
+|INV-CORE-000| 2.3 | 2026-11-25 | 2.2 |Foundational|
 
 ## I. Purpose
 
@@ -207,3 +204,27 @@ The canonical identity and ownership model is defined in
 
 Identity resolution and seat-scope enforcement rules are defined in
 `INV-ARC-008_IDENTITY_RESOLUTION_AND_SEAT_SCOPE.md`.
+
+---
+
+## V. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v2.3 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the v2.2 note below from the top of the document into
+> it, per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the
+> header table and §I Purpose. No content change.
+>
+> **v2.2 (2026-10-18).** §I no longer claims this document is the top-level authority from which all
+> other authority derives. §II now states its precedence directly: within the `INVARIANT` family it
+> outranks `INV-ARC-*` and `INV-CORE-001`. The title gains "of Classroom Token Hub", and the document
+> is reformatted for markdownlint. No invariant in §III changed.
+
+Revisions to this document must:
+
+1. Increment the version number.
+2. Update the Effective Date.
+3. Preserve this document's precedence within the `INVARIANT` family (§II).
+4. Maintain alignment with every invariant in §III.
