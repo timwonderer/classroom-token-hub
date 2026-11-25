@@ -4,27 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | SOP-DB-001       | 1.8     | 2026-10-22     | 1.7 | Normative |
 
-> [!NOTE]
-> v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
-> merged migrations are still never edited. §V.A defines the one circumstance in which following
-> Rule 3 literally would preserve an execution path that destroys state protected by a superior
-> `INV` or `DOM` document, and it prohibits every other use.
->
-> v1.3 (2026-09-17) adds §V.B, a second named exception, narrower than the first. It exists because
-> `0001_bootstrap` builds the baseline from *today's* ORM metadata rather than from a frozen
-> snapshot, so a schema element removed from the ORM after a historical migration was written is
-> absent when that migration replays — and the migration fails on a schema it was never written
-> for. §V.B permits only the guard that declines the operation in that case. It may not change what
-> the migration does when the element is present, and it may not alter the migration's intended end
-> state. Golden Rule 3 now names two exceptions and no others.
-
-> v1.7 (2026-10-06): Phase 1 of the Schema Contraction Policy no longer says the application supports
-> both forms. Physical schema coexistence is permitted; dual-write, fallback and heuristic
-> interpretation are not (`SOP-DB-004` §VII, owner ruling 2026-10-06). No other rule changes.
->
-> v1.8 (2026-10-22): the baseline reconstruction is tracked in issue #1649; the post-launch tracker
-> it named is archived. No rule changes.
-
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
 
@@ -516,4 +495,28 @@ for fk in inspector.get_foreign_keys('students'):
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [SQLAlchemy Inspector API](https://docs.sqlalchemy.org/en/20/core/reflection.html)
 ## XII. Amendment
+
+### Revision History
+
+> [!NOTE]
+> v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
+> merged migrations are still never edited. §V.A defines the one circumstance in which following
+> Rule 3 literally would preserve an execution path that destroys state protected by a superior
+> `INV` or `DOM` document, and it prohibits every other use.
+>
+> v1.3 (2026-09-17) adds §V.B, a second named exception, narrower than the first. It exists because
+> `0001_bootstrap` builds the baseline from *today's* ORM metadata rather than from a frozen
+> snapshot, so a schema element removed from the ORM after a historical migration was written is
+> absent when that migration replays — and the migration fails on a schema it was never written
+> for. §V.B permits only the guard that declines the operation in that case. It may not change what
+> the migration does when the element is present, and it may not alter the migration's intended end
+> state. Golden Rule 3 now names two exceptions and no others.
+
+> v1.7 (2026-10-06): Phase 1 of the Schema Contraction Policy no longer says the application supports
+> both forms. Physical schema coexistence is permitted; dual-write, fallback and heuristic
+> interpretation are not (`SOP-DB-004` §VII, owner ruling 2026-10-06). No other rule changes.
+>
+> v1.8 (2026-10-22): the baseline reconstruction is tracked in issue #1649; the post-launch tracker
+> it named is archived. No rule changes.
+
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.
