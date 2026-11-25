@@ -6,7 +6,7 @@ exact commands, scope and results. Owner rulings of 2026-11-24: feasibility, pre
 authorization, and implementation authorization.
 
 **Status at writing:** implemented on branch `feat/v2-launch-baseline` from `main` `fde9a6537`.
-Validated as recorded below, except the full test suite (V6), which runs in CI and by the owner.
+Validated as recorded below, including the full test suite (V6).
 Not merged, released or deployed. Production was read, never changed.
 
 ## 1. Three facts kept apart
@@ -50,7 +50,7 @@ read through the read-only connection, using catalog queries plus one hash over 
 | V3 | Baseline artifact correctness | **Pass.** New lineage to `d7a3e9b1c5f2` gives dump `6c5ca2a6e1502234…`, identical to the `v2.0.0` tag. |
 | V4 | Replay ≡ release bundle ≡ old lineage | **Pass.** New lineage to `a0faf8b2a35d` reproduces the committed bundle's `schema_sha256` `36c0f9a8…`. New and old lineages to head `4fad9d362d0d` give identical dumps (`70d4b21c8416d15f…`, 2391 lines). |
 | V5 | Post-launch compatibility on populated data | **Pass.** See §4. |
-| V6 | Operational equivalence: full suite | **Pending.** Runs in CI (`full-suite.yml`) and is owner-run. Targeted selection below. |
+| V6 | Operational equivalence: full suite | **Pass, one failure not caused by this change.** Full `pytest` at `ce251b0b2` (this branch with `main` merged) on an isolated database, with the schema rebuilt through the new lineage: 6257 passed, 16 skipped, 1 failed, in 53 min. The failure is `tests/dom/docs/test_documentation_index_complete.py::test_every_numbered_document_is_indexed`: `FEAT-IDEN-009` and `FEAT-LED-003` exist but SOP-DOC-001 does not list them. The same gap is on `origin/main`, and this change touches neither document. The later guard extension (`5d0e91547`) was verified by its targeted tests: 57 passed, plus a mutation check. |
 | V7 | Post-launch migration tests on the new lineage | **Pass.** 650 passed: the post-launch migration tests (`test_users_id_uuid_migration`, `test_payroll_settings_authority_migration`, `test_policy_lineage_retirement_migration`, `test_penalty_vocabulary_migration`, `test_bug_reward_vocabulary_migration`, `test_insurance_date_release_migration`, `test_configuration_migration`, `test_migration_revision_generation`, `test_attendance_migration_rerun`) and all of `tests/dom/core`, `tests/dom/identity`, `tests/dom/support`. A further 173 passed in the changed and new files. CLI walk head → `a0faf8b2a35d` → head → `c8f1a2b3d490` succeeded. |
 | V8 | Fail closed | **Pass.** (a) A database stamped `7c3d4e5f6a7b`: `Can't locate revision identified by '7c3d4e5f6a7b'`, nothing changed. (b) An unversioned database holding one table: the baseline refuses with "Found: relation seats, type _seats, type seats", nothing changed. (c) `flask db downgrade base` from the baseline refuses; revision unchanged. Also proven in `tests/dom/core/test_v2_era_baseline.py` against the real test database, including each permitted and forbidden object class. A deliberate mutation (refusal disabled) turned two of those tests red. |
 | V9 | No cross-era obligation | **Pass.** No live revision's `down_revision` names an archived revision. No live source under `app/`, `scripts/`, `tests/`, `infra/`, `.github/` or `migrations/versions/` imports or executes an archived artifact. Both detectors have mutation proofs. |
