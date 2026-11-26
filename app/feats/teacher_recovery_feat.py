@@ -290,6 +290,7 @@ def complete_setup(*, request_id, nonce, totp_code, correlation_id, idempotency_
         _, user.username_hash, user.username_lookup_hash = build_hashed_username_fields(username)
         user.totp_secret_encrypted = row.setup_totp_encrypted
         user.current_session_nonce = secrets.token_hex(32)
+        user.credential_generation = user.credential_generation + 1
         PasskeyCredential.query.filter_by(user_id=user.id).delete(synchronize_session=False)
         _clear(row.id, status='verified', completed_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc, attempt_nonce_hash=None)
         db.session.flush()

@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import base64
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -73,6 +74,27 @@ REPO = Path(__file__).resolve().parents[3]
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+def _code(secret, instant=None):
+    """The code for ``secret`` at the resolver's instant (never the wall clock)."""
+    return pyotp.TOTP(secret).at(instant or temporal.now())
+
+
+def _accepted(secret, instant=None):
+    """Every code the verifier accepts at ``instant``: previous, current and next step."""
+    instant = instant or temporal.now()
+    return {pyotp.TOTP(secret).at(instant, counter_offset=k) for k in (-1, 0, 1)}
+
+
+def _wrong_code(*secrets):
+    """A six-digit code outside all three accepted steps of every given seed."""
+    taken = set().union(*(_accepted(secret) for secret in secrets))
+    return next(f"{n:06d}" for n in range(1000000) if f"{n:06d}" not in taken)
+
+
+# A fixed instant at which the legacy and candidate seeds below share no accepted code.
+FIXED_INSTANT = datetime(2026, 1, 5, 12, 0, tzinfo=timezone.utc)
+
 
 def _set_seed(user_id, secret):
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:seed:{uuid.uuid4().hex}"):
@@ -151,7 +173,7 @@ def test_legacy_16_char_seed_still_signs_in_under_pinned_pyotp(client, app):
     username = TEACHERS[_teacher_key_for(classroom)]["username"]
 
     response = client.post(
-        "/admin/login", data={"username": username, "totp_code": pyotp.TOTP(LEGACY_SEED).now()},
+        "/admin/login", data={"username": username, "totp_code": _code(LEGACY_SEED)},
     )
 
     assert response.status_code == 302
@@ -260,25 +282,34 @@ def test_create_teacher_stores_the_seed_it_is_given_and_mints_none(app):
     assert absent.totp_secret_encrypted is None
 
 
-def unmanaged_seed_generation(source: str) -> list[int]:
-    """Lines that name pyotp's ``random_base32`` in any way (call, alias or import)."""
-    lines = []
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Attribute) and node.attr == "random_base32":
-            lines.append(node.lineno)
-        elif isinstance(node, ast.Name) and node.id == "random_base32":
-            lines.append(node.lineno)
-        elif isinstance(node, ast.ImportFrom) and any(a.name == "random_base32" for a in node.names):
-            lines.append(node.lineno)
-    return lines
+def unmanaged_seed_generation(source: str, exempt_function: str | None = None) -> list[int]:
+    """Lines that name pyotp's ``random_base32`` in any way (call, alias or import).
+
+    ``exempt_function`` excuses exactly one such reference, inside that function; a
+    second one there, or any elsewhere in the file, is reported.
+    """
+    tree = ast.parse(source)
+    exempt_nodes = set()
+    for node in ast.walk(tree):
+        if exempt_function and isinstance(node, ast.FunctionDef) and node.name == exempt_function:
+            inside = [n for n in ast.walk(node) if _names_generator(n)]
+            exempt_nodes.update(id(n) for n in inside[:1])
+    return sorted(n.lineno for n in ast.walk(tree) if _names_generator(n) and id(n) not in exempt_nodes)
+
+
+def _names_generator(node) -> bool:
+    return (
+        (isinstance(node, ast.Attribute) and node.attr == "random_base32")
+        or (isinstance(node, ast.Name) and node.id == "random_base32")
+        or (isinstance(node, ast.ImportFrom) and any(a.name == "random_base32" for a in node.names))
+    )
 
 
 def test_only_the_single_generator_names_random_base32():
     offenders = {}
     for path in sorted((REPO / "app").rglob("*.py")):
-        if path == REPO / "app" / "services" / "credential_lifecycle.py":
-            continue
-        found = unmanaged_seed_generation(path.read_text(encoding="utf-8"))
+        exempt = "mint_totp_secret" if path == REPO / "app" / "services" / "credential_lifecycle.py" else None
+        found = unmanaged_seed_generation(path.read_text(encoding="utf-8"), exempt)
         if found:
             offenders[str(path.relative_to(REPO))] = found
     assert offenders == {}
@@ -296,6 +327,18 @@ def test_seed_generation_guard_detects_near_misses(mutation):
     assert unmanaged_seed_generation(mutation)
 
 
+_MINT = "import pyotp\ndef mint_totp_secret():\n    return pyotp.random_base32(32)\n"
+
+
+def test_the_exemption_covers_only_the_one_call_in_mint_totp_secret():
+    assert unmanaged_seed_generation(_MINT, "mint_totp_secret") == []
+    # A second generator in the same file, in another function or in the exempt one.
+    other = _MINT + "def other():\n    return pyotp.random_base32(16)\n"
+    assert unmanaged_seed_generation(other, "mint_totp_secret") == [5]
+    twice = _MINT.replace("return pyotp.random_base32(32)", "pyotp.random_base32(16)\n    return pyotp.random_base32(32)")
+    assert len(unmanaged_seed_generation(twice, "mint_totp_secret")) == 1
+
+
 def test_seed_generation_guard_ignores_the_single_generator_call():
     assert unmanaged_seed_generation("from app.services.credential_lifecycle import mint_totp_secret\nx = mint_totp_secret()\n") == []
 
@@ -310,7 +353,7 @@ def test_open_operation_refuses_a_totp_code_for_totp_replace(client, app, fake_p
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(
             user_id=user_id, purpose="totp_replace",
-            proof=TotpCode(pyotp.TOTP(LEGACY_SEED).now()), session_nonce=_nonce(user_id),
+            proof=TotpCode(_code(LEGACY_SEED)), session_nonce=_nonce(user_id),
         )
 
     assert refused.value.category == "proof_kind_mismatch"
@@ -348,13 +391,13 @@ def test_totp_code_opens_passkey_enrollment_and_a_wrong_code_does_not(client, ap
 
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(
-            user_id=user_id, purpose="passkey_enroll", proof=TotpCode("000000"),
+            user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_wrong_code(LEGACY_SEED)),
             session_nonce=_nonce(user_id),
         )
     assert refused.value.category == "proof_rejected"
 
     operation_id = open_credential_operation(
-        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(pyotp.TOTP(LEGACY_SEED).now()),
+        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(LEGACY_SEED)),
         session_nonce=_nonce(user_id),
     )
     assert _operation(operation_id).purpose is CredentialOperationPurpose.PASSKEY_ENROLL
@@ -541,7 +584,7 @@ def test_wrong_code_changes_nothing_and_the_operation_stays_open(client, app, fa
     operation_id = _open_replacement(user_id, fake_passwordless)
     secret, _ = _hold(user_id, operation_id)
     before_seed, before_nonce = _stored_seed(user_id), _nonce(user_id)
-    wrong = "000000" if pyotp.TOTP(secret).now() != "000000" else "111111"
+    wrong = _wrong_code(secret)
 
     assert _activate(user_id, operation_id, wrong) is False
 
@@ -554,15 +597,18 @@ def test_wrong_code_changes_nothing_and_the_operation_stays_open(client, app, fa
     assert operation.attempt_count == 1
     assert _outcome_events() == []
     # The right code still works afterwards.
-    assert _activate(user_id, operation_id, pyotp.TOTP(secret).now()) is True
+    assert _activate(user_id, operation_id, _code(secret)) is True
 
 
-def test_a_code_for_the_old_secret_does_not_activate_the_candidate(client, app, fake_passwordless):
+def test_a_code_for_the_old_secret_does_not_activate_the_candidate(client, app, fake_passwordless, monkeypatch):
+    assert not _accepted(LEGACY_SEED, FIXED_INSTANT) & _accepted(SEED_32, FIXED_INSTANT)
+    monkeypatch.setattr(lifecycle, "mint_totp_secret", lambda: SEED_32)
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = _open_replacement(user_id, fake_passwordless)
     _hold(user_id, operation_id)
 
-    assert _activate(user_id, operation_id, pyotp.TOTP(LEGACY_SEED).now()) is False
+    with temporal.pinned_clock(FIXED_INSTANT):
+        assert _activate(user_id, operation_id, _code(LEGACY_SEED)) is False
     assert decrypt_totp(_stored_seed(user_id)) == LEGACY_SEED
 
 
@@ -570,7 +616,7 @@ def test_exhausting_the_wrong_code_budget_cancels_and_erases(client, app, fake_p
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = _open_replacement(user_id, fake_passwordless)
     secret, _ = _hold(user_id, operation_id)
-    wrong = "000000" if pyotp.TOTP(secret).now() != "000000" else "111111"
+    wrong = _wrong_code(secret)
     before = _stored_seed(user_id)
 
     for _ in range(lifecycle.MAX_CODE_ATTEMPTS):
@@ -581,16 +627,17 @@ def test_exhausting_the_wrong_code_budget_cancels_and_erases(client, app, fake_p
     assert operation.pending_totp_encrypted is None
     assert _stored_seed(user_id) == before
     with pytest.raises(CredentialOperationRefused):
-        _activate(user_id, operation_id, pyotp.TOTP(secret).now())
+        _activate(user_id, operation_id, _code(secret))
 
 
-def test_correct_code_activates_the_new_seed_once(client, app, fake_passwordless):
+def test_correct_code_activates_the_new_seed_once(client, app, fake_passwordless, monkeypatch):
+    monkeypatch.setattr(lifecycle, "mint_totp_secret", lambda: SEED_32)
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     old_nonce = _nonce(user_id)
     operation_id = _open_replacement(user_id, fake_passwordless)
     secret, _ = _hold(user_id, operation_id)
 
-    assert _activate(user_id, operation_id, pyotp.TOTP(secret).now()) is True
+    assert _activate(user_id, operation_id, _code(secret)) is True
 
     user = _user(user_id)
     assert decrypt_totp(user.totp_secret_encrypted) == secret
@@ -602,8 +649,9 @@ def test_correct_code_activates_the_new_seed_once(client, app, fake_passwordless
     assert operation.pending_totp_encrypted is None
     assert credential_compliance(user) is CredentialCompliance.COMPLIANT
     # The new authenticator is the only secret now.
-    assert lifecycle.evaluate_totp_code(user, pyotp.TOTP(secret).now())
-    assert not lifecycle.evaluate_totp_code(user, pyotp.TOTP(LEGACY_SEED).now())
+    with temporal.pinned_clock(FIXED_INSTANT):
+        assert lifecycle.evaluate_totp_code(user, _code(secret))
+        assert not lifecycle.evaluate_totp_code(user, _code(LEGACY_SEED))
 
 
 def test_activation_emits_one_non_identifying_outcome_event(client, app, fake_passwordless):
@@ -612,7 +660,7 @@ def test_activation_emits_one_non_identifying_outcome_event(client, app, fake_pa
     secret, _ = _hold(user_id, operation_id)
     nonce = _nonce(user_id)
 
-    _activate(user_id, operation_id, pyotp.TOTP(secret).now())
+    _activate(user_id, operation_id, _code(secret))
 
     (event,) = _outcome_events()
     assert event.operation == "TRANSITION"
@@ -631,7 +679,7 @@ def test_replay_after_completion_is_refused_and_generation_does_not_advance_twic
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = _open_replacement(user_id, fake_passwordless)
     secret, _ = _hold(user_id, operation_id)
-    code = pyotp.TOTP(secret).now()
+    code = _code(secret)
     assert _activate(user_id, operation_id, code) is True
     after_first = _stored_seed(user_id)
     session_nonce = _nonce(user_id)
@@ -657,7 +705,7 @@ def test_stale_generation_fails_closed(client, app, fake_passwordless):
         db.session.get(User, user_id).credential_generation = 2
 
     with pytest.raises(CredentialOperationRefused) as refused:
-        _activate(user_id, operation_id, pyotp.TOTP(secret).now())
+        _activate(user_id, operation_id, _code(secret))
     assert refused.value.category == "stale_generation"
     with pytest.raises(CredentialOperationRefused):
         _hold(user_id, operation_id)
@@ -675,7 +723,7 @@ def test_another_teacher_cannot_act_on_this_operation(client, app, fake_password
     operation_id = _open_replacement(user_a, fake_passwordless, credential="cred-a")
     secret, _ = _hold(user_a, operation_id)
     seed_a, seed_b = _stored_seed(user_a), _stored_seed(user_b)
-    code = pyotp.TOTP(secret).now()
+    code = _code(secret)
     nonce_b = _nonce(user_b) or "b-has-no-session"
 
     # Through the FEAT entries: B's id never reaches A's row.
@@ -705,7 +753,7 @@ def test_a_different_session_of_the_same_teacher_cannot_activate(client, app, fa
     secret, _ = _hold(user_id, operation_id)
 
     with pytest.raises(CredentialOperationRefused) as refused:
-        _activate(user_id, operation_id, pyotp.TOTP(secret).now(), nonce="a-second-browser-session")
+        _activate(user_id, operation_id, _code(secret), nonce="a-second-browser-session")
 
     assert refused.value.category == "session_not_current"
     assert decrypt_totp(_stored_seed(user_id)) == LEGACY_SEED
@@ -715,7 +763,7 @@ def test_activation_after_the_deadline_is_refused(client, app, fake_passwordless
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = _open_replacement(user_id, fake_passwordless)
     secret, _ = _hold(user_id, operation_id)
-    code = pyotp.TOTP(secret).now()
+    code = _code(secret)
 
     with temporal.pinned_clock(temporal.shifted(temporal.now(), minutes=10, seconds=1)):
         with pytest.raises(CredentialOperationRefused) as refused:
@@ -820,7 +868,7 @@ def test_the_sweep_drops_a_completed_receipt_only_after_its_deadline(client, app
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = _open_replacement(user_id, fake_passwordless)
     secret, _ = _hold(user_id, operation_id)
-    _activate(user_id, operation_id, pyotp.TOTP(secret).now())
+    _activate(user_id, operation_id, _code(secret))
 
     assert expire_credential_operations() == {"cancelled": 0, "erased": 0}
     assert _operation(operation_id).stage is CredentialOperationStage.COMPLETED
@@ -829,7 +877,7 @@ def test_the_sweep_drops_a_completed_receipt_only_after_its_deadline(client, app
     assert CredentialOperation.query.count() == 0
     # An expired receipt cannot authorize re-execution.
     with pytest.raises(CredentialOperationRefused) as refused:
-        _activate(user_id, operation_id, pyotp.TOTP(secret).now())
+        _activate(user_id, operation_id, _code(secret))
     assert refused.value.category == "operation_not_found"
 
 
@@ -895,3 +943,118 @@ def test_deleting_the_principal_removes_its_operation(app):
         db.session.execute(sa.delete(User.__table__).where(User.__table__.c.id == sysadmin_id))
 
     assert CredentialOperation.query.count() == 0
+
+
+# ---------------------------------------------------------------------------
+# review findings
+# ---------------------------------------------------------------------------
+
+def test_removing_the_authorizing_passkey_stops_the_pending_replacement(client, app, fake_passwordless):
+    from app.services import passkey_service
+
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    operation_id = _open_replacement(user_id, fake_passwordless)
+    secret, _ = _hold(user_id, operation_id)
+    before = _stored_seed(user_id)
+    row_id = PasskeyCredential.query.filter_by(user_id=user_id).one().id
+
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:remove-passkey"):
+        assert passkey_service.remove_passkey(user_id, row_id)
+    assert _user(user_id).credential_generation == 2
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        _activate(user_id, operation_id, _code(secret))
+    assert refused.value.category == "stale_generation"
+    assert _stored_seed(user_id) == before
+
+
+def test_removing_nothing_does_not_advance_the_generation(client, app, fake_passwordless):
+    from app.services.admin_identity_service import delete_admin_credential
+
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:remove-nothing"):
+        assert not delete_admin_credential(10**9, user_id)
+    assert _user(user_id).credential_generation == 1
+
+
+def test_the_provider_is_called_with_no_transaction_open(client, app, fake_passwordless):
+    seen = []
+    original = fake_passwordless.sign_in
+
+    def sign_in(verify):
+        seen.append(db.session().in_transaction())
+        return original(verify)
+
+    fake_passwordless.sign_in = sign_in
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    _nonce(user_id)  # an incidental read leaves a transaction open, as a request would
+    assert db.session().in_transaction()
+
+    _open_replacement(user_id, fake_passwordless)
+
+    assert seen == [False]
+
+
+def test_an_unverified_assertion_is_never_sent_to_the_provider_inside_the_command(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    with FEATContext("FEAT-IDEN-106", idempotency_key="seed-test:unverified"):
+        with pytest.raises(CredentialOperationRefused) as refused:
+            lifecycle.open_operation(
+                _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE,
+                proof=_assertion(fake_passwordless), session_nonce=_nonce(user_id),
+            )
+    assert refused.value.category == "proof_unverified"
+    assert fake_passwordless.tokens  # the token was not consumed
+
+
+def test_a_token_naming_one_principal_with_another_principals_credential_is_refused(client, app, fake_passwordless):
+    _, user_a = _enrolled_teacher(client, app, fake_passwordless)
+    user_b = initialize("biology_block_a", app).teacher_user.id
+    _add_passkey(user_b, "cred-b")  # activated locally, for B
+    fake_passwordless.credentials["cred-b"] = passkey_external_id(user_a)  # the token names A
+
+    with pytest.raises(PasskeyError):
+        _open_replacement(user_a, fake_passwordless, credential="cred-b")
+
+    assert CredentialOperation.query.count() == 0
+
+
+def test_a_non_ascii_session_nonce_is_refused_not_a_crash(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    with pytest.raises(CredentialOperationRefused):
+        _open_replacement(user_id, fake_passwordless, nonce="s\u00e9ssion")
+    operation_id = _open_replacement(user_id, fake_passwordless)
+    secret, _ = _hold(user_id, operation_id)
+    with pytest.raises(CredentialOperationRefused) as refused:
+        _activate(user_id, operation_id, _code(secret), nonce="s\u00e9ssion")
+    assert refused.value.category == "session_not_current"
+
+
+def test_the_totp_feat_cannot_cancel_a_passkey_operation(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    operation_id = open_credential_operation(
+        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(LEGACY_SEED)),
+        session_nonce=_nonce(user_id),
+    )
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        cancel_totp_replacement(user_id=user_id, operation_id=operation_id, session_nonce=_nonce(user_id))
+
+    assert refused.value.category == "wrong_purpose"
+    assert _operation(operation_id).stage is CredentialOperationStage.AUTHORIZED
+
+
+def test_the_deadline_is_rechecked_after_the_code_is_verified(client, app, fake_passwordless, monkeypatch):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    operation_id = _open_replacement(user_id, fake_passwordless)
+    secret, _ = _hold(user_id, operation_id)
+    before = _stored_seed(user_id)
+    calls = iter([True, False])  # open at the first check, expired by the second
+    monkeypatch.setattr(lifecycle, "_deadline_open", lambda operation: next(calls))
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        _activate(user_id, operation_id, _code(secret))
+
+    assert refused.value.category == "operation_expired"
+    assert _stored_seed(user_id) == before
+    assert _user(user_id).credential_generation == 1

@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 
 from app.extensions import db
-from app.feats.base import FEATContext, requires_feat_context
+from app.feats.base import FEATContext, is_discardable_read_autobegin, requires_feat_context
 from app.models import CredentialOperationPurpose, User
 from app.services import credential_lifecycle as lifecycle
 
@@ -35,12 +35,17 @@ def open_credential_operation(*, user_id, purpose, proof, session_nonce,
         raise lifecycle.CredentialOperationRefused("unknown_purpose") from None
     feat_name = lifecycle.FEAT_FOR_PURPOSE[purpose]
     key = idempotency_key or f"{feat_name.lower()}:open:{uuid.uuid4().hex}"
+    # Provider verification runs with no transaction open: drop an incidental read
+    # transaction first, verify, then begin the FEAT transaction and revalidate.
+    if db.session().in_transaction() and is_discardable_read_autobegin(db.session):
+        db.session.rollback()
+    verified = lifecycle.verify_proof(proof)
     with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=key):
         user = db.session.get(User, user_id)
         if user is None:
             raise lifecycle.CredentialOperationRefused("ineligible_principal")
         operation = lifecycle.open_operation(
-            user, purpose=purpose, proof=proof, session_nonce=session_nonce,
+            user, purpose=purpose, proof=proof, session_nonce=session_nonce, verified=verified,
         )
         return operation.id
 
@@ -70,7 +75,7 @@ def cancel_totp_replacement(*, user_id, operation_id, session_nonce,
     operation = _own_operation(user_id, operation_id)
     if not lifecycle.operation_matches_session(operation, session_nonce):
         raise lifecycle.CredentialOperationRefused("session_not_current")
-    return lifecycle.cancel_operation(operation)
+    return lifecycle.cancel_operation(operation, purpose=CredentialOperationPurpose.TOTP_REPLACE)
 
 
 @requires_feat_context("FEAT-IDEN-108", key_per_call=True)

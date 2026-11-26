@@ -268,7 +268,7 @@ def evaluate_totp_code(user: User, code: str) -> bool:
         return False
     try:
         secret = decrypt_totp(user.totp_secret_encrypted)
-        return bool(secret) and pyotp.TOTP(secret).verify(code.strip(), valid_window=1)
+        return bool(secret) and pyotp.TOTP(secret).verify(code.strip(), for_time=_now(), valid_window=1)
     except (TypeError, ValueError):
         return False
 
@@ -341,9 +341,9 @@ def _session_matches(operation: CredentialOperation, user: User, session_nonce) 
     if not isinstance(session_nonce, str) or not session_nonce or not user.current_session_nonce:
         return False
     return (
-        hmac.compare_digest(operation.session_binding_hash,
-                            session_binding_digest(operation.purpose, session_nonce))
-        and hmac.compare_digest(user.current_session_nonce, session_nonce)
+        _digests_equal(operation.session_binding_hash,
+                       session_binding_digest(operation.purpose, session_nonce))
+        and _digests_equal(user.current_session_nonce, session_nonce)
     )
 
 
@@ -373,6 +373,13 @@ def _lock_operation(operation_id: str) -> CredentialOperation | None:
     )
 
 
+def _digests_equal(left, right) -> bool:
+    """Constant-time equality that tolerates non-ASCII text (``compare_digest`` on ``str`` does not)."""
+    if not isinstance(left, str) or not isinstance(right, str):
+        return False
+    return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
+
+
 def _is_open(operation: CredentialOperation) -> bool:
     return operation.stage not in CREDENTIAL_OPERATION_TERMINAL_STAGES
 
@@ -397,17 +404,31 @@ def _erase_and_cancel(operation: CredentialOperation) -> None:
 # Commands
 # ---------------------------------------------------------------------------
 
+def verify_proof(proof):
+    """Provider verification of a passkey assertion, for the caller to run *before* its transaction.
+
+    Returns the verified payload to pass as ``open_operation(verified=...)``, or ``None``
+    for proofs that need no provider call. This is the only provider I/O in the module;
+    no transaction or row lock may be open while it runs (SPEC-IDEN-002 §V).
+    """
+    if isinstance(proof, PasskeyAssertion):
+        return passkey_service.verify_token(proof.token)
+    return None
+
+
 def open_operation(
     user: User,
     *,
     purpose: CredentialOperationPurpose,
     proof,
     session_nonce: str,
+    verified=None,
 ) -> CredentialOperation:
     """Authorize one credential operation for ``user`` at stage ``authorized``.
 
     The command, not its caller, checks that the proof kind matches the purpose
-    (a passkey assertion for ``totp_replace``; a TOTP code, or for the first
+    (a passkey assertion for ``totp_replace``, already provider-verified by
+    ``verify_proof`` and passed as ``verified``; a TOTP code, or for the first
     passkey enrollment the signup capability, for passkey work) and evaluates the
     proof against current state. It refuses when the principal already has an open
     operation, which the partial unique index also enforces.
@@ -423,8 +444,9 @@ def open_operation(
     if not isinstance(proof, _PROOFS_FOR_PURPOSE[purpose]):
         raise CredentialOperationRefused("proof_kind_mismatch")
 
-    # Provider I/O first: nothing is locked while the network call runs.
-    verified = passkey_service.verify_token(proof.token) if isinstance(proof, PasskeyAssertion) else None
+    if isinstance(proof, PasskeyAssertion) and verified is None:
+        # Provider I/O never runs inside this transaction; the caller verifies first.
+        raise CredentialOperationRefused("proof_unverified")
 
     principal = _lock_user(user.id)
     if principal is None or principal.user_role not in (UserRole.TEACHER, UserRole.SYSADMIN):
@@ -434,7 +456,7 @@ def open_operation(
     if (
         not isinstance(session_nonce, str) or not session_nonce
         or not principal.current_session_nonce
-        or not hmac.compare_digest(principal.current_session_nonce, session_nonce)
+        or not _digests_equal(principal.current_session_nonce, session_nonce)
     ):
         raise CredentialOperationRefused("session_not_current")
 
@@ -460,6 +482,7 @@ def open_operation(
             CredentialOperation.user_id == principal.id,
             CredentialOperation.stage.notin_(CREDENTIAL_OPERATION_TERMINAL_STAGES),
         )
+        .populate_existing()
         .with_for_update()
         .all()
     )
@@ -570,7 +593,7 @@ def activate_totp(operation: CredentialOperation, code: str, *, session_nonce: s
         pending = decrypt_totp(locked.pending_totp_encrypted)
         accepted = (
             isinstance(code, str) and bool(pending)
-            and pyotp.TOTP(pending).verify(code.strip(), valid_window=1)
+            and pyotp.TOTP(pending).verify(code.strip(), for_time=_now(), valid_window=1)
         )
     except (TypeError, ValueError):
         accepted = False
@@ -581,6 +604,10 @@ def activate_totp(operation: CredentialOperation, code: str, *, session_nonce: s
             locked.error_category = "code_attempts_exhausted"
         db.session.flush()
         return False
+
+    # Time passed during verification; recheck before any mutation.
+    if not _deadline_open(locked):
+        raise CredentialOperationRefused("operation_expired")
 
     principal.totp_secret_encrypted = locked.pending_totp_encrypted
     principal.credential_generation = principal.credential_generation + 1
@@ -598,15 +625,24 @@ def activate_totp(operation: CredentialOperation, code: str, *, session_nonce: s
     return True
 
 
-def cancel_operation(operation: CredentialOperation) -> bool:
+def cancel_operation(
+    operation: CredentialOperation, *, purpose: CredentialOperationPurpose | None = None,
+) -> bool:
     """Erase pending material and mark the operation cancelled.
 
-    Returns ``False`` without effect when it is already terminal. The caller (a
+    When ``purpose`` is given the operation must have it. Returns ``False`` without effect when it is already terminal. The caller (a
     FEAT entry) is responsible for the actor's authority; this command only
     performs the erasure.
     """
     _require_feat("FEAT-IDEN-102", "FEAT-IDEN-106", "FEAT-IDEN-107", "FEAT-IDEN-108")
     locked = _lock_operation(operation.id)
+    if purpose is not None and locked is not None and locked.purpose is not purpose:
+        # A FEAT may cancel only the kind of operation it owns.
+        raise CredentialOperationRefused("wrong_purpose")
+    return _cancel_locked(locked)
+
+
+def _cancel_locked(locked: CredentialOperation | None) -> bool:
     if locked is None or not _is_open(locked):
         return False
     _erase_and_cancel(locked)
@@ -650,7 +686,7 @@ def expire_stale_operations() -> dict[str, int]:
             locked is not None
             and locked.stage in _DEADLINE_CANCELLABLE_STAGES
             and not _deadline_open(locked)
-            and cancel_operation(locked)
+            and _cancel_locked(locked)
         ):
             cancelled += 1
     return {"cancelled": cancelled, "erased": erased}
