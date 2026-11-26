@@ -46,24 +46,11 @@ close_tunnel() {
 }
 
 latest() { ls -t "$CTH_BACKUP_STATE_DIR"/points/*."$1" 2>/dev/null | head -1 || true; }   # this run's state dir only
-# Newest point's UTC stamp in a directory of points ("" when it has none). Stems are cth-db-<YYYYmmddTHHMMSSZ>-<reason>,
-# so stamps compare as strings.
-newest_stamp() { [ -d "$1" ] || return 0; find "$1" -maxdepth 1 -name 'cth-db-*.manifest.json' 2>/dev/null | sed -E 's#.*/cth-db-([0-9TZ]+)-.*#\1#' | sort | tail -1; }
-# Owner ruling 2026-11-25 (SOP-DB-005 §VIII): a verified point invalidates every older one, wherever it is, so
-# delete every pre-release point older than $1, then every other folder ($2 is this run's) left with no point.
-# A folder with no point is an abandoned run.
+# Owner ruling 2026-11-25 (SOP-DB-005 §VIII): a verified point invalidates every older one, wherever it is.
+# The scheduled runner's cleanup does it, holding each folder's run.lock so a run in progress is never touched.
 drop_older_prerelease() {
-  local d s f
-  for d in ~/cth-backup/prerelease-*/; do
-    [ -d "$d" ] || continue
-    for f in "${d}"points/cth-db-*; do
-      [ -e "$f" ] || continue
-      s=$(basename "$f" | sed -E 's#^cth-db-([0-9TZ]+)-.*#\1#')
-      if [[ "$s" < "$1" ]]; then rm -f "$f"; echo "deleted older point $(basename "$f")"; fi
-    done
-    [ -n "${2:-}" ] && [ "$d" -ef "$2" ] && continue
-    if [ -z "$(newest_stamp "${d}points")" ]; then rm -rf "$d"; echo "deleted older point folder ${d%/}"; fi
-  done
+  "$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import cth_backup_scheduled as s; s.drop_older_prerelease(sys.argv[2], print)' \
+    "$(dirname "$TOOL")" "$1"
 }
 
 case "${1:-}" in
@@ -164,7 +151,7 @@ restore)
   # The boundary is the point just restored, not the newest name in the folder: `latest` picks by mtime.
   S=$(basename "$P" | sed -E 's#^cth-db-([0-9]{8}T[0-9]{6}Z)-.*#\1#')
   [[ "$S" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || { echo "cannot read the stamp of $P; older points kept"; exit 1; }
-  drop_older_prerelease "$S" "$CTH_BACKUP_STATE_DIR"
+  drop_older_prerelease "$S"
   ;;
 evidence)
   # Signs and uploads the one artifact infra/release-gate/guarded-deploy.sh will accept: proof that

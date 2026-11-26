@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -74,6 +75,7 @@ def env():
         '#!/bin/bash\n'
         'echo "tool $*"\n'
         'case "$*" in\n'
+        f'  *cth_backup_scheduled*) exec {sys.executable} "$@" ;;  # the real point cleanup\n'
         '  *"backup --reason manual"*) exit "${FAKE_TOOL_FAILS:-0}" ;;\n'
         '  *) exit 0 ;;\n'
         'esac\n'
@@ -312,6 +314,21 @@ def test_the_point_restored_is_the_boundary_not_the_newest_name(env):
 
     assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
     assert len(list((current / "points").iterdir())) == 4
+
+
+def test_a_passing_restore_never_deletes_a_folder_whose_run_is_in_progress(env):
+    """Review on #1873: the older folder's run.lock is held by a pre-release run still writing into it."""
+    import fcntl
+    backups = env["home"] / "cth-backup"
+    current, running = backups / "prerelease-2026-11-26", backups / "prerelease-2026-11-20"
+    running.mkdir(parents=True)
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+    with open(running / "run.lock", "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    assert running.exists()
 
 
 def test_a_failed_restore_deletes_no_older_point(env):
