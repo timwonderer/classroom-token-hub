@@ -119,8 +119,8 @@ def test_a_drill_or_status_that_could_not_run_fails(env, cmd):
 
 def test_the_nightly_hour_takes_no_check(env, monkeypatch):
     """Owner ruling 2026-11-25: 03:15 takes the backup, not a check."""
-    import time
-    monkeypatch.setattr(env["mod"], "NIGHTLY_HOUR", time.localtime().tm_hour)
+    monkeypatch.setattr(env["mod"], "NIGHTLY_HOUR", 3)
+    monkeypatch.setattr(env["mod"].time, "localtime", lambda *a: env["mod"].time.struct_time((2026, 11, 26, 3, 15, 0, 3, 330, 0)))
     assert env["mod"].main(["check"]) == 0
     assert env["calls"] == []
     assert env["mod"].main(["backup"]) == 0
@@ -132,6 +132,19 @@ def test_a_drill_without_the_drive_fails(env):
     (env["root"] / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
     env["state"]["mounted"] = False
     assert env["mod"].main(["drill"]) == 1
+
+
+def test_a_run_that_fails_before_the_tool_makes_status_degraded(env, monkeypatch):
+    """Review on #1873: a tunnel or container failure left state.json healthy, so status read CURRENT."""
+    @contextlib.contextmanager
+    def broken(cfg):
+        raise RuntimeError("tunnel to production did not come up")
+        yield
+
+    monkeypatch.setattr(env["mod"], "tunnel", broken)
+    assert env["mod"].main(["backup"]) == 1
+    saved = json.loads((env["root"] / "scheduled" / "state" / "state.json").read_text())
+    assert "did not come up" in saved["last_error"]["error"]
 
 
 def test_tool_failure_fails_the_run_notifies_and_cleans_up(env):
@@ -209,6 +222,17 @@ def test_the_destruction_check_then_compares_against_the_prerelease_point(env):
     assert saved["newest_point"]["identities"] == {"seats": [7]}
     assert saved["newest_point"]["off_host"] is False
     assert saved["points"] == ["old"]
+
+
+def test_older_points_go_even_from_a_folder_with_a_newer_one(env):
+    """Review on #1873: a folder holding a newer point kept its older ones."""
+    point(env["remote"], "20261126T031500Z")
+    folder = env["root"] / "prerelease-2026-11-27"
+    point(folder, "20261125T200000Z")
+    point(folder, "20261127T200000Z")
+    assert env["mod"].main(["check"]) == 0
+    assert sorted(f.name for f in (folder / "points").iterdir()) == [
+        "cth-db-20261127T200000Z-manual.dump.age", "cth-db-20261127T200000Z-manual.manifest.json"]
 
 
 def test_a_prerelease_run_in_progress_is_never_deleted(env):

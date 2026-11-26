@@ -39,6 +39,7 @@ TOOL = Path(__file__).resolve().with_name("cth_db_backup.py")
 CONTAINER = "cth-sched-verify"
 REDACT = re.compile(r"postgresql://\S*@")
 STAMP = re.compile(r"^cth-db-(\d{8}T\d{6}Z)-\w+\.manifest\.json$")
+POINT_FILE = re.compile(r"^cth-db-(\d{8}T\d{6}Z)-")
 LOCK_WAIT = {"backup": 1800, "drill": 600}  # a check finding the lock taken just exits; the next is an hour away
 EX_TEMPFAIL = 75
 NIGHTLY_HOUR = 3  # the backup's hour in macos/ and linux/; owner ruling 2026-11-25: that hour takes a backup, no check
@@ -134,9 +135,8 @@ def prerelease_folders():
 
 
 def drop_older_prerelease(stamp, out):
+    """Delete every pre-release point older than stamp; a folder left with no point goes too."""
     for folder in prerelease_folders():
-        if newest_stamp(folder / "points") >= stamp:  # "" (an abandoned run) sorts first
-            continue
         # A pre-release run in progress holds its folder's run.lock (cth_db_backup.py) and may have no point yet.
         with open(folder / "run.lock", "a") as fh:
             try:
@@ -144,8 +144,25 @@ def drop_older_prerelease(stamp, out):
             except BlockingIOError:
                 out(f"kept {folder}: a pre-release run holds it")
                 continue
-            shutil.rmtree(folder)
-        out(f"deleted older point folder {folder}")
+            if newest_stamp(folder / "points") < stamp:  # "" (an abandoned run) sorts first
+                shutil.rmtree(folder)
+                out(f"deleted older point folder {folder}")
+                continue
+            for name in os.listdir(folder / "points"):
+                if (m := POINT_FILE.match(name)) and m.group(1) < stamp:
+                    (folder / "points" / name).unlink()
+                    out(f"deleted older point {name}")
+
+
+def save_state(state_dir, change):
+    """Edit cth_db_backup.py's state.json the way it writes it."""
+    state_dir.mkdir(parents=True, exist_ok=True)
+    path = state_dir / "state.json"
+    state = json.loads(path.read_text()) if path.exists() else {}
+    change(state)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+    os.replace(tmp, path)
 
 
 def adopt_identities(folder, state_dir):
@@ -154,13 +171,7 @@ def adopt_identities(folder, state_dir):
     Off the drive, so status reports DEGRADED until the next nightly point replaces it (SOP-DB-005 §IX).
     """
     newest = json.loads((folder / "state.json").read_text())["newest_point"]
-    state_dir.mkdir(parents=True, exist_ok=True)
-    path = state_dir / "state.json"
-    state = json.loads(path.read_text()) if path.exists() else {}
-    state["newest_point"] = {**newest, "off_host": False}
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
-    os.replace(tmp, path)
+    save_state(state_dir, lambda state: state.update(newest_point={**newest, "off_host": False}))
 
 
 def one_copy(remote, state_dir, out):
@@ -347,7 +358,12 @@ def main(argv=None):
             return EX_TEMPFAIL
         raise
     except Exception as exc:  # recorded and notified; the exit code tells the scheduler
-        log(cmd, f"error: {REDACT.sub('postgresql://[redacted]@', str(exc))}")
+        error = REDACT.sub("postgresql://[redacted]@", str(exc))
+        log(cmd, f"error: {error}")
+        if cmd in ("backup", "check"):  # a run that failed before the tool started still makes status DEGRADED
+            with contextlib.suppress(Exception):
+                save_state(BASE / "state", lambda state: state.update(last_error={
+                    "at": dt.datetime.now(dt.timezone.utc).isoformat(), "error": error[:2000]}))
         rc = 1
     finally:
         if cmd == "drill" and IDENTITY.exists():
