@@ -119,6 +119,7 @@ attempt sent over this key is refused there regardless of which workflow sent it
    Droplet, as root (back up the file first):
    ```bash
    cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bak
+   sed -i -e '$a\' /root/.ssh/authorized_keys   # the file may lack a final newline; >> would join the new key onto the last line
    printf 'command="/root/release-gate/guarded-deploy.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty %s\n' \
      "$(cat /tmp/release_deploy_key.pub)" >> /root/.ssh/authorized_keys
    rm -f /tmp/release_deploy_key.pub
@@ -195,9 +196,19 @@ that lock.
    Droplet, as root:
    ```bash
    cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bak
+   sed -i -e '$a\' /root/.ssh/authorized_keys   # the file may lack a final newline; >> would join the new key onto the last line
    printf 'command="/root/release-gate/guarded-docs.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty %s\n' \
      "$(cat /tmp/docs_deploy_key.pub)" >> /root/.ssh/authorized_keys
    rm -f /tmp/docs_deploy_key.pub
+   ```
+
+   Check that each key is on its own line with its own forced command, then, from the Mac mini, that the key
+   reaches the forced command (it prints `docs transport ready on …`):
+   ```bash
+   awk '{match($0,/command="[^"]*"/); print NR": "(RSTART?substr($0,RSTART,RLENGTH):"(no forced command)")"  "$NF}' /root/.ssh/authorized_keys
+   ```
+   ```bash
+   ssh -i ~/cth-backup/docs_deploy_key -o IdentitiesOnly=yes root@cth transport-check
    ```
 
 3. **First publication, in two passes.** Steps 1 and 2 can be done at any time; this step cannot. Start it
