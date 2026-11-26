@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-003      | 1.0     | 2026-11-25     | —    | Normative |
+| SOP-DEP-003      | 1.1     | 2026-11-25     | 1.0  | Normative |
 
 ## I. Purpose
 
@@ -92,6 +92,8 @@ Owner actions on the droplet, in `infra/release-gate/README.md` (*Documentation 
 - the `DOCS_DEPLOY_KEY` repository secret;
 - a two-pass first publication: publish (which creates `/srv/cth-docs/current`), set
   `CTH_USER_GUIDES_DIR=/srv/cth-docs/current/docs` for the service, restart, then publish again to verify.
+  It starts only once the deployed application release reads `CTH_USER_GUIDES_DIR` (the first release after
+  v2.6.0): on an earlier release the final check passes while the bundled guides are still served.
 
 Until then, guides ship with application releases.
 
@@ -103,4 +105,5 @@ Revisions require incrementing the version, updating the Effective Date, and pop
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-11-25 | §IX: the first publication waits until the deployed release reads `CTH_USER_GUIDES_DIR`. |
 | 1.0 | 2026-11-25 | Established (owner ruling 2026-11-25): user guides as a separately published documentation artifact. |
