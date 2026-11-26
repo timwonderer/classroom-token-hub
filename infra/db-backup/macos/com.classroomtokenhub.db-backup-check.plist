@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Every 15 minutes, at login and whenever a volume mounts: replacement baseline after a protected destruction,
-     and the purge of older points from the drive. __HOME__ is replaced at install. -->
+<!-- Hourly at :15 (03:15 is also the nightly backup; the run lock serialises them): replacement baseline after a
+     protected destruction, and the purge of older points. __HOME__ is replaced at install. -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.classroomtokenhub.db-backup-check</string>
@@ -11,9 +11,8 @@
     <string>__HOME__/cth-backup/scheduled/bin/cth_backup_scheduled.py</string>
     <string>check</string>
   </array>
-  <key>StartInterval</key><integer>900</integer>
-  <key>StartOnMount</key><true/>
-  <key>RunAtLoad</key><true/>
+  <key>StartCalendarInterval</key>
+  <dict><key>Minute</key><integer>15</integer></dict>
   <key>StandardOutPath</key><string>__HOME__/Library/Logs/cth-db-backup/check.log</string>
   <key>StandardErrorPath</key><string>__HOME__/Library/Logs/cth-db-backup/check.log</string>
 </dict>

@@ -1,9 +1,8 @@
 [Unit]
-Description=CTH database backup: destruction check every 15 minutes
+Description=CTH database backup: destruction check hourly at :15
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=15min
+OnCalendar=*-*-* *:15:00
 
 [Install]
 WantedBy=timers.target

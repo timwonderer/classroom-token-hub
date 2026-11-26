@@ -2,7 +2,7 @@
 """Scheduled encrypted backups from the operator's computer to an encrypted external drive.
 
     cth_backup_scheduled.py backup   # nightly point
-    cth_backup_scheduled.py check    # every 15 minutes: replacement baseline after a protected destruction
+    cth_backup_scheduled.py check    # hourly at :15: replacement baseline after a protected destruction
     cth_backup_scheduled.py status   # health: CURRENT / STALE / DEGRADED (exit 0 / 1 / 2)
     cth_backup_scheduled.py drill    # restore drill: newest point on the drive, decrypted with the identity in
                                      # ~/cth-backup/identity.txt (deleted on exit), restored and checked
@@ -39,7 +39,7 @@ TOOL = Path(__file__).resolve().with_name("cth_db_backup.py")
 CONTAINER = "cth-sched-verify"
 REDACT = re.compile(r"postgresql://\S*@")
 STAMP = re.compile(r"^cth-db-(\d{8}T\d{6}Z)-\w+\.manifest\.json$")
-LOCK_WAIT = {"backup": 1800, "drill": 600}  # a check finding the lock taken just exits; the next is 15 minutes away
+LOCK_WAIT = {"backup": 1800, "drill": 600}  # a check finding the lock taken just exits; the next is an hour away
 EX_TEMPFAIL = 75
 
 DEFAULT_DRIVE = {"darwin": "/Volumes/CTH-Backup"}.get(sys.platform, f"/media/{os.environ.get('USER', '')}/CTH-Backup")
@@ -265,7 +265,7 @@ def run(cmd, cfg):
     state_dir = BASE / "state"
     if not drive_mounted(cfg["drive"]):
         out(f"{cfg['drive']} is not mounted; nothing done")
-        if cmd == "backup":  # a check every 15 minutes saying so would be noise
+        if cmd == "backup":  # a check every hour saying so would be noise
             notify("Nightly backup skipped: the backup drive is not attached and unlocked.")
         return 1 if cmd == "status" else 0
     remote.mkdir(parents=True, exist_ok=True)

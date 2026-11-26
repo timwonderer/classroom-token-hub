@@ -15,8 +15,8 @@ which is the placement `SOP-DB-005` proposes.
 | `env.example` | `/etc/cth-db-backup/env` |
 | `rclone.conf.example` | `/etc/cth-db-backup/rclone.conf` (Backblaze B2) |
 | `cth_backup_scheduled.py` | The operator's-computer placement (macOS, Linux): drive check, tunnel, verify container, then `backup`, `check`, `status` or `drill`, and the one-copy rule. |
-| `macos/*.plist` | launchd jobs: nightly `backup`; `check` every 15 minutes and on every mount. |
-| `linux/*` | systemd user units: nightly `backup`; `check` every 15 minutes. |
+| `macos/*.plist` | launchd jobs: nightly `backup` at 03:15; `check` hourly at :15. |
+| `linux/*` | systemd user units: nightly `backup` at 03:15; `check` hourly at :15. |
 
 ## Install on the production host
 

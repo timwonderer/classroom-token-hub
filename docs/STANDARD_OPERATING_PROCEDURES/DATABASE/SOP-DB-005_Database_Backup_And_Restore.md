@@ -65,7 +65,7 @@ identity counts, SHA-256). Reasons: `scheduled`, `baseline` (taken after a destr
 2. **When.**
    - `backup`: nightly at 03:15 local. The computer wakes itself at 03:10 (`pmset` on macOS, `rtcwake` on Linux) and
      stays awake until the run ends; a run still missed (computer off) runs once at the next start.
-   - `check`: every 15 minutes (on macOS also at login and whenever a volume mounts). It detects a destruction and takes the
+   - `check`: hourly at a quarter past (owner ruling 2026-11-25); at 03:15 the backup runs as well. It detects a destruction and takes the
      replacement baseline (§VIII.2).
 3. **When not.** No run while the drive is absent, while `classroom-economy` is not active (a release or an
    outage), or while another run is in progress.
@@ -82,7 +82,7 @@ identity counts, SHA-256). Reasons: `scheduled`, `baseline` (taken after a destr
    point on the drive and on the computer. If the baseline fails, older points are kept and health is STALE until one
    succeeds.
 3. **Pre-release points.** A `SOP-DEP-002` pre-release point deletes every older pre-release point once `restore`
-   passes. The scheduled job's next run (within 15 minutes of the application restarting) deletes the older point on
+   passes. The scheduled job's next run (within an hour of the application restarting) deletes the older point on
    the drive, and the next verified scheduled point deletes the pre-release one. A release can therefore be rolled back by restore only
    until that next scheduled point, which is after its health was verified (`SOP-DB-004` §IX); later, recovery is
    fix-forward.

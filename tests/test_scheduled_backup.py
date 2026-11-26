@@ -1,7 +1,7 @@
 """`infra/db-backup/cth_backup_scheduled.py` runs the backup tool only when it is safe to, and keeps one copy.
 
-SOP-DB-005: the operator's computer (macOS or Linux) runs the runner nightly (`backup`) and every 15
-minutes (`check`). It must do nothing while the backup drive is absent or the application is stopped for a release,
+SOP-DB-005: the operator's computer (macOS or Linux) runs the runner nightly (`backup`) and hourly
+(`check`). It must do nothing while the backup drive is absent or the application is stopped for a release,
 and, owner ruling 2026-11-25, exactly one copy of the newest verified point may exist, whatever took it.
 
 The runner is loaded in-process with production, docker and the backup tool replaced, in a throwaway HOME.
