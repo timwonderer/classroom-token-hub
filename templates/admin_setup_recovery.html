@@ -25,7 +25,7 @@
     <div class="col-12 col-md-8 col-lg-6">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0">
-                <h5 class="fw-bold mb-0 text-primary">Setup Account Recovery</h5>
+                <h2 class="h5 fw-bold mb-0 text-primary">Setup Account Recovery</h2>
             </div>
             <div class="card-body p-4">
                 <p class="text-secondary-dark ">
@@ -38,7 +38,7 @@
                         <li>Verified student recovery workflow for your class scope</li>
                     </ul>
                 
-                    {% call cards.alert_card('warning', 'Security requirement: at least ' ~ recovery_min_students ~ ' claimed students in every class', icon='shield_lock', body_class='mb-3', role='note', heading_tag='h2') %}
+                    {% call cards.alert_card('warning', 'Security requirement: at least ' ~ recovery_min_students ~ ' claimed students in every class', icon='shield_lock', body_class='mb-3', role='note', heading_tag='h3') %}
                         <p class="mb-0">When you recover your account, Classroom Token Hub randomly selects 2 students in each of
                             your classes to give you confirmation codes. If a class has fewer than {{ recovery_min_students }} students
                             with claimed accounts, that selection would be predictable, so recovery is blocked for your whole

@@ -122,7 +122,10 @@ def axe_violations(page, url: str, *, before_axe=None) -> list:
     page.add_script_tag(content=AXE_SOURCE)
     result = page.evaluate("""async () => {
         return await axe.run(document, {
-            runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa']}
+            runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa']},
+            // heading-order is tagged best-practice, so the tag filter alone
+            // skips it; INV-ARC-020 §VI.2 makes it a requirement here.
+            rules: {'heading-order': {enabled: true}}
         });
     }""")
     return [v for v in result["violations"] if v["id"] not in ACCEPTED_RULE_IDS]

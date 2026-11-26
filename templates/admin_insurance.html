@@ -42,10 +42,10 @@
 
   <div class="card shadow-sm mb-4">
     <div class="card-header bg-info text-white py-3">
-      <h5 class="mb-0 fw-semibold text-white">
+      <h2 class="h5 mb-0 fw-semibold text-white">
         <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">info</span>
         Purchased Insurance Policies are Contracts
-      </h5>
+      </h2>
     </div>
     <div class="card-body">
      When a student purchases an insurance product, it is considered an <strong>enforceable contract</strong> between the student and the class. A period a student has already started always runs on the terms they bought. When you edit a policy, current holders move to the new version at their next renewal.
@@ -57,7 +57,7 @@
       {# `list_insurance_claims` returns every claim in the class regardless of
          status, so this list is not "pending" — the heading says what the query
          actually asks for. #}
-      <h5 class="mb-0 fw-bold"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">other_admission</span>Filed claims</h5>
+      <h2 class="h5 mb-0 fw-bold"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">other_admission</span>Filed claims</h2>
     </div>
     <div class="list-group list-group-flush">
       {% for claim in claims %}
@@ -78,10 +78,10 @@
 
   <div class="card shadow">
     <div class="card-header bg-primary text-white py-3">
-      <h5 class="mb-0 fw-bold text-white">
+      <h2 class="h5 mb-0 fw-bold text-white">
         <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">shield</span>
         Existing Policies
-      </h5>
+      </h2>
     </div>
     <div class="list-group list-group-flush">
       {% for policy in policies %}

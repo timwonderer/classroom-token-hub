@@ -24,7 +24,7 @@
 <div class="row justify-content-center">
   <div class="col-xl-9">
     {% if notice %}
-      {% call cards.alert_card('warning', 'Balances changed', icon='sync_problem', body_class='mb-3', role='alert') %}
+      {% call cards.alert_card('warning', 'Balances changed', icon='sync_problem', body_class='mb-3', role='alert', heading_tag='h2') %}
         <p class="mb-0">{{ notice }}</p>
       {% endcall %}
     {% endif %}

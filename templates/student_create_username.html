@@ -34,19 +34,19 @@
             {% with messages = get_flashed_messages(category_filter=["setup"]) %}
             {% if messages %}
             {% for message in messages %}
-            {% call cards.alert_card('danger', "Username couldn't be created", icon='error', role='alert', body_class='mb-4') %}
+            {% call cards.alert_card('danger', "Username couldn't be created", icon='error', role='alert', body_class='mb-4', heading_tag='h2') %}
                 <p class="mb-0">{{ message }}</p>
             {% endcall %}
             {% endfor %}
             {% endif %}
             {% endwith %}
 
-            {% call cards.alert_card('info', 'Your username theme', icon='lightbulb', role='alert', body_class='mb-4') %}
+            {% call cards.alert_card('info', 'Your username theme', icon='lightbulb', role='alert', body_class='mb-4', heading_tag='h2') %}
                 <p class="mb-2 fw-semibold">{{ theme_prompt }}</p>
                 <p class="mb-0">Please enter one word that fits the prompt above. It should have no spaces and be 3-12 letters long. We will combine it with two random words to create your unique username.</p>
             {% endcall %}
 
-            {% call cards.alert_card('warning', 'Save the username you get next', icon='visibility', role='alert', body_class='mb-4') %}
+            {% call cards.alert_card('warning', 'Save the username you get next', icon='visibility', role='alert', body_class='mb-4', heading_tag='h2') %}
                 <p class="mb-0">Your username will be shown on the next page. Save it somewhere you can find later, then type it back to show you have it. It cannot be looked up later, even by your teacher.</p>
             {% endcall %}
 

@@ -47,17 +47,17 @@
 
             <div class="card shadow">
                 <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">
+                    <h2 class="h4 mb-0">
                         <span class="material-symbols-outlined icon-xl icon-middle me-2" aria-hidden="true">
                             problem
                         </span>
                         Details about the issue
-                    </h4>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <!-- Transaction Info (if applicable) -->
                     {% if issue_type == 'transaction' and transaction %}
-                    {% call cards.alert_card('info', 'You are creating a support ticket for this transaction', icon='receipt_long', body_class='mb-3', heading_tag='h2') %}
+                    {% call cards.alert_card('info', 'You are creating a support ticket for this transaction', icon='receipt_long', body_class='mb-3', heading_tag='h3') %}
                             <ul class="mb-0 lh-lg">
                                 <li><strong>Amount:</strong> ${{ "%.2f"|format(transaction.amount) }}</li>          
                                 <li><strong>Account:</strong> {{ transaction.account_type|title }}</li>
@@ -76,10 +76,10 @@
                     <!-- Instructions -->
                    
                     {% if issue_type == 'transaction' %}
-                        <h4>Tell us what's wrong with this transaction</h4>
+                        <h3 class="h4">Tell us what's wrong with this transaction</h3>
                         {% endif %}
                     <div class="mt-2 mb-4 p-3 bg-light rounded">
-                        <h6 class="mb-2"><span class="material-symbols-outlined me-2 text-warning" aria-hidden="true">lightbulb</span>Tips for Good Reports</h6>
+                        <h3 class="h6 mb-2"><span class="material-symbols-outlined me-2 text-warning" aria-hidden="true">lightbulb</span>Tips for Good Reports</h3>
                         <ul class="mb-0">
                             <li>Be specific about what went wrong</li>
                             <li>Include what you were trying to do</li>

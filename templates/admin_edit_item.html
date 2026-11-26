@@ -50,7 +50,7 @@
 
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit</span>Edit: {{ item.name }}</h5>
+        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit</span>Edit: {{ item.name }}</h2>
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('admin.edit_store_item', product_lineage_uuid=item.product_lineage_uuid) }}" data-store-item-form data-rent-prevents-late-purchase="{{ 'true' if rent_prevents_purchase_when_late else 'false' }}">
