@@ -36,6 +36,10 @@ and this project follows semantic versioning principles.
 
   **Mandatory dual enrollment, TOTP seed-length floor and credential compliance gate (owner rulings 2026-11-26).** Teacher and sysadmin principals must hold verified TOTP and at least one activated passkey; seeds decode to at least 112 bits and are generated at 160; a noncompliant principal reaches only credential maintenance and sign-out; revoking the only passkey is refused; sysadmin provisioning stays CLI-only with the same enrollment and gate; `pyotp==2.10.0` stays pinned until the noncompliant-seed count is zero (SOP-DEP-002 §VII.C). Amends DOM-IDEN-003, FEAT-IDEN-101/102/106/107, FEAT-CORE-000, SPEC-SEC-001, SPEC-IDEN-002, SPEC-OPS-004, DOM-CORE-002 and SOP-DEP-002. Documentation only.
 
+- <!-- notes: internal -->
+
+  **Bump pyotp to 2.12.1.** Sub-112-bit TOTP seeds are now rejected at construction, enforcing the SPEC-SEC-001 §V.1 item 7 floor. The SOP-DEP-002 §VII.C zero-count record is `docs/ops/audits/TOTP_SEED_COMPLIANCE_2026-11-26.md`. `tests/dom/identity/test_totp_seed_length.py` signs with 160-bit seeds and measures the 80-bit fixture without constructing a `TOTP`. Supersedes #1804.
+
 
 ### Fixed
 
