@@ -5,10 +5,11 @@ new seed is 160 bits from one generator. SPEC-IDEN-002 / FEAT-IDEN-106: a TOTP i
 replaced only through an operation proven by a fresh passkey assertion, and the
 old secret survives everything short of a verified activation.
 
-Every enrolled seed was 80 bits because the generators called
-``pyotp.random_base32()`` with no length. ``pyotp`` stays pinned below the release
-that refuses 80-bit seeds, so legacy seeds keep signing in; the tests here use a
-literal 16-character seed (never ``random_base32``) for exactly that reason.
+CTH has minted 160-bit seeds since it first pinned pyotp 2.9.0, so no enrolled seed
+is expected to be short. The 16-character seed ``SHORT_SEED`` below is a synthetic
+fixture for the noncompliant branch only: ``pyotp`` 2.12 refuses to construct a
+``TOTP`` from it, so the tests classify it by length and never sign with it. Every
+test that needs a working authenticator holds a 160-bit seed.
 """
 
 from __future__ import annotations
@@ -65,10 +66,14 @@ from tests.helpers.canonical_identities import TEACHERS
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
 
-# Sixteen base32 characters: 80 bits, what every enrolled teacher holds today.
-LEGACY_SEED = "JBSWY3DPEHPK3PXP"
+# Sixteen base32 characters: 80 bits. Synthetic and below the SPEC-SEC-001 §V.1
+# item 7 floor; pyotp >= 2.12 cannot build a TOTP from it, so it is only ever stored
+# and measured.
+SHORT_SEED = "JBSWY3DPEHPK3PXP"
 SEED_20 = "JBSWY3DPEHPK3PXPJBSQ"
 SEED_32 = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+# The seed a signed-in teacher holds in these tests: 160 bits, distinct from SEED_32.
+HELD_SEED = "KRSXG5CTMVRXEZLUKN2XAZLSMRSXGZLT"
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -124,7 +129,7 @@ def _stored_seed(user_id):
     return _user(user_id).totp_secret_encrypted
 
 
-def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=LEGACY_SEED, credential="cred-1"):
+def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=HELD_SEED, credential="cred-1"):
     """A signed-in teacher holding ``seed`` and one activated passkey."""
     classroom = initialize_as_teacher(key, client, app)
     user_id = classroom.teacher_user.id
@@ -171,19 +176,18 @@ def _outcome_events():
 
 
 # ---------------------------------------------------------------------------
-# legacy seeds keep signing in; compliance is derived from live state
+# the pinned pyotp enforces the floor; compliance is derived from live state
 # ---------------------------------------------------------------------------
 
-def test_legacy_16_char_seed_still_signs_in_under_pinned_pyotp(client, app):
-    """The regression the suite lacked: an 80-bit seed, stored as production stores it."""
+def test_a_160_bit_seed_signs_in(client, app):
     classroom = initialize("chemistry_p1", app)
     user_id = classroom.teacher_user.id
-    _set_seed(user_id, LEGACY_SEED)
-    assert len(LEGACY_SEED) == 16
+    _set_seed(user_id, HELD_SEED)
+    assert len(HELD_SEED) == 32
     username = TEACHERS[_teacher_key_for(classroom)]["username"]
 
     response = client.post(
-        "/admin/login", data={"username": username, "totp_code": _code(LEGACY_SEED)},
+        "/admin/login", data={"username": username, "totp_code": _code(HELD_SEED)},
     )
 
     assert response.status_code == 302
@@ -191,10 +195,32 @@ def test_legacy_16_char_seed_still_signs_in_under_pinned_pyotp(client, app):
         assert sess["user_id"] == user_id
 
 
-def test_legacy_seed_is_reported_noncompliant(client, app):
+def test_the_pinned_pyotp_refuses_a_seed_below_the_floor():
+    """The dependency pin is what enforces SPEC-SEC-001 §V.1 item 7 at sign-in."""
+    assert len(SHORT_SEED) == 16
+    with pytest.raises(ValueError):
+        pyotp.TOTP(SHORT_SEED)
+    pyotp.TOTP(HELD_SEED)
+
+
+def test_a_sub_floor_seed_does_not_sign_in(client, app):
+    """A stored 80-bit seed cannot authenticate; the login route answers, not a 500."""
     classroom = initialize("chemistry_p1", app)
     user_id = classroom.teacher_user.id
-    _set_seed(user_id, LEGACY_SEED)
+    _set_seed(user_id, SHORT_SEED)
+    username = TEACHERS[_teacher_key_for(classroom)]["username"]
+
+    response = client.post("/admin/login", data={"username": username, "totp_code": "123456"})
+
+    assert response.status_code != 500
+    with client.session_transaction() as sess:
+        assert sess.get("user_id") != user_id
+
+
+def test_short_seed_is_reported_noncompliant(client, app):
+    classroom = initialize("chemistry_p1", app)
+    user_id = classroom.teacher_user.id
+    _set_seed(user_id, SHORT_SEED)
 
     assert decoded_secret_bits(_user(user_id)) == 80
     # Order proof: the passkey is reported before the seed.
@@ -219,7 +245,7 @@ def test_compliance_is_not_stored(client, app):
     assert not {c for c in columns if "compliance" in c or "compliant" in c}
 
 
-@pytest.mark.parametrize("seed, bits", [(LEGACY_SEED, 80), (SEED_20, 100), (SEED_32, 160)])
+@pytest.mark.parametrize("seed, bits", [(SHORT_SEED, 80), (SEED_20, 100), (SEED_32, 160)])
 def test_decoded_secret_bits_by_seed_length(seed, bits):
     """Mutation proof: the measure tracks length, so a floor change cannot hide."""
     assert decoded_secret_bits(SimpleNamespace(totp_secret_encrypted=encrypt_totp(seed))) == bits
@@ -234,7 +260,7 @@ def test_decoded_secret_bits_rejects_a_non_base32_seed():
     assert decoded_secret_bits(SimpleNamespace(totp_secret_encrypted=encrypt_totp("!!!!!!!!!!!!!!!!"))) == 0
 
 
-def test_the_floor_sits_between_the_legacy_and_generated_lengths():
+def test_the_floor_sits_between_the_short_and_generated_lengths():
     assert lifecycle.TOTP_MIN_SEED_BITS == 112
     assert lifecycle.TOTP_GENERATED_SEED_BITS == 160
     assert 80 < lifecycle.TOTP_MIN_SEED_BITS <= lifecycle.TOTP_GENERATED_SEED_BITS
@@ -251,8 +277,8 @@ def _is_160_bit_base32(secret):
 def test_mint_asks_for_its_length_rather_than_trusting_the_library_default(monkeypatch):
     """Mutation proof: a library whose default length is 80 bits must still yield 160.
 
-    pyotp's default has changed between releases (16 characters in old ones, 32 in
-    the pinned 2.10.0), so the generator states the length itself.
+    pyotp's default has changed between releases (16 characters before 2.4.0, 32
+    since), so the generator states the length itself.
     """
     monkeypatch.setattr(lifecycle.pyotp, "random_base32", lambda length=16, chars=None: "A" * length)
 
@@ -286,9 +312,9 @@ def test_create_teacher_stores_the_seed_it_is_given_and_mints_none(app):
     from app.services.classroom_setup import create_teacher
 
     with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:create-teacher"):
-        stored = create_teacher("seed_teacher_given", totp_secret=LEGACY_SEED)
+        stored = create_teacher("seed_teacher_given", totp_secret=SHORT_SEED)
         absent = create_teacher("seed_teacher_none")
-    assert decrypt_totp(stored.totp_secret_encrypted) == LEGACY_SEED
+    assert decrypt_totp(stored.totp_secret_encrypted) == SHORT_SEED
     assert absent.totp_secret_encrypted is None
 
 
@@ -363,7 +389,7 @@ def test_open_operation_refuses_a_totp_code_for_totp_replace(client, app, fake_p
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(
             user_id=user_id, purpose="totp_replace",
-            proof=TotpCode(_code(LEGACY_SEED)), session_nonce=_nonce(user_id),
+            proof=TotpCode(_code(HELD_SEED)), session_nonce=_nonce(user_id),
         )
 
     assert refused.value.category == "proof_kind_mismatch"
@@ -401,13 +427,13 @@ def test_totp_code_opens_passkey_enrollment_and_a_wrong_code_does_not(client, ap
 
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(
-            user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_wrong_code(LEGACY_SEED)),
+            user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_wrong_code(HELD_SEED)),
             session_nonce=_nonce(user_id),
         )
     assert refused.value.category == "proof_rejected"
 
     operation_id = open_credential_operation(
-        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(LEGACY_SEED)),
+        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(HELD_SEED)),
         session_nonce=_nonce(user_id),
     )
     assert _operation(operation_id).purpose is CredentialOperationPurpose.PASSKEY_ENROLL
@@ -611,15 +637,15 @@ def test_wrong_code_changes_nothing_and_the_operation_stays_open(client, app, fa
 
 
 def test_a_code_for_the_old_secret_does_not_activate_the_candidate(client, app, fake_passwordless, monkeypatch):
-    assert not _accepted(LEGACY_SEED, FIXED_INSTANT) & _accepted(SEED_32, FIXED_INSTANT)
+    assert not _accepted(HELD_SEED, FIXED_INSTANT) & _accepted(SEED_32, FIXED_INSTANT)
     monkeypatch.setattr(lifecycle, "mint_totp_secret", lambda: SEED_32)
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = _open_replacement(user_id, fake_passwordless)
     _hold(user_id, operation_id)
 
     with temporal.pinned_clock(FIXED_INSTANT):
-        assert _activate(user_id, operation_id, _code(LEGACY_SEED)) is False
-    assert decrypt_totp(_stored_seed(user_id)) == LEGACY_SEED
+        assert _activate(user_id, operation_id, _code(HELD_SEED)) is False
+    assert decrypt_totp(_stored_seed(user_id)) == HELD_SEED
 
 
 def test_repeated_wrong_codes_never_cancel_the_operation_or_touch_attempt_count(client, app, fake_passwordless):
@@ -662,7 +688,7 @@ def test_correct_code_activates_the_new_seed_once(client, app, fake_passwordless
     # The new authenticator is the only secret now.
     with temporal.pinned_clock(FIXED_INSTANT):
         assert lifecycle.evaluate_totp_code(user, _code(secret))
-        assert not lifecycle.evaluate_totp_code(user, _code(LEGACY_SEED))
+        assert not lifecycle.evaluate_totp_code(user, _code(HELD_SEED))
 
 
 def test_activation_emits_one_non_identifying_outcome_event(client, app, fake_passwordless):
@@ -730,7 +756,7 @@ def test_another_teacher_cannot_act_on_this_operation(client, app, fake_password
     _, user_a = _enrolled_teacher(client, app, fake_passwordless, key="chemistry_p1", credential="cred-a")
     classroom_b = initialize("biology_block_a", app)
     user_b = classroom_b.teacher_user.id
-    _set_seed(user_b, LEGACY_SEED)
+    _set_seed(user_b, HELD_SEED)
     operation_id = _open_replacement(user_a, fake_passwordless, credential="cred-a")
     secret, _ = _hold(user_a, operation_id)
     seed_a, seed_b = _stored_seed(user_a), _stored_seed(user_b)
@@ -767,7 +793,7 @@ def test_a_different_session_of_the_same_teacher_cannot_activate(client, app, fa
         _activate(user_id, operation_id, _code(secret), nonce="a-second-browser-session")
 
     assert refused.value.category == "session_not_current"
-    assert decrypt_totp(_stored_seed(user_id)) == LEGACY_SEED
+    assert decrypt_totp(_stored_seed(user_id)) == HELD_SEED
 
 
 def test_activation_after_the_deadline_is_refused(client, app, fake_passwordless):
@@ -780,7 +806,7 @@ def test_activation_after_the_deadline_is_refused(client, app, fake_passwordless
         with pytest.raises(CredentialOperationRefused) as refused:
             _activate(user_id, operation_id, code)
     assert refused.value.category == "operation_expired"
-    assert decrypt_totp(_stored_seed(user_id)) == LEGACY_SEED
+    assert decrypt_totp(_stored_seed(user_id)) == HELD_SEED
     assert _user(user_id).credential_generation == 1
 
 
@@ -1044,7 +1070,7 @@ def test_a_non_ascii_session_nonce_is_refused_not_a_crash(client, app, fake_pass
 def test_the_totp_feat_cannot_cancel_a_passkey_operation(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = open_credential_operation(
-        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(LEGACY_SEED)),
+        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(HELD_SEED)),
         session_nonce=_nonce(user_id),
     )
 
@@ -1181,7 +1207,7 @@ def test_the_challenge_is_stored_nowhere(client, app, fake_passwordless):
 
 def _recovery_teacher_session(recovery_fixture, fake):
     user_id = recovery_fixture.teacher.id
-    _set_seed(user_id, LEGACY_SEED)
+    _set_seed(user_id, HELD_SEED)
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:nonce:{uuid.uuid4().hex}"):
         db.session.get(User, user_id).current_session_nonce = f"session-{uuid.uuid4().hex}"
     fake.credentials["old-key"] = passkey_external_id(user_id)
@@ -1214,7 +1240,7 @@ def test_a_routine_operation_cannot_open_while_a_recovery_grant_is_live(app, fak
     assert refused.value.category == "recovery_active"
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(
-            user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(LEGACY_SEED)),
+            user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(HELD_SEED)),
             session_nonce=_nonce(user_id),
         )
     assert refused.value.category == "recovery_active"
