@@ -1,8 +1,8 @@
 # Encrypted off-host database backups
 
-**Proposal, not installed.** The design, the rules it keeps, restore and the failure-mode questions are in
-[`docs/ops/DATABASE_BACKUP_PLAN.md`](../../docs/ops/DATABASE_BACKUP_PLAN.md). The procedure that will govern it is
-`SOP-DB-005` (DRAFT). This page is the operator's install and run sheet. The same tool runs in one of two places:
+**Not installed yet.** The design, the rules it keeps, restore and the failure-mode questions are in
+[`docs/ops/DATABASE_BACKUP_PLAN.md`](../../docs/ops/DATABASE_BACKUP_PLAN.md). The procedure that governs it is
+`SOP-DB-005`. This page is the operator's install and run sheet. The same tool runs in one of two places:
 on the droplet with a B2 bucket as the off-host copy (below), or on the operator's computer (macOS or Linux) with an
 encrypted external drive as the off-host copy ([Scheduled backups from the operator's computer](#scheduled-backups-from-the-operators-computer)),
 which is the placement `SOP-DB-005` proposes.

@@ -2,12 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-005       | 0.1 (DRAFT) | —          | —          | Normative once ratified |
+| SOP-DB-005       | 1.0     | 2026-11-25     | —          | Normative (SOP Tier 2) |
 
 > [!IMPORTANT]
-> **DRAFT.** Nothing here binds until the owner ratifies v1.0 (every §XI decision is settled). Until then
-> `docs/ops/DATABASE_BACKUP_PLAN.md` stays input to the failure-mode review that issue #1639 requires, and the only
-> recovery points are the pre-release points of `SOP-DEP-002` §VII.A.
+> **Not yet installed.** Until the install record of §XII exists, the only recovery points are the pre-release
+> points of `SOP-DEP-002` §VII.A.
 
 ## I. Purpose
 
@@ -27,7 +26,7 @@ The production PostgreSQL database. Out of scope, and never captured:
 
 ## III. Authority Level
 
-Normative (SOP Tier) from v1.0. Subordinate to INV-CORE-000, INV-ARC-018 and SOP-SEC-001. `SOP-DEP-002` §VI.2 and
+Normative (SOP Tier 2). Subordinate to INV-CORE-000, INV-ARC-018 and SOP-SEC-001. `SOP-DEP-002` §VI.2 and
 §VII.A and `SOP-DB-004` §IX rely on the recovery points this document defines.
 
 ## IV. Dependencies
@@ -115,7 +114,7 @@ Every failed run posts a desktop notification where the platform has one (D10).
 4. **Drill.** Monthly, and after any change to the tooling, the key or the drive: `cth_backup_scheduled.py drill` restores
    the newest point on the drive with the owner's identity. Record it in `docs/ops/audits/RESTORE_DRILL_<date>.md`.
 
-## XI. Owner decisions required before v1.0
+## XI. Owner decisions
 
 Plan §7 and §8 give the background.
 
@@ -144,8 +143,7 @@ Plan §7 and §8 give the background.
 
 ## Change Notes
 
-**Version 0.1 (2026-11-25), DRAFT:** First draft. Places the existing `cth_db_backup.py` on the operator's Mac under
-launchd with an encrypted external drive as the off-host copy, and lists the decisions issue #1639's failure-mode
-review must settle. Same day: owner ruling that only one copy of the newest verified point exists, whatever took it (D2, D5
-settled, §VIII rewritten). Owner rulings settle D1, D4, D6, D7, D8, D9 (§X.3 rewritten), D10 and D11, then D3; every decision is settled. Same day: placement made platform-neutral (macOS or Linux), `mac-scheduled.sh` replaced by
-`cth_backup_scheduled.py`.
+**Version 1.0 (2026-11-25):** First issue, effective on issue (owner ruling). Places the existing `cth_db_backup.py`
+on the operator's computer (macOS or Linux, `cth_backup_scheduled.py` under launchd or systemd) with an encrypted
+external drive as the off-host copy. Records the owner's rulings on the eleven decisions issue #1639's failure-mode
+review required (§XI), including one copy of the newest verified point, whatever took it (§VIII).
