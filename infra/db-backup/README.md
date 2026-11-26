@@ -238,7 +238,7 @@ Settings are environment variables, or `KEY=VALUE` lines in `~/cth-backup/schedu
    macOS (`pmset` holds one repeating schedule, so this replaces any other):
 
    ```bash
-   mkdir -p ~/Library/Logs/cth-db-backup
+   mkdir -p ~/Library/Logs/cth-db-backup ~/Library/LaunchAgents
    for job in db-backup db-backup-check; do
      sed "s#__HOME__#$HOME#g" infra/db-backup/macos/com.classroomtokenhub.$job.plist \
        > ~/Library/LaunchAgents/com.classroomtokenhub.$job.plist
@@ -266,7 +266,9 @@ To stop: `launchctl bootout gui/$(id -u)/com.classroomtokenhub.db-backup` (and `
 ### Running it
 
 - **Monthly drill:** step 7 again; record it in `docs/ops/audits/RESTORE_DRILL_<date>.md` (plan §5.3).
-- **Disaster recovery or rollback:** plan §5.2, taking the point from the drive's `cth-db-backups/production/`.
+- **Disaster recovery or rollback:** plan §5.2, taking the one point there is: on the drive's
+  `cth-db-backups/production/`, or, after a release until the next nightly point, in
+  `~/cth-backup/prerelease-<UTC date>/points/` (the newest folder with a `restore.ok`).
 - **Moving to another computer:** steps 1, 3 (only the unlock), 4, 5, 6 and 8 there, with the same drive and keys.
   The state directory need not move: with none, the first run is a baseline and deletes the older point once its
   own is verified.

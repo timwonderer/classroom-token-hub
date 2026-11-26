@@ -159,7 +159,7 @@ def test_restore_closes_the_tunnel_after_a_successful_restore(env):
     state_dir = env["home"] / "cth-backup" / "run"
     (state_dir / "points").mkdir(parents=True)
     assert run(env, "backup", CTH_BACKUP_STATE_DIR=state_dir).returncode == 0
-    (state_dir / "points" / "cth-db-x-manual.dump.age").write_text("x")
+    (state_dir / "points" / "cth-db-20261126T200000Z-manual.dump.age").write_text("x")
     identity = env["home"] / "cth-backup" / "identity.txt"
     identity.write_text("AGE-SECRET-KEY-FAKE\n")
 
@@ -281,6 +281,37 @@ def test_a_passing_restore_deletes_an_older_point_in_its_own_folder(env):
     assert result.returncode == 0, result.stdout + result.stderr
     assert sorted(f.name for f in (current / "points").iterdir()) == [
         "cth-db-20261126T200000Z-manual.dump.age", "cth-db-20261126T200000Z-manual.manifest.json"]
+
+
+def test_a_passing_restore_deletes_older_points_beside_a_newer_one(env):
+    """Review on #1873: another folder holding a newer point kept its older ones."""
+    backups = env["home"] / "cth-backup"
+    current, other = backups / "prerelease-2026-11-26", backups / "prerelease-2026-11-27"
+    _point(other, "20261125T200000Z")
+    _point(other, "20261127T200000Z")
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    assert sorted(f.name for f in (other / "points").iterdir()) == [
+        "cth-db-20261127T200000Z-manual.dump.age", "cth-db-20261127T200000Z-manual.manifest.json"]
+
+
+def test_the_point_restored_is_the_boundary_not_the_newest_name(env):
+    """Review on #1873: `latest` picks by mtime, so the newest name may not be the point that passed."""
+    import os
+    backups = env["home"] / "cth-backup"
+    current = backups / "prerelease-2026-11-26"
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T090000Z")
+    _point(current, "20261126T200000Z")
+    for f in (current / "points").glob("cth-db-20261126T200000Z-*"):
+        os.utime(f, (1, 1))  # older mtime: `latest` restores the 09:00 point
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    assert len(list((current / "points").iterdir())) == 4
 
 
 def test_a_failed_restore_deletes_no_older_point(env):
