@@ -132,6 +132,9 @@ do_health_check() {
 do_deploy() {
   local revision="$1"   # already validated below: exactly 40 hex characters, nothing else
   set -euo pipefail
+  # Shared with guarded-docs.sh (SOP-DEP-003): a release and a docs publish never interleave.
+  exec 9>"$RELEASE_GATE_DIR/deploy.lock"
+  flock -w 600 9 || fail "a docs publish holds $RELEASE_GATE_DIR/deploy.lock"
   cd "$APP_DIR"
   git fetch --no-tags origin "$revision"
   git reset --hard "$revision"

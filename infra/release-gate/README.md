@@ -159,6 +159,56 @@ attempt sent over this key is refused there regardless of which workflow sent it
 
    Confirm all of this before the next scheduled release, not during one.
 
+## Documentation publication (SOP-DEP-003)
+
+A third key, `DOCS_DEPLOY_KEY`, lets `docs-deploy.yml` publish `docs/user-guides/` from a commit on main as
+a separate documentation artifact, and nothing else. Its forced command, `guarded-docs.sh`, runs
+`docs_publish.py`. Both files are installed root-owned beside `guarded-deploy.sh`, outside the checkout, for
+the same reason. Each publication shares `deploy.lock` with `guarded-deploy.sh`, so a release and a
+publication never interleave. Re-install `guarded-deploy.sh` from this repository as well: its copy now takes
+that lock.
+
+1. **Install the scripts**, on the droplet as root, from a reviewed checkout of this repository at the commit
+   that added them:
+
+   ```bash
+   install -o root -g root -m 0700 infra/release-gate/guarded-docs.sh infra/release-gate/docs_publish.py infra/release-gate/guarded-deploy.sh /root/release-gate/
+   install -d -o root -g root -m 0755 /srv/cth-docs /srv/cth-docs/releases
+   ```
+
+2. **Create the key** on the Mac mini, add it to GitHub as the repository secret `DOCS_DEPLOY_KEY`, and
+   append its forced-command line, exactly as for `RELEASE_DEPLOY_KEY` above:
+
+   ```bash
+   ssh-keygen -t ed25519 -f ~/cth-backup/docs_deploy_key -C cth-docs-deploy -N ''
+   scp ~/cth-backup/docs_deploy_key.pub root@cth:/tmp/docs_deploy_key.pub
+   ```
+
+   Droplet, as root:
+   ```bash
+   cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bak
+   printf 'command="/root/release-gate/guarded-docs.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty %s\n' \
+     "$(cat /tmp/docs_deploy_key.pub)" >> /root/.ssh/authorized_keys
+   rm -f /tmp/docs_deploy_key.pub
+   ```
+
+3. **First publication, in two passes.** The application can only be pointed at `/srv/cth-docs/current`
+   once it exists.
+   1. Dispatch `docs-deploy.yml` with the deployed release's SHA. It publishes and switches `current`, then
+      reports that the service does not serve the artifact yet. That report is expected on this pass only.
+   2. Point the service at the artifact with a systemd drop-in, which a deploy's `git reset` cannot
+      remove:
+
+      ```bash
+      systemctl edit classroom-economy   # add under [Service]:  Environment=CTH_USER_GUIDES_DIR=/srv/cth-docs/current/docs
+      systemctl restart classroom-economy
+      ```
+
+   3. Dispatch `docs-deploy.yml` with the same SHA again. It reuses the artifact and now passes every check,
+      including that the running service serves guides from `/srv/cth-docs/current/docs`.
+
+To stop using the artifact, remove the drop-in and restart. The service then serves the guides in its checkout.
+
 ## What's deliberately not in this repository
 
 `/root/release-gate/guarded-deploy.sh` and `/root/release-gate/guarded-ci.sh` (the installed copies),

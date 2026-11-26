@@ -1,0 +1,113 @@
+name: Publish user guides to production
+
+# SOP-DEP-003. Publishes docs/user-guides/ from one commit on main as the production documentation
+# artifact. No application deploy, restart, migration or maintenance window. The droplet's forced
+# command (infra/release-gate/guarded-docs.sh) enforces every check below independently; these
+# runner-side checks only fail early with a readable message. The run summary is the record.
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "Exact commit SHA on main whose docs/user-guides/ to publish"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish user guides
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check revision and artifact scope
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REVISION" | grep -Eq '^[0-9a-f]{40}$' || { echo "Revision must be 40 lowercase hex characters."; exit 1; }
+          git merge-base --is-ancestor "$REVISION" origin/main || { echo "Revision is not on main."; exit 1; }
+          python3 - "$REVISION" <<'PY'
+          import importlib.util, subprocess, sys
+          spec = importlib.util.spec_from_file_location("dp", "infra/release-gate/docs_publish.py")
+          dp = importlib.util.module_from_spec(spec); spec.loader.exec_module(dp)
+          out = subprocess.run(["git", "ls-tree", "-r", "--full-tree", sys.argv[1], "--", dp.SCOPE],
+                               check=True, capture_output=True, text=True).stdout
+          rows = [(m, k, p) for meta, p in (l.split("\t", 1) for l in out.splitlines()) for m, k, _ in [meta.split()]]
+          problems = dp.tree_problems(rows)
+          if problems:
+              sys.exit("Refused: " + "; ".join(problems))
+          print(f"{len(rows)} files under {dp.SCOPE}")
+          PY
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+
+      - name: Set up SSH host key verification
+        env:
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh; chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Publish on the droplet
+        env:
+          HOST: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+          REVISION: ${{ inputs.revision }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes root@"$HOST" transport-check
+          ssh -o BatchMode=yes root@"$HOST" status > before.json || echo '{}' > before.json
+          ssh -o BatchMode=yes root@"$HOST" "deploy $REVISION $RUN_ID"
+          ssh -o BatchMode=yes root@"$HOST" status > after.json
+
+      - name: Record the publication
+        if: always()
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          set -euo pipefail
+          python3 - "$REVISION" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, subprocess, sys
+          def load(name):
+              try:
+                  return json.load(open(name))
+              except Exception:
+                  return {}
+          before, after, rev = load("before.json"), load("after.json"), sys.argv[1]
+          prev = ((before.get("current") or {}).get("docs_sha")) or ""
+          print("## User guides publication (SOP-DEP-003)\n")
+          print(f"- Requested docs revision: `{rev}`")
+          print(f"- Previously published: `{prev or 'none'}`")
+          print(f"- Now published: `{((after.get('current') or {}).get('docs_sha')) or 'unchanged (failed)'}`")
+          print(f"- Deployed application release at publish: `{after.get('app_sha') or before.get('app_sha') or 'unknown'}`")
+          print(f"- Served from: `{after.get('served_from') or 'unknown'}`\n")
+          if prev:
+              diff = subprocess.run(["git", "diff", "--name-status", prev, rev, "--", "docs/user-guides/"],
+                                    capture_output=True, text=True).stdout.strip()
+              print("### Guide changes\n\n```text\n" + (diff or "(none)") + "\n```")
+          PY

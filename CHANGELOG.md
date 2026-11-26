@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+
+- <!-- notes: internal -->
+
+  **User guides can be published to production without an application release** (SOP-DEP-003; SOP-DEP-002 1.25; owner ruling 2026-11-25). Production can serve `docs/user-guides/` from a separately published documentation artifact (`CTH_USER_GUIDES_DIR`, read only for `user-guides/` pages and search; unset, the checkout serves them as before), with its own source revision and rollback. `docs-deploy.yml` publishes one commit's guides through a new dedicated key whose root-owned forced command (`infra/release-gate/guarded-docs.sh`, `docs_publish.py`) runs no client text and checks four things: the commit is on main; the artifact holds only regular Markdown and image files under `docs/user-guides/`; no commit since the deployed release changed guides together with anything else (screening for guides that describe undeployed code); and, after an atomic switch, the served tree is byte-for-byte the commit's and the running service serves it. A formal release and a publication share one droplet lock, and a release publishes its own guides before the gate reopens. Needs one-time setup on the droplet (`infra/release-gate/README.md`) and ships with the next application release.
+
 ### Changed
 
 - <!-- notes: fixed -->
