@@ -1,6 +1,6 @@
 """`infra/db-backup/cth_backup_scheduled.py` runs the backup tool only when it is safe to, and keeps one copy.
 
-SOP-DB-005 (DRAFT): the operator's computer (macOS or Linux) runs the runner nightly (`backup`) and every 15
+SOP-DB-005: the operator's computer (macOS or Linux) runs the runner nightly (`backup`) and every 15
 minutes (`check`). It must do nothing while the backup drive is absent or the application is stopped for a release,
 and, owner ruling 2026-11-25, exactly one copy of the newest verified point may exist, whatever took it.
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -77,6 +78,8 @@ def point(folder, stamp, *, verified_prerelease=False):
         (points / f"cth-db-{stamp}-manual.{ext}").write_text("x")
     if verified_prerelease:
         (folder / "restore.ok").touch()
+        (folder / "state.json").write_text(json.dumps({"newest_point": {
+            "stem": f"cth-db-{stamp}-manual", "taken_at": stamp, "identities": {"seats": [7]}, "off_host": False}}))
 
 
 def test_backup_runs_the_tool_against_the_drive_keeping_one_point(env):
@@ -101,6 +104,16 @@ def test_stopped_application_means_no_backup(env):
     assert env["mod"].main(["backup"]) == 0
     assert "tool" not in kinds(env) and "container" not in kinds(env)
     assert env["calls"][-1] == ("tunnel", "closed")
+
+
+@pytest.mark.parametrize("cmd", ["drill", "status"])
+def test_a_drill_or_status_that_could_not_run_fails(env, cmd):
+    """Review on #1873: a skipped drill passed, so the schedule could be enabled with no drill done."""
+    point(env["remote"], "20261126T031500Z")
+    (env["root"] / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+    env["state"]["active"] = False
+    assert env["mod"].main([cmd]) == 1
+    assert "tool" not in kinds(env)
 
 
 def test_tool_failure_fails_the_run_notifies_and_cleans_up(env):
@@ -162,6 +175,34 @@ def test_a_newer_verified_prerelease_point_deletes_the_drive_point(env):
     assert env["mod"].main(["check"]) == 0
     assert list(env["remote"].iterdir()) == []
     assert release.exists()
+
+
+def test_the_destruction_check_then_compares_against_the_prerelease_point(env):
+    """Review on #1873: an identity created after the scheduled point and destroyed after the pre-release point
+    went unnoticed while the check still compared against the deleted scheduled point."""
+    state = env["root"] / "scheduled" / "state"
+    state.mkdir()
+    (state / "state.json").write_text(json.dumps({"newest_point": {"stem": "old", "identities": {"seats": []}},
+                                                  "points": ["old"]}))
+    point(env["remote"], "20261125T031500Z")
+    point(env["root"] / "prerelease-2026-11-25", "20261125T200141Z", verified_prerelease=True)
+    assert env["mod"].main(["check"]) == 0
+    saved = json.loads((state / "state.json").read_text())
+    assert saved["newest_point"]["identities"] == {"seats": [7]}
+    assert saved["newest_point"]["off_host"] is False
+    assert saved["points"] == ["old"]
+
+
+def test_a_prerelease_run_in_progress_is_never_deleted(env):
+    """Review on #1873: a scheduled run could delete the folder a pre-release dump was writing into."""
+    point(env["remote"], "20261126T031500Z")
+    running = env["root"] / "prerelease-2026-11-27"
+    running.mkdir()
+    import fcntl
+    with open(running / "run.lock", "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert env["mod"].main(["check"]) == 0
+        assert running.exists()
 
 
 def test_an_unverified_prerelease_point_deletes_nothing_on_the_drive(env):

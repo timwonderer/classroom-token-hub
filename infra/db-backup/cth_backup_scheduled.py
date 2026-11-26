@@ -8,7 +8,7 @@
                                      # ~/cth-backup/identity.txt (deleted on exit), restored and checked
 
 Runs ``cth_db_backup.py`` (same directory) with the drive as its off-host copy, on macOS or Linux. The scheduler
-is the platform's own: launchd (``macos/``) or systemd user units (``linux/``). Governed by SOP-DB-005 (DRAFT);
+is the platform's own: launchd (``macos/``) or systemd user units (``linux/``). Governed by SOP-DB-005;
 install steps in ``README.md``. Uses its own tunnel port, verify container and state directory, so it never
 touches what ``prerelease.sh`` owns.
 
@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import fcntl
+import json
 import os
 import re
 import shutil
@@ -133,9 +134,32 @@ def prerelease_folders():
 
 def drop_older_prerelease(stamp, out):
     for folder in prerelease_folders():
-        if newest_stamp(folder / "points") < stamp:  # "" (an abandoned run) sorts first
+        if newest_stamp(folder / "points") >= stamp:  # "" (an abandoned run) sorts first
+            continue
+        # A pre-release run in progress holds its folder's run.lock (cth_db_backup.py) and may have no point yet.
+        with open(folder / "run.lock", "a") as fh:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                out(f"kept {folder}: a pre-release run holds it")
+                continue
             shutil.rmtree(folder)
-            out(f"deleted older point folder {folder}")
+        out(f"deleted older point folder {folder}")
+
+
+def adopt_identities(folder, state_dir):
+    """The destruction check compares production with the newest point's identities; make that the pre-release one.
+
+    Off the drive, so status reports DEGRADED until the next nightly point replaces it (SOP-DB-005 §IX).
+    """
+    newest = json.loads((folder / "state.json").read_text())["newest_point"]
+    state_dir.mkdir(parents=True, exist_ok=True)
+    path = state_dir / "state.json"
+    state = json.loads(path.read_text()) if path.exists() else {}
+    state["newest_point"] = {**newest, "off_host": False}
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
+    os.replace(tmp, path)
 
 
 def one_copy(remote, state_dir, out):
@@ -145,13 +169,14 @@ def one_copy(remote, state_dir, out):
     passed (restore.ok). The newest of them stays; everything else goes, including the tool's copy on this computer.
     """
     drive = newest_stamp(remote)
-    pre = max((newest_stamp(f / "points") for f in prerelease_folders() if (f / "restore.ok").exists()), default="")
+    pre, pre_folder = max(((newest_stamp(f / "points"), f) for f in prerelease_folders()
+                           if (f / "restore.ok").exists()), default=("", None))
     if pre and pre > drive:
-        # shortcut: status keeps reporting the deleted drive point until the next nightly point replaces it.
         for name in os.listdir(remote):
             if name.startswith("cth-db-"):
                 (remote / name).unlink()
-        out(f"deleted the drive's point: pre-release point {pre} is newer")
+                out(f"deleted the drive's point {name}: pre-release point {pre} is newer")
+        adopt_identities(pre_folder, state_dir)
     elif drive:
         drop_older_prerelease(drive, out)
     with contextlib.suppress(FileNotFoundError):
@@ -263,7 +288,8 @@ def run(cmd, cfg):
             out(f"{cfg['service']} is not active (release or outage in progress); nothing done")
             if cmd == "backup":
                 notify("Nightly backup skipped: the application is stopped.")
-            return 0
+            # Skipping is success only for the scheduled runs; a drill or status that did not run must not pass.
+            return 0 if cmd in ("backup", "check") else 1
         env["CTH_BACKUP_SOURCE_URL"] = (BASE / "source_url").read_text().strip()
 
         if cmd == "status":

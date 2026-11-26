@@ -50,12 +50,20 @@ latest() { ls -t "$CTH_BACKUP_STATE_DIR"/points/*."$1" 2>/dev/null | head -1 || 
 # so stamps compare as strings.
 newest_stamp() { [ -d "$1" ] || return 0; find "$1" -maxdepth 1 -name 'cth-db-*.manifest.json' 2>/dev/null | sed -E 's#.*/cth-db-([0-9TZ]+)-.*#\1#' | sort | tail -1; }
 # Owner ruling 2026-11-25 (SOP-DB-005 §VIII): a verified point invalidates every older one, so drop every
-# pre-release folder whose points are all older than $1. A folder with no point is an abandoned run.
+# pre-release folder whose points are all older than $1, and older points in this run's folder $2 (two releases on
+# one day share it). A folder with no point is an abandoned run.
 drop_older_prerelease() {
-  local d s
+  local d s f
   for d in ~/cth-backup/prerelease-*/; do
     [ -d "$d" ] || continue
-    [ -n "${2:-}" ] && [ "$d" -ef "$2" ] && continue
+    if [ -n "${2:-}" ] && [ "$d" -ef "$2" ]; then
+      for f in "${d}"points/cth-db-*; do
+        [ -e "$f" ] || continue
+        s=$(basename "$f" | sed -E 's#^cth-db-([0-9TZ]+)-.*#\1#')
+        if [[ "$s" < "$1" ]]; then rm -f "$f"; echo "deleted older point $(basename "$f")"; fi
+      done
+      continue
+    fi
     s=$(newest_stamp "${d}points")
     if [ -z "$s" ] || [[ "$s" < "$1" ]]; then rm -rf "$d"; echo "deleted older point folder ${d%/}"; fi
   done

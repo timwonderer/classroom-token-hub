@@ -267,6 +267,22 @@ def test_a_passing_restore_deletes_every_older_prerelease_point(env):
     assert (backups / "prerelease-v2.2.1.sh").exists()
 
 
+def test_a_passing_restore_deletes_an_older_point_in_its_own_folder(env):
+    """Review on #1873: two releases on one UTC day share a folder, and the tool keeps two points in it."""
+    backups = env["home"] / "cth-backup"
+    current = backups / "prerelease-2026-11-26"
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T090000Z")
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(f.name for f in (current / "points").iterdir()) == [
+        "cth-db-20261126T200000Z-manual.dump.age", "cth-db-20261126T200000Z-manual.manifest.json"]
+
+
 def test_a_failed_restore_deletes_no_older_point(env):
     backups = env["home"] / "cth-backup"
     current, older = backups / "prerelease-2026-11-26", backups / "prerelease-2026-11-20"
