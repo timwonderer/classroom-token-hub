@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.25 | 2026-11-25 | 1.24 | Normative |
+| SOP-DEP-002 | 1.26 | 2026-11-25 | 1.25 | Normative |
 
 ## I. Purpose
 
@@ -133,9 +133,24 @@ advisory and are recorded as such, never as the independent verifier.
    followed by `, highlight`. The blank line ends the HTML comment block so GitHub renders the
    paragraph as Markdown. Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
-2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
-   Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
-   record says so and later records the result.
+2. **Full suite on the release SHA or a validated equivalent.** A full suite SHALL pass on the release SHA before
+   deployment. If only documentation changed after a full-suite run, that run stands and the applicable documentation
+   and template tests are run on the release SHA instead. Any change outside `CHANGELOG.md` and the documentation
+   directories (`docs/`, including `docs/user-guides/`) requires a new full-suite result.
+
+   | Changes since full-suite validation | Required validation |
+   |---|---|
+   | Changelog wording | Applicable changelog tests |
+   | User-guide wording | Applicable documentation and accessibility tests |
+   | Developer guide | Applicable documentation tests |
+   | Application code | Full suite |
+   | Templates | Full suite |
+   | Database migrations | Full suite |
+   | Test code or configuration | Full suite |
+   | Uncertain impact | Full suite |
+
+   The release record identifies which validation was performed against each SHA.
+
 3. **Configuration and migration checks.**
    - `flask db heads` shows one head; `bash scripts/check-migrations.sh` reports "Safe to deploy".
    - `git diff vPREV <SHA> -- requirements.txt migrations/versions` lists what is new.
@@ -241,7 +256,8 @@ advisory and are recorded as such, never as the independent verifier.
     tag that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes. `--raw` prints the section
     verbatim.
 
-Untagged hotfixes follow steps 3-12 and record any step they skip; they have no tag, so no step 13.
+Untagged hotfixes follow steps 2-12 and record any step they skip, except step 2, which they never skip; they have
+no tag, so no step 13.
 
 Step 12's README update changes the deployment and latest-release lines only. The supported fresh-install release
 line changes only under §VII.B.
@@ -397,6 +413,12 @@ Record:
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.26 (2026-11-25):** §VII.A step 2: the full suite passes on the release SHA, or an earlier full-suite
+result stands when only `CHANGELOG.md` or documentation changed since, with the applicable documentation, changelog
+and accessibility tests run on the release SHA. Any other change needs a new full suite; the release record names
+the validation run against each SHA. Untagged hotfixes now take step 2 as well; the security and data-integrity
+exception for dispatching before the suite is removed, as the full suite no longer takes about four hours.
 
 **Version 1.25 (2026-11-25):** §VII.A step 10a publishes a release's user guides through `SOP-DEP-003` before the gate
 reopens, and §IX makes an application rollback publish the guides of the release rolled back to. The release record
