@@ -99,10 +99,10 @@
         <div class="card shadow h-100">
             <div class="card-header bg-white py-3">
                 <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold">
+                    <h2 class="h5 mb-0 fw-bold">
                         <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">history</span>
                         Attendance History
-                    </h5>
+                    </h2>
                 </div>
             </div>
 
@@ -110,20 +110,20 @@
             <div class="card-body border-bottom bg-light">
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <label class="form-label small fw-bold">Status</label>
-                        <select class="form-select form-select-sm" id="filterStatus" aria-label="Filter attendance by status">
+                        <label for="filterStatus" class="form-label small fw-bold">Status</label>
+                        <select class="form-select form-select-sm" id="filterStatus">
                             <option value="">All</option>
                             <option value="active">Start Work (Active)</option>
                             <option value="inactive">Break (Inactive)</option>
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small fw-bold">Start Date</label>
-                        <input type="date" class="form-control form-control-sm" id="filterStartDate" aria-label="Attendance start date">
+                        <label for="filterStartDate" class="form-label small fw-bold">Start Date</label>
+                        <input type="date" class="form-control form-control-sm" id="filterStartDate">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small fw-bold">End Date</label>
-                        <input type="date" class="form-control form-control-sm" id="filterEndDate" aria-label="Attendance end date">
+                        <label for="filterEndDate" class="form-label small fw-bold">End Date</label>
+                        <input type="date" class="form-control form-control-sm" id="filterEndDate">
                     </div>
                     <div class="col-12 d-flex align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-primary" onclick="loadAttendanceHistory()">

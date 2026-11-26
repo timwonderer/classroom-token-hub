@@ -410,7 +410,16 @@ def close_due_attendance_intervals(*, ctx, seat_id, as_of_utc):
     """PROD command: append due system closures within the caller's FEAT transaction."""
     from app.services.attendance_writer_service import record_attendance_session_command
     from app.services.payroll.settings import current_daily_limit_seconds
-    lock_attendance_seat(seat_id, ctx.class_id)
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): a closure this call
+    # appends is attributed to ctx.seat_id as actor_seat_id, so locking only
+    # the target here -- ahead of knowing whether ctx.seat_id will ever be
+    # locked -- fixes the target-before-actor half of the order regardless of
+    # which id is smaller. Lock both ascending up front instead, matching the
+    # ascending lock payroll now takes on its own actor and target (#1640);
+    # callers that already hold both (the payroll/settlement call sites) just
+    # re-acquire a lock they already have (Codex review on PR #1832).
+    for sid in sorted({seat_id, ctx.seat_id}):
+        lock_attendance_seat(sid, ctx.class_id)
     now = as_of_utc
     intervals = list_attendance_intervals(seat_id, ctx.class_id, ctx=ctx, as_of_utc=now)
     created = []
@@ -740,11 +749,17 @@ def get_class_attendance_status(student, *, class_id: str, ctx=None):
         seat.id, class_id, ctx=ctx
     )
 
+    # Local import: app.services.payroll.pricing imports this module, so a
+    # top-level import here would be circular.
+    from app.services.payroll.pricing import estimate_unpaid_amount
+
+    projected_pay = estimate_unpaid_amount(seat.id, class_id, ctx=ctx)
+
     return {
         "active": is_active,
         "done": done,
         "duration": duration,
         "duration_today": duration_today,
-        "projected_pay": None,
+        "projected_pay": projected_pay,
         "hall_pass": _derive_hall_pass_state(seat.id, class_id, ctx=ctx),
     }

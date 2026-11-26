@@ -2,10 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.23 | 2026-11-23 | 1.22 | Normative |
-
-> [!IMPORTANT]
-> **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
+| SOP-DEP-002 | 1.26 | 2026-11-25 | 1.25 | Normative |
 
 ## I. Purpose
 
@@ -136,9 +133,24 @@ advisory and are recorded as such, never as the independent verifier.
    followed by `, highlight`. The blank line ends the HTML comment block so GitHub renders the
    paragraph as Markdown. Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
-2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
-   Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
-   record says so and later records the result.
+2. **Full suite on the release SHA or a validated equivalent.** A full suite SHALL pass on the release SHA before
+   deployment. If only documentation changed after a full-suite run, that run stands and the applicable documentation
+   and template tests are run on the release SHA instead. Any change outside `CHANGELOG.md` and the documentation
+   directories (`docs/`, including `docs/user-guides/`) requires a new full-suite result.
+
+   | Changes since full-suite validation | Required validation |
+   |---|---|
+   | Changelog wording | Applicable changelog tests |
+   | User-guide wording | Applicable documentation and accessibility tests |
+   | Developer guide | Applicable documentation tests |
+   | Application code | Full suite |
+   | Templates | Full suite |
+   | Database migrations | Full suite |
+   | Test code or configuration | Full suite |
+   | Uncertain impact | Full suite |
+
+   The release record identifies which validation was performed against each SHA.
+
 3. **Configuration and migration checks.**
    - `flask db heads` shows one head; `bash scripts/check-migrations.sh` reports "Safe to deploy".
    - `git diff vPREV <SHA> -- requirements.txt migrations/versions` lists what is new.
@@ -211,9 +223,12 @@ advisory and are recorded as such, never as the independent verifier.
     baseline's fingerprint. A different fingerprint is explained by what the release itself is meant to change,
     or by activity after the application restarted (rows timestamped after the restart, by type), and the record
     says which. The operator runs the browser checks in §VIII.
+10a. **Publish the release's user guides**, where production serves guides from a documentation artifact
+    (`SOP-DEP-003`). Dispatch `docs-deploy.yml` with the release SHA, and confirm its summary shows that
+    revision published and served, **before** reopening, so no one sees new behavior with old instructions.
 11. **Reopen** by changing the Access policy (§VI).
 12. **Release record PR.** `docs/ops/audits/DEPLOY_<UTC date>_<short SHA>.md`, in the shape of the previous one:
-    identity table, contents, migrations, §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
+    identity table, contents, migrations, user-guide revisions published since the previous release (`SOP-DEP-003`), §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
     restore results), the step 8 summary row, release run, §VIII results, rollback, follow-ups. Each follow-up is an issue on the
     [CTH Backlog](https://github.com/users/timwonderer/projects/6) project, opened before the record merges, and the record links it rather than
     describing open work in prose. In the same PR, update the
@@ -241,7 +256,48 @@ advisory and are recorded as such, never as the independent verifier.
     tag that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes. `--raw` prints the section
     verbatim.
 
-Untagged hotfixes follow steps 3-12 and record any step they skip; they have no tag, so no step 13.
+Untagged hotfixes follow steps 2-12 and record any step they skip, except step 2, which they never skip; they have
+no tag, so no step 13.
+
+Step 12's README update changes the deployment and latest-release lines only. The supported fresh-install release
+line changes only under §VII.B.
+
+### VII.B Supported fresh-install release
+
+Two release identities are kept apart:
+
+- **Latest stable release:** the newest published stable tag. Every tagged release under §VII.A becomes it.
+- **Supported fresh-install release:** the tagged release that the self-hosting handbook and its fresh-install
+  bundle (`migrations/fresh/<revision>/`, `SOP-DB-001` §V.C.1(4)) were validated against, and from which every new
+  installation starts (`SOP-DEP-001` §IX.5). It may be older than the latest stable release.
+
+The one authoritative declaration is `migrations/fresh/supported_release.json` (`tag`, `commit`, `revision`). The
+README and `docs/self-hosting/before-you-begin.md` each name it on one `Supported fresh-install release` line, and
+CI (`scripts/check_supported_release.py`, in `check-migrations.yml`) fails unless the three agree. CI also fails
+unless the declared tag resolves to the declared commit, that release's sole migration head is the declared revision,
+and the release ships an intact bundle for it, byte-identical to the one in `main`. `verify_fresh_bundles.py` already
+proves that bundle derives from the migration lineage.
+
+1. **Ordinary releases need no bundle.** A release that moves the migration head without a bundle is not blocked and
+   records no deviation for that reason. Migration compatibility and validation (`SOP-DB-001`, `SOP-DB-003`,
+   `SOP-DB-004`, §VII.A) apply in full, regardless of bundles. Such a release cannot be installed from empty. The
+   installer refuses a checkout whose head has no bundle, and new installations reach it by upgrading.
+2. **Advancing the supported release is a deliberate owner decision**, never automatic. The new supported release
+   must ship its own bundle, so the bundle exists before that release is tagged:
+   1. on the release candidate commit on `main`, generate the bundle for its head
+      (`scripts/generate_fresh_database.py --source-sha <commit>`, PostgreSQL 14) and merge it by PR, where
+      `fresh-bundle-derivation` verifies it;
+   2. tag and release that commit under §VII.A;
+   3. in one PR, set the declaration to the new tag, commit and revision, and update the README and handbook lines and
+      any handbook text that release changes. CI checks the result.
+
+   A release tagged without its bundle cannot become the supported fresh-install release. Choose a later release
+   that ships one.
+3. **Security.** The supported fresh-install release must remain a safe installation starting point, even for the
+   short time before the post-install upgrade. When a security defect makes it unsafe even as that temporary baseline,
+   the owner either advances it under rule 2 to a release without the defect, or suspends the handbook's installation
+   instructions with a notice in `before-you-begin.md` and the README until a safe release is declared. The security
+   release record says which was done.
 
 ## VIII. Post-Release Verification
 
@@ -261,6 +317,7 @@ browser.
 - If migration fails before app reopen, rollback to the pre-deploy backup/snapshot.
 - If post-deploy smoke checks fail and cannot be corrected within the maintenance window, rollback.
 - If migration is structurally successful but business behavior is incorrect, keep Cloudflare Access restricted until rollback or fix-forward is approved.
+- An application rollback also publishes the user guides of the release rolled back to (`SOP-DEP-003` §VII.3), before reopening.
 
 ### IX.1 Exact-SHA Release Failure Handling
 
@@ -350,7 +407,27 @@ Record:
 
 ## XIII. Amendment
 
+### Revision History
+
+> [!IMPORTANT]
+> **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
+
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.26 (2026-11-25):** §VII.A step 2: the full suite passes on the release SHA, or an earlier full-suite
+result stands when only `CHANGELOG.md` or documentation changed since, with the applicable documentation, changelog
+and accessibility tests run on the release SHA. Any other change needs a new full suite; the release record names
+the validation run against each SHA. Untagged hotfixes now take step 2 as well; the security and data-integrity
+exception for dispatching before the suite is removed, as the full suite no longer takes about four hours.
+
+**Version 1.25 (2026-11-25):** §VII.A step 10a publishes a release's user guides through `SOP-DEP-003` before the gate
+reopens, and §IX makes an application rollback publish the guides of the release rolled back to. The release record
+lists docs revisions published since the previous release. Owner ruling 2026-11-25.
+
+**Version 1.24 (2026-11-25):** §VII.B: the supported fresh-install release is declared once
+(`migrations/fresh/supported_release.json`) and kept separate from the latest stable release; bundles are generated
+only when it advances; ordinary releases need none; a security rule for an unsafe baseline. Step 12 no longer moves
+that README line. Owner ruling 2026-11-25.
 
 **Version 1.23 (2026-11-23):** §VII.A step 1: separate each release-notes metadata comment from its indented Markdown paragraph with a blank line. GitHub otherwise treats the following text as an HTML block and displays bold, code and links as raw Markdown. Tag meanings and generated release-note content are unchanged. Owner-reported rendering correction.
 

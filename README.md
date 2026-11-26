@@ -6,11 +6,13 @@ A classroom behavior management and reward platform with built-in simulated fina
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**Latest recorded application deployment (2026-11-23 UTC):** [v2.5.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.5.0) (`6251659`, deployed 2026-11-23 UTC, [release record](docs/ops/audits/DEPLOY_2026-11-23_6251659.md)).
+**Latest recorded application deployment (2026-11-25 UTC):** [v2.6.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.6.0) (`6f0089f`, deployed 2026-11-25 UTC, [release record](docs/ops/audits/DEPLOY_2026-11-25_6f0089f.md)).
 
 The deployment record describes checks performed at release time, not a live health check.
 
-**Latest published release:** ![Version](https://img.shields.io/github/v/release/timwonderer/classroom-token-hub)
+**Latest stable release:** ![Version](https://img.shields.io/github/v/release/timwonderer/classroom-token-hub). This is the newest published stable version of CTH.
+
+**Supported fresh-install release:** [v2.5.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.5.0). This is the release the [self-hosting handbook](docs/self-hosting/README.md) and its fresh-install database bundle are validated against. It can be older than the latest stable release. A new installation starts from it, then follows the [upgrade walkthrough](docs/self-hosting/upgrades.md) to the latest stable release before real students join. The authoritative declaration is [`migrations/fresh/supported_release.json`](migrations/fresh/supported_release.json); CI checks that this line, the handbook and that file agree.
 
 **Branch:** `main`
 

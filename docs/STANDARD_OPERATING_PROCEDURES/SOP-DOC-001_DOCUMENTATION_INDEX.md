@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.64 | 2026-11-23 | 3.63 | Normative |
+| SOP-DOC-001 | 3.72 | 2026-11-26 | 3.71 | Normative |
 
 ---
 
@@ -108,6 +108,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-IDEN-006 — Provision Student Seat in Existing Class](../FEATURE-EXECUTION/FEAT-IDEN-006_PROVISION_STUDENT_SEAT.md)
 - [FEAT-IDEN-007 — Teacher Account Destruction](../FEATURE-EXECUTION/FEAT-IDEN-007_TEACHER_ACCOUNT_DESTRUCTION.md)
 - [FEAT-IDEN-008 — Operator Sysadmin Bootstrap](../FEATURE-EXECUTION/FEAT-IDEN-008_OPERATOR_SYSADMIN_BOOTSTRAP.md)
+- [FEAT-IDEN-009 — Identity Session Lifecycle](../FEATURE-EXECUTION/FEAT-IDEN-009_IDENTITY_SESSION_LIFECYCLE.md)
 - [FEAT-IDEN-101 — Teacher TOTP Setup](../FEATURE-EXECUTION/FEAT-IDEN-101_TEACHER_TOTP_SETUP.md)
 - [FEAT-IDEN-102 — Teacher Passkey Enrollment and Selected Replacement](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
 - [FEAT-IDEN-103 — Teacher Recovery Proof and Random Recipient Selection](../FEATURE-EXECUTION/FEAT-IDEN-103_TEACHER_RECOVERY_INITIATION.md)
@@ -119,6 +120,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-000 — Canonical Monetary Resolution Workflow](../FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md)
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
+- [FEAT-LED-003 — Ledger Settlement Sweep](../FEATURE-EXECUTION/FEAT-LED-003_LEDGER_SETTLEMENT_SWEEP.md)
 - [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
 - [FEAT-LED-006 — Apply Teacher Penalty](../FEATURE-EXECUTION/FEAT-LED-006_APPLY_TEACHER_PENALTY.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
@@ -158,7 +160,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
-- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.7 (2026-11-23): 30-day 4xx/5xx error distribution, non-overlapping counts, last observation windows and explicit coverage replace historical reliability scores. v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
+- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.8 (owner ruling 2026-11-24): the sampler excludes the `/teapot` 418 easter egg. v1.7 (2026-11-23): 30-day 4xx/5xx error distribution, non-overlapping counts, last observation windows and explicit coverage replace historical reliability scores. v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001/DOM-LED-001 and FEAT-PROD-003/005/006 for canonical interval eligibility, exact historical reconstruction/graph attribution and atomic correction.
 - [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning PROD/Ledger/Operations/Policies contracts and FEAT-PROD-006/005/003: pure assessment, distinct immutable-source historical reconstruction and existing atomic correction; original canonical lineage remains separately reported.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
@@ -178,12 +180,14 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-002 — Deprecated Symbols Registry](DATABASE/SOP-DB-002_Deprecated_Symbols_Registry.md)
 - [SOP-DB-003 — Schema Change Gate](DATABASE/SOP-DB-003_Schema_Change_Proposals.md)
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
+- [SOP-DB-005 — Database Backup and Restore](DATABASE/SOP-DB-005_Database_Backup_And_Restore.md) — v1.0 (2026-11-25): scheduled, encrypted, verified recovery points on an encrypted external drive from the operator's computer; one copy of the newest verified point; no restore of destroyed identities. Not yet installed.
 
 ### Procedures — Deployment (SOP-DEP)
 - [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.13: initial-host and rehearsal scope; §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
 - [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.3: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens; validation is development and operations alone (§V.5).
 - [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.3: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, and no check expects a teacher or student to act (the operator may use a test account of their own in a live class); the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
 - [SOP-DEP-002 — Production Release Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
+- [SOP-DEP-003 — User Guide Publication](DEPLOYMENT/SOP-DEP-003_User_Guide_Publication.md)
 
 ### Procedures — DevOps (SOP-DEV)
 - [SOP-DEV-001 — Refactor Best Practices](DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md)
@@ -285,13 +289,41 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
-**Version 3.64 (2026-11-23):**
+**Version 3.72 (2026-11-26), merge of the 2026-11-23 credential-lifecycle branch entry (originally numbered 3.64 on that branch):**
 
 - Register FEAT-IDEN-108 v1.0 and SPEC-IDEN-002 v1.0 for unified credential reconciliation and lifecycle protocol.
 - Coordinate INV-ARC-001/002/003 v1.2, INV-ARC-008 v1.4, INV-ARC-018 v1.7 and INV-ARC-019 v1.8: explicit principal/system scopes, local authentication authority, activation and minimal retention.
 - Register DOM-IDEN-003 v2.12, DOM-IDEN-005/006 v2.4/v1.4, DOM-OPS-001/002 v2.16/v1.13 and FEAT-CORE-000 v1.3 for credential-generation, session, reconciliation and non-identifying outcome contracts.
 - Register FEAT-IDEN-007 v1.1, FEAT-IDEN-101 v1.4, FEAT-IDEN-102 v1.1, FEAT-IDEN-105 v1.4, FEAT-IDEN-106 v1.2 and FEAT-IDEN-107 v1.3; distinguish atomic TOTP replacement from recoverable passkey replacement.
 - Register SPEC-SEC-001 v1.7 and SPEC-OPS-004 v1.6; shared teacher/sysadmin validation is side-effect free. These amendments specify target behavior, not application implementation or deployment.
+- Register DOM-OPS-001 v2.17 (reconciles the 2026-11-23 amendment with v2.16 documentation modernization; no substantive rule changed).
+
+**Version 3.71 (2026-11-25):**
+- Register SOP-DEP-002 v1.26: §VII.A step 2 lets an earlier full-suite result stand for a release SHA when only `CHANGELOG.md` or documentation changed since, with the applicable documentation tests run on the release SHA; any other change needs a new full suite. Untagged hotfixes take step 2 too, and the dispatch-before-suite exception is removed.
+
+**Version 3.70 (2026-11-25):**
+- Register SOP-DB-005 v1.0 (Database Backup and Restore): scheduled, encrypted, verified recovery points taken from the operator's computer (macOS or Linux) to an encrypted external drive with the existing `cth_db_backup.py`, the replacement-baseline purge after a destruction, and the eleven owner decisions issue #1639's failure-mode review required, all settled 2026-11-25.
+
+**Version 3.69 (2026-11-25):**
+- Register SOP-DEP-003 v1.0 (User Guide Publication) and SOP-DEP-002 v1.25: production serves user guides from a separately published documentation artifact. SOP-DEP-003 covers eligibility, compatibility with deployed behavior, droplet-side scope enforcement, deployment, rollback and evidence; SOP-DEP-002 step 10a publishes a release's guides before the gate reopens. Owner ruling 2026-11-25.
+
+**Version 3.68 (2026-11-25):**
+- Register SOP-DEP-002 v1.24 and SOP-DEP-001 v2.15: the supported fresh-install release is declared once in `migrations/fresh/supported_release.json`, kept separate from the latest stable release, and advanced only deliberately (SOP-DEP-002 §VII.B). New installations start from it and upgrade before classroom use (SOP-DEP-001 §IX.5). Owner ruling 2026-11-25.
+
+**Version 3.67 (2026-11-25):**
+- Register SOP-DB-001 v1.9 and SOP-DB-004 v1.4: schema eras and the v2 launch baseline (owner rulings 2026-11-24). The supported v2 lineage begins at the v2.0.0 launch revision `d7a3e9b1c5f2`; the 171 pre-launch revisions are provenance in `migrations/archive/v2_prelaunch/`; SOP-DB-001 §V.B is retired as an exception; SOP-DB-004 §V.1 now separates what production executed, what the lineage contains and what a new installation executes. Evidence: `docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`.
+
+**Version 3.66 (2026-11-25):**
+- Register FEAT-IDEN-009 (Identity Session Lifecycle) and FEAT-LED-003 (Ledger Settlement Sweep):
+  both PRs that introduced these contracts (#1831, #1832) landed without adding their entries to
+  this index, which `tests/dom/docs/test_documentation_index_complete.py` should have caught.
+  Documents only; no content change to either FEAT.
+
+**Version 3.65 (2026-11-24):**
+- Register SPEC-OPS-006 v1.8: the status sampler excludes `/teapot`, the 418 easter egg, from request counts (owner ruling 2026-11-24).
+
+**Version 3.64 (2026-11-24):**
+- Register DOM-SUP-001 v1.11: `issues.eligible_for_reward` is physically dropped by migration `4fad9d362d0d`, completing the v1.10 bug-reward retirement (owner ruling 2026-10-27; issue #1678). `Issue.eligible_for_reward` no longer exists on the model.
 
 **Version 3.63 (2026-11-23):**
 - Register owner-approved SPEC-OPS-002 v1.7 and SPEC-OPS-006 v1.7: 30-day overall error observations replace 90-day reliability history, with non-overlapping totals and explicit coverage.

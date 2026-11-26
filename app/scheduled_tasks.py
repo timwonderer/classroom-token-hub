@@ -36,7 +36,7 @@ def enforce_daily_limits_job():
     from sqlalchemy import func
     from sqlalchemy.orm import aliased
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled daily-limit enforcement job")
 
     try:
@@ -121,6 +121,39 @@ def enforce_daily_limits_job():
             )
             now_utc = now_evaluation.canonical_now_utc
 
+            # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): each per-seat
+            # iteration below runs in its own savepoint (so one seat's failure
+            # doesn't abort the whole job), and a successful savepoint keeps
+            # its locks for the rest of this OUTER transaction. Locking only
+            # {seat_id, actor_seat_id} per iteration is ascending within that
+            # pair, but not across iterations: processing seat 3 before seat 1
+            # can leave this job holding the (lower) teacher seat while it still
+            # has seat 1 ahead of it in the loop, so a concurrent payroll run
+            # already holding seat 1 and waiting on the teacher seat deadlocks
+            # against this job waiting on seat 1 (CodeRabbit review on PR #1832
+            # of commit f0478037). Pre-lock the WHOLE batch -- every seat this
+            # job will touch, plus the actor seat -- ascending, once, before any
+            # per-seat savepoint opens, exactly as settle_class_payroll_cycle
+            # already does for its own student batch.
+            #
+            # A seat enumerated above can vanish (be deleted) before this runs.
+            # The per-seat loop below already tolerates that (its own lookup
+            # returns None and it continues), so this batch lock must tolerate
+            # it too, rather than raising past the per-seat savepoint boundary
+            # and aborting the whole job -- the exact regression this job exists
+            # to not reintroduce (Codex review on PR #1832 of commit 0a691213).
+            # Lock only the rows that still exist, ascending by id, and skip
+            # any seat that is gone by the time this query runs.
+            candidate_ids = sorted(set(seat_ids) | {actor_seat_id})
+            locked_seats = (
+                Seat.query.filter(Seat.class_id == class_id, Seat.id.in_(candidate_ids))
+                .order_by(Seat.id.asc())
+                .with_for_update()
+                .all()
+            )
+            existing_ids = {seat.id for seat in locked_seats}
+            seat_ids = [sid for sid in seat_ids if sid in existing_ids]
+
             for seat_id in seat_ids:
                 try:
                     with db.session.begin_nested():
@@ -176,7 +209,7 @@ def database_maintenance_job():
     # Import here to avoid circular imports
     from app.extensions import db
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting nightly database maintenance job")
 
     total_cleaned = 0
@@ -217,7 +250,7 @@ def run_rent_reconciliation_job():
     from app.services.class_configuration_query_service import is_feature_enabled
     from app.feats.reconcile_rent_feat import execute_reconcile_rent
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled rent reconciliation job")
 
     reconciled = 0
@@ -303,7 +336,7 @@ def run_automatic_payroll_job():
         canonical_temporal_resolver,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled automatic-payroll job")
 
     now = canonical_temporal_resolver(
@@ -383,7 +416,7 @@ def run_audit_invariant_check_job():
     signatures and verifying hash continuity. The result is consumed by the
     Operations status-signal pipeline.
     """
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting nightly audit invariant check")
     try:
         from app.utils.audit_verifier import run_full_invariant_check, record_integrity_verification
@@ -443,7 +476,7 @@ def run_insurance_expiry_job():
         canonical_temporal_resolver,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled insurance boundary-expiry job")
 
     now = canonical_temporal_resolver(
@@ -543,7 +576,7 @@ def run_insurance_renewal_job():
         list_renewable_insurance_entitlements,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled insurance coverage-renewal job")
 
     try:
@@ -608,7 +641,7 @@ def run_collective_goal_expiry_job():
         canonical_temporal_resolver,
     )
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled collective-goal expiry job")
 
     now = canonical_temporal_resolver(
@@ -695,7 +728,7 @@ def run_ledger_settlement_job():
     """
     from app.services.ledger_settlement_service import settle_pending_transaction_contexts
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     summary = settle_pending_transaction_contexts()
     logger.info(
         "Ledger settlement sweep completed; settled %s context(s), failed %s context(s)",
@@ -726,12 +759,25 @@ def run_savings_interest_job():
     # rather than failing. Two independent interval jobs have no ordering
     # guarantee between them, so the dependency is discharged here instead of
     # being left to registration order.
-    run_ledger_settlement_job()
+    # ``or {}``: a caller (e.g. a test isolating the lock-order regression from
+    # settlement entirely) may monkeypatch this to a bare no-op returning None.
+    settlement_summary = run_ledger_settlement_job() or {}
+    # A seat this sweep could not settle still carries its PRIOR posted
+    # snapshot, understating its real posted balance. savings_interest's own
+    # idempotency key is scoped per (class, seat, payout window) — never per
+    # run — so skipping that seat here costs nothing: a later tick, once that
+    # seat finally settles, pays its still-open window against the correct
+    # balance. Finalizing it now against a stale snapshot instead would
+    # underpay it for a window that never gets revisited (#1640).
+    failed_seats_by_class: dict[str, set[int]] = {}
+    for seat_id, failed_class_id in settlement_summary.get("failed_seat_class_pairs", ()):
+        failed_seats_by_class.setdefault(failed_class_id, set()).add(seat_id)
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     class_ids = [row[0] for row in db.session.query(Seat.class_id).distinct().all()]
     posted = 0
     failed = 0
+    skipped_unsettled = 0
     run_key = canonical_temporal_resolver(
         SYSTEM_LEVEL_EVALUATION, primitive="current_time"
     ).canonical_now_utc.strftime("%Y-%m-%dT%H")
@@ -751,6 +797,10 @@ def run_savings_interest_job():
             .order_by(Seat.id.asc())
             .all()
         )
+        unsettled_seat_ids = failed_seats_by_class.get(class_id, frozenset())
+        if unsettled_seat_ids:
+            skipped_unsettled += len(unsettled_seat_ids & {seat.id for seat in seats})
+            seats = [seat for seat in seats if seat.id not in unsettled_seat_ids]
         try:
             with FEATContext(
                 "FEAT-LED-001",
@@ -768,8 +818,9 @@ def run_savings_interest_job():
             db.session.rollback()
             logger.exception("Savings-interest payout failed for class %s", class_log_ref(class_id))
     logger.info(
-        "Savings-interest job completed; posted %s payout(s), failed %s class(es)",
-        posted, failed,
+        "Savings-interest job completed; posted %s payout(s), failed %s class(es), "
+        "skipped %s seat(s) unsettled this run",
+        posted, failed, skipped_unsettled,
     )
 
 
@@ -803,7 +854,7 @@ def run_store_item_expiry_job():
     from app.services.identity_service import resolve_teacher_seat_for_class
     from sqlalchemy.orm import aliased
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     logger.info("Starting scheduled store item expiry job")
 
     ended = aliased(EntitlementEvent)
@@ -926,7 +977,7 @@ def close_prior_day_hall_pass_requests_job():
     from app.services.hall_pass_request_queue import list_class_ids_with_pending_hall_pass_requests
     from app.services.identity_service import resolve_teacher_seat_for_class
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
     for class_id in list_class_ids_with_pending_hall_pass_requests():
         try:
             class_row = db.session.get(ClassEconomy, class_id)
@@ -1085,7 +1136,7 @@ def init_scheduled_tasks(app):
     from app.extensions import scheduler
     from app.scheduler_ownership import SchedulerOwnershipError, owns_scheduler
 
-    logger = logging.getLogger('scheduled_tasks')
+    logger = logging.getLogger(__name__)
 
     # Only the process holding the scheduler lock may run the jobs; see
     # app/scheduler_ownership.py. Refusing here means a stray direct call

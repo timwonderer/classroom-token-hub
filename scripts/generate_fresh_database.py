@@ -28,7 +28,13 @@ def installable_ddl(oracle):
                     else line for line in oracle.splitlines(keepends=True))
 
 
-def generate(sha, output):
+def generate(sha, output, revision=None):
+    """Derive the bundle for ``revision`` (default: the sole head) from commit ``sha``.
+
+    With an explicit revision that is not the head, the installer round trip is
+    skipped: the installer only installs a checkout's sole head. CI uses this to
+    re-derive an older committed bundle from the current lineage.
+    """
     require(re.fullmatch("[a-f0-9]{40}", sha), "supply exact reviewed source SHA")
     require(not output.exists(), "choose a new output directory")
     # Short socket path even on macOS. No inherited PG*, application config or TCP listener.
@@ -48,7 +54,8 @@ def generate(sha, output):
             archive.extractall(source)
         heads = ScriptDirectory(str(source/"migrations")).get_heads()
         require(len(heads) == 1, "ambiguous release head")
-        revision = heads[0]
+        revision = revision or heads[0]
+        installable = revision == heads[0]
         opts = SimpleNamespace(host=str(tmp), port=55439, user="cth_baseline", database="cth_oracle_test")
         run("initdb", "--no-locale", "-E", "UTF8", "-A", "trust", "-U", opts.user, "-D", tmp/"data",
             stdout=subprocess.DEVNULL)
@@ -73,13 +80,21 @@ def generate(sha, output):
                     state = inventory(cur, [(revision,)])
             finally:
                 conn.close()
-            report = {**state, "release_sha": sha, "revision": revision, "postgresql": version,
+            # source_sha is the commit the bundle was derived from. The release commit that later
+            # ships it is recorded in the release record; CI re-derives the bundle from that commit's
+            # lineage (verify_fresh_bundles.py), so the two never need to name each other.
+            report = {**state, "source_sha": sha, "revision": revision, "postgresql": version,
                       "pg_dump": run("pg_dump", "--version", capture_output=True, text=True).stdout.strip(),
                       "schema_sha256": digest(schema), "empty_schema_sha256": empty, "ddl_sha256": digest(ddl)}
             bundle = source / "migrations/fresh" / revision
             bundle.mkdir(parents=True, exist_ok=True)
             (bundle/"schema.sql").write_bytes(ddl)
             (bundle/"manifest.json").write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+            if not installable:
+                output.mkdir(parents=True)
+                for filename in ("schema.sql", "manifest.json"):
+                    shutil.copyfile(bundle / filename, output / filename)
+                return
             # Exercise the actual installer under an ordinary database owner.
             run("createuser", "-h", tmp, "-p", str(opts.port), "-U", opts.user,
                 "--no-superuser", "--no-createdb", "--no-createrole", "cth_install")
@@ -106,5 +121,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--revision", help="derive this revision instead of the sole head (no installer round trip)")
     args = parser.parse_args()
-    generate(args.source_sha, args.output)
+    generate(args.source_sha, args.output, args.revision)

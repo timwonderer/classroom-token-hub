@@ -31,10 +31,10 @@
     <div class="col-lg-8">
         <div class="card shadow">
             <div class="card-header bg-primary text-white">
-                <h4 class="mb-0">
+                <h2 class="h4 mb-0">
                     <span class="material-symbols-outlined icon-middle" aria-hidden="true">edit_document</span>
                     {{ action }} Announcement
-                </h4>
+                </h2>
             </div>
             <div class="card-body">
                 <form method="POST" action="">
@@ -122,7 +122,7 @@
         {% if action == 'Edit' and announcement %}
         <div class="card shadow mt-3">
             <div class="card-header bg-light">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Preview</h5>
+                <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Preview</h2>
             </div>
             <div class="card-body">
                 {% call cards.alert_card(announcement.priority_level, announcement.title, icon=announcement.priority_icon, body_class='mb-0') %}

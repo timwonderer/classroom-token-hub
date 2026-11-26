@@ -18,8 +18,9 @@
 # The application stays stopped; the release workflow restarts it.
 set -euo pipefail
 
-export PATH=/opt/homebrew/opt/postgresql@14/bin:$PATH   # client major must match the server (14)
-export DOCKER_HOST=${DOCKER_HOST:-unix://$HOME/.colima/default/docker.sock}
+export PATH="${CTH_BACKUP_PG_BIN:-/opt/homebrew/opt/postgresql@14/bin}:$PATH"   # client major must match the server (14); override via CTH_BACKUP_PG_BIN
+# colima on macOS; elsewhere Docker's own default socket.
+[ -n "${DOCKER_HOST:-}" ] || [ ! -S "$HOME/.colima/default/docker.sock" ] || export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
 export CTH_BACKUP_SOURCE_URL="$(cat ~/cth-backup/source_url)"
 export CTH_BACKUP_VERIFY_URL='postgresql://postgres:verify@127.0.0.1:55432/cth_backup_verify'
 export CTH_BACKUP_AGE_RECIPIENTS_FILE=~/cth-backup/recipients.txt
@@ -45,10 +46,24 @@ close_tunnel() {
 }
 
 latest() { ls -t "$CTH_BACKUP_STATE_DIR"/points/*."$1" 2>/dev/null | head -1 || true; }   # this run's state dir only
+# Owner ruling 2026-11-25 (SOP-DB-005 §VIII): a verified point invalidates every older one, wherever it is.
+# The scheduled runner's cleanup does it, holding each folder's run.lock so a run in progress is never touched.
+drop_older_prerelease() {
+  "$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import cth_backup_scheduled as s; s.drop_older_prerelease(sys.argv[2], print)' \
+    "$(dirname "$TOOL")" "$1"
+}
 
 case "${1:-}" in
 backup)
   pg_dump --version
+  # Prerequisite validation BEFORE anything touches production: a removed or relocated backup-venv
+  # interpreter (e.g. the Homebrew Python it was built against gets upgraded out from under it) must
+  # fail here, not after classroom-economy is already stopped with nothing able to back it up.
+  [ -x "$PY" ] || { echo "$PY not found or not executable: rebuild the backup venv (see infra/db-backup/README.md) before releasing"; exit 1; }
+  "$PY" --version >/dev/null 2>&1 \
+    || { echo "$PY does not run ('$PY --version' failed): rebuild the backup venv before releasing"; exit 1; }
+  "$PY" -c 'import psycopg2' >/dev/null 2>&1 \
+    || { echo "$PY cannot import psycopg2: rebuild the backup venv (pip install psycopg2-binary) before releasing"; exit 1; }
   # A new point invalidates any earlier counts/restore receipt for this state dir: `evidence` must not
   # be able to read a stale .ok left over from a previous point taken the same day.
   rm -f "$CTH_BACKUP_STATE_DIR/counts.ok" "$CTH_BACKUP_STATE_DIR/restore.ok"
@@ -59,7 +74,23 @@ backup)
   docker rm -f cth-verify >/dev/null 2>&1 || true
   docker run --rm -d --name cth-verify -e POSTGRES_PASSWORD=verify \
     -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql/data postgres:14
-  sleep 5
+  # Bounded, polling readiness wait in place of a fixed sleep: the container's postgres:14 init time
+  # varies by host load, so a fixed sleep either wastes time or (as happened during the v2.5.0 release)
+  # loses the race and leaves cth-verify not yet accepting connections when createdb runs. Fail closed
+  # if it never comes up within the bound rather than proceeding against a server that isn't ready.
+  ready=0
+  for _ in $(seq 1 30); do
+    if pg_isready -h 127.0.0.1 -p 55432 -U postgres >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  if [ "$ready" -ne 1 ]; then
+    echo "cth-verify postgres:14 container did not become ready on 127.0.0.1:55432 within 30s"
+    docker rm -f cth-verify >/dev/null 2>&1 || true
+    exit 1
+  fi
   docker exec cth-verify createdb -U postgres cth_backup_verify
   docker exec cth-verify createdb -U postgres cth_restore_check
 
@@ -103,8 +134,9 @@ restore)
   # Last step: the tunnel is closed and any identity deleted however this exits, including the guards below.
   trap 'if [ -f "$ID" ]; then { rm -P "$ID" 2>/dev/null || rm -f "$ID"; }; echo "identity deleted"; fi; close_tunnel' EXIT
   [ -f "$ID" ] || { echo "missing $ID"; exit 1; }
-  diff <(age-keygen -y "$ID") "$CTH_BACKUP_AGE_RECIPIENTS_FILE" >/dev/null \
-    || { echo "identity does not match recipients.txt"; exit 1; }
+  # recipients.txt may hold several keys (the owner's and two YubiKeys, SOP-DB-005 D6); this identity must be one.
+  grep -qxF "$(age-keygen -y "$ID")" "$CTH_BACKUP_AGE_RECIPIENTS_FILE" \
+    || { echo "identity is not one of the keys in recipients.txt"; exit 1; }
   P=$(latest dump.age); [ -n "$P" ] || { echo "no point in $CTH_BACKUP_STATE_DIR (set CTH_BACKUP_STATE_DIR to the backup's directory)"; exit 1; }
   open_tunnel   # --live-url reaches production through it for the no-resurrection check
   "$PY" "$TOOL" restore \
@@ -116,6 +148,10 @@ restore)
   # the script above on either failing); `evidence` requires this receipt rather than trusting that a
   # manifest alone means restore was ever actually run.
   touch "$CTH_BACKUP_STATE_DIR/restore.ok"
+  # The boundary is the point just restored, not the newest name in the folder: `latest` picks by mtime.
+  S=$(basename "$P" | sed -E 's#^cth-db-([0-9]{8}T[0-9]{6}Z)-.*#\1#')
+  [[ "$S" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || { echo "cannot read the stamp of $P; older points kept"; exit 1; }
+  drop_older_prerelease "$S"
   ;;
 evidence)
   # Signs and uploads the one artifact infra/release-gate/guarded-deploy.sh will accept: proof that

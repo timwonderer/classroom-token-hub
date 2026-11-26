@@ -70,7 +70,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">trending_up</span>Banking Statistics</h5>
+            <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">trending_up</span>Banking Statistics</h2>
           </div>
           <div class="card-body">
             <div class="row text-center">
@@ -99,7 +99,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Current Savings Interest</h5>
+            <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Current Savings Interest</h2>
           </div>
           <div class="card-body">
             <ul class="list-unstyled mb-0">
@@ -121,7 +121,7 @@
     <!-- Recent Activity -->
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Recent Transaction Activity</h5>
+        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Recent Transaction Activity</h2>
       </div>
       <div class="card-body">
         {% if transactions %}
@@ -180,7 +180,7 @@
   <div class="tab-pane fade" id="transactions" role="tabpanel" aria-labelledby="transactions-tab">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>All Banking Transactions</h5>
+        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>All Banking Transactions</h2>
       </div>
       <div class="card-body">
         <!-- Filter Controls -->
@@ -218,8 +218,12 @@
             </div>
             <div class="col-md-2">
               <label for="student" class="form-label fw-bold">Student:</label>
-              <input type="text" name="student" id="student" class="form-control form-control-sm" placeholder="Name..."
-                value="{{ request.args.get('student', '') }}">
+              <select name="student" id="student" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% for public_id, name in student_filter_options %}
+                <option value="{{ public_id }}" {% if request.args.get('student')==public_id %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+              </select>
             </div>
           </div>
           <div class="row mt-3">
@@ -353,7 +357,7 @@
         <div class="col-lg-6 mb-4">
           <div class="card shadow h-100">
             <div class="card-header bg-primary text-white">
-              <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">percent</span>Savings Interest</h5>
+              <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">percent</span>Savings Interest</h2>
             </div>
             <div class="card-body">
               <div class="mb-4">
@@ -384,7 +388,7 @@
               <div class="mb-4">
                 <label for="interest_calculation_type" class="form-label fw-bold">Interest Type</label>
                 <select name="interest_calculation_type" id="interest_calculation_type" class="form-select"
-                  aria-describedby="interest_calculation_type_help interest_calculation_type_caveat">
+                  aria-describedby="interest_calculation_type_help">
                   <option value="simple" {% if interest_calculation_type != 'compound' %}selected{% endif %}>
                     Simple</option>
                   <option value="compound" {% if interest_calculation_type == 'compound' %}selected{% endif %}>
@@ -392,10 +396,6 @@
                 </select>
                 <small class="text-muted d-block" id="interest_calculation_type_help">Compound interest also earns on
                   interest that has built up but not been paid yet. Simple interest does not.</small>
-                <small class="text-muted d-block" id="interest_calculation_type_caveat"><strong>Known issue:</strong>
-                  with Simple, interest that has already been paid into savings still earns interest in later
-                  payout periods, so Simple currently grows a little like compounding once per payout. We are
-                  tracking a fix.</small>
               </div>
 
               <div class="mb-4" id="compoundFrequencyGroup">
@@ -430,7 +430,7 @@
         <div class="col-lg-6 mb-4">
           <div class="card shadow h-100">
             <div class="card-header bg-danger text-white">
-              <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">account_balance_wallet</span>Overdraft</h5>
+              <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">account_balance_wallet</span>Overdraft</h2>
             </div>
             <div class="card-body">
               <div class="form-check form-switch mb-4">
@@ -442,10 +442,6 @@
                 <div><small class="text-muted">When on, a negative checking transaction pulls from savings before
                   it overdraws.</small></div>
               </div>
-
-              {% call cards.alert_card('info', 'No overdraft fee is charged', icon='info', body_class='mb-0') %}
-                <p class="mb-0">No overdraft or non-sufficient-funds fee is ever charged (owner ruling 2026-10-07). An overdrawn checking balance stays owed; protection, above, decides whether savings covers it first.</p>
-              {% endcall %}
             </div>
           </div>
         </div>

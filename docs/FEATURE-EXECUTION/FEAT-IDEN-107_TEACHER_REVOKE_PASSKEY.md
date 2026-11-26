@@ -72,3 +72,10 @@ preservation. Retain GHSA remote-before-local and local-binding regression cover
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
 and update SOP-DOC-001 and dependent references. This 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.2 (2026-10-14), review correction.** v1.1's restated replay-safety mechanism was a read-then-act check, not a lock: two requests carrying the same `idempotency_key` can both pass Step 3's existence lookup before either audit event is written, since `audit_events` carries no uniqueness on `(feat_id, idempotency_key)` (`app/models.py` `AuditEvent.__table_args__`). §V now requires a unique constraint on that pair as part of this FEAT's schema contract, and Step 3's failure behavior is restated to rely on that constraint rather than on the lookup alone.
+>
+> **v1.1 (2026-10-14), documentation modernization.** Removed the former Mutation Phase Step 1, which inserted into an `IdempotencyRecord` entity that does not exist anywhere in the codebase (same removal already made in `FEAT-IDEN-001`/`FEAT-IDEN-002`). Replay safety is restated through the mechanism §V already described: a missing `passkey_credentials` row plus a matching `idempotency_key` in the `ACT-IDEN-107` audit event (Step 2, Mutation Phase) resolves to `ALREADY_REVOKED` rather than `CREDENTIAL_NOT_FOUND`. Renumbered the remaining Mutation Phase steps; no behavior change.

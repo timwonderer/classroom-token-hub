@@ -72,8 +72,18 @@ def execute_hall_pass_adjustment(
     correlation_id = f"corr_{hashlib.sha256(idempotency_key.encode()).hexdigest()}"
     feat = "FEAT-STOR-004" if operation == "add" else "FEAT-STOR-002"
     with FEATContext(feat, correlation_id=correlation_id, idempotency_key=idempotency_key):
-        target = lock_hall_pass_holder(target_seat_id, ctx.class_id)
-        if target.role != "student" or target.claimed_at is None or target.user_id is None:
+        # grant_hall_passes / remove_hall_passes below write EntitlementEvent
+        # rows that unconditionally reference both target_seat_id and
+        # ctx.seat_id (the actor) by foreign key; remove_hall_passes also
+        # locks both ascending on its own before touching any grant row. But
+        # locking only the target here, ahead of that, still leaves the same
+        # half-open window one level up -- the exact shape CodeRabbit flagged
+        # in this call site specifically (PR #1832). Lock both, ascending,
+        # before any seat-specific work.
+        for sid in sorted({target_seat_id, ctx.seat_id}):
+            lock_hall_pass_holder(sid, ctx.class_id)
+        target = db.session.query(Seat).filter_by(id=target_seat_id, class_id=ctx.class_id).one_or_none()
+        if target is None or target.role != "student" or target.claimed_at is None or target.user_id is None:
             raise ValueError("A claimed student seat is required")
         existing = EntitlementEvent.query.filter_by(
             class_id=ctx.class_id, target_seat_id=target.id,

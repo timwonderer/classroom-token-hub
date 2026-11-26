@@ -78,7 +78,7 @@ from app.forms import (
     ManualPaymentForm, TeacherFineForm
 )
 # Import utility functions
-from app.utils.helpers import safe_redirect_target, generate_anonymous_code, loggable_token, render_template_with_fallback as render_template
+from app.utils.helpers import safe_redirect_target, generate_anonymous_code, loggable_route, loggable_token, render_template_with_fallback as render_template
 from app.utils.join_code import generate_join_code, get_display_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.services.payroll.builders import (
@@ -488,7 +488,7 @@ def _handle_mismatched_admin_class_context():
         extra={
             'endpoint': request.endpoint,
             'method': request.method,
-            'path': request.path,
+            'route': loggable_route(),
             'session_join_code': _get_teacher_user_join_code(canonical_context),
             'requested_class': class_log_ref(_get_requested_admin_class_id()),
         },
@@ -518,7 +518,7 @@ def _handle_missing_admin_class_context():
         extra={
             'endpoint': request.endpoint,
             'method': request.method,
-            'path': request.path,
+            'route': loggable_route(),
         },
     )
 
@@ -1944,24 +1944,31 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
     # silently alter an insurance contract. Surface only out-of-band policies
     # and send the teacher to the owning management flow.
     if insurance_policies:
-        from app.services.economic_engine import resolve_insurance
+        from app.services.economic_engine import premium_currency_band, resolve_insurance
         from app.services.insurance_policy_service import normalize_insurance_type
+        from app.services.insurance_premium_helper import _AUTHORING_DAYS
 
         for policy in insurance_policies:
             if policy.premium is None:
                 continue
             current = Decimal(str(policy.premium))
             product = normalize_insurance_type(policy.insurance_type)
+            # The policy's own billing cadence, not a hardcoded weekly period: a
+            # MONTHLY-billed premium must be compared against a MONTHLY-scaled band
+            # (SPEC-ECON-003 §4.5.2), the same normalization
+            # build_insurance_premium_helper() uses for the authoring form.
+            charge_frequency = (str(getattr(policy, 'charge_frequency', None) or 'WEEKLY')).strip().upper()
+            authoring_days = _AUTHORING_DAYS.get(charge_frequency, _AUTHORING_DAYS['WEEKLY'])
             recommendation = resolve_insurance(
                 product=product,
                 cwi=cwi,
                 mode=getattr(checker, 'policy_mode', 'default'),
+                coverage_period=charge_frequency.lower(),
+                covered_calendar_days=None if charge_frequency == 'WEEKLY' else authoring_days,
             )
             if recommendation.cwi is None:
                 continue
-            rate_min, rate_max = recommendation.recommended_ranges['premium_rate']
-            minimum = (recommendation.cwi * Decimal(str(rate_min))).quantize(Decimal('0.01'))
-            maximum = (recommendation.cwi * Decimal(str(rate_max))).quantize(Decimal('0.01'))
+            minimum, maximum = premium_currency_band(recommendation)
             if minimum <= current <= maximum:
                 continue
             preview_items.append({
@@ -2160,7 +2167,7 @@ def select_class_context():
         return redirect(url_for("admin.onboarding"))
 
     if request.method == "POST":
-        # Only the selection runs inside FEAT-IDEN-001; a FEAT commits on exit,
+        # Only the selection runs inside FEAT-IDEN-009; a FEAT commits on exit,
         # and rendering the selector must not (INV-ARC-007: GET must be pure).
         return _apply_teacher_class_selection(ctx, raw_options)
 
@@ -2174,7 +2181,7 @@ def select_class_context():
     )
 
 
-@requires_feat_context("FEAT-IDEN-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 def _apply_teacher_class_selection(ctx, raw_options):
     """The submitted class selection: move the teacher's canonical pointers."""
     selected_class_id = (request.form.get("class_id") or "").strip()
@@ -2201,8 +2208,8 @@ def _apply_teacher_class_selection(ctx, raw_options):
         # (seat.class_id != last_active_class_id) — the class switch then fails.
         # `selected["seat_id"]` is the teacher seat for the newly chosen class,
         # validated by _get_validated_teacher_class_options.
-        user.last_active_class_id = selected["class_id"]
-        user.last_active_seat_id = selected["seat_id"]
+        from app.services.identity_service import select_teacher_class_fields
+        select_teacher_class_fields(user, class_id=selected["class_id"], seat_id=selected["seat_id"])
         # A teacher has a distinct Seat + IdentityProfile per class, so
         # switching classes switches identity. Invalidate the session
         # identity caches carried over from the previous class, then
@@ -2577,17 +2584,15 @@ def login():
                 except (TypeError, ValueError):
                     totp_valid = False
                 if totp_valid:
-                    nonce = secrets.token_urlsafe(32)
+                    attempt_token = secrets.token_urlsafe(32)
                     with FEATContext(
-                        "FEAT-IDEN-001",
-                        idempotency_key=f"identity:teacher-login:{user.id}:{nonce}",
+                        "FEAT-IDEN-009",
+                        idempotency_key=f"identity:teacher-login:{user.id}:{attempt_token}",
                     ):
                         from app.services.teacher_lifecycle import record_teacher_sign_in
                         user = record_teacher_sign_in(user.id)
                         session.clear()
                         establish_teacher_session(user)
-                        session["current_session_nonce"] = nonce
-                        user.current_session_nonce = nonce
                         login_at = canonical_temporal_resolver(
                             SYSTEM_LEVEL_EVALUATION, primitive="current_time",
                         ).canonical_now_utc.isoformat()
@@ -2614,8 +2619,10 @@ def login():
 
                         if len(class_options) == 1:
                             only_class = class_options[0]
-                            user.last_active_class_id = only_class["class_id"]
-                            user.last_active_seat_id = only_class["seat_id"]
+                            from app.services.identity_service import select_teacher_class_fields
+                            select_teacher_class_fields(
+                                user, class_id=only_class["class_id"], seat_id=only_class["seat_id"],
+                            )
                             return redirect(next_url)
 
                         return redirect(url_for("admin.select_class_context"))
@@ -3272,10 +3279,10 @@ def set_current_class():
 
     try:
         idempotency_key = f"feat:iden:set-current-class:{user_id}:{class_id}"
-        with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
+        with FEATContext("FEAT-IDEN-009", idempotency_key=idempotency_key):
+            from app.services.identity_service import select_teacher_class_fields
             user = db.session.get(User, user_id)
-            user.last_active_class_id = class_id
-            user.last_active_seat_id = target_seat.id
+            select_teacher_class_fields(user, class_id=class_id, seat_id=target_seat.id)
             db.session.flush()
     except Exception:
         current_app.logger.error(
@@ -6784,6 +6791,10 @@ def economic_engine():
             product=TRANSACTION,
             cwi=cwi_calc.cwi,
             mode=policy_summary['mode'],
+            # This is a representative weekly figure for the dashboard summary card,
+            # not tied to any one policy's own billing cadence (see comment above) —
+            # "weekly" is a deliberate, explicit choice here, not the engine's default.
+            coverage_period="weekly",
         )
         _rate_lo, _rate_hi = _ins.recommended_ranges['premium_rate']
         insurance_recommendation = {
@@ -8056,7 +8067,8 @@ def payroll_manual_payment():
                 raise
 
             db.session.rollback()
-            current_app.logger.error(f"Error processing manual payment: {e}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error processing manual payment: {type(e).__name__}")
             flash('Error processing manual payment. Please try again.', 'error')
     else:
         flash('Invalid form data. Please check your inputs.', 'error')
@@ -8784,21 +8796,11 @@ def banking():
         )
     )
 
+    # The student filter is a seat public_id picked from the roster dropdown, never a
+    # typed name: a GET query string reaches access logs, history and Referer
+    # (INV-ARC-005 §V; DOM-OPS-001 §7 names an actor in a URL by seats.public_id).
     if student_q:
-        matching_seat_ids = []
-        if student_q.isdigit():
-            matching_seat_ids.append(int(student_q))
-        for seat in Seat.query.filter(
-            Seat.class_id == selected_class_id,
-            Seat.claimed_at.isnot(None),
-        ).all():
-            _ip = seat.identity_profile
-            if student_q.lower() in (_ip.full_name if _ip else "").lower():
-                matching_seat_ids.append(seat.id)
-        if matching_seat_ids:
-            query = query.filter(Seat.id.in_(matching_seat_ids))
-        else:
-            query = query.filter(sa.false())
+        query = query.filter(Seat.public_id == student_q)
 
     if account_q:
         query = query.filter(Transaction.account_type == account_q)
@@ -8902,6 +8904,13 @@ def banking():
         total_deposits=total_deposits,
         students_with_savings=students_with_savings,
         total_students=len(students),
+        student_filter_options=sorted(
+            (
+                (seat.public_id, seat.identity_profile.full_name if seat.identity_profile else seat.public_id)
+                for seat in students
+            ),
+            key=lambda option: option[1].lower(),
+        ),
         average_savings_balance=average_savings_balance,
         transaction_types=transaction_types,
         page=page,
@@ -9558,7 +9567,8 @@ def announcement_create():
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error creating announcement: {e}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error creating announcement: {type(e).__name__}")
             flash('An error occurred while creating the announcement.', 'danger')
 
     return render_template(
@@ -9625,7 +9635,8 @@ def announcement_edit(announcement_id):
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error updating announcement: {e}")
+            # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+            current_app.logger.error(f"Error updating announcement: {type(e).__name__}")
             flash('An error occurred while updating the announcement.', 'danger')
 
     # Build view model for class context display in edit mode. Label the active
@@ -9972,7 +9983,7 @@ def api_economy_analyze():
                 event_type="INVALID_CLASS_SCOPE",
                 severity="warning",
                 domain="economy",
-                route=request.path,
+                route=loggable_route(),
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={
@@ -10081,7 +10092,7 @@ def api_economy_validate(feature):
                 event_type="INVALID_CLASS_SCOPE",
                 severity="warning",
                 domain="economy",
-                route=request.path,
+                route=loggable_route(),
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={
@@ -10308,7 +10319,7 @@ def passkey_auth_start():
 
 
 @admin_bp.route('/passkey/auth/finish', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 @limiter.limit("20 per minute")
 def passkey_auth_finish():
     """
@@ -10344,9 +10355,6 @@ def passkey_auth_finish():
         auth_username = session.get('passkey_auth_username')
         session.clear()
         establish_teacher_session(user)
-        nonce = secrets.token_urlsafe(32)
-        session["current_session_nonce"] = nonce
-        user.current_session_nonce = nonce
         session["login_time"] = now.isoformat()
         session["last_activity"] = now.isoformat()
         session['admin_auth_username'] = auth_username or f"user_{user.id}"

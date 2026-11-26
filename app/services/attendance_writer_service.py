@@ -80,7 +80,21 @@ def close_due_hanging_hall_pass(*, ctx, seat_id, as_of_utc):
     the seat's latest event: the student can start work the next day before the
     sweep runs. The closure is dated to the day it left on, so it sorts before that.
     """
-    lock_attendance_seat(seat_id, ctx.class_id)
+    from app.services.identity_service import resolve_teacher_seat_for_class
+
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): each closure
+    # _append_hanging_pass_closure appends below is attributed to this class's
+    # teacher seat as actor_seat_id (resolved independently of ctx.seat_id, so
+    # this locks the same seat the insert will reference rather than assume
+    # the two coincide), so locking only the target here would leave the actor
+    # seat to be locked later via the insert's implicit FOR KEY SHARE, in
+    # whatever order the two ids fall. Lock both ascending up front, matching
+    # the ascending lock payroll now takes on its own actor and target
+    # (#1640); a caller that already holds both just re-acquires a lock it
+    # already has (Codex review on PR #1832).
+    actor_seat_id = resolve_teacher_seat_for_class(ctx.class_id).id
+    for sid in sorted({seat_id, actor_seat_id}):
+        lock_attendance_seat(sid, ctx.class_id)
     rows = AttendanceSession.query.filter(
         AttendanceSession.target_seat_id == seat_id,
         AttendanceSession.class_id == ctx.class_id,
@@ -156,18 +170,24 @@ def record_attendance_session_command(
     if mechanism not in {"self", "teacher", "system"}:
         raise ValueError("Attendance mechanism must be 'self', 'teacher', or 'system'.")
 
-    target_seat = lock_attendance_seat(resolved_target_seat_id, ctx.class_id)
-    if target_seat is None or target_seat.class_id != ctx.class_id:
-        raise ValueError("Attendance target seat must belong to the canonical class.")
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): the row this command
+    # eventually inserts carries a foreign key to actor_seat_id, so Postgres
+    # takes an implicit FOR KEY SHARE lock on it at insert time even when the
+    # actor differs from the target. Locking only the target here left the
+    # actor seat to be locked later, in whatever order the two ids happened to
+    # fall -- exactly the half-open window that let a concurrent payroll run
+    # (which locks its own actor and target ascending, #1640) deadlock against
+    # this command (Codex review on PR #1832).
+    locked_seats = {
+        sid: lock_attendance_seat(sid, ctx.class_id)
+        for sid in sorted({resolved_actor_seat_id, resolved_target_seat_id})
+    }
+    target_seat = locked_seats[resolved_target_seat_id]
     # Attendance is paid time, so recording it against an unclaimed seat is what
     # made that seat payroll-eligible. An unclaimed seat has no activated runtime
     # participation to record (DOM-IDEN-005 §VII).
     if target_seat.claimed_at is None or target_seat.user_id is None:
         raise ValueError("Attendance target seat must be claimed.")
-    if resolved_actor_seat_id:
-        actor_seat = db.session.get(Seat, resolved_actor_seat_id)
-        if actor_seat is None or actor_seat.class_id != ctx.class_id:
-            raise ValueError("Attendance actor seat must belong to the canonical class.")
 
     existing_active = _latest_seat_event(resolved_target_seat_id, ctx.class_id)
     # Leaving needs a session to leave; returning needs this pass to be the one out.

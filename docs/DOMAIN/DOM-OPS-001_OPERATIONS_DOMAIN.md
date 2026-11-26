@@ -2,16 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001 | 2.16 | 2026-11-23 | 2.15 | Constitutional |
-
-> [!IMPORTANT]
-> **v2.15 (2026-10-27), owner ruling 2026-10-27.** §7: internal identifiers stay inside the database. Anything that can leave it (log lines, telemetry, operator-facing pages, URLs) names a class by `class_public_id` or `join_code` and an actor by `seats.public_id`, never by `classes.class_id`, `seats.id` or `users.id`, including inside a composed value such as an idempotency key or correlation identifier. Motivated by support ticket #13, whose log lines carried the class's internal identifier on every line and the seat's in several messages.
-
-> **v2.14 (2026-10-23), owner ruling 2026-10-23.** §Application Availability Gate: health endpoints are public and need no credential; the Access redirect is the maintenance signal, and while the gate is closed the status collector reads nothing from the application. The service token existed only to let the collector reach production during maintenance, which it no longer does.
-
-> **v2.13 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
-
-*Revision 2.12 (2026-10-02; ratified by the owner 2026-10-02): §1 Public Request Monitoring — the closed component registry gains `hall_pass`. A 404 on a request-resolution route that `SPEC-OPS-006` designates is a failed request. It is never an outage or an incident. When such 404s reach `SPEC-OPS-006`'s rate-plus-minimum rule, they are a signal of a possible problem: they are reported on that component, and they qualify the overall summary as `Detected problems`, as a fresh 5xx does. Motivated by 2026-10-01, when a teacher's Approve or Reject and a student's Cancel answered 404 "Pending request not found." about half the time while the status page showed nothing: hall passes had no component, and no 404 counted.*
+| DOM-OPS-001      | 2.17    | 2026-11-26     | 2.16       | Constitutional  |
 
 ## 0. Authority Level and Dependencies
 
@@ -215,16 +206,6 @@ and MUST NOT initiate queries, samplers, verifiers or mutations.
     *   Audit `changes` MUST follow a structured schema (before/after or field-delta format).
 *   **Prohibited Action**: Storing arbitrary, unstructured blobs in the `audit_log.changes` field.
 
-Credential lifecycle outcomes use the specific non-identifying envelope in DOM-OPS-002
-§2.5. Its structured before/after values are operation stages, not credentials or
-identity snapshots. No principal/credential identifier or identity-derived digest is
-retained in outcome history, logs, correlation packs, exports or secondary indexes.
-Exact targets for current execution remain inside Identity state or transient inventory
-processing. This specific envelope also satisfies INV-OPS-011's remediation rationale
-without turning exact orphan-deletion targets into historical ownership archives.
-
-
-
 ### INV-OPS-008: Append-Only Operational History
 *   **Statement**: Incident history, invariant results, and audit events must be append-only within their retention window.
 *   **Prohibited Action**: Deleting a record of a failed background job because it was eventually retried successfully.
@@ -424,5 +405,30 @@ The following are constitutionally prohibited:
 ### 8.2 Evidence
 
 Operational jobs that consume policy (payroll, rent reconciliation, interest) record their own execution evidence in `job_events` (§4, §5). OPS evidence does not constitute policy truth. Policy truth remains in the owning domain's table (`DOM-CLASS-003` §V).
+
+---
+
+## 9. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v2.17 (2026-11-26), merge reconciliation.** Combines the 2026-11-23 credential-lifecycle amendment with v2.16 (documentation modernization). No substantive rule changed.
+>
+> **v2.16 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the notes below from the top of the document into it,
+> per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the header
+> table and §1 Domain Authority. No content change.
+>
+> **v2.15 (2026-10-27), owner ruling 2026-10-27.** §7: internal identifiers stay inside the database. Anything that can leave it (log lines, telemetry, operator-facing pages, URLs) names a class by `class_public_id` or `join_code` and an actor by `seats.public_id`, never by `classes.class_id`, `seats.id` or `users.id`, including inside a composed value such as an idempotency key or correlation identifier. Motivated by support ticket #13, whose log lines carried the class's internal identifier on every line and the seat's in several messages.
+>
+> **v2.14 (2026-10-23), owner ruling 2026-10-23.** §Application Availability Gate: health endpoints are public and need no credential; the Access redirect is the maintenance signal, and while the gate is closed the status collector reads nothing from the application. The service token existed only to let the collector reach production during maintenance, which it no longer does.
+>
+> **v2.13 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
+
+*Revision 2.12 (2026-10-02; ratified by the owner 2026-10-02): §1 Public Request Monitoring — the closed component registry gains `hall_pass`. A 404 on a request-resolution route that `SPEC-OPS-006` designates is a failed request. It is never an outage or an incident. When such 404s reach `SPEC-OPS-006`'s rate-plus-minimum rule, they are a signal of a possible problem: they are reported on that component, and they qualify the overall summary as `Detected problems`, as a fresh 5xx does. Motivated by 2026-10-01, when a teacher's Approve or Reject and a student's Cancel answered 404 "Pending request not found." about half the time while the status page showed nothing: hall passes had no component, and no 404 counted.*
+
+Revisions to this document must increment the version number, update the Effective Date, and
+remain consistent with `INV-CORE-000` and `INV-ARC-009`.
 
 **2026-11-23 amendment:** Records the approved credential-lifecycle validation/outcome boundary. No identity archive, financial lineage relaxation or deployed-behavior claim is introduced.

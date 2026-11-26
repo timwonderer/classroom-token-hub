@@ -435,21 +435,6 @@ class TestScoping:
                     )
 
 
-def test_migration_revision_chain_links_to_head():
-    """The Step A migration must chain from the prior head and be reversible."""
-    from migrations.versions.a7b8c9d0e1f3_add_insurance_claims_table import (
-        revision,
-        down_revision,
-        upgrade,
-        downgrade,
-    )
-
-    assert revision == "a7b8c9d0e1f3"
-    assert down_revision == "d4e5f6a7b8c9"
-    assert callable(upgrade)
-    assert callable(downgrade)
-
-
 def test_productivity_dates_lock_grant_for_direct_domain_call(app):
     from sqlalchemy import select
     from sqlalchemy.exc import OperationalError

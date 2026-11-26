@@ -384,6 +384,17 @@ def renew_insurance_coverage(
         result.skipped_reason = "NO_LINEAGE"
         return result
 
+    # Seat-then-class, ascending (INV-LED-015, DOM-LED-001 §VII): nonpayment
+    # termination below (_terminate_for_nonpayment -> entitlement_service.
+    # expire_entitlement) locks {target_seat_id, actor_seat_id} ascending
+    # itself, but only once it runs -- by then this function has already
+    # taken a target-only lock here. A concurrent teacher-authored event
+    # (e.g. payroll) holding the teacher seat and waiting on this student
+    # deadlocks against that ordering (Codex review on PR #1832). Take both
+    # locks ascending up front so renewal's first lock is never target-only.
+    teacher_seat_id = resolve_teacher_seat_for_class(class_id).id
+    for sid in sorted({grant.target_seat_id, teacher_seat_id}):
+        Seat.query.filter_by(id=sid, class_id=class_id).with_for_update().first()
     # The seat row serializes this seat's money (INV-LED-015) for autopay.
     seat = (
         Seat.query.filter_by(id=grant.target_seat_id, class_id=class_id)

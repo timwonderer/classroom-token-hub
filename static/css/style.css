@@ -2732,7 +2732,8 @@ body.error-page {
     margin-bottom: var(--space-8);
 }
 
-.error-page .troubleshooting h5 {
+.error-page .troubleshooting h5,
+.error-page .troubleshooting h2 {
     margin-bottom: var(--space-4);
     font-weight: var(--weight-semibold);
 }

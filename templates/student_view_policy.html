@@ -35,7 +35,7 @@
                 Policy Overview
             </div>
             <div class="card-body">
-                <h5>{{ enrollment.contract_title }}</h5>
+                <h2 class="h5">{{ enrollment.contract_title }}</h2>
                 <div class="text-muted">{{ enrollment.contract_description | markdown }}</div>
 
                 <hr>
@@ -92,7 +92,7 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>Claim Limits</h6>
+                        <h3 class="h6">Claim Limits</h3>
                         <ul>
                             <li>Waiting period: {{ enrollment.policy.waiting_period_days }} days</li>
                             {% if enrollment.contract_claim_time_limit_days is not none %}
@@ -111,7 +111,7 @@
                         </ul>
                     </div>
                     <div class="col-md-6">
-                        <h6>Payment Terms</h6>
+                        <h3 class="h6">Payment Terms</h3>
                         <ul>
                             <li>Frequency: {{ enrollment.policy.charge_frequency|title }}</li>
                             <li>Autopay: {{ 'Yes' if enrollment.policy.autopay else 'No' }}</li>
@@ -186,7 +186,7 @@
                                 <div class="modal-dialog">
                                     <div class="modal-content">
                                         <div class="modal-header">
-                                            <h5 class="modal-title" id="claimModalLabel{{ claim.id }}">Claim Details</h5>
+                                            <h2 class="h5 modal-title" id="claimModalLabel{{ claim.id }}">Claim Details</h2>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close claim details"></button>
                                         </div>
                                         <div class="modal-body">

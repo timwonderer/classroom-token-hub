@@ -31,7 +31,7 @@
     </a>
 </div>
 
-{% call cards.alert_card('info', 'Active Class: ' ~ active_class_label, icon='groups', body_class='mb-4') %}
+{% call cards.alert_card('info', 'Active Class: ' ~ active_class_label, icon='groups', body_class='mb-4', heading_tag='h2') %}
 <p class="mb-0">The announcements below belong to this class. Switch class in the sidebar to manage another class's announcements.</p>
 {% endcall %}
 
@@ -84,7 +84,7 @@
         {% endfor %}
     </div>
 {% else %}
-    {% call cards.alert_card('info', 'No announcements yet', icon='campaign') %}
+    {% call cards.alert_card('info', 'No announcements yet', icon='campaign', heading_tag='h2') %}
         <p class="mb-0">Create your first announcement to communicate with students in the active class.</p>
     {% endcall %}
 {% endif %}

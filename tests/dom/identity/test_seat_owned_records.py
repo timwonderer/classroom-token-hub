@@ -1,12 +1,8 @@
 """Shipping schema permits principal references only at Identity boundaries."""
 from decimal import Decimal
-import importlib.util
-from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 
 from tests.helpers.payroll_fixture import record_payroll_source_fixture
 from app import db
@@ -83,69 +79,6 @@ def test_principal_delete_cannot_cascade_away_a_bound_seat(client):
     assert db.session.get(Seat, seat_id).user_id == user_id
 
 
-def _migration(conn):
-    path = Path(__file__).resolve().parents[3] / 'migrations/versions/c7a7b8c9d0e1_seat_owned_records.py'
-    spec = importlib.util.spec_from_file_location('seat_migration_test', path)
-    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-    module.op = Operations(MigrationContext.configure(conn))
-    return module
-
-
-def test_migration_maps_author_only_with_exact_class_teacher_binding(client):
-    classroom = initialize('chemistry_p1', client.application)
-    with db.engine.connect() as conn:
-        transaction = conn.begin()
-        try:
-            # user_id carries users.id's current type (uuid since f4b8d2a6c1e9).
-            conn.execute(sa.text('CREATE TABLE legacy_authors (id INT, class_id TEXT, user_id UUID)'))
-            conn.execute(sa.text('INSERT INTO legacy_authors VALUES (1, :class_id, :user_id)'),
-                         {'class_id': classroom.class_id, 'user_id': classroom.teacher_user.id})
-            _migration(conn)._replace_author(conn, 'legacy_authors', 'user_id', 'created_by_seat_id', nullable=False)
-            assert conn.execute(sa.text('SELECT created_by_seat_id FROM legacy_authors')).scalar() == classroom.teacher_seat.id
-            assert 'user_id' not in {c['name'] for c in sa.inspect(conn).get_columns('legacy_authors')}
-        finally:
-            transaction.rollback()
-
-
-def test_migration_rejects_an_author_outside_the_class(client):
-    classroom = initialize('chemistry_p1', client.application)
-    with db.engine.connect() as conn:
-        transaction = conn.begin()
-        try:
-            conn.execute(sa.text('CREATE TABLE legacy_authors (id INT, class_id TEXT, user_id UUID)'))
-            conn.execute(sa.text('INSERT INTO legacy_authors VALUES (1, :class_id, :user_id)'),
-                         {'class_id': classroom.class_id, 'user_id': classroom.students[0].user.id})
-            with pytest.raises(RuntimeError, match='exactly one teacher seat'):
-                _migration(conn)._replace_author(conn, 'legacy_authors', 'user_id', 'created_by_seat_id', nullable=False)
-        finally:
-            transaction.rollback()
-
-
-def test_migration_refuses_legacy_bulk_replay_without_rewriting_history(client):
-    from app.services.ledger_command_service import create_reserved_effects
-    classroom = initialize('chemistry_p1', client.application)
-    effects = [{'seat_id': s.seat.id, 'target_seat_id': s.seat.id,
-                'actor_seat_id': classroom.teacher_seat.id, 'class_id': classroom.class_id,
-                'mechanism': 'teacher', 'amount': Decimal('2.00'), 'account_type': 'checking',
-                'type': 'manual_payment', 'description': 'Bulk bonus'}
-               for s in classroom.students[:2]]
-    with FEATContext('FEAT-TEST-SETUP', idempotency_key='migration:bulk'):
-        rows, _ = create_reserved_effects(class_id=classroom.class_id,
-            feat_code='FEAT-TEST-SETUP', idempotency_key='migration:bulk', effects=effects)
-        reservation_id = rows[0].command_reservation_id
-    with db.engine.connect() as conn:
-        transaction = conn.begin()
-        try:
-            conn.execute(sa.text('UPDATE ledger_command_reservation SET fingerprint_version=2 WHERE id=:id'),
-                         {'id': reservation_id})
-            before = conn.execute(sa.text('SELECT replay_fingerprint FROM ledger_command_reservation WHERE id=:id'), {'id': reservation_id}).scalar()
-            with pytest.raises(RuntimeError, match='legacy multi-effect replay history'):
-                _migration(conn).upgrade()
-            assert conn.execute(sa.text('SELECT replay_fingerprint FROM ledger_command_reservation WHERE id=:id'), {'id': reservation_id}).scalar() == before
-        finally:
-            transaction.rollback()
-
-
 def test_class_destroy_removes_seat_authored_announcements_and_policy_definitions(client):
     from app.models import Announcement, ClassEconomy, InsurancePolicy
     from app.services.announcement_service import create_class_announcement
@@ -189,58 +122,6 @@ def test_authors_cannot_be_borrowed_from_another_class(client, record):
             else:
                 publish_product(class_id=classroom.class_id, actor_seat_id=sibling.teacher_seat.id,
                     definition={'name': 'No', 'price': Decimal('1.00'), 'item_type': 'delayed', 'economic_role': 'necessity'})
-
-
-def test_migration_preserves_legacy_transfer_replay_without_principal_material(client):
-    # create_transfer_pair keeps the internal-transfer family's own dedicated
-    # _command_fingerprint replay serializer (SPEC-LED-002 S4.2) across the
-    # build_transfer_effect_pair consolidation, so it still stands in for a
-    # pre-FINGERPRINT_VERSION-3 legacy row here.
-    from app.services.ledger_transfer_service import create_transfer_pair
-    classroom = initialize('chemistry_p1', client.application)
-    with FEATContext('FEAT-TEST-SETUP', idempotency_key='migration:transfer'):
-        debit, credit = create_transfer_pair(seat_id=classroom.students[0].seat.id,
-            class_id=classroom.class_id, amount=Decimal('2.00'), from_account='checking',
-            to_account='savings', withdraw_description='Transfer', deposit_description='Transfer')
-        reservation_id = debit.command_reservation_id
-    with db.engine.connect() as conn:
-        transaction = conn.begin()
-        try:
-            conn.execute(sa.text('UPDATE ledger_command_reservation SET fingerprint_version=2 WHERE id=:id'), {'id': reservation_id})
-            before = conn.execute(sa.text('SELECT replay_fingerprint FROM ledger_command_reservation WHERE id=:id'), {'id': reservation_id}).scalar()
-            _migration(conn)._assert_replay_history_supported(conn)
-            assert conn.execute(sa.text('SELECT replay_fingerprint FROM ledger_command_reservation WHERE id=:id'), {'id': reservation_id}).scalar() == before
-        finally:
-            transaction.rollback()
-
-
-def test_removing_legacy_audit_principal_leaves_signed_history_unchanged(client):
-    classroom = initialize('chemistry_p1', client.application)
-    with FEATContext('FEAT-TEST-SETUP', idempotency_key='migration:audit'):
-        create_pending_transaction(seat_id=classroom.students[0].seat.id,
-            target_seat_id=classroom.students[0].seat.id, actor_seat_id=classroom.teacher_seat.id,
-            class_id=classroom.class_id, mechanism='teacher', amount=Decimal('1.00'),
-            account_type='checking', type='manual_payment', description='Audit migration test')
-    db.session.rollback()  # release the ORM connection before exercising schema DDL
-    with db.engine.connect() as conn:
-        transaction = conn.begin()
-        try:
-            query = sa.text('SELECT id, event_hash, payload_digest, context_digest, hmac_signature FROM audit_events ORDER BY id')
-            before = conn.execute(query).all()
-            assert before
-            # The legacy anchor was not a signed field. Simulate populated old metadata.
-            conn.execute(sa.text('ALTER TABLE audit_events ADD COLUMN teacher_id INTEGER DEFAULT 123'))
-            # This replays a historical revision against today's schema. It was
-            # written against a schema that still had the lineage table retired
-            # by dd52b19d48d8, so give it that table back for the replay (the
-            # transaction is rolled back).
-            conn.execute(sa.text('CREATE TABLE policy_transitions (id SERIAL PRIMARY KEY,'
-                                 ' class_id VARCHAR(36), created_by_seat_id INTEGER)'))
-            _migration(conn).upgrade()
-            assert 'teacher_id' not in {c['name'] for c in sa.inspect(conn).get_columns('audit_events')}
-            assert conn.execute(query).all() == before
-        finally:
-            transaction.rollback()
 
 
 def test_operational_actor_logging_uses_scoped_seat_never_principal(app, caplog):

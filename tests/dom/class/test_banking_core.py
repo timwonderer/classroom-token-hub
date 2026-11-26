@@ -262,7 +262,9 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
     summary = settle_pending_transaction_contexts()
 
     # Two distinct seat/class contexts settle exactly once each; none fail.
-    assert summary == {"settled_contexts": 2, "failed_contexts": 0}
+    assert summary == {
+        "settled_contexts": 2, "failed_contexts": 0, "failed_seat_class_pairs": (),
+    }
 
     # --- Assert: settlement is durably persisted (survives beyond the sweep) ---
     db.session.expire_all()
@@ -286,7 +288,9 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
 
     # --- Idempotency: a second sweep finds no eligible contexts and settles nothing ---
     summary_again = settle_pending_transaction_contexts()
-    assert summary_again == {"settled_contexts": 0, "failed_contexts": 0}
+    assert summary_again == {
+        "settled_contexts": 0, "failed_contexts": 0, "failed_seat_class_pairs": (),
+    }
 
     db.session.expire_all()
     assert _snapshot(student_one_seat_id, class_id_one).posted_balance_cents == 1234

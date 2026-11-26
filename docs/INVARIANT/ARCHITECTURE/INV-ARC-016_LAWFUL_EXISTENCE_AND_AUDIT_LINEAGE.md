@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-016      | 2.3     | 2026-10-14     | 2.2        | Constitutional   |
 
-> [!IMPORTANT]
-> **v2.3 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
-
 ## I. Purpose
 
 Define the principle of lawful existence: physical database persistence alone does not constitute a valid application entity. A protected row is lawful only if it was created through an authorized CTH execution path and carries verifiable audit lineage.
@@ -143,5 +140,10 @@ Protected economic policy tables are those `DOM-OPS-002` §5.4 registers among t
 CI guardrails in `scripts/policy_guardrails.py` enforce this structurally.
 
 ## XII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v2.3 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions must preserve the distinction between `UNVERIFIED` and `INVALID`, the two-path lawful write model, and the HMAC key startup requirement.

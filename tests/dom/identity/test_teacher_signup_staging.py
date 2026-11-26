@@ -125,21 +125,13 @@ def test_username_collision_rolls_back_without_consuming_attempt(app):
     assert User.query.count()==ClassEconomy.query.count()==1
 
 
-def test_migration_creates_encrypted_staging_and_is_repeatable(app):
-    import importlib.util
-    from alembic.migration import MigrationContext
-    from alembic.operations import Operations
-    spec=importlib.util.spec_from_file_location('signup_migration',
-        'migrations/versions/a1e1f2a3b4c5_teacher_signup_staging.py')
-    migration=importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
-    db.session.remove()
-    with db.engine.begin() as connection:
-        TeacherSignupAttempt.__table__.drop(connection)
-        with Operations.context(MigrationContext.configure(connection)):
-            migration.upgrade()
-            migration.upgrade()
-        columns={c['name'] for c in sa.inspect(connection).get_columns('teacher_signup_attempts')}
-        assert columns=={'nonce_hash','payload_encrypted','expires_at'}
+def test_staging_table_holds_only_encrypted_payload(app):
+    """The migrated schema stages a signup as nonce hash, ciphertext and expiry, nothing else.
+
+    Formerly asserted by replaying pre-launch revision a1e1f2a3b4c5, now provenance
+    (SOP-DB-001 §V.C); the table is part of the v2 launch baseline.
+    """
+    columns={c['name'] for c in sa.inspect(db.engine).get_columns('teacher_signup_attempts')}
+    assert columns=={'nonce_hash','payload_encrypted','expires_at'}
     nonce,secret=prepared()
     assert complete(nonce,secret)

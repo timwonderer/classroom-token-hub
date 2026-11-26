@@ -119,6 +119,7 @@ attempt sent over this key is refused there regardless of which workflow sent it
    Droplet, as root (back up the file first):
    ```bash
    cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bak
+   sed -i -e '$a\' /root/.ssh/authorized_keys   # the file may lack a final newline; >> would join the new key onto the last line
    printf 'command="/root/release-gate/guarded-deploy.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty %s\n' \
      "$(cat /tmp/release_deploy_key.pub)" >> /root/.ssh/authorized_keys
    rm -f /tmp/release_deploy_key.pub
@@ -158,6 +159,79 @@ attempt sent over this key is refused there regardless of which workflow sent it
      does not match a known CI operation`, proving the loophole this closes is actually closed.
 
    Confirm all of this before the next scheduled release, not during one.
+
+## Documentation publication (SOP-DEP-003)
+
+A third key, `DOCS_DEPLOY_KEY`, lets `docs-deploy.yml` publish `docs/user-guides/` from a commit on main as
+a separate documentation artifact, and nothing else. Its forced command, `guarded-docs.sh`, runs
+`docs_publish.py`. Both files are installed root-owned beside `guarded-deploy.sh`, outside the checkout, for
+the same reason. Each publication shares `deploy.lock` with `guarded-deploy.sh`, so a release and a
+publication never interleave. Re-install `guarded-deploy.sh` from this repository as well: its copy now takes
+that lock.
+
+1. **Install the scripts** from a reviewed checkout on the Mac mini that contains them (main at or after
+   #1870). Copy them rather than checking anything out on the droplet: its checkout stays at the deployed
+   release, which may predate these files.
+
+   ```bash
+   scp infra/release-gate/guarded-docs.sh infra/release-gate/docs_publish.py infra/release-gate/guarded-deploy.sh root@cth:/tmp/
+   ```
+
+   Droplet, as root. The `diff` should show only the added `flock` lines in `do_deploy`:
+   ```bash
+   diff /root/release-gate/guarded-deploy.sh /tmp/guarded-deploy.sh
+   install -o root -g root -m 0700 /tmp/guarded-docs.sh /tmp/docs_publish.py /tmp/guarded-deploy.sh /root/release-gate/
+   rm -f /tmp/guarded-docs.sh /tmp/docs_publish.py /tmp/guarded-deploy.sh
+   install -d -o root -g root -m 0755 /srv/cth-docs /srv/cth-docs/releases
+   ```
+
+2. **Create the key** on the Mac mini, add it to GitHub as the repository secret `DOCS_DEPLOY_KEY`, and
+   append its forced-command line, exactly as for `RELEASE_DEPLOY_KEY` above:
+
+   ```bash
+   ssh-keygen -t ed25519 -f ~/cth-backup/docs_deploy_key -C cth-docs-deploy -N ''
+   scp ~/cth-backup/docs_deploy_key.pub root@cth:/tmp/docs_deploy_key.pub
+   ```
+
+   Droplet, as root:
+   ```bash
+   cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bak
+   sed -i -e '$a\' /root/.ssh/authorized_keys   # the file may lack a final newline; >> would join the new key onto the last line
+   printf 'command="/root/release-gate/guarded-docs.sh",no-agent-forwarding,no-X11-forwarding,no-port-forwarding,no-pty %s\n' \
+     "$(cat /tmp/docs_deploy_key.pub)" >> /root/.ssh/authorized_keys
+   rm -f /tmp/docs_deploy_key.pub
+   ```
+
+   Check that each key is on its own line with its own forced command, then, from the Mac mini, that the key
+   reaches the forced command (it prints `docs transport ready on …`):
+   ```bash
+   awk '{match($0,/command="[^"]*"/); print NR": "(RSTART?substr($0,RSTART,RLENGTH):"(no forced command)")"  "$NF}' /root/.ssh/authorized_keys
+   ```
+   ```bash
+   ssh -i ~/cth-backup/docs_deploy_key -o IdentitiesOnly=yes root@cth transport-check
+   ```
+
+3. **First publication, in two passes.** Steps 1 and 2 can be done at any time; this step cannot. Start it
+   only once the **deployed** application release reads `CTH_USER_GUIDES_DIR` (the first release after
+   v2.6.0). An earlier release ignores the variable and keeps serving its bundled guides, yet the final check
+   would still pass, because it reads the variable from the service's environment, not from what the app
+   serves. A good moment is that release's maintenance window, before the gate reopens, so the restart below
+   happens while the gate is closed. The application can only be pointed at `/srv/cth-docs/current` once it
+   exists.
+   1. Dispatch `docs-deploy.yml` with the deployed release's SHA. It publishes and switches `current`, then
+      reports that the service does not serve the artifact yet. That report is expected on this pass only.
+   2. Point the service at the artifact with a systemd drop-in, which a deploy's `git reset` cannot
+      remove:
+
+      ```bash
+      systemctl edit classroom-economy   # add under [Service]:  Environment=CTH_USER_GUIDES_DIR=/srv/cth-docs/current/docs
+      systemctl restart classroom-economy
+      ```
+
+   3. Dispatch `docs-deploy.yml` with the same SHA again. It reuses the artifact and now passes every check,
+      including that the running service serves guides from `/srv/cth-docs/current/docs`.
+
+To stop using the artifact, remove the drop-in and restart. The service then serves the guides in its checkout.
 
 ## What's deliberately not in this repository
 

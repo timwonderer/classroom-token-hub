@@ -4,9 +4,6 @@
 |------------------|---------|----------------|------------|-----------------|
 | INV-ARC-001 | 1.2 | 2026-11-23 | 1.1 | Constitutional |
 
-> [!IMPORTANT]
-> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
-
 ## I. Purpose
 
 Define the required request context for all request-time decision making.
@@ -73,6 +70,11 @@ implicit session carryover, or actor-only access patterns that bypass tenant sco
 infer or repair scope implicitly.
 
 ## VIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions must preserve explicit scope requirements and alignment with `INV-ARC-000`.
 

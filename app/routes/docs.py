@@ -5,6 +5,7 @@ Serves feature-based documentation with markdown rendering,
 allowing users to access help without leaving the app or losing their session.
 """
 
+import os
 import re
 from pathlib import Path
 from flask import Blueprint, abort, current_app, g, session, request, url_for, redirect, make_response
@@ -32,6 +33,24 @@ docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
 
 # Documentation root directory
 DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
+
+# SOP-DEP-003: production may serve the user guides from a separately published documentation
+# artifact instead of the application checkout. The variable names the artifact's ``docs`` directory
+# (the one holding ``user-guides/``); unset, the checkout serves them as before.
+USER_GUIDES_ROOT_ENV = 'CTH_USER_GUIDES_DIR'
+
+
+def user_guides_docs_root():
+    """The docs root that serves ``user-guides/``: the published artifact if configured."""
+    configured = os.environ.get(USER_GUIDES_ROOT_ENV, '').strip()
+    return Path(configured) if configured else DOCS_ROOT
+
+
+def docs_root_for(doc_path):
+    """The docs root for one request path. Only ``user-guides/`` ever leaves the checkout."""
+    if is_user_guide_doc_path(doc_path):
+        return user_guides_docs_root()
+    return DOCS_ROOT
 
 # Directories excluded from ALL search audiences (internal documentation only)
 EXCLUDED_DIRECTORIES = {'security'}
@@ -521,7 +540,7 @@ def view_doc(doc_path):
 
         # Ensure we have a safe, absolute docs root
         try:
-            docs_root = DOCS_ROOT
+            docs_root = docs_root_for(doc_path)
         except NameError:
             # Fallback: constrain to a 'docs' directory under the application root
             docs_root = Path(current_app.root_path) / "docs"
@@ -671,13 +690,14 @@ def search():
         # Note: This implementation reads all files on every search request.
         # For production with many documentation files, consider implementing
         # a search index (in-memory or cached) built at startup for better performance.
-        for doc_file in DOCS_ROOT.rglob('*.md'):
+        search_root = user_guides_docs_root()
+        for doc_file in search_root.rglob('*.md'):
             try:
-                # Skip if not relative to DOCS_ROOT (safety check)
-                if not doc_file.is_relative_to(DOCS_ROOT.resolve()):
+                # Skip anything that resolves outside the root (safety check)
+                if not doc_file.resolve().is_relative_to(search_root.resolve()):
                     continue
 
-                rel_path = doc_file.relative_to(DOCS_ROOT)
+                rel_path = doc_file.relative_to(search_root)
 
                 top_dir_raw = rel_path.parts[0] if rel_path.parts else ''
                 top_dir = top_dir_raw.lower()

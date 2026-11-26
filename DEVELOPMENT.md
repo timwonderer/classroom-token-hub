@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Reviewed:** 2026-11-03 UTC
-**Latest Recorded Application Deployment:** [v2.5.0 (`6251659`)](docs/ops/audits/DEPLOY_2026-11-23_6251659.md), 2026-11-23 UTC. This is release-record evidence, not a live production check
+**Latest Recorded Application Deployment:** [v2.6.0 (`6f0089f`)](docs/ops/audits/DEPLOY_2026-11-25_6f0089f.md), 2026-11-25 UTC. This is release-record evidence, not a live production check
 **Engineering State:** v2 in production; post-launch hardening
 **Integration Target:** `main` (feature branches and worktrees may differ)
 
@@ -38,8 +38,11 @@
   The full suite runs nightly in [full-suite.yml](.github/workflows/full-suite.yml); request an
   owner-run full suite when broader validation is needed. Always set `TEST_DATABASE_URL` to a
   disposable local test database; see [CONTRIBUTING.md](CONTRIBUTING.md).
-- New databases build step 0 from the frozen baseline `migrations/baseline/0001_baseline_schema.sql`
-  (2026-09-28); model changes no longer reach the bootstrap.
+- The supported migration lineage starts at the v2.0.0 launch baseline, revision `d7a3e9b1c5f2`, which
+  executes the frozen, hashed `migrations/baseline/d7a3e9b1c5f2_v2_launch_schema.sql`
+  (`SOP-DB-001` §V.C). The 171 pre-launch revisions are provenance in
+  `migrations/archive/v2_prelaunch/`; a database at one of them is refused. New production-style
+  installations initialize from their release schema bundle (`migrations/fresh/<revision>/`).
 
 ## Git Hooks
 
@@ -56,11 +59,13 @@ on a custom database URL.
 
 ### Released baseline
 
-The latest application deployment record is [v2.5.0](docs/ops/audits/DEPLOY_2026-11-23_6251659.md).
-It adds the self-hosting installer and handbook, fixed teacher-session lifetime, deliberate POST
-sign-out with server-side invalidation, Redis 6 student-setup compatibility and dependency updates.
-The record separates the passed deployment/backup checks and owner sign-in/sign-out check from
-remaining scoped validation under [#1811](https://github.com/timwonderer/classroom-token-hub/issues/1811).
+The latest application deployment record is [v2.6.0](docs/ops/audits/DEPLOY_2026-11-25_6f0089f.md).
+It starts the supported migration lineage at the v2.0.0 launch baseline, makes simple interest
+non-compounding, fixes two production deadlocks and a bill-cycle race, keeps URLs, request ids,
+statement parameters and typed names out of logs, and drops the retired `issues.eligible_for_reward`
+(migration `4fad9d362d0d`). The supported fresh-install release stays v2.5.0. The record separates
+the passed deployment, backup and balance checks and owner sign-in/sign-out check from remaining
+scoped validation under [#1862](https://github.com/timwonderer/classroom-token-hub/issues/1862).
 
 Recent releases also delivered Copy Configuration between classes, canonical temporal resolution,
 Hugo + Hextra developer documentation, and the host-side production release gate. The application,

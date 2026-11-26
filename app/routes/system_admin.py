@@ -8,7 +8,6 @@ system logs, error monitoring, and debug/testing tools.
 import os
 import re
 import binascii
-import secrets
 from urllib.parse import urlparse
 import requests
 from types import SimpleNamespace
@@ -138,7 +137,7 @@ def login():
     return render_template("system_admin_login.html", form=form)
 
 
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 def _complete_sysadmin_login(form):
     """The validated sysadmin login submission."""
     # Ingress gate: the widget already renders here (the global
@@ -183,9 +182,6 @@ def _complete_sysadmin_login(form):
                 # class, nonce, or username) carries over.
                 session.clear()
                 establish_sysadmin_session(user)
-                nonce = secrets.token_urlsafe(32)
-                session["current_session_nonce"] = nonce
-                user.current_session_nonce = nonce
                 session["sysadmin_auth_username"] = username
                 session['last_activity'] = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc.isoformat()
                 flash("System admin login successful.")
@@ -342,7 +338,7 @@ def passkey_auth_start():
 
 
 @sysadmin_bp.route('/passkey/auth/finish', methods=['POST'])
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
+@requires_feat_context("FEAT-IDEN-009", key_per_call=True)
 @limiter.limit("20 per minute")
 def passkey_auth_finish():
     """
@@ -374,9 +370,6 @@ def passkey_auth_finish():
         auth_username = session.get("passkey_sysadmin_auth_username")
         session.clear()
         establish_sysadmin_session(user)
-        nonce = secrets.token_urlsafe(32)
-        session["current_session_nonce"] = nonce
-        user.current_session_nonce = nonce
         session["sysadmin_auth_username"] = auth_username or f"sysadmin_{user.id}"
         session['last_activity'] = now.isoformat()
 
@@ -835,7 +828,8 @@ def update_issue(issue_ref):
         flash(f"Ticket #{issue.id} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error updating ticket {issue_id}: {str(e)}")
+        # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+        current_app.logger.error(f"Error updating ticket {issue_id}: {type(e).__name__}")
         flash("Error updating ticket. Please try again.", "error")
 
     return redirect(url_for('sysadmin.view_issue', issue_ref=issue_ref))
@@ -1154,7 +1148,8 @@ def resolve_escalated_issue(issue_ref):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error resolving escalated issue {issue_id}: {e}")
+        # Class only: a DB error's DETAIL echoes the row's free text (INV-ARC-005 §V).
+        current_app.logger.error(f"Error resolving escalated issue {issue_id}: {type(e).__name__}")
         flash("An error occurred while resolving the issue.", "error")
 
     return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))

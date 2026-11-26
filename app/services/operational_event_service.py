@@ -69,12 +69,13 @@ def record(
     """
     if not event_type or not domain:
         return
+    from app.utils.helpers import loggable_route as _loggable_route
 
     payload = {
         "event_type": event_type,
         "severity": severity,
         "domain": domain,
-        "route": route or (request.path if has_request_context() else None),
+        "route": route or (_loggable_route() if has_request_context() else None),
         "actor_seat_id": (actor_seat_id if actor_seat_id is not None else (
             getattr(getattr(g, 'canonical_context', None), 'seat_id', None)
             if has_request_context() and getattr(getattr(g, 'canonical_context', None), 'class_id', None) == class_id

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-004 | 1.3 | 2026-11-04 | 1.2 | Normative |
+| SOP-DB-004 | 1.4 | 2026-11-24 | 1.3 | Normative |
 
 > [!NOTE]
 > §VII and §VIII record the owner ruling of 2026-10-06 on compatibility: physical schema coexistence
@@ -51,8 +51,18 @@ what is not permitted until they have.
 ## V. Definitions and Boundary
 
 1. **Live-v2.** The production database and application from the v2.0.0 release (2026-09-26)
-   onward. Its history is the frozen baseline (`migrations/baseline/0001_baseline_schema.sql`, see
-   `SOP-DB-001` §V.B) plus the Alembic chain to the deployed head.
+   onward: the v2 schema era (`SOP-DB-001` §V.C). Three facts are distinct and are not conflated:
+   - **What production executed.** On 2026-09-26 the public schema was recreated empty and
+     `flask db upgrade` ran at `26d1792b5`: revision `0001` materialized the live ORM, then 170
+     revisions ran to `d7a3e9b1c5f2` (`docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md`). Every
+     later revision ran as an ordinary upgrade. Production never executed the 2026-09-28 frozen
+     baseline.
+   - **What the supported lineage contains.** The era baseline `d7a3e9b1c5f2` (the v2.0.0 launch
+     schema) and every later revision in `migrations/versions/`. Its equivalence to what production
+     executed is recorded in `docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`.
+   - **What a new installation executes.** The release schema bundle for its release
+     (`SOP-DEP-001` §IX). Replaying the supported lineage from the era baseline is the equivalent
+     path CI and tests use.
 2. **Production state** has five parts, and a change names every part it touches:
    - **Structure**: tables, columns, constraints, triggers, indexes.
    - **Rows**: existing data in unprotected tables.
@@ -76,7 +86,9 @@ what is not permitted until they have.
    sense. The complete list is `migrations/forward_only_register.txt`, which
    `tests/test_forward_only_revision_register.py` holds equal to the set derived from each
    revision's own `downgrade()`. A PR that adds a forward-only revision adds it to the register;
-   a missing or stale entry fails the test.
+   a missing or stale entry fails the test. Revisions outside the supported lineage are provenance
+   (`SOP-DB-001` §V.C.1), not forward-only revisions in this sense; the register's last pre-replacement
+   form is `migrations/archive/v2_prelaunch/forward_only_register.txt`.
 6. **Rollback boundary.** The first revision in a release whose `downgrade()` is not both defined
    and rehearsed (`SOP-DB-003` §VII.5). Past it, recovery is snapshot restore or a reviewed
    fix-forward, never a downgrade.
@@ -272,6 +284,12 @@ the named independent observer; and the version assigned under §X with the leve
 - `SOP-DEP-002` is unchanged. §IX adds evidence to its checklist; it removes none.
 
 ## XIII. Amendment
+
+> v1.4 (2026-11-24): §V.1 described production's history as the frozen baseline plus the chain;
+> production never executed the frozen baseline. §V.1 now separates what production executed, what
+> the supported lineage contains and what a new installation executes, under the schema era of
+> `SOP-DB-001` §V.C. §V.5 notes that revisions outside the lineage are provenance. No classification
+> or versioning rule changes.
 
 Revisions require incrementing the version, updating the Effective Date, and populating the
 Supersedes field, and must remain consistent with `INV-CORE-000`. Any change to §VII requires an owner ruling, which the new version cites.

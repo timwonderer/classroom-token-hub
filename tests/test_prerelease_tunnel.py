@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -60,10 +61,25 @@ def env():
     stub("docker", "exit 0")
     stub("sleep", "exit 0")
     stub("pg_dump", "echo 'pg_dump (PostgreSQL) 14.0'")
+    # `docker` is a no-op stub that never actually starts a server, so the readiness poll must be told
+    # the (fake) container is up immediately; exit "${FAKE_PG_NOT_READY:-0}" lets a test simulate the
+    # container never becoming ready within the bound.
+    stub("pg_isready", 'exit "${FAKE_PG_NOT_READY:-0}"')
     stub("lsof", 'exit "${FAKE_PORT_BUSY:-1}"')
     stub("age-keygen", 'echo "${FAKE_RECIPIENT:-age1fake}"')
     tool = home / "cth-backup-venv" / "bin" / "python"
-    tool.write_text('#!/bin/bash\necho "tool $*"\nexit "${FAKE_TOOL_FAILS:-0}"\n')
+    # FAKE_TOOL_FAILS must fail only the actual backup invocation (`$TOOL backup --reason manual`), not
+    # the `--version` / `-c import psycopg2` prerequisite checks prerelease.sh now runs first — otherwise
+    # a test using it to simulate the backup tool failing never gets past the prerequisite check at all.
+    tool.write_text(
+        '#!/bin/bash\n'
+        'echo "tool $*"\n'
+        'case "$*" in\n'
+        f'  *cth_backup_scheduled*) exec {sys.executable} "$@" ;;  # the real point cleanup\n'
+        '  *"backup --reason manual"*) exit "${FAKE_TOOL_FAILS:-0}" ;;\n'
+        '  *) exit 0 ;;\n'
+        'esac\n'
+    )
     tool.chmod(0o755)
 
     base = {
@@ -71,6 +87,12 @@ def env():
         "PATH": f"{stubs}:/usr/bin:/bin:/usr/sbin:/sbin",
         "STUB_LOG": str(state / "calls.log"),
         "STUB_STATE": str(state),
+        # prerelease.sh prepends a hardcoded Homebrew postgresql@14 bin dir to PATH. On a machine where
+        # that package is actually installed, its real pg_isready would resolve ahead of the stub above
+        # and fail every poll (nothing is listening on 127.0.0.1:55432 in these tests), breaking the
+        # success-path tests on such a host. Override it to the stub directory so the stub always wins
+        # regardless of what is installed on the host running the tests.
+        "CTH_BACKUP_PG_BIN": str(stubs),
     }
     yield {"root": root, "home": home, "state": state, "base": base}
     shutil.rmtree(root, ignore_errors=True)
@@ -116,7 +138,11 @@ def test_backup_closes_the_tunnel_when_the_app_will_not_stop(env):
 def test_backup_closes_the_tunnel_when_the_backup_tool_fails(env):
     result = run(env, "backup", FAKE_TOOL_FAILS=1)
     assert result.returncode != 0
+    # The tunnel must actually have been opened (i.e. the prerequisite checks and app-stop passed, and
+    # the failure is the backup tool invocation itself), then closed by the ERR trap.
+    assert opened_with_control_socket(env)
     assert not tunnel_open(env)
+    assert any("-O exit" in c for c in ssh_calls(env))
 
 
 def test_restore_closes_the_tunnel_and_deletes_the_identity(env):
@@ -135,7 +161,7 @@ def test_restore_closes_the_tunnel_after_a_successful_restore(env):
     state_dir = env["home"] / "cth-backup" / "run"
     (state_dir / "points").mkdir(parents=True)
     assert run(env, "backup", CTH_BACKUP_STATE_DIR=state_dir).returncode == 0
-    (state_dir / "points" / "cth-db-x-manual.dump.age").write_text("x")
+    (state_dir / "points" / "cth-db-20261126T200000Z-manual.dump.age").write_text("x")
     identity = env["home"] / "cth-backup" / "identity.txt"
     identity.write_text("AGE-SECRET-KEY-FAKE\n")
 
@@ -174,6 +200,40 @@ def test_a_stale_control_socket_is_replaced_not_reused(env):
     assert run(env, "close-tunnel").returncode == 0 and not tunnel_open(env)
 
 
+def test_backup_fails_closed_when_cth_verify_never_becomes_ready(env):
+    # Issue #1819: a fixed `sleep 5` either wasted time or lost the race against postgres:14's real
+    # init time. The bounded pg_isready poll must fail closed, before the tunnel opens or the app stops,
+    # rather than proceed to createdb/backup against a server that was never confirmed ready.
+    result = run(env, "backup", FAKE_PG_NOT_READY=1)
+    assert result.returncode != 0
+    assert "did not become ready" in result.stdout
+    assert not tunnel_open(env)
+    assert not any("systemctl stop" in c for c in ssh_calls(env))
+
+
+def test_backup_aborts_before_stopping_the_app_when_the_backup_venv_python_is_missing(env):
+    # Issue #1819: prerelease.sh stopped the gated app before discovering the backup venv's python was
+    # gone (removed Homebrew Python it had been built against). The check must run, and fail, before
+    # anything touches production.
+    (env["home"] / "cth-backup-venv" / "bin" / "python").unlink()
+    result = run(env, "backup")
+    assert result.returncode != 0
+    assert "not found or not executable" in result.stdout
+    assert not any("systemctl stop" in c for c in ssh_calls(env))
+    assert not tunnel_open(env)
+
+
+def test_backup_aborts_before_stopping_the_app_when_the_backup_venv_python_cannot_import_psycopg2(env):
+    tool = env["home"] / "cth-backup-venv" / "bin" / "python"
+    tool.write_text('#!/bin/bash\ncase "$*" in\n  *"-c import psycopg2"*) exit 1 ;;\nesac\necho "tool $*"\n')
+    tool.chmod(0o755)
+    result = run(env, "backup")
+    assert result.returncode != 0
+    assert "cannot import psycopg2" in result.stdout
+    assert not any("systemctl stop" in c for c in ssh_calls(env))
+    assert not tunnel_open(env)
+
+
 def test_restore_without_an_identity_still_closes_the_tunnel(env):
     # Review on #1632: the identity guard exited before the cleanup trap existed.
     assert run(env, "backup").returncode == 0 and tunnel_open(env)
@@ -181,3 +241,126 @@ def test_restore_without_an_identity_still_closes_the_tunnel(env):
     assert result.returncode != 0
     assert "missing" in result.stdout
     assert not tunnel_open(env)
+
+
+def _point(folder, stamp):
+    (folder / "points").mkdir(parents=True, exist_ok=True)
+    for ext in ("dump.age", "manifest.json"):
+        (folder / "points" / f"cth-db-{stamp}-manual.{ext}").write_text("x")
+
+
+def test_a_passing_restore_deletes_every_older_prerelease_point(env):
+    """Owner ruling 2026-11-25 (SOP-DB-005 §VIII): a verified point invalidates every older one."""
+    backups = env["home"] / "cth-backup"
+    current, older, newer, empty = (backups / f"prerelease-{n}" for n in ("2026-11-26", "2026-11-20", "2026-11-27", "x"))
+    _point(older, "20261120T200000Z")
+    _point(newer, "20261127T200000Z")
+    empty.mkdir()
+    (backups / "prerelease-v2.2.1.sh").write_text("# a script, not a point\n")
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert current.exists() and newer.exists()
+    assert not older.exists() and not empty.exists()
+    assert (backups / "prerelease-v2.2.1.sh").exists()
+
+
+def test_a_passing_restore_deletes_an_older_point_in_its_own_folder(env):
+    """Review on #1873: two releases on one UTC day share a folder, and the tool keeps two points in it."""
+    backups = env["home"] / "cth-backup"
+    current = backups / "prerelease-2026-11-26"
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T090000Z")
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(f.name for f in (current / "points").iterdir()) == [
+        "cth-db-20261126T200000Z-manual.dump.age", "cth-db-20261126T200000Z-manual.manifest.json"]
+
+
+def test_a_passing_restore_deletes_older_points_beside_a_newer_one(env):
+    """Review on #1873: another folder holding a newer point kept its older ones."""
+    backups = env["home"] / "cth-backup"
+    current, other = backups / "prerelease-2026-11-26", backups / "prerelease-2026-11-27"
+    _point(other, "20261125T200000Z")
+    _point(other, "20261127T200000Z")
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    assert sorted(f.name for f in (other / "points").iterdir()) == [
+        "cth-db-20261127T200000Z-manual.dump.age", "cth-db-20261127T200000Z-manual.manifest.json"]
+
+
+def test_the_point_restored_is_the_boundary_not_the_newest_name(env):
+    """Review on #1873: `latest` picks by mtime, so the newest name may not be the point that passed."""
+    import os
+    backups = env["home"] / "cth-backup"
+    current = backups / "prerelease-2026-11-26"
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T090000Z")
+    _point(current, "20261126T200000Z")
+    for f in (current / "points").glob("cth-db-20261126T200000Z-*"):
+        os.utime(f, (1, 1))  # older mtime: `latest` restores the 09:00 point
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    assert len(list((current / "points").iterdir())) == 4
+
+
+def test_a_passing_restore_never_deletes_a_folder_whose_run_is_in_progress(env):
+    """Review on #1873: the older folder's run.lock is held by a pre-release run still writing into it."""
+    import fcntl
+    backups = env["home"] / "cth-backup"
+    current, running = backups / "prerelease-2026-11-26", backups / "prerelease-2026-11-20"
+    running.mkdir(parents=True)
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+    with open(running / "run.lock", "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    assert running.exists()
+
+
+def test_a_failed_restore_deletes_no_older_point(env):
+    backups = env["home"] / "cth-backup"
+    current, older = backups / "prerelease-2026-11-26", backups / "prerelease-2026-11-20"
+    _point(older, "20261120T200000Z")
+    _point(current, "20261126T200000Z")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current)  # no identity: refuses before restoring
+
+    assert result.returncode != 0
+    assert older.exists()
+
+
+def test_restore_accepts_an_identity_that_is_one_of_several_recipients(env):
+    """recipients.txt holds the owner's key and two YubiKey recipients (SOP-DB-005 D6)."""
+    backups = env["home"] / "cth-backup"
+    (backups / "recipients.txt").write_text("age1yubikey1one\nage1fake\nage1yubikey1two\n")
+    current = backups / "prerelease-2026-11-26"
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+
+
+def test_restore_refuses_an_identity_that_is_no_recipient(env):
+    backups = env["home"] / "cth-backup"
+    current = backups / "prerelease-2026-11-26"
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current, FAKE_RECIPIENT="age1someoneelse")
+
+    assert result.returncode != 0
+    assert "not one of the keys" in result.stdout

@@ -32,7 +32,7 @@ def test_flagged_warnings_cannot_forge_lines(filename, expected_calls):
         'app': SimpleNamespace(logger=logger),
         'request': SimpleNamespace(path=malicious, url=malicious, remote_addr=malicious, method=malicious),
         'real_ip': malicious, 'error_msg': malicious, 'limit_description': malicious, 'in_request_context': True, 'error_type': 'test',
-        'sanitize_for_log': _sanitizer(),
+        'sanitize_for_log': _sanitizer(), 'loggable_route': lambda: malicious,
     }
     for call in calls:
         exec(compile(ast.Expression(call), filename, 'eval'), namespace)
@@ -62,10 +62,13 @@ def test_request_filter_sanitizes_existing_and_fallback_endpoints(in_request_con
         'has_request_context': lambda: in_request_context,
         'request': SimpleNamespace(url_rule=None, path=malicious, method='GET'),
         'sanitize_for_log': _sanitizer(),
+        'loggable_route': lambda: '<unmatched>' if in_request_context else '-',
     }
     exec(compile(ast.Module(body=[filter_class], type_ignores=[]), 'app/__init__.py', 'exec'), namespace)
     record = logging.LogRecord('test', logging.ERROR, __file__, 1, 'error', (), None)
     if prepopulated:
         record.endpoint = malicious
     assert namespace['RequestIdFilter']().filter(record)
-    assert record.endpoint == (_sanitizer()(malicious) if prepopulated or in_request_context else '-')
+    # An unmatched route is logged as <unmatched>, never its raw path (INV-ARC-005 §V).
+    expected = _sanitizer()(malicious) if prepopulated else ('<unmatched>' if in_request_context else '-')
+    assert record.endpoint == expected

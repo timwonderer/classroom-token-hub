@@ -56,7 +56,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="text-muted mb-1">Pending Review</h6>
+                            <h2 class="h6 text-muted mb-1">Pending Review</h2>
                             <h3 class="mb-0">{{ pending_issues|length }}</h3>
                         </div>
                         <span class="material-symbols-outlined fs-1 text-warning" aria-hidden="true">history</span>
@@ -69,7 +69,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="text-muted mb-1">Final Review</h6>
+                            <h2 class="h6 text-muted mb-1">Final Review</h2>
                             <h3 class="mb-0">{{ resolved_issues|length }}</h3>
                         </div>
                         <span class="material-symbols-outlined fs-1 text-success" aria-hidden="true">check_circle</span>
@@ -82,7 +82,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="text-muted mb-1">Escalated</h6>
+                            <h2 class="h6 text-muted mb-1">Escalated</h2>
                             <h3 class="mb-0">{{ escalated_issues|length }}</h3>
                         </div>
                         <span class="material-symbols-outlined fs-1 text-info" aria-hidden="true">arrow_circle_up</span>
@@ -124,10 +124,10 @@
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
-                                    <h6 class="mb-0 me-2">
+                                    <h2 class="h6 mb-0 me-2">
                                         <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                         {{ issue.student_display_name }}
-                                    </h6>
+                                    </h2>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
                                     {% if issue.related_transaction_id %}
                                     <span class="badge bg-info ms-2">
@@ -159,7 +159,7 @@
                 <div class="card">
                     <div class="card-body text-center py-5">
                         <span class="material-symbols-outlined fs-1 text-success mb-3" aria-hidden="true">check_circle</span>
-                        <h5 class="text-muted">No pending issues</h5>
+                        <h2 class="h5 text-muted">No pending issues</h2>
                         <p class="text-muted mb-0">All caught up! There are no issues waiting for your review.</p>
                     </div>
                 </div>
@@ -175,10 +175,10 @@
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
-                                    <h6 class="mb-0 me-2">
+                                    <h2 class="h6 mb-0 me-2">
                                         <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                         {{ issue.student_display_name }}
-                                    </h6>
+                                    </h2>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
                                     {% if issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}
                                     <span class="badge bg-info ms-2">Developer Fix Applied - Teacher Review Required</span>
@@ -209,7 +209,7 @@
                 <div class="card">
                     <div class="card-body text-center py-5">
                         <span class="material-symbols-outlined fs-1 text-muted mb-3" aria-hidden="true">inbox</span>
-                        <h5 class="text-muted">No tickets awaiting final review</h5>
+                        <h2 class="h5 text-muted">No tickets awaiting final review</h2>
                         <p class="text-muted mb-0">Tickets waiting for your final review will appear here.</p>
                     </div>
                 </div>
@@ -225,10 +225,10 @@
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
-                                    <h6 class="mb-0 me-2">
+                                    <h2 class="h6 mb-0 me-2">
                                         <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
                                         {{ issue.student_display_name }}
-                                    </h6>
+                                    </h2>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
                                 </div>
                                 <p class="mb-1 text-muted small">
@@ -255,7 +255,7 @@
                 <div class="card">
                     <div class="card-body text-center py-5">
                         <span class="material-symbols-outlined fs-1 text-muted mb-3" aria-hidden="true">inbox</span>
-                        <h5 class="text-muted">No escalated issues</h5>
+                        <h2 class="h5 text-muted">No escalated issues</h2>
                         <p class="text-muted mb-0">Issues you escalate to developers will appear here.</p>
                     </div>
                 </div>

@@ -9,7 +9,7 @@ from app.hash_utils import normalize_lookup_text
 from types import SimpleNamespace
 from flask import (
     Blueprint, redirect, url_for, jsonify, current_app,
-    request, g,
+    request, g, abort,
 )
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -121,6 +121,12 @@ def health_status():
 def privacy():
     """Redirect to the hosted Privacy & Data Handling Policy page."""
     return _marketing_site_redirect('privacy.html')
+
+
+@main_bp.route('/teapot')
+def teapot():
+    """Easter egg behind the 404 page's header icon: RFC 2324 §2.3.2."""
+    abort(418)
 
 
 @main_bp.route('/terms')

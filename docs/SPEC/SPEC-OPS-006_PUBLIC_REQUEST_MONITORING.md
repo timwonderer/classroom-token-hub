@@ -2,15 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.7 | 2026-11-23 | 1.6 | Subordinate implementation contract |
-
-*Revision 1.7 (2026-11-23; owner-approved amendment): replace the 90-day reliability strip and historical threshold percentages with a 30-day overall request-error distribution. Count 4xx and 5xx without assigning fault, show last recorded observation windows, and disclose missing coverage. Current status and incident policy are unchanged.*
-
-*Revision 1.6 (2026-10-23; owner ruling 2026-10-23): the collector probes the gate first and, while the gate is closed, reads nothing from the application: no request telemetry and no health read; the endpoint and database checks are UNKNOWN under the new closed diagnostic `NOT_COLLECTED` (§VIII Independent platform checks). The collector carries no Cloudflare Access credential: the health endpoints are public, and the Access redirect is the maintenance signal. The service token existed only to reach production during maintenance.*
-
-*Revision 1.5 (2026-10-21; owner ruling 2026-10-21): the endpoint check is FAIL (`HTTP_UNAVAILABLE`) only on an HTTP 5xx response. Any other non-redirect, non-authentication HTTP error, such as 429 (rate limited) or 404, means the check could not observe health: it is UNKNOWN under the new closed diagnostic `HTTP_REFUSED`, for the endpoint and the database alike, and so can never make the hero `Mostly unavailable` (§VIII Independent platform checks). Prompted by 2026-10-20, when the collector's health read was rate limited and the hero read `Mostly unavailable` while the app was up.*
-
-*Revision 1.4 (2026-10-02; ratified by the owner 2026-10-02, under DOM-OPS-001 2.12): adds the `hall_pass` component and its route group (§V, §VI); adds `http_404_failure_count` and the closed list of failed-request routes, which at 1.4 is the hall-pass approve, reject and cancel routes only (§V, §VI); the failed-request rule — at least 3 in the window and more than 2% of the component's requests (owner ruling 2026-10-02) — governing classification, the card and the hero (§VI, §VIII); schema `request-telemetry-v2`, with `request-telemetry-v1` snapshots still read (§V, §VII).*
+| SPEC-OPS-006 | 1.8 | 2026-11-24 | 1.7 | Subordinate implementation contract |
 
 ## I. Purpose
 
@@ -82,7 +74,8 @@ upgraded in either order, and keeps retained activity readable (§VIII).
 ## VI. Collection, freshness and classification
 
 The sampler queries local Loki with fixed reviewed route expressions and a common
-UTC evaluation time. It aggregates away all labels. Caller-defined queries are
+UTC evaluation time. It aggregates away all labels. Requests to `/teapot`, an easter egg that
+always answers 418 by design, are excluded from every group (owner ruling 2026-11-24). Caller-defined queries are
 forbidden. Request counts and latency come from the same 300-second window.
 The service group observes upstream application requests. Route groups are proxies,
 not a complete registry of business operations. Source evidence may overlap groups.
@@ -356,6 +349,18 @@ populated/idle/stale history and cards for keyboard/touch access.
 A deployed claim requires source → collector → Firestore → rendered evidence.
 
 ## X. Amendment
+
+### Revision History
+
+*Revision 1.8 (2026-11-24; owner ruling 2026-11-24): the sampler excludes `/teapot`, the easter egg that always answers 418 (§VI), so visiting it never adds to the 4xx request-error count.*
+
+*Revision 1.7 (2026-11-23; owner-approved amendment): replace the 90-day reliability strip and historical threshold percentages with a 30-day overall request-error distribution. Count 4xx and 5xx without assigning fault, show last recorded observation windows, and disclose missing coverage. Current status and incident policy are unchanged.*
+
+*Revision 1.6 (2026-10-23; owner ruling 2026-10-23): the collector probes the gate first and, while the gate is closed, reads nothing from the application: no request telemetry and no health read; the endpoint and database checks are UNKNOWN under the new closed diagnostic `NOT_COLLECTED` (§VIII Independent platform checks). The collector carries no Cloudflare Access credential: the health endpoints are public, and the Access redirect is the maintenance signal. The service token existed only to reach production during maintenance.*
+
+*Revision 1.5 (2026-10-21; owner ruling 2026-10-21): the endpoint check is FAIL (`HTTP_UNAVAILABLE`) only on an HTTP 5xx response. Any other non-redirect, non-authentication HTTP error, such as 429 (rate limited) or 404, means the check could not observe health: it is UNKNOWN under the new closed diagnostic `HTTP_REFUSED`, for the endpoint and the database alike, and so can never make the hero `Mostly unavailable` (§VIII Independent platform checks). Prompted by 2026-10-20, when the collector's health read was rate limited and the hero read `Mostly unavailable` while the app was up.*
+
+*Revision 1.4 (2026-10-02; ratified by the owner 2026-10-02, under DOM-OPS-001 2.12): adds the `hall_pass` component and its route group (§V, §VI); adds `http_404_failure_count` and the closed list of failed-request routes, which at 1.4 is the hall-pass approve, reject and cancel routes only (§V, §VI); the failed-request rule — at least 3 in the window and more than 2% of the component's requests (owner ruling 2026-10-02) — governing classification, the card and the hero (§VI, §VIII); schema `request-telemetry-v2`, with `request-telemetry-v1` snapshots still read (§V, §VII).*
 
 Increment version, update date and documentation index, and review changes against
 DOM-OPS-001. No amendment may relax internal verification or privacy authority.
