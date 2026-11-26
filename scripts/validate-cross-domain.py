@@ -44,6 +44,7 @@ TABLE_DOMAIN = {
     "student_recovery_codes": "DOM-IDEN",
     "recovery_class_challenges": "DOM-IDEN",
     "passkey_credentials": "DOM-IDEN",
+    "credential_operations": "DOM-IDEN",
     "teacher_signup_attempts": "DOM-IDEN",
     # DOM-CLASS-001 / -002 — class directives and their effective-dated versions
     "class_features": "DOM-CLASS",

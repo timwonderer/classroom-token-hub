@@ -10,6 +10,7 @@ from app import db
 from app.feats.base import requires_feat_context
 from app.hash_utils import _get_pepper, verify_password, hash_username_lookup
 from app.models import User, Seat, ClassEconomy, PasskeyCredential
+from app.services.credential_lifecycle import mint_totp_secret, supersede_for_recovery
 from app.services.recovery_service import _tables
 from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
@@ -259,7 +260,8 @@ def authorize_setup(*, request_id, attempt_nonce, username, correlation_id, idem
     username = normalize_auth_username(username)
     if not username or len(username)>100 or User.query.filter(User.username_lookup_hash==hash_username_lookup(username), User.id!=user.id).first():
         return None
-    nonce, secret = secrets.token_urlsafe(32), pyotp.random_base32()
+    supersede_for_recovery(user)
+    nonce, secret = secrets.token_urlsafe(32), mint_totp_secret()
     requests, _ = _tables()
     # Keep attempt resume authority; accepted class proofs outlive a browser session.
     db.session.execute(sa.update(requests).where(requests.c.id==row.id).values(setup_nonce_hash=_nonce_digest(nonce),
@@ -289,6 +291,7 @@ def complete_setup(*, request_id, nonce, totp_code, correlation_id, idempotency_
         _, user.username_hash, user.username_lookup_hash = build_hashed_username_fields(username)
         user.totp_secret_encrypted = row.setup_totp_encrypted
         user.current_session_nonce = secrets.token_hex(32)
+        user.credential_generation = user.credential_generation + 1
         PasskeyCredential.query.filter_by(user_id=user.id).delete(synchronize_session=False)
         _clear(row.id, status='verified', completed_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc, attempt_nonce_hash=None)
         db.session.flush()

@@ -967,6 +967,17 @@ def purge_expired_teacher_signups_job():
         idempotency_key='teacher-signup:purge')
 
 
+def expire_credential_operations_job():
+    """Cancel credential operations past their deadline and drop spent receipts.
+
+    SPEC-IDEN-002 §V/§VI: pending TOTP material loses authority at the deadline
+    and is physically erased by the earliest cleanup execution.
+    """
+    from app.feats.credential_operations_feat import expire_credential_operations
+    from app.feats.base import generate_correlation_id
+    return expire_credential_operations(correlation_id=generate_correlation_id())
+
+
 def close_prior_day_hall_pass_requests_job():
     """Close every class's hall-pass requests whose day has ended (FEAT-PROD-002 §III.A)."""
     from app.extensions import db
@@ -1016,6 +1027,15 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         func=purge_expired_teacher_signups_job,
         trigger='cron',
         trigger_kwargs={'minute': 54},
+    ),
+    # Hourly: erases pending TOTP seeds of credential operations past their
+    # interactive deadline (SPEC-IDEN-002 §VI). Idempotent: a swept row is terminal.
+    ScheduledJobSpec(
+        id='expire_credential_operations',
+        name='Expire credential operations past their deadline',
+        func=expire_credential_operations_job,
+        trigger='cron',
+        trigger_kwargs={'minute': 9},
     ),
     ScheduledJobSpec(
         id='stale_teacher_accounts',

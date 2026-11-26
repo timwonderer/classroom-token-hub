@@ -14,7 +14,8 @@ from app.utils.student_deletion import delete_user_if_orphaned
 from tests.helpers.classroom_initializer import initialize
 
 ALLOWED = {('seats', 'user_id'), ('classes', 'teacher_user_id'),
-           ('passkey_credentials', 'user_id'), ('recovery_requests', 'user_id')}
+           ('passkey_credentials', 'user_id'), ('recovery_requests', 'user_id'),
+           ('credential_operations', 'user_id')}
 
 
 def test_shipped_schema_has_only_identity_principal_references(client):

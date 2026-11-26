@@ -110,12 +110,23 @@ def delete_admin_credential(credential_id: int, user_id: int) -> bool:
     credentials = _credentials_table()
     if user_id is None:
         return False
+    users = db.metadata.tables["users"]
+    # Removing a binding advances the principal's credential generation under the
+    # user row lock (DOM-IDEN-003 §VII.A), so an operation authorized by this
+    # passkey fails its generation recheck instead of activating.
+    db.session.execute(sa.select(users.c.id).where(users.c.id == user_id).with_for_update())
     stmt = sa.delete(credentials).where(
         credentials.c.id == credential_id,
         credentials.c.user_id == user_id,
     )
     result = db.session.execute(stmt)
-    return (result.rowcount or 0) > 0
+    removed = (result.rowcount or 0) > 0
+    if removed:
+        db.session.execute(
+            sa.update(users).where(users.c.id == user_id)
+            .values(credential_generation=users.c.credential_generation + 1)
+        )
+    return removed
 
 
 def delete_admin_credentials_for_user(user_id: int) -> None:

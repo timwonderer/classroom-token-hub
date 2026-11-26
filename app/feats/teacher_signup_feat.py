@@ -8,6 +8,7 @@ from app import db
 from app.feats.base import requires_feat_context
 from app.models import TeacherSignupAttempt
 from app.services.classroom_setup import create_teacher, create_class
+from app.services.credential_lifecycle import mint_totp_secret
 from app.utils.auth_username import normalize_auth_username
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.encryption import encrypt_totp, decrypt_totp
@@ -65,7 +66,7 @@ def prepare_totp(*, nonce, username, correlation_id, idempotency_key):
     payload = json.loads(decrypt_totp(row.payload_encrypted))
     username = normalize_auth_username(username)
     if payload.get('username') != username:
-        payload.update(username=username, totp_secret=pyotp.random_base32())
+        payload.update(username=username, totp_secret=mint_totp_secret())
         row.payload_encrypted = encrypt_totp(json.dumps(payload))
     return payload['totp_secret']
 

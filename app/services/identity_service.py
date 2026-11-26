@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import pyotp
-
 import secrets
 
 from app.extensions import db
 from app.feats.base import get_active_feat_name
 from app.models import ClassEconomy, Seat, User, UserRole
+from app.services.credential_lifecycle import mint_totp_secret
 from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
 from app.utils.encryption import encrypt_totp
 
@@ -33,7 +32,7 @@ def create_system_principal(username: str) -> str | None:
     _, username_hash, lookup_hash = build_hashed_username_fields(username)
     if User.query.with_entities(User.id).filter_by(username_lookup_hash=lookup_hash).first() is not None:
         return None
-    secret = pyotp.random_base32()
+    secret = mint_totp_secret()
     db.session.add(User(
         user_role=UserRole.SYSADMIN,
         username_hash=username_hash,
