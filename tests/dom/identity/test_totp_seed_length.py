@@ -1058,3 +1058,29 @@ def test_the_deadline_is_rechecked_after_the_code_is_verified(client, app, fake_
     assert refused.value.category == "operation_expired"
     assert _stored_seed(user_id) == before
     assert _user(user_id).credential_generation == 1
+
+
+def test_provider_verification_is_refused_inside_an_open_transaction_with_pending_work(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    token = fake_passwordless.sign_in_token("cred-1")
+    calls = []
+    fake_passwordless.sign_in = lambda verify: calls.append(verify) or None
+    nonce = _nonce(user_id)
+
+    db.session.begin_nested() if db.session().in_transaction() else db.session.begin()
+    db.session.add(CredentialOperation(
+        user_id=user_id, purpose=CredentialOperationPurpose.TOTP_REPLACE,
+        stage=CredentialOperationStage.CANCELLED, authorized_generation=1,
+        session_binding_hash="0" * 64, deadline_at=temporal.now(),
+    ))
+    try:
+        with pytest.raises(CredentialOperationRefused) as refused:
+            open_credential_operation(
+                user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token),
+                session_nonce=nonce,
+            )
+        assert refused.value.category == "transaction_open"
+        assert calls == []
+        assert db.session.new  # the pending work was not rolled back
+    finally:
+        db.session.rollback()

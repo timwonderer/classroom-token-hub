@@ -39,6 +39,10 @@ def open_credential_operation(*, user_id, purpose, proof, session_nonce,
     # transaction first, verify, then begin the FEAT transaction and revalidate.
     if db.session().in_transaction() and is_discardable_read_autobegin(db.session):
         db.session.rollback()
+    if db.session().in_transaction():
+        # Intentional work (explicit transaction, savepoint, pending writes): never roll it
+        # back, and never hold it open across a provider call.
+        raise lifecycle.CredentialOperationRefused("transaction_open")
     verified = lifecycle.verify_proof(proof)
     with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=key):
         user = db.session.get(User, user_id)
