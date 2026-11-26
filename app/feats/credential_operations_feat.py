@@ -35,6 +35,17 @@ def open_credential_operation(*, user_id, purpose, proof, session_nonce,
         raise lifecycle.CredentialOperationRefused("unknown_purpose") from None
     feat_name = lifecycle.FEAT_FOR_PURPOSE[purpose]
     key = idempotency_key or f"{feat_name.lower()}:open:{uuid.uuid4().hex}"
+    with db.session.no_autoflush:  # pending intentional work is never flushed by a read here
+        user = db.session.get(User, user_id)
+        if user is None:
+            raise lifecycle.CredentialOperationRefused("ineligible_principal")
+        if not lifecycle.proof_kind_allowed(purpose, proof):
+            raise lifecycle.CredentialOperationRefused("proof_kind_mismatch")
+        if isinstance(proof, lifecycle.PasskeyAssertion):
+            # The challenge is checked before any provider call.
+            lifecycle.check_step_up_challenge(
+                user, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge,
+            )
     # Provider verification runs with no transaction open: drop an incidental read
     # transaction first, verify, then begin the FEAT transaction and revalidate.
     if db.session().in_transaction() and is_discardable_read_autobegin(db.session):

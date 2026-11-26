@@ -55,8 +55,10 @@ from app.services.credential_lifecycle import (
 )
 from app.services.passkey_service import PasskeyError
 from app.utils.encryption import decrypt_totp, encrypt_totp
-from app.utils.user_ids import passkey_external_id
-from tests.dom.identity.test_teacher_recovery_completion import recovery, setup as recovery_setup  # noqa: F401
+from app.utils.user_ids import parse_passkey_external_id, passkey_external_id
+from tests.dom.identity.test_teacher_recovery_completion import (  # noqa: F401
+    finish as recovery_finish, recovery, setup as recovery_setup,
+)
 from tests.helpers import temporal
 from tests.helpers.canonical_classroom import _teacher_key_for
 from tests.helpers.canonical_identities import TEACHERS
@@ -132,13 +134,21 @@ def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=LEGACY_SEED, c
     return classroom, user_id
 
 
-def _assertion(fake, credential="cred-1"):
-    return PasskeyAssertion(fake.sign_in_token(credential))
+def _challenge(user_id, purpose="totp_replace", nonce=None):
+    return lifecycle.issue_step_up_challenge(
+        _user(user_id), purpose=CredentialOperationPurpose(purpose), session_nonce=nonce or _nonce(user_id),
+    )
+
+
+def _assertion(fake, credential="cred-1", acting=None):
+    """A sign-in token for ``credential`` with a challenge issued to ``acting`` (default: its owner)."""
+    acting = acting or parse_passkey_external_id(fake.credentials[credential])
+    return PasskeyAssertion(fake.sign_in_token(credential), _challenge(acting))
 
 
 def _open_replacement(user_id, fake, credential="cred-1", nonce=None):
     return open_credential_operation(
-        user_id=user_id, purpose="totp_replace", proof=_assertion(fake, credential),
+        user_id=user_id, purpose="totp_replace", proof=_assertion(fake, credential, acting=user_id),
         session_nonce=nonce or _nonce(user_id),
     )
 
@@ -441,7 +451,7 @@ def test_an_assertion_for_a_foreign_unknown_or_unactivated_credential_opens_noth
     token = fake_passwordless.token_for(passkey_external_id(other.teacher_user.id), "cred-other")
     with pytest.raises(PasskeyError):
         open_credential_operation(
-            user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token),
+            user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token, _challenge(user_id)),
             session_nonce=_nonce(user_id),
         )
 
@@ -454,7 +464,7 @@ def test_a_sign_in_or_registration_token_of_the_wrong_type_is_refused(client, ap
 
     with pytest.raises(PasskeyError):
         open_credential_operation(
-            user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token),
+            user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token, _challenge(user_id)),
             session_nonce=_nonce(user_id),
         )
 
@@ -594,7 +604,7 @@ def test_wrong_code_changes_nothing_and_the_operation_stays_open(client, app, fa
     operation = _operation(operation_id)
     assert operation.stage is CredentialOperationStage.AUTHORIZED
     assert operation.pending_totp_encrypted is not None
-    assert operation.attempt_count == 1
+    assert operation.attempt_count == 0
     assert _outcome_events() == []
     # The right code still works afterwards.
     assert _activate(user_id, operation_id, _code(secret)) is True
@@ -612,22 +622,23 @@ def test_a_code_for_the_old_secret_does_not_activate_the_candidate(client, app, 
     assert decrypt_totp(_stored_seed(user_id)) == LEGACY_SEED
 
 
-def test_exhausting_the_wrong_code_budget_cancels_and_erases(client, app, fake_passwordless):
+def test_repeated_wrong_codes_never_cancel_the_operation_or_touch_attempt_count(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     operation_id = _open_replacement(user_id, fake_passwordless)
     secret, _ = _hold(user_id, operation_id)
     wrong = _wrong_code(secret)
     before = _stored_seed(user_id)
 
-    for _ in range(lifecycle.MAX_CODE_ATTEMPTS):
+    for _ in range(10):
         assert _activate(user_id, operation_id, wrong) is False
 
     operation = _operation(operation_id)
-    assert operation.stage is CredentialOperationStage.CANCELLED
-    assert operation.pending_totp_encrypted is None
+    assert operation.stage is CredentialOperationStage.AUTHORIZED
+    assert operation.pending_totp_encrypted is not None
+    assert operation.attempt_count == 0
     assert _stored_seed(user_id) == before
-    with pytest.raises(CredentialOperationRefused):
-        _activate(user_id, operation_id, _code(secret))
+    assert not hasattr(lifecycle, "MAX_CODE_ATTEMPTS")
+    assert _activate(user_id, operation_id, _code(secret)) is True
 
 
 def test_correct_code_activates_the_new_seed_once(client, app, fake_passwordless, monkeypatch):
@@ -1066,6 +1077,7 @@ def test_provider_verification_is_refused_inside_an_open_transaction_with_pendin
     calls = []
     fake_passwordless.sign_in = lambda verify: calls.append(verify) or None
     nonce = _nonce(user_id)
+    proof = PasskeyAssertion(token, _challenge(user_id))
 
     db.session.begin_nested() if db.session().in_transaction() else db.session.begin()
     db.session.add(CredentialOperation(
@@ -1076,7 +1088,7 @@ def test_provider_verification_is_refused_inside_an_open_transaction_with_pendin
     try:
         with pytest.raises(CredentialOperationRefused) as refused:
             open_credential_operation(
-                user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token),
+                user_id=user_id, purpose="totp_replace", proof=proof,
                 session_nonce=nonce,
             )
         assert refused.value.category == "transaction_open"
@@ -1084,3 +1096,142 @@ def test_provider_verification_is_refused_inside_an_open_transaction_with_pendin
         assert db.session.new  # the pending work was not rolled back
     finally:
         db.session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# purpose-bound step-up assertions
+# ---------------------------------------------------------------------------
+
+def _open_with(user_id, fake, challenge, credential="cred-1"):
+    return open_credential_operation(
+        user_id=user_id, purpose="totp_replace",
+        proof=PasskeyAssertion(fake.sign_in_token(credential), challenge), session_nonce=_nonce(user_id),
+    )
+
+
+def test_a_sign_in_token_without_a_valid_challenge_is_refused_and_the_provider_is_not_called(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    calls = []
+    original = fake_passwordless.sign_in
+    fake_passwordless.sign_in = lambda verify: calls.append(verify) or original(verify)
+
+    for bad in ("", "x" * 64, None):
+        with pytest.raises(CredentialOperationRefused) as refused:
+            _open_with(user_id, fake_passwordless, bad)
+        assert refused.value.category == "challenge_invalid"
+
+    assert calls == [] and CredentialOperation.query.count() == 0
+
+
+def test_a_challenge_for_another_purpose_generation_or_session_is_refused(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    user = _user(user_id)
+    nonce = _nonce(user_id)
+    other_purpose = _challenge(user_id, purpose="passkey_enroll")
+    stale = _challenge(user_id)
+    other_session = lifecycle._step_up_value(
+        user_id, CredentialOperationPurpose.TOTP_REPLACE, "another-session", user.credential_generation,
+        lifecycle._step_up_bucket(),
+    )
+    other_user = lifecycle._step_up_value(
+        "00000000-0000-0000-0000-000000000000", CredentialOperationPurpose.TOTP_REPLACE, nonce,
+        user.credential_generation, lifecycle._step_up_bucket(),
+    )
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:bump"):
+        db.session.get(User, user_id).credential_generation = 2
+
+    for challenge in (other_purpose, stale, other_session, other_user):
+        with pytest.raises(CredentialOperationRefused) as refused:
+            _open_with(user_id, fake_passwordless, challenge)
+        assert refused.value.category == "challenge_invalid"
+    assert CredentialOperation.query.count() == 0
+
+
+def test_a_valid_challenge_opens_and_expires_after_one_further_bucket(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    with temporal.pinned_clock(FIXED_INSTANT):
+        challenge = _challenge(user_id)
+    with temporal.pinned_clock(temporal.shifted(FIXED_INSTANT, minutes=10)):
+        with pytest.raises(CredentialOperationRefused) as refused:
+            _open_with(user_id, fake_passwordless, challenge)
+    assert refused.value.category == "challenge_invalid"
+    with temporal.pinned_clock(temporal.shifted(FIXED_INSTANT, minutes=5)):
+        assert _open_with(user_id, fake_passwordless, challenge)
+
+
+def test_without_the_challenge_check_a_plain_sign_in_token_would_authorize(client, app, fake_passwordless, monkeypatch):
+    """Mutation proof: the challenge check is the only thing separating login from step-up."""
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    monkeypatch.setattr(lifecycle, "check_step_up_challenge", lambda *a, **k: None)
+    monkeypatch.setattr("app.feats.credential_operations_feat.lifecycle.check_step_up_challenge", lambda *a, **k: None)
+
+    assert _open_with(user_id, fake_passwordless, "not-a-challenge")
+
+
+def test_the_challenge_is_stored_nowhere(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    before = CredentialOperation.query.count()
+    _challenge(user_id)
+    assert CredentialOperation.query.count() == before == 0
+
+
+# ---------------------------------------------------------------------------
+# recovery supersession
+# ---------------------------------------------------------------------------
+
+def _recovery_teacher_session(recovery_fixture, fake):
+    user_id = recovery_fixture.teacher.id
+    _set_seed(user_id, LEGACY_SEED)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:nonce:{uuid.uuid4().hex}"):
+        db.session.get(User, user_id).current_session_nonce = f"session-{uuid.uuid4().hex}"
+    fake.credentials["old-key"] = passkey_external_id(user_id)
+    return user_id
+
+
+def test_recovery_aggregate_success_supersedes_a_pending_replacement(app, fake_passwordless, recovery):  # noqa: F811
+    user_id = _recovery_teacher_session(recovery, fake_passwordless)
+    operation_id = _open_replacement(user_id, fake_passwordless, credential="old-key")
+    secret, _ = _hold(user_id, operation_id)
+    before_seed = _stored_seed(user_id)
+
+    recovery_setup(recovery)
+
+    assert _user(user_id).credential_generation == 2
+    operation = _operation(operation_id)
+    assert operation.stage is CredentialOperationStage.CANCELLED
+    assert operation.pending_totp_encrypted is None
+    with pytest.raises(CredentialOperationRefused):
+        _activate(user_id, operation_id, _code(secret))
+    assert _stored_seed(user_id) == before_seed
+
+
+def test_a_routine_operation_cannot_open_while_a_recovery_grant_is_live(app, fake_passwordless, recovery):  # noqa: F811
+    user_id = _recovery_teacher_session(recovery, fake_passwordless)
+    recovery_setup(recovery)
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        _open_replacement(user_id, fake_passwordless, credential="old-key")
+    assert refused.value.category == "recovery_active"
+    with pytest.raises(CredentialOperationRefused) as refused:
+        open_credential_operation(
+            user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(LEGACY_SEED)),
+            session_nonce=_nonce(user_id),
+        )
+    assert refused.value.category == "recovery_active"
+    assert CredentialOperation.query.count() == 0
+
+
+def test_after_recovery_completes_the_gate_path_still_works(app, fake_passwordless, recovery):  # noqa: F811
+    user_id = _recovery_teacher_session(recovery, fake_passwordless)
+    grant = recovery_setup(recovery)
+    recovery_finish(recovery, grant)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:relogin"):
+        db.session.get(User, user_id).current_session_nonce = "post-recovery-session"
+
+    assert credential_compliance(_user(user_id)) is CredentialCompliance.PASSKEY_MISSING
+    operation_id = open_credential_operation(
+        user_id=user_id, purpose="passkey_enroll", proof=TotpCode(_code(grant["secret"])),
+        session_nonce="post-recovery-session",
+    )
+
+    assert _operation(operation_id).stage is CredentialOperationStage.AUTHORIZED

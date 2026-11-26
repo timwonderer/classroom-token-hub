@@ -10,7 +10,7 @@ from app import db
 from app.feats.base import requires_feat_context
 from app.hash_utils import _get_pepper, verify_password, hash_username_lookup
 from app.models import User, Seat, ClassEconomy, PasskeyCredential
-from app.services.credential_lifecycle import mint_totp_secret
+from app.services.credential_lifecycle import mint_totp_secret, supersede_for_recovery
 from app.services.recovery_service import _tables
 from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
@@ -260,6 +260,7 @@ def authorize_setup(*, request_id, attempt_nonce, username, correlation_id, idem
     username = normalize_auth_username(username)
     if not username or len(username)>100 or User.query.filter(User.username_lookup_hash==hash_username_lookup(username), User.id!=user.id).first():
         return None
+    supersede_for_recovery(user)
     nonce, secret = secrets.token_urlsafe(32), mint_totp_secret()
     requests, _ = _tables()
     # Keep attempt resume authority; accepted class proofs outlive a browser session.

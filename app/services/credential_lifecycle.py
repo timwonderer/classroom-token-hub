@@ -31,10 +31,13 @@ import hmac
 import secrets
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from hashlib import sha256
 
 import pyotp
+import sqlalchemy as sa
+from flask import current_app
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
@@ -147,8 +150,14 @@ def credential_compliance(user: User) -> CredentialCompliance:
 
 @dataclass(frozen=True)
 class PasskeyAssertion:
-    """A fresh passwordless.dev assertion token."""
+    """A fresh passwordless.dev assertion token and the step-up challenge it answers.
+
+    A plain sign-in token is login proof and never operation authorization
+    (SPEC-IDEN-002 §V): ``challenge`` must be one ``issue_step_up_challenge`` issued
+    for this principal, purpose, session and generation.
+    """
     token: str = field(repr=False)
+    challenge: str = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -178,6 +187,11 @@ FEAT_FOR_PURPOSE = {
     CredentialOperationPurpose.PASSKEY_REPLACE: "FEAT-IDEN-102",
     CredentialOperationPurpose.PASSKEY_REVOKE: "FEAT-IDEN-107",
 }
+
+def proof_kind_allowed(purpose: CredentialOperationPurpose, proof) -> bool:
+    """Whether ``proof`` is a kind that may authorize ``purpose``. Pure."""
+    return isinstance(proof, _PROOFS_FOR_PURPOSE[CredentialOperationPurpose(purpose)])
+
 
 # ---------------------------------------------------------------------------
 # Pure assertion evaluation (SPEC-IDEN-002 §V)
@@ -274,13 +288,72 @@ def evaluate_totp_code(user: User, code: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Step-up challenge (purpose binding for assertions)
+# ---------------------------------------------------------------------------
+
+#: Validity of a step-up challenge: the bucket it was issued in and the next one.
+STEP_UP_BUCKET_SECONDS = 5 * 60
+_STEP_UP_EPOCH = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
+
+
+def _step_up_bucket() -> int:
+    elapsed = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="time_since", start=_STEP_UP_EPOCH,
+    ).elapsed_seconds
+    return elapsed // STEP_UP_BUCKET_SECONDS
+
+
+def _step_up_value(user_id, purpose: CredentialOperationPurpose, session_nonce, generation, bucket) -> str:
+    key = current_app.config["SECRET_KEY"]
+    key = key.encode("utf-8") if isinstance(key, str) else key
+    message = "\0".join(["credential-step-up:v1", str(user_id), purpose.value, session_nonce,
+                         str(generation), str(bucket)])
+    return hmac.new(key, message.encode("utf-8"), sha256).hexdigest()
+
+
+def issue_step_up_challenge(user: User, *, purpose: CredentialOperationPurpose, session_nonce: str) -> str:
+    """A short-lived opaque challenge binding an assertion to one purpose. Stores nothing.
+
+    Derived by a purpose-separated HMAC over the principal, purpose, current session,
+    credential generation and a five-minute time bucket, so it fails once any of them
+    changes. The caller mints it when it renders the replacement step; the user's
+    passkey ceremony then answers it.
+    """
+    purpose = CredentialOperationPurpose(purpose)
+    if not isinstance(session_nonce, str) or not session_nonce or not _digests_equal(
+        user.current_session_nonce, session_nonce
+    ):
+        raise CredentialOperationRefused("session_not_current")
+    return _step_up_value(user.id, purpose, session_nonce, user.credential_generation, _step_up_bucket())
+
+
+def check_step_up_challenge(
+    user: User, *, purpose: CredentialOperationPurpose, session_nonce, challenge,
+) -> None:
+    """Refuse (``challenge_invalid``) unless ``challenge`` recomputes for this state. Pure.
+
+    The current and the previous time bucket are accepted.
+    """
+    if not isinstance(session_nonce, str) or not _digests_equal(user.current_session_nonce, session_nonce):
+        raise CredentialOperationRefused("session_not_current")
+    if not isinstance(challenge, str):
+        raise CredentialOperationRefused("challenge_invalid")
+    bucket = _step_up_bucket()
+    accepted = [
+        _digests_equal(challenge, _step_up_value(
+            user.id, purpose, session_nonce, user.credential_generation, candidate))
+        for candidate in (bucket, bucket - 1)
+    ]
+    if not any(accepted):
+        raise CredentialOperationRefused("challenge_invalid")
+
+
+# ---------------------------------------------------------------------------
 # Operations: errors, helpers
 # ---------------------------------------------------------------------------
 
 #: Fixed interactive lifetime (SPEC-IDEN-002 §V): ten minutes, capped by the session.
 OPERATION_LIFETIME_SECONDS = 10 * 60
-#: Wrong-code budget against a pending seed; the operation is cancelled when spent.
-MAX_CODE_ATTEMPTS = 5
 
 #: Stages a sweep may cancel after the deadline. A committed retirement and an
 #: uncertain provider result are exempt from the deadline (SPEC-IDEN-002 §V) and
@@ -441,9 +514,11 @@ def open_operation(
     except ValueError:
         raise CredentialOperationRefused("unknown_purpose") from None
     _require_feat(FEAT_FOR_PURPOSE[purpose])
-    if not isinstance(proof, _PROOFS_FOR_PURPOSE[purpose]):
+    if not proof_kind_allowed(purpose, proof):
         raise CredentialOperationRefused("proof_kind_mismatch")
 
+    if isinstance(proof, PasskeyAssertion):
+        check_step_up_challenge(user, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge)
     if isinstance(proof, PasskeyAssertion) and verified is None:
         # Provider I/O never runs inside this transaction; the caller verifies first.
         raise CredentialOperationRefused("proof_unverified")
@@ -460,8 +535,12 @@ def open_operation(
     ):
         raise CredentialOperationRefused("session_not_current")
 
+    if recovery_setup_is_live(principal.id):
+        raise CredentialOperationRefused("recovery_active")
+
     # Decide on the proof against current, locked state.
     if isinstance(proof, PasskeyAssertion):
+        check_step_up_challenge(principal, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge)
         evaluate_verified_assertion(
             verified,
             expected_role=principal.user_role.value,
@@ -577,10 +656,9 @@ def activate_totp(operation: CredentialOperation, code: str, *, session_nonce: s
     rotating ``current_session_nonce``, the operation completes, the pending seed
     is erased and ACT-IDEN-106 is emitted. Returns ``True``.
 
-    A wrong code returns ``False`` having changed nothing but the attempt counter:
-    the principal's secret is byte-identical and the operation stays open, until
-    ``MAX_CODE_ATTEMPTS`` wrong codes cancel it. Every other refusal raises
-    ``CredentialOperationRefused`` and rolls the command back.
+    A wrong code returns ``False`` having changed nothing: the principal's secret is
+    byte-identical and the operation stays open until its deadline. Every other
+    refusal raises ``CredentialOperationRefused`` and rolls the command back.
     """
     _require_feat(FEAT_FOR_PURPOSE[CredentialOperationPurpose.TOTP_REPLACE])
     principal = _lock_user(operation.user_id)
@@ -598,11 +676,6 @@ def activate_totp(operation: CredentialOperation, code: str, *, session_nonce: s
     except (TypeError, ValueError):
         accepted = False
     if not accepted:
-        locked.attempt_count += 1
-        if locked.attempt_count >= MAX_CODE_ATTEMPTS:
-            _erase_and_cancel(locked)
-            locked.error_category = "code_attempts_exhausted"
-        db.session.flush()
         return False
 
     # Time passed during verification; recheck before any mutation.
@@ -690,6 +763,46 @@ def expire_stale_operations() -> dict[str, int]:
         ):
             cancelled += 1
     return {"cancelled": cancelled, "erased": erased}
+
+
+def recovery_setup_is_live(user_id: str) -> bool:
+    """Whether the principal holds a live SATAR setup grant (an unexpired pending recovery). Pure."""
+    requests = db.metadata.tables["recovery_requests"]
+    rows = db.session.execute(
+        sa.select(requests.c.expires_at).where(
+            requests.c.user_id == user_id,
+            requests.c.status == "pending",
+            requests.c.completed_at.is_(None),
+            requests.c.setup_nonce_hash.isnot(None),
+        )
+    ).all()
+    return any(_is_later(row.expires_at, _now()) for row in rows)
+
+
+def supersede_for_recovery(user: User) -> int:
+    """SATAR aggregate success supersedes routine maintenance (DOM-IDEN-003 §VII.A).
+
+    Advances ``credential_generation`` and cancels the principal's open operations,
+    erasing pending material, so no stale continuation can activate. ``user`` must be
+    row-locked by the caller (FEAT-IDEN-105's recovery lock). Returns the number cancelled.
+    """
+    _require_feat("FEAT-IDEN-105")
+    user.credential_generation = user.credential_generation + 1
+    cancelled = 0
+    for operation in (
+        db.session.query(CredentialOperation)
+        .filter(
+            CredentialOperation.user_id == user.id,
+            CredentialOperation.stage.notin_(CREDENTIAL_OPERATION_TERMINAL_STAGES),
+        )
+        .populate_existing()
+        .with_for_update()
+        .all()
+    ):
+        _erase_and_cancel(operation)
+        cancelled += 1
+    db.session.flush()
+    return cancelled
 
 
 def _emit_outcome(*, action: str, actor_type: str, stage_before: str, stage_after: str, outcome: str) -> None:
