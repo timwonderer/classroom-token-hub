@@ -288,7 +288,7 @@ Their surviving content lives at:
 ## VIII. Change Notes
 
 **Version 3.71 (2026-11-25):**
-- Register SOP-DEP-002 v1.26: §VII.A step 2 lets an earlier full-suite result stand for a release SHA when only `CHANGELOG.md` or documentation changed since, with the applicable documentation tests run on the release SHA; any other change needs a new full suite.
+- Register SOP-DEP-002 v1.26: §VII.A step 2 lets an earlier full-suite result stand for a release SHA when only `CHANGELOG.md` or documentation changed since, with the applicable documentation tests run on the release SHA; any other change needs a new full suite. Untagged hotfixes take step 2 too, and the dispatch-before-suite exception is removed.
 
 **Version 3.70 (2026-11-25):**
 - Register SOP-DB-005 v1.0 (Database Backup and Restore): scheduled, encrypted, verified recovery points taken from the operator's computer (macOS or Linux) to an encrypted external drive with the existing `cth_db_backup.py`, the replacement-baseline purge after a destruction, and the eleven owner decisions issue #1639's failure-mode review required, all settled 2026-11-25.

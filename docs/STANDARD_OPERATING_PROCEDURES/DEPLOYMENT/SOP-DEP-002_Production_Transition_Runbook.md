@@ -256,7 +256,8 @@ advisory and are recorded as such, never as the independent verifier.
     tag that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes. `--raw` prints the section
     verbatim.
 
-Untagged hotfixes follow steps 3-12 and record any step they skip; they have no tag, so no step 13.
+Untagged hotfixes follow steps 2-12 and record any step they skip, except step 2, which they never skip; they have
+no tag, so no step 13.
 
 Step 12's README update changes the deployment and latest-release lines only. The supported fresh-install release
 line changes only under §VII.B.
@@ -416,7 +417,8 @@ Revisions to this document require incrementing the version number, updating the
 **Version 1.26 (2026-11-25):** §VII.A step 2: the full suite passes on the release SHA, or an earlier full-suite
 result stands when only `CHANGELOG.md` or documentation changed since, with the applicable documentation, changelog
 and accessibility tests run on the release SHA. Any other change needs a new full suite; the release record names
-the validation run against each SHA.
+the validation run against each SHA. Untagged hotfixes now take step 2 as well; the security and data-integrity
+exception for dispatching before the suite is removed, as the full suite no longer takes about four hours.
 
 **Version 1.25 (2026-11-25):** §VII.A step 10a publishes a release's user guides through `SOP-DEP-003` before the gate
 reopens, and §IX makes an application rollback publish the guides of the release rolled back to. The release record
