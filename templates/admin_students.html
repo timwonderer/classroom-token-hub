@@ -134,9 +134,9 @@
 
 {% block content %}
 
-{% macro recovery_readiness_warning() %}
+{% macro recovery_readiness_warning(heading_tag='h2') %}
 {% if roster.recovery_at_risk %}
-            {% call cards.alert_card('danger', 'Your account may be at risk of being unrecoverable', icon='shield_lock', role='note', id='recovery-readiness-warning', body_class='mb-3', heading_tag='h2') %}
+            {% call cards.alert_card('danger', 'Your account may be at risk of being unrecoverable', icon='shield_lock', role='note', id='recovery-readiness-warning', body_class='mb-3', heading_tag=heading_tag) %}
                 <p class="mb-0">Classroom Token Hub uses student-assisted teacher account recovery. Recovery requires enough claimed students across the classes you own, including at least {{ roster.recovery_min_students }} claimed students in each class.
                   <strong>You currently have {{ roster.claimed_count }} claimed students in this class.</strong>
                   Until this class reaches {{ roster.recovery_min_students }}, teacher account recovery will not be available if you lose access.</p>
@@ -240,7 +240,7 @@
                     </div>
                   </div>
                 </div>
-                {{ recovery_readiness_warning() }}
+                {{ recovery_readiness_warning(heading_tag='h3') }}
                 <div class="table-responsive">
                   <table class="table table-hover table-striped js-sortable" id="students-table-current-class">
                     <caption class="visually-hidden">Current class student roster</caption>

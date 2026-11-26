@@ -14,13 +14,14 @@ LABEL_FOR = re.compile(r'<label\b[^>]*\bfor="([^"]+)"')
 
 
 def _orphaned_label_targets(html: str) -> set[str]:
-    ids = set(re.findall(r'\bid="([^"]+)"', html))
+    ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
     return {target for target in LABEL_FOR.findall(html) if target not in ids}
 
 
 def test_orphaned_label_detector_reports_a_mismatched_for():
     assert _orphaned_label_targets('<label for="description">D</label><textarea id="manualDescription">') == {"description"}
     assert _orphaned_label_targets('<label for="manualDescription">D</label><textarea id="manualDescription">') == set()
+    assert _orphaned_label_targets('<label for="manualDescription">D</label><textarea data-id="manualDescription">') == {"manualDescription"}
 
 
 def test_payroll_and_attendance_log_labels_point_at_their_controls(client, app):
