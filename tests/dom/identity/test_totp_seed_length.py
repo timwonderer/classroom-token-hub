@@ -203,18 +203,37 @@ def test_the_pinned_pyotp_refuses_a_seed_below_the_floor():
     pyotp.TOTP(HELD_SEED)
 
 
-def test_a_sub_floor_seed_does_not_sign_in(client, app):
-    """A stored 80-bit seed cannot authenticate; the login route answers, not a 500."""
+def test_a_sub_floor_seed_does_not_sign_in(client, app, monkeypatch):
+    """The login route reaches ``pyotp.TOTP(seed)``, the constructor raises, and the
+    handler answers with the ordinary invalid-code response (no 500, no session)."""
+    from app.routes import admin as admin_routes
+
     classroom = initialize("chemistry_p1", app)
     user_id = classroom.teacher_user.id
     _set_seed(user_id, SHORT_SEED)
     username = TEACHERS[_teacher_key_for(classroom)]["username"]
 
+    real_totp = pyotp.TOTP
+    calls = []
+
+    def recording_totp(secret, *args, **kwargs):
+        try:
+            return real_totp(secret, *args, **kwargs)
+        except ValueError as error:
+            calls.append((secret, error))
+            raise
+
+    monkeypatch.setattr(admin_routes.pyotp, "TOTP", recording_totp)
+
     response = client.post("/admin/login", data={"username": username, "totp_code": "123456"})
 
-    assert response.status_code != 500
+    assert [secret for secret, _ in calls] == [SHORT_SEED]
+    assert isinstance(calls[0][1], ValueError)
+    assert response.status_code == 302
+    assert response.headers["Location"].startswith("/admin/login")
     with client.session_transaction() as sess:
         assert sess.get("user_id") != user_id
+        assert ("error", "Invalid credentials or TOTP code.") in sess.get("_flashes", [])
 
 
 def test_short_seed_is_reported_noncompliant(client, app):
