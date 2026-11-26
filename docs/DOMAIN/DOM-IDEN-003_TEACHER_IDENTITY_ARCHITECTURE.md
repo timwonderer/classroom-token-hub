@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.11 | 2026-10-25 | 2.10 | Constitutional |
+| DOM-IDEN-003 | 2.13 | 2026-11-26 | 2.12 | Constitutional |
 
 ---
 
@@ -81,7 +81,11 @@ The encrypted, expiring staging record for initial teacher provisioning (§VII A
 
 ### Schema Contract
 
-Teacher-specific fields on `users`: `totp_secret_encrypted`.
+Teacher-specific credential field on `users`: `totp_secret_encrypted`. Identity also
+owns the principal's monotonic credential generation and current security-operation
+state; these are authentication metadata, not classroom state. `credential_operations`
+holds only current principal-owned operations under INV-ARC-019's allowlist and the
+field/erasure inventory incorporated from SPEC-IDEN-002. It is not an identity archive.
 
 ### Constraints
 
@@ -90,7 +94,8 @@ Teacher-specific fields on `users`: `totp_secret_encrypted`.
 - `passkey_credentials`: Passwordless external IDs use `user_<users.id>`, where `users.id` is a UUID (INV-ARC-019 §VI). An external ID that does not name a current UUID principal names no principal; this includes the integer forms issued before 2026-09-28 and legacy forms such as `admin_<id>`. Passkey metadata does not authorize class access, seat access, recovery, or economic actions.
   - **Credential binding.** Every row carries the passwordless.dev `credential_id`, NOT NULL and UNIQUE. It is recorded only from a registration token verified server-side, of type `passkey_register`, naming the registering principal.
   - **Sign-in.** A passkey authenticates a principal only when the verified token is a successful `passkey_signin` token whose `credential_id` is recorded for the `users.id` the token names, and that principal holds the expected role. When sign-in began from a username, the principal must be the one that username resolves to. A token proves that some credential in the tenant was used; the recorded binding is what makes it this principal's.
-  - **Removal.** Removing a passkey deletes the credential on passwordless.dev before the row. Destroying a principal deletes its passwordless.dev user, with its credentials and aliases, before any local row. If the remote deletion fails, nothing local changes.
+  - **Removal.** Ordinary replacement/removal deletes the exact credential remotely before its local binding. Provider failure leaves it incomplete. Account destruction attempts provider-user deletion (including credentials and aliases) and empty-set reconciliation first, but bounded provider failure SHALL NOT prevent lawful local destruction (§VII.A). No unverified remote deletion is reported as successful.
+  - **Activation and assertions.** A verified provider token is insufficient. INV-ARC-019 §VI requires an existing principal and exact, owned, lawfully activated local credential, plus purpose, expiry and generation checks on every assertion surface. Validation has no local mutations; usage bookkeeping follows through a command.
 - `teacher_signup_attempts`: Temporary state only. It references no `users`, `classes` or `seats` row and grants no identity, lookup or classroom authority. The plaintext nonce is never stored. A row past `expires_at` is inert and is removed by cleanup; a restart deletes the previous attempt; successful provisioning deletes the attempt in the same transaction that creates the `User`, `Class`, `Seat` and `IdentityProfile`, so a replay cannot provision a second account.
 
 ### Derived / Cross-Domain Rules
@@ -119,7 +124,7 @@ Teacher-specific fields:
 
 > [!IMPORTANT]
 >
-> Teacher users may optionally enable passkey for authentication. Passkey-related metadata is stored on the unified `passkey_credentials` table with the following fields: `id`, `user_id` (FK to `users.id`), `credential_id`, `authenticator_name`, `created_at`, `last_used`. Actual field requirements should consult Bitwarden Passwordless SDK requirements.
+> Every teacher principal holds at least one activated passkey (mandatory dual enrollment, §VII.A). Passkey-related metadata is stored on the unified `passkey_credentials` table with the following fields: `id`, `user_id` (FK to `users.id`), `credential_id`, `authenticator_name`, `created_at`, `last_used`. Actual field requirements should consult Bitwarden Passwordless SDK requirements.
 
 Student-specific fields (`pin_hash`, `passphrase_hash`, `money_action_cooldown_until`) SHALL be `NULL` for teacher rows.
 
@@ -160,7 +165,7 @@ Defined by DOM-IDEN-001. No teacher-specific delta. Teacher display names are st
    current_session_nonce.
 ```
 
-TOTP is required for all teacher accounts. Passkey is an optional second authentication method — when enrolled, it replaces the TOTP step for that device.
+TOTP and at least one activated passkey are both required for every teacher account (§VII.A Mandatory dual enrollment). Sign-in may use either factor; a passkey assertion replaces the TOTP step for that device.
 
 Active seat and class context restoration follows DOM-IDEN-006. Sysadmin authentication may share the same login surface but is not governed by this document.
 
@@ -175,7 +180,12 @@ Teacher account provisioning follows DOM-IDEN-005 §VI. The constitutional provi
 5. Initialize the active class and seat pointers (per DOM-IDEN-006 §XIII).
 6. Permit runtime participation through DOM-IDEN-006.
 
-Teacher-specific credential setup (TOTP enrollment, optional passkey enrollment) occurs within this sequence. TOTP setup is required before `has_completed_setup = true`.
+TOTP verification precedes durable initial provisioning and is required before
+`has_completed_setup = true`. Passkey enrollment follows successful atomic
+provisioning and may be deferred; skipping or failing that step does not undo signup,
+but leaves the principal noncompliant until a passkey is enrolled (§VII.A Credential
+compliance gate). The explicit dual-purpose signup ceremony in §VII.A may authorize
+that one enrollment.
 
 Per DOM-IDEN-005 §VI, the initial Class and administrative Seat MUST be provisioned atomically with the User. Failure to provision the initial Class SHALL invalidate the entire teacher provisioning transaction.
 
@@ -199,7 +209,9 @@ Teachers administering financial actions (adjustments, payroll, approvals) are a
 
 ### Step-Up Authentication
 
-Certain privileged identity mutations SHALL require step-up authentication beyond the existing session. Step-up authentication is a fresh re-authentication challenge issued at the time of the privileged action, not a replay or reuse of the login-time credential.
+Certain privileged identity mutations SHALL require step-up authentication beyond the existing session. Step-up authentication is fresh, explicit, purpose-bound proof for the privileged
+action, not authority inferred from an existing session. The sole signup-specific
+reuse is the explicit dual-purpose ceremony in §VII.A; it is not a reusable login proof.
 
 The following actions SHALL require step-up authentication:
 
@@ -212,6 +224,206 @@ Step-up authentication is a constitutional requirement. The specific mechanism, 
 
 ---
 
+## VII.A. Credential Lifecycle Management
+
+### Authority and execution
+
+The provider verifies cryptographic proof. CTH establishes authentication authority.
+Reconciliation maintains consistency between the two. INV-ARC-019 governs all
+assertion consumers, including sysadmin sign-in. This section owns teacher lifecycle
+policy and Identity's shared provider-reconciliation policy; it incorporates
+[SPEC-IDEN-002](../SPEC/SPEC-IDEN-002_CREDENTIAL_LIFECYCLE_PROTOCOL.md) for the protocol,
+state inventory, operational bounds and required validation.
+
+Credential maintenance uses explicit principal context without requiring an active
+class or Seat. It confers no classroom capability. Identity exposes pure capability
+checks and explicit mutation commands; FEAT orchestrates them. No route, GET, query
+or validator may mutate credentials, reconcile inventory or issue authorization.
+
+Mandatory dual enrollment applies (below); multiple passkeys may coexist. Existing
+teachers prove fresh TOTP for passkey enrollment, selected-passkey replacement and
+removal. TOTP replacement requires a fresh assertion using an activated, locally
+owned passkey. Missing proof does not authorize a weaker maintenance path: SATAR
+remains independent recovery. No contact information, backup codes, administrative
+overrides, physical-device separation or synchronization restrictions are introduced.
+
+### Mandatory dual enrollment
+
+A teacher principal SHALL hold one activated TOTP credential and at least one activated
+passkey. Ordinary sign-in may use either. Maintenance of each requires its own fresh,
+purpose-bound proof: fresh TOTP for passkey enrollment, replacement and revocation;
+a fresh assertion from an activated passkey for TOTP replacement. Enrollment may be
+deferred past signup; a principal without an activated passkey is noncompliant until
+one is enrolled (see Credential compliance gate). The signup-derived five-minute
+capability remains the proof for the first enrollment. Multiple passkeys may coexist.
+
+A sysadmin principal is subject to the same obligations, proofs and gate after initial
+authentication. Principal provisioning and credential enrollment are distinct: sysadmin
+provisioning remains exclusively the CLI bootstrap (FEAT-IDEN-008), no application-level
+operator registration or provisioning surface exists, and unifying credential
+enrollment expands neither role's capabilities. Personal credential enrollment,
+replacement, retirement and maintenance use the single Identity-owned implementation.
+
+### Credential compliance gate
+
+After authentication, a principal whose credential state fails mandatory dual
+enrollment, or whose stored TOTP seed is below the minimum in SPEC-SEC-001 §V
+(noncompliant), may reach only credential maintenance, sign-out and, for a teacher, account destruction under
+FEAT-IDEN-007 with its own confirmation and authorization, until it complies.
+Compliance is evaluated from current credential state on every request; no completion
+flag is stored. Rendering the gate mutates nothing (INV-ARC-007).
+
+Revoking the only activated passkey is refused; selected-passkey replacement is the
+lawful path. SATAR recovery completion leaves the principal with a new TOTP and no
+passkey; the gate directs enrollment at the next sign-in, authorized by the fresh
+recovery TOTP.
+
+### Activation, generation and sessions
+
+Identity owns a monotonic credential generation. Credential activation, replacement
+or removal atomically advances it, invalidates all existing login sessions and
+outstanding authentication/management challenges, and emits the DOM-OPS-002 §2.5
+outcome. Require fresh sign-in; do not establish a new session automatically.
+The first signup activation initializes the generation with no prior session; its
+subsequent passkey activation invalidates the signup session.
+All consuming commands recheck generation and applicable session binding against
+current state. Already-completed retries and cleanup do not advance it again or
+invalidate a later sign-in. An old provider response grants no authority.
+
+### Signup-derived enrollment
+
+Before submitting signup TOTP verification, the teacher may explicitly elect to enroll
+the required passkey now; enrollment may instead be deferred. Successful dual-purpose verification atomically provisions the
+account and creates one five-minute enrollment authorization bound to the principal,
+generation and signup browser/session. It authorizes one initial enrollment operation,
+not replacement or general maintenance. Starting consumes it into that operation;
+retries resume only that operation and never renew expiry. Skipping, expiry, session
+invalidation or SATAR supersession ends it. A session alone cannot regenerate it.
+Successful activation ends the signup session and requires fresh sign-in; skipping
+retains the session but leaves the principal noncompliant until a passkey is enrolled.
+Enrollment failure never rolls back completed signup.
+
+### Distinct lifetimes and concurrency
+
+Interactive authority expires at its fixed deadline (at most ten minutes, five for
+signup) or session invalidation. Pending secrets/credentials do not authenticate.
+Expiry prevents further discretionary mutations, but does not cancel a durably
+committed exact remote-retirement intent. Reconciliation can complete only its
+recorded operation, or retire material superseded by recovery/destruction; it cannot
+register, substitute a target, extend a session or restore authority.
+
+Serialize credential work per principal and combine it with generation/stage checks.
+Persist intent before external calls; hold no database transaction or database row
+lock throughout provider calls or retry delays. Revalidate current state at the next
+local transaction boundary. Pure validation never updates `last_used`; explicit
+post-validation commands own challenge consumption, session writes and bookkeeping.
+
+### Routine replacement and removal
+
+TOTP replacement stages an encrypted new secret and displays QR/manual-entry material.
+Only a valid new code permits the single atomic transaction to overwrite the old
+secret, consume authorization, advance generation, revoke sessions and emit audit.
+Failure/cancellation before that commit preserves the old TOTP. No old-secret fallback
+or backup code is retained. A secret is not activated merely by being displayed.
+
+Selected-passkey replacement records exact old/new credential IDs. Register and verify
+the new credential, persist it as non-authoritative pending material, then commit
+retirement intent before deleting the old credential remotely. After confirmed remote
+retirement and required reconciliation, atomically activate the new binding, hard-delete
+the old binding and apply generation/session/audit effects. Preserve unrelated passkeys.
+Ordinary removal uses the same remote-first retirement without a replacement.
+
+Provider failure leaves routine replacement/removal incomplete. An uncertain response
+requires verification/retry, not assumed success. A crash after remote deletion cannot
+restore the old credential; this is a durable, recoverable workflow, not a distributed
+atomic transaction. Before retirement intent, cancellation preserves the old credential
+and retires abandoned new remote material. After intent, complete the fixed operation
+unless superseded; do not promise rollback. TOTP remains available for sign-in.
+
+### SATAR supersession
+
+Precedence is destruction, then proven SATAR recovery, then routine maintenance.
+Recovery initiation alone does not revoke functioning credentials or sessions.
+Successful aggregate proof advances credential generation, invalidates existing
+sessions/challenges and routine-management authorizations, and establishes recovery
+setup authority. Routine maintenance cannot proceed while that authority is active.
+Repeating the same aggregate success does not repeat invalidation. Expiry/resume/failure
+never revives superseded management authority.
+
+Before retirement intent, supersession cancels activation and erases pending secrets.
+After intent, reconciliation may retire the recorded old/new provider material but
+SHALL NOT activate the superseded replacement. SATAR completion activates only its
+recovered credential set and invokes principal reconciliation. Pending credentials
+from older generations never become recovery credentials. No recovery changes Seats,
+class ownership or economic state.
+
+### Reconciliation authority
+
+Identity owns one canonical reconciliation implementation, invoked at initial/additional
+passkey enrollment, replacement, removal, SATAR and account-destruction completion
+boundaries, and periodically under system authority through FEAT-IDEN-108. Initiating
+FEATs compose shared domain commands; no FEAT-to-FEAT execution is introduced.
+System reconciliation may read only minimal Identity/provider state needed to evaluate
+credential correspondence. It confers no classroom-data or classroom-mutation access.
+
+Compare exact provider principal/credential IDs with activated bindings, lawful pending
+registrations and authorized retirement. Protect live registrations whose final ID is
+unknown: defer ambiguous orphan classification for that principal until the bounded
+operation identifies the credential, expires or is superseded. Inventory is never proof
+of activation. Unexpected absence of a lawful local credential is a discrepancy, not
+permission to delete or recreate that binding. A provider credential without lawful
+local correspondence is retired only after revalidation against current state and
+coordination with registration/replacement. Failed/incomplete inventory proves nothing.
+
+Provider-wide reconciliation discovers late registrations and orphaned credentials
+from current provider inventory, including absent local principals. It does not use
+historical ownership records. Destructive scheduled reconciliation cannot be enabled
+until inventory completeness/pagination, tenant permissions and exact deletion behavior
+have been verified for the integration. Mock tests alone do not prove that readiness.
+Authentication-time local validation remains effective while reconciliation is unavailable.
+
+### Account destruction exception
+
+At destruction start, revoke authentication authority, advance generation, supersede
+pending operations and prohibit new registration authorization. Attempt remote deletion
+of known credentials and the provider user/aliases, then principal reconciliation with
+an empty expected provider set. Apply SPEC-IDEN-002's bounded provider-work budget.
+
+If provider work fails after bounded attempts, proceed with the lawful local destruction
+command anyway. Provider unavailability cannot retain classroom/personal data against
+expressed destruction intent. Authorization, database or mandatory audit failure still
+prevents local completion. Local class/principal destruction remains atomic under
+DOM-IDEN-005 and FEAT-IDEN-007; prior external effects are not claimed to roll back.
+
+Destroy every local credential, operation, secret and identity association with the
+principal. Do not retain tombstones, post-destruction references, ownership archives or
+indefinitely retained principals to discover remote residue. Scheduled reconciliation
+rediscovers subsequent residue from current provider inventory. Local validation denies
+it even before cleanup. Provider registration fencing is not a prerequisite for local
+destruction. Reconciliation proves consistency at execution time, not absence of future
+external registrations.
+
+Completion distinguishes local destruction with verified external cleanup, local
+destruction with unverified cleanup, and incomplete local destruction. Never describe
+unverified provider deletion as successful. Retry or cleanup cannot resurrect local
+authentication authority or manufacture an identity from provider data.
+
+### Audit, secrecy and retention
+
+Use DOM-OPS-002 §2.5's non-identifying-by-construction outcome envelope. No principal,
+provider-user or credential identifier, username, credential label, secret, identity-derived
+hash/digest or recoverable ownership association may survive in audit, logs, correlation
+packs, exports or secondary indexes. Independent event/correlation IDs must not enable
+reconstruction of deleted ownership. This is not a guarantee of absolute anonymity.
+
+Pending secret authority ends immediately on expiry/consumption/supersession; erase it
+at the earliest lawful cleanup execution. One-minute erasure is an observable target,
+not an unconditional guarantee during unavailability. Nonsecret cleanup needs never
+justify retaining secrets. SPEC-IDEN-002 enumerates the only operation-state fields;
+it does not broaden INV-ARC-018's permitted PII inventory.
+
+---
+
 ## VIII. Authority Rules
 
 1. **Authentication authority:** `user_id` proves who is logged in.
@@ -219,7 +431,7 @@ Step-up authentication is a constitutional requirement. The specific mechanism, 
 3. **Request contract:** Global teacher routes may use authenticated `user_id` only. Any class-scoped teacher operation must resolve and validate `seat_id + class_id` ownership.
 4. **Membership by existence:** If a teacher seat exists for (`user_id`, `class_id`), membership exists. No implied membership from other tables or duplicated denormalized markers.
 
-Domains SHALL NOT accept teacher authority from `join_code` or `user_id` without seat-ownership validation.
+Class-scoped domains SHALL NOT accept teacher authority from `join_code` or `user_id` without Seat-ownership validation. Principal credential maintenance follows §VII.A and grants no classroom authority.
 
 ---
 
@@ -333,15 +545,20 @@ The attempt has a random server-verified access nonce; knowing its ID or reenter
 roster pairs does not grant access to another browser's selected attempt. A teacher
 can obtain a six-digit resume PIN, stored only as a separate-purpose verifier.
 Resuming rotates the attempt access nonce, clears prior setup authorization, and
-retains fixed selections and private class confirmations. Ambiguous PIN matches
+retains fixed selections and private class confirmations. If aggregate success was already
+reached, resuming issues one replacement setup grant bound to the current generation and
+new nonce, without advancing the generation again. Ambiguous PIN matches
 fail closed. No plaintext student codes are saved for later replay.
 
-Successful full-set verification grants one server-bound setup nonce. Store its
+Successful full-set verification grants one server-bound setup nonce and applies the generation/session supersession boundary in §VII.A. Store its
 verifier, encrypted pending TOTP seed and encrypted pending username on the attempt;
 the signed cookie holds only nonces and references. Verify the new TOTP against
 server-held state, pending status, original expiry and complete current proof set.
-Atomically replace canonical username/TOTP credentials, revoke passkeys and login
-sessions, mark verified/completed_at, and erase temporary authorization/resume data.
+Use the recoverable provider-retirement and reconciliation workflow in §VII.A before
+completion. In one local transaction replace canonical username/TOTP credentials,
+remove superseded local passkey bindings, advance generation, revoke login sessions,
+mark verified/completed_at, emit audit and erase temporary authorization/resume data.
+External provider deletion does not participate in the database transaction.
 Recovery completion never changes participation or class state. Require fresh login.
 
 
@@ -367,7 +584,7 @@ A failed account transaction rolls back; a later sweep can retry.
 |------------|---------|
 | Username | `username_hash` / `username_lookup_hash` |
 | Primary auth factor | TOTP (`totp_secret_encrypted`) |
-| Secondary / optional factor | Passkey metadata owned by `users.id` |
+| Required second factor | Passkey metadata owned by `users.id` (at least one activated) |
 | Passphrase | N/A |
 | DOB | **Not stored** |
 | Recovery | Student-assisted distributed trust |
@@ -413,3 +630,7 @@ Revisions to this document SHALL:
 2. Update the effective date.
 3. Maintain consistency with DOM-IDEN-001 and DOM-IDEN-005.
 4. Maintain consistency with INV-CORE-000.
+
+**2026-11-26 amendment (owner rulings 2026-11-26):** Passkeys are mandatory for teacher and sysadmin principals (dual enrollment); adds the credential compliance gate, the sysadmin credential-maintenance clause and the TOTP seed-length consequence. Signup passkey wording changes from optional to deferrable.
+
+**2026-11-23 amendment:** Applies the approved credential lifecycle contract, principal-scoped authority, generation supersession and provider/local completion distinction. No application implementation is asserted.

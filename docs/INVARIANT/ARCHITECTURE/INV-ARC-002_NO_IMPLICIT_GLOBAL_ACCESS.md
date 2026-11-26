@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-002      | 1.1     | 2026-10-14     | 1.0        | Constitutional   |
+| INV-ARC-002 | 1.2 | 2026-11-23 | 1.1 | Constitutional |
 
 ## I. Purpose
 
@@ -24,10 +24,18 @@ Constitutional within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `
 
 ## V. Core Rule
 
-No domain or feature logic may access global or unscoped data.
+No domain or feature logic may obtain implicit global or unscoped authority.
 
-All data access MUST be explicitly scoped using `class_id`, or by a
+Classroom data access MUST be explicitly scoped using `class_id`, or by a
 `join_code` that has already been resolved to `class_id` at the boundary ingress.
+Principal-owned authentication and credential maintenance use the explicit principal
+scope defined by INV-ARC-001/019. They SHALL NOT require or fabricate classroom
+context, access classroom data, or confer classroom authority.
+
+System credential reconciliation uses only the dedicated FEAT-IDEN-108 authority
+for current Identity credential state and the authentication-provider registry.
+It SHALL NOT grant classroom access. This is an explicit domain-owned execution
+scope, not permission for arbitrary global queries or teacher-global shortcuts.
 
 ## VI. Rebuild Intent
 
@@ -47,3 +55,5 @@ the underlying field or helper still exists in the repository.
 > **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 Revisions must preserve explicit scoping requirements.
+
+**2026-11-23 amendment:** Coordinate explicit principal and system credential scopes with INV-ARC-001/003/019 while preserving classroom isolation.

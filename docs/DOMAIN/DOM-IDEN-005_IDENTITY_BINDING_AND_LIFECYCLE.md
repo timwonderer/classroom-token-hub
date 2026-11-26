@@ -1,7 +1,7 @@
 # DOM-IDEN-005: Identity Binding and Lifecycle
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-005   | 2.3     | 2026-10-01    | 2.2 | Constitutional   |
+| DOM-IDEN-005 | 2.4 | 2026-11-23 | 2.3 | Constitutional |
 
 ---
 ## I. Purpose
@@ -79,6 +79,20 @@ If no remaining Seats exist, the corresponding `User` SHALL be destroyed.
 > This must be gated behind the timed, multilayer deletion workflow to prevent accidental deletion. User must be informed of the consequences prior to performing deletion.
 
 Teachers SHALL follow the same identity lifecycle and Membership-by-Existence laws as every other participant. No constitutional exceptions exist for teacher identities.
+
+---
+
+### Credential-provider boundary during teacher destruction
+
+DOM-IDEN-003 §VII.A governs external credential cleanup. Revoke authentication and
+supersede operations at destruction start; attempt remote retirement/reconciliation
+before final local destruction, without holding database transactions or row locks
+across provider calls. Bounded provider failure does not prevent the existing atomic
+local lifecycle command. Authorization/database/mandatory audit failures still fail
+local completion. No surviving principal tombstone, historical credential association
+or cleanup reference is permitted. FEAT-IDEN-108 discovers later provider residue
+from current provider inventory; it never reconstructs a principal or its authority.
+This exception does not extend to ordinary passkey replacement/removal.
 
 ---
 
@@ -268,3 +282,5 @@ followed it. That produced the divergence above in reverse: the claim key moved 
 the entered name while the roster kept the previous claimant's. The preservation
 rule is about not discarding the Seat's accumulated value — notes, balances,
 history — and was never meant to pin the display name to a departed claimant.
+
+**2026-11-23 amendment:** Applies the approved credential lifecycle contract, principal-scoped authority, generation supersession and provider/local completion distinction. No application implementation is asserted.

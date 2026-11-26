@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.16    | 2026-11-25     | 2.15       | Constitutional  |
+| DOM-OPS-001      | 2.17    | 2026-11-26     | 2.16       | Constitutional  |
 
 ## 0. Authority Level and Dependencies
 
@@ -222,7 +222,9 @@ and MUST NOT initiate queries, samplers, verifiers or mutations.
 
 ### INV-OPS-011: No Hidden Remediation
 *   **Statement**: Any automatic remediation MUST be explicit, logged, and separately classified from detection.
-*   **Prohibited Action**: A background job "cleaning up" data without logging the specific records changed and the rationale.
+*   **Constraints**:
+    *   Credential-lifecycle provider cleanup is the sole exception to record-level logging: it is logged only as the non-identifying outcome envelope of DOM-OPS-002 §2.5, because retaining the exact orphan-deletion targets would preserve the identity association that the credential lifecycle forbids. The cleanup remains explicit, separately classified from detection, and rationale-bearing.
+*   **Prohibited Action**: A background job "cleaning up" data without logging the specific records changed and the rationale, except as the Constraint above provides.
 
 ### INV-OPS-012: Class/Seat/User Trace Boundaries
 *   **Statement**: Classroom operational records MUST use `seat_id` (economic actor) under `class_id` (universe). Authentication principal IDs belong only to the Identity references allowed by INV-ARC-019.
@@ -413,6 +415,8 @@ Operational jobs that consume policy (payroll, rent reconciliation, interest) re
 ### Revision History
 
 > [!IMPORTANT]
+> **v2.17 (2026-11-26), merge reconciliation.** Combines the 2026-11-23 credential-lifecycle amendment with v2.16 (documentation modernization). No substantive rule changed.
+>
 > **v2.16 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
 > §VIII required one; none existed) and moved the notes below from the top of the document into it,
 > per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the header
@@ -428,3 +432,5 @@ Operational jobs that consume policy (payroll, rent reconciliation, interest) re
 
 Revisions to this document must increment the version number, update the Effective Date, and
 remain consistent with `INV-CORE-000` and `INV-ARC-009`.
+
+**2026-11-23 amendment:** Records the approved credential-lifecycle validation/outcome boundary. No identity archive, financial lineage relaxation or deployed-behavior claim is introduced.

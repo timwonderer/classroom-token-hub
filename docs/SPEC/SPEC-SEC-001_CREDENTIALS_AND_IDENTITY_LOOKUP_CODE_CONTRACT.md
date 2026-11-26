@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-SEC-001 | 1.6 | 2026-11-04 | 1.5 | Technical Specification |
+| SPEC-SEC-001 | 1.8 | 2026-11-26 | 1.7 | Technical Specification |
 
 ## I. Purpose
 
@@ -43,6 +43,7 @@ Technical Specification. `SPEC-SEC-001` is not an independent level of runtime a
 4. Code MUST store only the resulting verifier; it MUST NOT store plaintext passphrases, reversible passphrase encryption, or a recoverable copy in logs, events, sessions, URLs, caches, test output, or error objects.
 5. Verification MUST use the stored verifier and MUST return only a boolean/typed success result to its caller. Algorithm and parameters MUST be centralized in the canonical primitive, not duplicated in FEAT documents or route code.
 6. Malformed, missing, expired, or otherwise unusable verifiers MUST fail closed and MUST not disclose which condition occurred.
+7. A TOTP seed MUST decode to at least 112 bits. New seeds MUST be generated at 160 bits (32 base32 characters) by one Identity-owned generator; no other code path generates seeds. A stored seed below the minimum is noncompliant and subjects its principal to the credential compliance gate (DOM-IDEN-003 §VII.A).
 
 ### V.1a Required runtime environment
 
@@ -132,6 +133,39 @@ with their User row. Cookie signing does not replace the server-side check.
 
 Security events MAY record a request identifier, owning FEAT identifier, outcome class, and non-sensitive technical metadata. They MUST NOT contain PII, passphrases, tokens, raw lookup inputs, digests, encryption keys, or detailed failure material. Records MUST follow the owning identity and class deletion semantics; no security artifact may preserve deleted identity data without an explicitly authorized, separately scoped requirement.
 
+### V.6 Credential lifecycle validation and secret representation
+
+INV-ARC-019 §VI incorporates this section for all teacher/sysadmin passkey assertion
+consumers. Validate the current principal, exact activated local credential ownership,
+expected role/principal, assertion/challenge purpose, validity, replay state and current
+credential generation without mutating local state. Provider cryptographic proof alone
+is insufficient. In particular, `last_used` belongs to a subsequent explicit usage
+command, not a verification UPDATE. Challenge consumption, session establishment and
+audit emission likewise occur only in explicit post-validation commands.
+
+Use purpose-separated nonreversible verifiers for random high-entropy management
+capabilities, distinct from password and PII lookup primitives. Do not store raw provider
+tokens or copy a raw session nonce into operation state. Pending TOTP uses the existing
+approved encryption facility and canonical TOTP construction/storage primitives; this
+revision changes no cryptographic algorithm, parameter or key-rotation semantics.
+Never accept a browser-supplied pending seed as authoritative.
+
+SPEC-IDEN-002, incorporated by DOM-IDEN-003 §VII.A, defines the operation field inventory
+and lifetimes. Authentication secrets, sensitive verifiers, credential metadata and
+operational state are not interchangeable PII categories. No new PII inventory is granted.
+Expiry/consumption/supersession immediately ends secret authority; physical erasure occurs
+at the earliest lawful cleanup execution. One minute is an observable target with failures
+and retries, not an unconditional availability guarantee. Do not retain secret material
+for nonsecret reconciliation. Account destruction erases all current identity associations;
+late provider residue is discovered from current provider inventory, not local history.
+
+DOM-OPS-002 §2.5 is the only credential-lifecycle outcome envelope. Prohibited identifiers
+remain prohibited when hashed, placed in `row_pk`, composed into idempotency/correlation
+keys, or exported in logs and correlation packs. Independent identifiers must not retain
+recoverable ownership associations after deletion. Financial audit requirements are unchanged.
+
+
+
 ## VI. Required Verification
 
 Implementations MUST have focused tests proving: plaintext and secret non-retention; normalization and keyed lookup behavior; class-scoped resolution; principal/seat/class separation; fail-closed malformed and replay paths; generic failure responses; pure reads; atomic authorized mutations; and deletion of security material with its owning identity. Source inspection alone is insufficient evidence for rendered or runtime behavior.
@@ -162,3 +196,7 @@ username and TOTP seed use the approved encryption facility; neither is stored i
 the signed cookie. Receipt responses reveal no code/class validity; only complete
 set validation returns a generic result. Failed rounds invalidate earlier-round
 codes/proofs while preserving recipient selection.
+
+**2026-11-26 amendment (owner ruling 2026-11-26):** §V.1 adds the TOTP seed-length floor, generation length and single generator.
+
+**2026-11-23 amendment:** Records the approved credential-lifecycle validation/outcome boundary. No identity archive, financial lineage relaxation or deployed-behavior claim is introduced.

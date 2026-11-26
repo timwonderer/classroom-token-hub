@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.6     | 2026-11-04     | 1.5        | Constitutional |
+| INV-ARC-018 | 1.7 | 2026-11-23 | 1.6 | Constitutional |
 
 ---
 
@@ -107,6 +107,20 @@ Only the following PII fields are permitted in the v2 schema. Any PII column not
 | Username hash | `users` | HMAC-hashed | Login lookup |
 
 ---
+
+### Credential state is not an expanded PII inventory
+
+Authentication secrets, sensitive capability verifiers, credential metadata and
+nonsecret operation state are distinct from the PII inventory above. This amendment
+authorizes no additional names, contact information or identity lookup representation.
+INV-ARC-019 and incorporated SPEC-SEC-001/SPEC-IDEN-002 govern credential operations.
+Pending secret material loses authority immediately on expiry, consumption or
+supersession and is erased at the earliest lawful cleanup execution. Nonsecret
+reconciliation needs do not justify retaining secrets. All principal-associated
+operation state is destroyed with the principal. No post-destruction identity mapping,
+including a hash or observability correlation pack, may be retained for orphan discovery.
+DOM-OPS-002 §2.5 outcome events are non-identifying by construction, not a claim of
+absolute anonymity; they preserve no recoverable identity association.
 
 ## VII. Prohibited Storage Patterns
 
@@ -213,3 +227,5 @@ Together they enforce INV-CORE-000 §III.2 across both the execution layer and t
 ## XII. Amendment
 
 Revisions to this document must increment the version number, update the effective date, and remain consistent with INV-CORE-000 §III.2 and the foundational documentation standard (SOP-DOC-000).
+
+**2026-11-23 amendment:** Records the owner-approved credential lifecycle scope, activation, reconciliation and retention boundaries. Class isolation and foundational lifecycle requirements remain unchanged.

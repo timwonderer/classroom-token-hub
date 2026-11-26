@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-004 | 1.5 | 2026-10-27 | SPEC-OPS-004 v1.4 | Normative |
+| SPEC-OPS-004 | 1.7 | 2026-11-26 | 1.6 | Normative |
 
 > [!NOTE]
 > Renumbered from `SPEC-OPS-003` on 2026-09-06. This document and
@@ -46,6 +46,32 @@ Authentication factors supported by the console:
 - passkey (WebAuthn) registration and assertion.
 
 Passkey self-service lives at `/sysadmin/passkey/settings`. Registration, listing, and deletion act only on the authenticated sysadmin's own credentials. The console exposes no surface for creating, deleting, or resetting the credentials of another operator; that provisioning is out-of-band.
+
+### Personal credential management
+
+DOM-IDEN-003 §VII.A (mandatory dual enrollment and the credential compliance gate) is
+incorporated by reference. After initial authentication a sysadmin principal must hold a
+verified TOTP credential and at least one activated passkey, and is subject to the same
+compliance gate. Principal provisioning stays exclusively the CLI bootstrap
+(FEAT-IDEN-008); the console exposes no application-level operator registration or
+provisioning surface. Personal credential enrollment, replacement, retirement and
+maintenance use the single Identity-owned implementation. The console remains limited to
+observability, customer support and personal credential management. Principal
+provisioning and credential enrollment are distinct; unifying the latter expands neither
+role's capabilities.
+
+### Shared credential validation boundary
+
+Every sysadmin passkey assertion uses INV-ARC-019 §VI and SPEC-SEC-001 §V.6: current
+principal, expected role, exact owned activated local credential, purpose, validity and
+applicable generation. Pending or provider-only credentials never authenticate, even if
+reconciliation is unavailable. Pure validation performs no usage/session/challenge writes;
+explicit commands own those effects. Successful credential activation/removal applies the
+same generation/session invalidation rule. Provider-wide reconciliation is Identity's
+FEAT-IDEN-108 system authority, not an additional sysadmin power or classroom access.
+This amendment grants no cross-operator credential maintenance or new recovery surface.
+
+
 
 ## VI. Console Surface
 
@@ -188,3 +214,7 @@ The prior guides at `docs/user-guides/features/sysadmin/` and `docs/user-guides/
 
 Revisions increment the version and effective date, add a change note, and stay consistent with
 the documents listed in §III.
+
+**2026-11-26 amendment (owner rulings 2026-11-26):** Adds Personal credential management (§V) incorporating DOM-IDEN-003 §VII.A for sysadmin principals.
+
+**2026-11-23 amendment:** Records the approved credential-lifecycle validation/outcome boundary. No identity archive, financial lineage relaxation or deployed-behavior claim is introduced.
