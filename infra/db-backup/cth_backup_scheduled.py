@@ -271,7 +271,7 @@ def run(cmd, cfg):
         out(f"{cfg['drive']} is not mounted; nothing done")
         if cmd == "backup":  # a check every hour saying so would be noise
             notify("Nightly backup skipped: the backup drive is not attached and unlocked.")
-        return 1 if cmd == "status" else 0
+        return 0 if cmd in ("backup", "check") else 1
     remote.mkdir(parents=True, exist_ok=True)
 
     env = dict(os.environ)

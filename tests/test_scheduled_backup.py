@@ -127,6 +127,13 @@ def test_the_nightly_hour_takes_no_check(env, monkeypatch):
     assert "tool" in kinds(env)
 
 
+def test_a_drill_without_the_drive_fails(env):
+    """Review on #1873: a drill with the drive absent passed without restoring anything."""
+    (env["root"] / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+    env["state"]["mounted"] = False
+    assert env["mod"].main(["drill"]) == 1
+
+
 def test_tool_failure_fails_the_run_notifies_and_cleans_up(env):
     env["state"]["tool_rc"] = 1
     assert env["mod"].main(["check"]) == 1
