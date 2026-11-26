@@ -168,11 +168,19 @@ the same reason. Each publication shares `deploy.lock` with `guarded-deploy.sh`,
 publication never interleave. Re-install `guarded-deploy.sh` from this repository as well: its copy now takes
 that lock.
 
-1. **Install the scripts**, on the droplet as root, from a reviewed checkout of this repository at the commit
-   that added them:
+1. **Install the scripts** from a reviewed checkout on the Mac mini that contains them (main at or after
+   #1870). Copy them rather than checking anything out on the droplet: its checkout stays at the deployed
+   release, which may predate these files.
 
    ```bash
-   install -o root -g root -m 0700 infra/release-gate/guarded-docs.sh infra/release-gate/docs_publish.py infra/release-gate/guarded-deploy.sh /root/release-gate/
+   scp infra/release-gate/guarded-docs.sh infra/release-gate/docs_publish.py infra/release-gate/guarded-deploy.sh root@cth:/tmp/
+   ```
+
+   Droplet, as root. The `diff` should show only the added `flock` lines in `do_deploy`:
+   ```bash
+   diff /root/release-gate/guarded-deploy.sh /tmp/guarded-deploy.sh
+   install -o root -g root -m 0700 /tmp/guarded-docs.sh /tmp/docs_publish.py /tmp/guarded-deploy.sh /root/release-gate/
+   rm -f /tmp/guarded-docs.sh /tmp/docs_publish.py /tmp/guarded-deploy.sh
    install -d -o root -g root -m 0755 /srv/cth-docs /srv/cth-docs/releases
    ```
 
