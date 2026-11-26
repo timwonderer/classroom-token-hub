@@ -41,6 +41,7 @@ REDACT = re.compile(r"postgresql://\S*@")
 STAMP = re.compile(r"^cth-db-(\d{8}T\d{6}Z)-\w+\.manifest\.json$")
 LOCK_WAIT = {"backup": 1800, "drill": 600}  # a check finding the lock taken just exits; the next is an hour away
 EX_TEMPFAIL = 75
+NIGHTLY_HOUR = 3  # the backup's hour in macos/ and linux/; owner ruling 2026-11-25: that hour takes a backup, no check
 
 DEFAULT_DRIVE = {"darwin": "/Volumes/CTH-Backup"}.get(sys.platform, f"/media/{os.environ.get('USER', '')}/CTH-Backup")
 
@@ -261,6 +262,9 @@ def run(cmd, cfg):
     def out(msg):
         log(cmd, msg)
 
+    if cmd == "check" and time.localtime().tm_hour == NIGHTLY_HOUR:
+        out("the nightly backup runs this hour; nothing done")
+        return 0
     remote = cfg["drive"] / "cth-db-backups" / "production"
     state_dir = BASE / "state"
     if not drive_mounted(cfg["drive"]):

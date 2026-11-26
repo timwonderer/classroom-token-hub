@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Hourly at :15 (03:15 is also the nightly backup; the run lock serialises them): replacement baseline after a
-     protected destruction, and the purge of older points. __HOME__ is replaced at install. -->
+<!-- Hourly at :15, except 03:15, when the nightly backup runs instead (the runner skips that hour): replacement
+     baseline after a protected destruction, and the purge of older points. __HOME__ is replaced at install. -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.classroomtokenhub.db-backup-check</string>

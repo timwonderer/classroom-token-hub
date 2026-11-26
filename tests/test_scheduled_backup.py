@@ -35,6 +35,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "ROOT", root)
     monkeypatch.setattr(mod, "BASE", root / "scheduled")
     monkeypatch.setattr(mod, "IDENTITY", root / "identity.txt")
+    monkeypatch.setattr(mod, "NIGHTLY_HOUR", -1)  # the suite may run at 03:xx
     monkeypatch.setenv("CTH_BACKUP_DRIVE", str(drive))
 
     calls = []
@@ -114,6 +115,16 @@ def test_a_drill_or_status_that_could_not_run_fails(env, cmd):
     env["state"]["active"] = False
     assert env["mod"].main([cmd]) == 1
     assert "tool" not in kinds(env)
+
+
+def test_the_nightly_hour_takes_no_check(env, monkeypatch):
+    """Owner ruling 2026-11-25: 03:15 takes the backup, not a check."""
+    import time
+    monkeypatch.setattr(env["mod"], "NIGHTLY_HOUR", time.localtime().tm_hour)
+    assert env["mod"].main(["check"]) == 0
+    assert env["calls"] == []
+    assert env["mod"].main(["backup"]) == 0
+    assert "tool" in kinds(env)
 
 
 def test_tool_failure_fails_the_run_notifies_and_cleans_up(env):

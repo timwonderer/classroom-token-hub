@@ -65,7 +65,7 @@ identity counts, SHA-256). Reasons: `scheduled`, `baseline` (taken after a destr
 2. **When.**
    - `backup`: nightly at 03:15 local. The computer wakes itself at 03:10 (`pmset` on macOS, `rtcwake` on Linux) and
      stays awake until the run ends; a run still missed (computer off) runs once at the next start.
-   - `check`: hourly at a quarter past (owner ruling 2026-11-25); at 03:15 the backup runs as well. It detects a destruction and takes the
+   - `check`: hourly at a quarter past, except 03:15, which takes the backup instead (owner ruling 2026-11-25). It detects a destruction and takes the
      replacement baseline (§VIII.2).
 3. **When not.** No run while the drive is absent, while `classroom-economy` is not active (a release or an
    outage), or while another run is in progress.
