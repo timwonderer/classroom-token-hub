@@ -12,6 +12,7 @@ is a 409 ``alias_conflict``.
 from __future__ import annotations
 
 import secrets
+import uuid
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
@@ -38,6 +39,7 @@ class FakePasswordless:
     tokens: dict = field(default_factory=dict)       # token -> verified payload
     calls: list = field(default_factory=list)
     fail_deletes: bool = False
+    lose_next_delete_response: bool = False  # the provider deletes, then the reply is lost
 
     # ---- what tests use to simulate the browser ceremony ----
 
@@ -83,6 +85,9 @@ class FakePasswordless:
         if self.fail_deletes:
             raise _problem(500, "unavailable")
         self.credentials.pop(delete_credential.credential_id, None)
+        if self.lose_next_delete_response:
+            self.lose_next_delete_response = False
+            raise _problem(504, "timeout")
 
     def delete_user(self, delete_user):
         self.calls.append(("delete_user", delete_user.user_id))
@@ -105,3 +110,46 @@ def fake_passwordless(monkeypatch):
         lambda: pytest.fail("a test reached the real passwordless.dev client"),
     )
     return fake
+
+
+# ---- a teacher or sysadmin who can pass the fresh-TOTP gate ----------------
+
+#: A 160-bit seed (SPEC-SEC-001 §V.1 item 7); the TOTP the tests below prove with.
+HELD_SEED = "KRSXG5CTMVRXEZLUKN2XAZLSMRSXGZLT"
+
+
+def totp_code(seed=HELD_SEED):
+    """The current code for ``seed`` at the resolver's instant (never the wall clock)."""
+    import pyotp
+    from tests.helpers import temporal
+    return pyotp.TOTP(seed).at(temporal.now())
+
+
+def give_totp_seed(user_id, seed=HELD_SEED):
+    from app import db
+    from app.feats.base import FEATContext
+    from app.models import User
+    from app.utils.encryption import encrypt_totp
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:seed:{uuid.uuid4().hex}"):
+        db.session.get(User, user_id).totp_secret_encrypted = encrypt_totp(seed)
+
+
+def record_passkey(user_id, credential_id, fake=None, name="Key"):
+    """An activated binding for ``user_id`` (and, given ``fake``, the provider's copy of it)."""
+    from app import db
+    from app.feats.base import FEATContext
+    from app.models import PasskeyCredential
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:passkey:{uuid.uuid4().hex}"):
+        db.session.add(PasskeyCredential(user_id=user_id, credential_id=credential_id, authenticator_name=name))
+    if fake is not None:
+        fake.credentials[credential_id] = passkey_external_id(user_id)
+
+
+def start_registration(client, *, prefix="/admin", code=None, **body):
+    """POST the start step with a fresh TOTP code (the current one unless ``code`` is given)."""
+    payload = {"totp_code": totp_code() if code is None else code, **body}
+    return client.post(f"{prefix}/passkey/register/start", json=payload)
+
+
+def finish_registration(client, token, *, prefix="/admin", name="Key"):
+    return client.post(f"{prefix}/passkey/register/finish", json={"token": token, "authenticatorName": name})

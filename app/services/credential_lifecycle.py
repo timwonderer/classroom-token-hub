@@ -1,8 +1,10 @@
-"""Identity-owned credential lifecycle: seed generation, compliance and TOTP replacement.
+"""Identity-owned credential lifecycle: seed generation, compliance, TOTP replacement and passkeys.
 
 Governed by SPEC-IDEN-002 (protocol and state inventory), DOM-IDEN-003 §VII.A
 (mandatory dual enrollment, credential compliance gate), SPEC-SEC-001 §V.1 item 7
-(seed-length floor and the single generator) and FEAT-IDEN-106 (TOTP replacement).
+(seed-length floor and the single generator), FEAT-IDEN-106 (TOTP replacement),
+FEAT-IDEN-102 (passkey enrollment and selected replacement) and FEAT-IDEN-107
+(passkey revocation).
 
 Two kinds of function live here and the split is deliberate:
 
@@ -13,13 +15,17 @@ Two kinds of function live here and the split is deliberate:
   activation"). Compliance is derived from live credential state on every call;
   no completion flag is stored.
 * **Commands** (``open_operation``, ``hold_totp_candidate``, ``activate_totp``,
+  ``hold_pending_registration``, ``record_registered_credential``,
+  ``activate_passkey``, ``commit_retirement_intent``, ``complete_retirement``,
   ``cancel_operation``, ``expire_stale_operations``) mutate and may only run inside
-  the Identity FEAT that owns them (``app/feats/credential_operations_feat.py``).
-  Each rechecks, at the mutation boundary, everything it relies on.
+  the Identity FEAT that owns them (``app/feats/credential_operations_feat.py`` and
+  ``app/feats/passkey_lifecycle_feat.py``). Each rechecks, at the mutation boundary,
+  everything it relies on.
 
-Passkey workflow commands that retire or register credentials remotely are not
-here. This module issues no provider call except the single read-only verification
-of an assertion token, made before any row lock is taken (SPEC-IDEN-002 §V
+This module issues no provider call except the single read-only verification
+of an assertion token, made before any row lock is taken. Registration tokens,
+verification of a registration and remote credential deletion are made by the
+orchestrating FEAT between its short local transactions (SPEC-IDEN-002 §V
 "Transactions and provider I/O").
 """
 
@@ -52,7 +58,7 @@ from app.models import (
     UserRole,
 )
 from app.services import passkey_service
-from app.services.passkey_service import PasskeyError, SIGNIN_TOKEN_TYPE
+from app.services.passkey_service import PasskeyError, REGISTER_TOKEN_TYPE, SIGNIN_TOKEN_TYPE
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.encryption import decrypt_totp, encrypt_totp
 from app.utils.user_ids import parse_passkey_external_id
@@ -501,9 +507,10 @@ def open_operation(
 
     The command, not its caller, checks that the proof kind matches the purpose
     (a passkey assertion for ``totp_replace``, already provider-verified by
-    ``verify_proof`` and passed as ``verified``; a TOTP code, or for the first
+    ``verify_proof`` and passed as ``verified``; a TOTP code, or for a teacher's first
     passkey enrollment the signup capability, for passkey work) and evaluates the
-    proof against current state. It refuses when the principal already has an open
+    proof against current state. A signup capability is an operation issued by
+    ``issue_signup_capability``; presenting it returns that operation, never a new one. It refuses when the principal already has an open
     operation, which the partial unique index also enforces.
 
     Raises ``CredentialOperationRefused`` (and ``PasskeyError`` for a refused
@@ -538,6 +545,9 @@ def open_operation(
     if recovery_setup_is_live(principal.id):
         raise CredentialOperationRefused("recovery_active")
 
+    if isinstance(proof, SignupCapability):
+        return _consume_signup_capability(principal, proof, session_nonce)
+
     # Decide on the proof against current, locked state.
     if isinstance(proof, PasskeyAssertion):
         check_step_up_challenge(principal, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge)
@@ -552,7 +562,6 @@ def open_operation(
         if not evaluate_totp_code(principal, proof.code):
             raise CredentialOperationRefused("proof_rejected")
     else:
-        # No signup capability issuer exists yet; an unverifiable capability is never accepted.
         raise CredentialOperationRefused("proof_rejected")
 
     live = (
@@ -819,3 +828,416 @@ def _emit_outcome(*, action: str, actor_type: str, stage_before: str, stage_afte
     emit_audit_event(
         _AUDIT_CATEGORY, str(uuid.uuid4()), "TRANSITION", fields, actor_type=actor_type,
     )
+
+
+# ---------------------------------------------------------------------------
+# Passkey operations: enrollment, selected replacement, revocation
+# (FEAT-IDEN-102, FEAT-IDEN-107; SPEC-IDEN-002 §V workflow stages)
+# ---------------------------------------------------------------------------
+
+#: Signup-derived initial-enrollment capability lifetime (FEAT-IDEN-101, SPEC-IDEN-002 §V).
+SIGNUP_CAPABILITY_SECONDS = 5 * 60
+#: Stands in for the session binding verifier once it is consumed into a retirement
+#: intent (SPEC-IDEN-002 §VI: erase on consumption). It is not the digest of any nonce.
+ERASED_SESSION_BINDING = "0" * 64
+
+PASSKEY_PURPOSES = (
+    CredentialOperationPurpose.PASSKEY_ENROLL,
+    CredentialOperationPurpose.PASSKEY_REPLACE,
+    CredentialOperationPurpose.PASSKEY_REVOKE,
+)
+#: Stages before interactive authorization is consumed; they obey the deadline and session.
+PRE_INTENT_STAGES = _DEADLINE_CANCELLABLE_STAGES
+#: Stages after retirement intent; only the fixed operation may finish (SPEC-IDEN-002 §V).
+RETIREMENT_STAGES = (
+    CredentialOperationStage.RETIREMENT_COMMITTED,
+    CredentialOperationStage.PROVIDER_UNCERTAIN,
+)
+
+COMPLETED = "completed"
+ALREADY_COMPLETED = "already_completed"
+
+_ACTION_FOR_PURPOSE = {
+    CredentialOperationPurpose.PASSKEY_ENROLL: "ACT-IDEN-102",
+    CredentialOperationPurpose.PASSKEY_REPLACE: "ACT-IDEN-102",
+    CredentialOperationPurpose.PASSKEY_REVOKE: "ACT-IDEN-107",
+}
+_OUTCOME_FOR_PURPOSE = {
+    CredentialOperationPurpose.PASSKEY_ENROLL: "activated",
+    CredentialOperationPurpose.PASSKEY_REPLACE: "replaced",
+    CredentialOperationPurpose.PASSKEY_REVOKE: "revoked",
+}
+
+
+def get_open_operation(user_id: str) -> CredentialOperation | None:
+    """The principal's one open operation, if any. Pure read."""
+    if not user_id:
+        return None
+    return (
+        db.session.query(CredentialOperation)
+        .filter(
+            CredentialOperation.user_id == user_id,
+            CredentialOperation.stage.notin_(CREDENTIAL_OPERATION_TERMINAL_STAGES),
+        )
+        .one_or_none()
+    )
+
+
+def issue_signup_capability(user: User, *, session_nonce: str) -> str:
+    """Issue the one five-minute initial-passkey capability for a just-provisioned teacher.
+
+    FEAT-IDEN-101 calls this in the transaction that provisions the principal, after the
+    signup TOTP was verified and the teacher elected to enroll now. The capability is an
+    ``authorized`` ``passkey_enroll`` operation bound to the principal, the credential
+    generation and the signup session; its id is the capability the browser presents.
+    It cannot replace a credential, is never renewed and is never rebuilt from a login.
+    """
+    _require_feat("FEAT-IDEN-101")
+    principal = _lock_user(user.id)
+    if principal is None or principal.user_role is not UserRole.TEACHER or not principal.totp_secret_encrypted:
+        raise CredentialOperationRefused("ineligible_principal")
+    if (
+        not isinstance(session_nonce, str) or not session_nonce
+        or not _digests_equal(principal.current_session_nonce, session_nonce)
+    ):
+        raise CredentialOperationRefused("session_not_current")
+    if get_open_operation(principal.id) is not None:
+        raise CredentialOperationRefused("operation_already_open")
+    now = _now()
+    deadline = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=SIGNUP_CAPABILITY_SECONDS,
+    ).shifted_timestamp_utc
+    session_end = principal.current_session_expires_at
+    if session_end is not None and _is_earlier(session_end, deadline):
+        deadline = session_end
+    operation = CredentialOperation(
+        user_id=principal.id,
+        purpose=CredentialOperationPurpose.PASSKEY_ENROLL,
+        stage=CredentialOperationStage.AUTHORIZED,
+        authorized_generation=principal.credential_generation,
+        session_binding_hash=session_binding_digest(CredentialOperationPurpose.PASSKEY_ENROLL, session_nonce),
+        deadline_at=deadline,
+        attempt_count=0,
+    )
+    db.session.add(operation)
+    db.session.flush()
+    return operation.id
+
+
+#: A provider registration token's own lifetime; the SDK default, stated so it is not implicit.
+REGISTRATION_TOKEN_SECONDS = 2 * 60
+
+
+def registration_token_expiry(deadline_at):
+    """When a registration token issued now must expire: two minutes, never past ``deadline_at``.
+
+    SPEC-IDEN-002 §V: a new provider token must not outlive the registration deadline. Pure.
+    """
+    expiry = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=_now(), elapsed_seconds=REGISTRATION_TOKEN_SECONDS,
+    ).shifted_timestamp_utc
+    return deadline_at if _is_earlier(deadline_at, expiry) else expiry
+
+
+def open_passkey_operation_state(user_id: str) -> str | None:
+    """How the principal's open passkey operation presents: ``"registering"``,
+    ``"retirement_pending"`` or ``None``. Pure read, for rendering the settings page."""
+    operation = get_open_operation(user_id)
+    if operation is None or operation.purpose not in PASSKEY_PURPOSES:
+        return None
+    if operation.stage in RETIREMENT_STAGES:
+        return "retirement_pending"
+    return "registering" if _deadline_open(operation) else None
+
+
+def _consume_signup_capability(principal: User, proof: SignupCapability, session_nonce) -> CredentialOperation:
+    """Resolve a presented capability to the live operation it names, or refuse."""
+    if principal.user_role is not UserRole.TEACHER:
+        raise CredentialOperationRefused("proof_rejected")
+    try:
+        capability_id = str(uuid.UUID(str(proof.nonce)))
+    except ValueError:
+        raise CredentialOperationRefused("proof_rejected") from None
+    operation = (
+        db.session.query(CredentialOperation)
+        .filter_by(id=capability_id, user_id=principal.id)
+        .populate_existing()
+        .with_for_update()
+        .one_or_none()
+    )
+    if (
+        operation is None
+        or operation.purpose is not CredentialOperationPurpose.PASSKEY_ENROLL
+        or operation.stage is not CredentialOperationStage.AUTHORIZED
+    ):
+        raise CredentialOperationRefused("proof_rejected")
+    _recheck_pre_intent(principal, operation, CredentialOperationStage.AUTHORIZED, session_nonce)
+    return operation
+
+
+def _lock_passkey_operation(operation: CredentialOperation, *purposes: CredentialOperationPurpose):
+    principal = _lock_user(operation.user_id)
+    locked = _lock_operation(operation.id)
+    if (
+        principal is None or locked is None or locked.user_id != principal.id
+        or principal.user_role not in (UserRole.TEACHER, UserRole.SYSADMIN)
+    ):
+        raise CredentialOperationRefused("operation_not_found")
+    if locked.purpose not in purposes:
+        raise CredentialOperationRefused("wrong_purpose")
+    _require_feat(FEAT_FOR_PURPOSE[locked.purpose])
+    return principal, locked
+
+
+def _recheck_pre_intent(principal, operation, stage, session_nonce) -> None:
+    """Mutation-boundary rechecks for every step before retirement intent is committed."""
+    if operation.stage is not stage:
+        raise CredentialOperationRefused("operation_not_open")
+    if principal.credential_generation != operation.authorized_generation:
+        raise CredentialOperationRefused("stale_generation")
+    if not _deadline_open(operation):
+        raise CredentialOperationRefused("operation_expired")
+    if not _session_matches(operation, principal, session_nonce):
+        raise CredentialOperationRefused("session_not_current")
+
+
+def hold_pending_registration(
+    operation: CredentialOperation, *, session_nonce: str, replace_passkey_id: int | None = None,
+) -> CredentialOperation:
+    """Persist the pending registration, before any provider token is issued (FEAT-IDEN-102 §V).
+
+    Moves an ``authorized`` enrollment or replacement to ``registration_pending``. A
+    replacement records the exact selected local credential; it must be an activated
+    binding of this principal (a pending credential is never one). The old binding is
+    untouched.
+    """
+    principal, locked = _lock_passkey_operation(
+        operation, CredentialOperationPurpose.PASSKEY_ENROLL, CredentialOperationPurpose.PASSKEY_REPLACE,
+    )
+    _recheck_pre_intent(principal, locked, CredentialOperationStage.AUTHORIZED, session_nonce)
+    if locked.purpose is CredentialOperationPurpose.PASSKEY_REPLACE:
+        selected = _owned_binding(principal, replace_passkey_id)
+        locked.old_credential_id = selected.credential_id
+    elif replace_passkey_id is not None:
+        raise CredentialOperationRefused("wrong_purpose")
+    locked.stage = CredentialOperationStage.REGISTRATION_PENDING
+    db.session.flush()
+    return locked
+
+
+def _owned_binding(principal: User, passkey_row_id) -> PasskeyCredential:
+    """The activated binding ``passkey_row_id`` names, only when ``principal`` owns it."""
+    try:
+        row_id = int(passkey_row_id)
+    except (TypeError, ValueError):
+        raise CredentialOperationRefused("credential_not_found") from None
+    row = db.session.query(PasskeyCredential).filter_by(id=row_id, user_id=principal.id).one_or_none()
+    if row is None:
+        raise CredentialOperationRefused("credential_not_found")
+    return row
+
+
+def record_registered_credential(operation: CredentialOperation, verified, *, session_nonce: str) -> CredentialOperation:
+    """Durably record the provider-verified registration as the pending candidate.
+
+    ``verified`` is the payload ``passkey_service.verify_token`` returned for the token
+    ``p.register()`` produced. It must be a successful ``passkey_register`` token naming
+    this principal and a credential id that no local binding holds and that is not the
+    credential being replaced. The candidate is recorded on the operation only; the
+    registry gains nothing and the candidate cannot sign in.
+    """
+    principal, locked = _lock_passkey_operation(
+        operation, CredentialOperationPurpose.PASSKEY_ENROLL, CredentialOperationPurpose.PASSKEY_REPLACE,
+    )
+    _recheck_pre_intent(principal, locked, CredentialOperationStage.REGISTRATION_PENDING, session_nonce)
+    if not getattr(verified, "success", False) or getattr(verified, "type", None) != REGISTER_TOKEN_TYPE:
+        raise CredentialOperationRefused("registration_rejected")
+    if parse_passkey_external_id(getattr(verified, "user_id", None)) != str(principal.id):
+        raise CredentialOperationRefused("registration_rejected")
+    credential_id = getattr(verified, "credential_id", None)
+    if not credential_id or not isinstance(credential_id, str) or credential_id == locked.old_credential_id:
+        raise CredentialOperationRefused("registration_rejected")
+    if db.session.query(db.session.query(PasskeyCredential.id).filter_by(credential_id=credential_id).exists()).scalar():
+        raise CredentialOperationRefused("registration_rejected")
+    locked.new_credential_id = credential_id
+    locked.stage = CredentialOperationStage.CANDIDATE_VERIFIED
+    db.session.flush()
+    return locked
+
+
+def _complete_locked(principal: User, operation: CredentialOperation, *, stage_before: CredentialOperationStage) -> None:
+    """The one place a passkey operation completes: generation, sign-in, receipt, outcome."""
+    purpose = operation.purpose
+    principal.credential_generation = principal.credential_generation + 1
+    principal.current_session_nonce = secrets.token_hex(32)
+    operation.stage = CredentialOperationStage.COMPLETED
+    operation.old_credential_id = None
+    operation.new_credential_id = None
+    operation.session_binding_hash = ERASED_SESSION_BINDING
+    operation.retry_after_at = None
+    operation.error_category = None
+    db.session.flush()
+    _emit_outcome(
+        action=_ACTION_FOR_PURPOSE[purpose],
+        actor_type=principal.user_role.value,
+        stage_before=stage_before.value,
+        stage_after=CredentialOperationStage.COMPLETED.value,
+        outcome=_OUTCOME_FOR_PURPOSE[purpose],
+    )
+
+
+def _bind(principal: User, credential_id: str, authenticator_name) -> None:
+    """Activate ``credential_id`` as a binding of ``principal``: the registry's only writer."""
+    name = (authenticator_name or "").strip() or "Unnamed Passkey"
+    try:
+        with db.session.begin_nested():
+            db.session.add(PasskeyCredential(
+                user_id=principal.id, credential_id=credential_id, authenticator_name=name[:100],
+            ))
+            db.session.flush()
+    except IntegrityError:
+        raise CredentialOperationRefused("registration_rejected") from None
+
+
+def activate_passkey(operation: CredentialOperation, *, authenticator_name: str, session_nonce: str) -> str:
+    """Activate the verified candidate of an enrollment, once.
+
+    Locks the principal and the operation and rechecks stage, generation, deadline and
+    session. Writes the binding, advances ``credential_generation``, voids the sign-in
+    (which also voids every step-up challenge), completes the operation, erases its
+    credential ids and emits ACT-IDEN-102. A completed operation returns
+    ``ALREADY_COMPLETED`` with none of those effects.
+    """
+    principal, locked = _lock_passkey_operation(operation, CredentialOperationPurpose.PASSKEY_ENROLL)
+    if locked.stage is CredentialOperationStage.COMPLETED:
+        return ALREADY_COMPLETED
+    _recheck_pre_intent(principal, locked, CredentialOperationStage.CANDIDATE_VERIFIED, session_nonce)
+    _bind(principal, locked.new_credential_id, authenticator_name)
+    _complete_locked(principal, locked, stage_before=CredentialOperationStage.CANDIDATE_VERIFIED)
+    return COMPLETED
+
+
+def _commit_intent(operation: CredentialOperation, old_credential_id: str) -> None:
+    operation.old_credential_id = old_credential_id
+    operation.stage = CredentialOperationStage.RETIREMENT_COMMITTED
+    operation.retirement_intent_at = _now()
+    operation.session_binding_hash = ERASED_SESSION_BINDING
+    db.session.flush()
+
+
+def commit_retirement_intent(operation: CredentialOperation, *, session_nonce: str) -> CredentialOperation:
+    """Consume interactive authorization of a replacement by committing its retirement intent.
+
+    From ``candidate_verified`` the selected old binding must still be this principal's.
+    After this the deadline and the session no longer apply: only the fixed operation
+    (the recorded old and new credential ids) may finish.
+    """
+    principal, locked = _lock_passkey_operation(operation, CredentialOperationPurpose.PASSKEY_REPLACE)
+    _recheck_pre_intent(principal, locked, CredentialOperationStage.CANDIDATE_VERIFIED, session_nonce)
+    if not db.session.query(db.session.query(PasskeyCredential.id).filter_by(
+        user_id=principal.id, credential_id=locked.old_credential_id,
+    ).exists()).scalar():
+        raise CredentialOperationRefused("credential_not_found")
+    _commit_intent(locked, locked.old_credential_id)
+    return locked
+
+
+def commit_revocation_intent(
+    operation: CredentialOperation, *, passkey_id: int, session_nonce: str,
+) -> CredentialOperation:
+    """Record the exact credential a revocation retires and commit its retirement intent.
+
+    The selected binding must be this principal's and activated, TOTP must still be
+    available, and the principal must hold another activated passkey: revoking the only
+    one is refused (FEAT-IDEN-107 §V; selected replacement is the lawful path).
+    """
+    principal, locked = _lock_passkey_operation(operation, CredentialOperationPurpose.PASSKEY_REVOKE)
+    _recheck_pre_intent(principal, locked, CredentialOperationStage.AUTHORIZED, session_nonce)
+    selected = _owned_binding(principal, passkey_id)
+    if not principal.totp_secret_encrypted:
+        raise CredentialOperationRefused("totp_not_activated")
+    held = db.session.query(PasskeyCredential).filter_by(user_id=principal.id).count()
+    if held < 2:
+        raise CredentialOperationRefused("only_passkey")
+    _commit_intent(locked, selected.credential_id)
+    return locked
+
+
+def record_provider_uncertain(operation: CredentialOperation) -> bool:
+    """Record that remote retirement was attempted and not confirmed; the fixed work stays pending.
+
+    Keeps only a bounded counter and a coarse category (SPEC-IDEN-002 §VI). Returns
+    ``False`` without effect when the operation is no longer awaiting retirement.
+    """
+    _, locked = _lock_passkey_operation(
+        operation, CredentialOperationPurpose.PASSKEY_REPLACE, CredentialOperationPurpose.PASSKEY_REVOKE,
+    )
+    if locked.stage not in RETIREMENT_STAGES:
+        return False
+    locked.stage = CredentialOperationStage.PROVIDER_UNCERTAIN
+    locked.attempt_count = locked.attempt_count + 1
+    locked.error_category = "provider_unavailable"
+    db.session.flush()
+    return True
+
+
+def complete_retirement(operation: CredentialOperation, *, authenticator_name: str | None = None) -> str:
+    """Finish a replacement or revocation after the old credential is confirmed gone remotely.
+
+    Locks the principal and the operation and rechecks the recorded stage and the
+    generation (a recovery or any other credential change advances it and supersedes
+    the work). The deadline and the session are deliberately not consulted: retirement
+    intent was committed inside them. Atomically hard-deletes only the selected local
+    binding, activates the new one for a replacement, advances ``credential_generation``,
+    voids the sign-in, completes the operation and emits ACT-IDEN-107 (revocation) or
+    ACT-IDEN-102 (replacement). A completed operation returns ``ALREADY_COMPLETED`` with
+    none of those effects.
+    """
+    principal, locked = _lock_passkey_operation(
+        operation, CredentialOperationPurpose.PASSKEY_REPLACE, CredentialOperationPurpose.PASSKEY_REVOKE,
+    )
+    if locked.stage is CredentialOperationStage.COMPLETED:
+        return ALREADY_COMPLETED
+    if locked.stage not in RETIREMENT_STAGES:
+        raise CredentialOperationRefused("operation_not_open")
+    if principal.credential_generation != locked.authorized_generation:
+        raise CredentialOperationRefused("stale_generation")
+    stage_before = locked.stage
+    old = (
+        db.session.query(PasskeyCredential)
+        .filter_by(user_id=principal.id, credential_id=locked.old_credential_id)
+        .one_or_none()
+    )
+    if old is None:
+        raise CredentialOperationRefused("credential_not_found")
+    new_credential_id = locked.new_credential_id
+    db.session.delete(old)
+    db.session.flush()
+    if locked.purpose is CredentialOperationPurpose.PASSKEY_REPLACE:
+        if not new_credential_id:
+            raise CredentialOperationRefused("operation_not_open")
+        _bind(principal, new_credential_id, authenticator_name)
+    _complete_locked(principal, locked, stage_before=stage_before)
+    return COMPLETED
+
+
+def cancel_before_retirement(operation: CredentialOperation, *, session_nonce: str) -> bool:
+    """Cancel a passkey operation that has not yet committed retirement intent.
+
+    The principal's bindings are untouched. A registration the browser already finished
+    remotely is then cleanup-only (FEAT-IDEN-102 §VII); the recorded credential id stays
+    on the cancelled receipt for that cleanup until the sweep erases the receipt. Refused once retirement intent is committed. Returns ``False``
+    without effect when the operation is already terminal.
+    """
+    principal, locked = _lock_passkey_operation(operation, *PASSKEY_PURPOSES)
+    if not _is_open(locked):
+        return False
+    if locked.stage not in PRE_INTENT_STAGES:
+        raise CredentialOperationRefused("retirement_committed")
+    if not _session_matches(locked, principal, session_nonce):
+        raise CredentialOperationRefused("session_not_current")
+    _erase_and_cancel(locked)
+    db.session.flush()
+    return True

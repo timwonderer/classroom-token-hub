@@ -5,13 +5,13 @@ of them belong to which ``users.id`` (DOM-IDEN-003). A passwordless.dev token
 proves only that *some* credential in the tenant was used. Authority comes from
 matching that credential to a row here:
 
-- Registration verifies the token on the server and records the credential id
-  it names, for the signed-in principal only.
+- Registration tokens are issued here and the browser's result is verified here;
+  recording and activating the credential it names is an Identity command
+  (``credential_lifecycle``), never this adapter.
 - Sign-in accepts only a ``passkey_signin`` token whose credential is recorded
   for the principal the token names.
-- Removal deletes on passwordless.dev first, then here. If the remote call
-  fails nothing local changes, so no local state points at a credential that
-  still works remotely without our knowing.
+- Retirement deletes on passwordless.dev first; the local binding is removed by
+  the Identity command only after the deletion is confirmed.
 """
 
 from __future__ import annotations
@@ -74,44 +74,30 @@ def _verify(token: str):
         raise PasskeyError("passwordless.dev rejected the token") from exc
 
 
-def create_registration_token(user: User, *, alias: str, display_name: str) -> str:
-    """A passwordless.dev registration token for ``user``.
+def create_registration_token(user_id: str, *, alias: str, display_name: str, expires_at=None) -> str:
+    """A passwordless.dev registration token for the principal ``user_id``.
+
+    ``expires_at`` caps the token's life (the caller passes the operation's registration
+    deadline); the provider default is two minutes.
 
     Raises ``PasskeyAliasConflict`` when passwordless.dev already binds the
     alias to another user id, which is what a registration left over from a
     deleted account looks like.
     """
     from passwordless import PasswordlessError, RegisterToken
+    extra = {"expires_at": expires_at} if expires_at is not None else {}
     try:
         return _client().register_token(RegisterToken(
-            user_id=passkey_external_id(user.id),
+            user_id=passkey_external_id(user_id),
             username=display_name,
             aliases=[alias],
+            **extra,
         )).token
     except PasswordlessError as exc:
         details = getattr(exc, "problem_details", None)
         if getattr(details, "error_code", None) == "alias_conflict":
             raise PasskeyAliasConflict("alias bound to another passwordless.dev user") from exc
         raise
-
-
-def complete_registration(user: User, token: str, *, authenticator_name: str):
-    """Verify a registration token and record its credential for ``user``."""
-    verified = _verify(token)
-    if (
-        not getattr(verified, "success", False)
-        or getattr(verified, "type", None) != REGISTER_TOKEN_TYPE
-        or parse_passkey_external_id(getattr(verified, "user_id", None)) != str(user.id)
-        or not getattr(verified, "credential_id", None)
-    ):
-        raise PasskeyError("registration token does not register a credential for this user")
-
-    from app.services.admin_identity_service import create_admin_credential
-    return create_admin_credential(
-        user_id=user.id,
-        credential_id=verified.credential_id,
-        authenticator_name=(authenticator_name or "Unnamed Passkey")[:100],
-    )
 
 
 def verify_token(token: str):
@@ -149,18 +135,20 @@ def verify_sign_in(token: str, *, expected_role: str, expected_user_id: str | No
     return user
 
 
-def remove_passkey(user_id: str, passkey_row_id: int) -> bool:
-    """Remove one recorded passkey: on passwordless.dev first, then here."""
-    from app.services.admin_identity_service import delete_admin_credential, get_admin_credential
-    row = get_admin_credential(passkey_row_id, user_id)
-    if row is None:
-        return False
+def retire_remote_credential(credential_id: str) -> None:
+    """Delete one exact credential on passwordless.dev. Provider I/O: no transaction may be open.
+
+    Raises ``PasskeyServiceUnavailable`` when the provider did not confirm the
+    deletion. A failure never licenses removing the local binding: the caller keeps
+    the fixed operation pending and retries this same credential (FEAT-IDEN-102/107).
+    """
+    if not credential_id or not isinstance(credential_id, str):
+        raise PasskeyError("no credential to retire")
     from passwordless import DeleteCredential
     try:
-        _client().delete_credential(DeleteCredential(credential_id=row.credential_id))
+        _client().delete_credential(DeleteCredential(credential_id=credential_id))
     except Exception as exc:
         raise PasskeyServiceUnavailable("remote credential deletion failed") from exc
-    return delete_admin_credential(passkey_row_id, user_id)
 
 
 def forget_principal_remotely(user_id: str) -> None:

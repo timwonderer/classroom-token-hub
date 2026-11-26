@@ -5,9 +5,9 @@ principal's own operation, then composes the Identity commands in
 ``app.services.credential_lifecycle`` (SPEC-IDEN-002). Routes call these; they
 never touch ``credential_operations`` or ``users.credential_generation`` directly.
 
-Only the TOTP-replacement commands (FEAT-IDEN-106) and the expiry sweep
-(FEAT-IDEN-108) exist so far. Passkey enrollment, replacement and revocation
-completion are separate commands.
+The TOTP-replacement commands (FEAT-IDEN-106) and the expiry sweep (FEAT-IDEN-108)
+live here. Passkey enrollment, replacement and revocation (FEAT-IDEN-102/107) are in
+``app/feats/passkey_lifecycle_feat.py``.
 """
 from __future__ import annotations
 
@@ -17,6 +17,19 @@ from app.extensions import db
 from app.feats.base import FEATContext, is_discardable_read_autobegin, requires_feat_context
 from app.models import CredentialOperationPurpose, User
 from app.services import credential_lifecycle as lifecycle
+
+
+def release_read_transaction() -> None:
+    """Leave no database transaction open, so a provider call can run.
+
+    Drops an incidental read-only transaction (the request's canonical-context read).
+    Intentional work (an explicit transaction, a savepoint, pending writes) is never
+    rolled back and never held open across a provider call: it is refused.
+    """
+    if db.session().in_transaction() and is_discardable_read_autobegin(db.session):
+        db.session.rollback()
+    if db.session().in_transaction():
+        raise lifecycle.CredentialOperationRefused("transaction_open")
 
 
 def _own_operation(user_id, operation_id):
@@ -46,14 +59,8 @@ def open_credential_operation(*, user_id, purpose, proof, session_nonce,
             lifecycle.check_step_up_challenge(
                 user, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge,
             )
-    # Provider verification runs with no transaction open: drop an incidental read
-    # transaction first, verify, then begin the FEAT transaction and revalidate.
-    if db.session().in_transaction() and is_discardable_read_autobegin(db.session):
-        db.session.rollback()
-    if db.session().in_transaction():
-        # Intentional work (explicit transaction, savepoint, pending writes): never roll it
-        # back, and never hold it open across a provider call.
-        raise lifecycle.CredentialOperationRefused("transaction_open")
+    # Provider verification runs with no transaction open.
+    release_read_transaction()
     verified = lifecycle.verify_proof(proof)
     with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=key):
         user = db.session.get(User, user_id)

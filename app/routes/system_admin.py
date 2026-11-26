@@ -54,7 +54,8 @@ from app.services.admin_identity_service import (
     admin_has_passkeys,
     list_admin_credentials,
 )
-from app.services import passkey_service
+from app.routes import passkey_management
+from app.services import credential_lifecycle, passkey_service
 from app.services.identity.builders import build_passkey_credential_rows
 from app.services.support.builders import (
     build_correlation_pack_view,
@@ -221,78 +222,30 @@ def logout():
 @system_admin_required
 @limiter.limit("10 per minute")
 def passkey_register_start():
+    """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token.
+
+    A ``replace_passkey_id`` in the body makes this a selected replacement. A system
+    admin has no signup capability and always proves fresh TOTP.
     """
-    Start passkey registration - Generate registration token.
-
-    Official SDK Pattern: Create RegisterToken and get token from passwordless.dev
-    """
-    try:
-        ctx = g.canonical_context
-        user = get_current_user()
-        if not user or ctx.actor_role != 'sysadmin':
-            abort(404)
-
-        username = session.get("sysadmin_auth_username") or user.auth_username or f"sysadmin_{user.id}"
-        token = passkey_service.create_registration_token(
-            user, alias=username, display_name=f"System administrator: {username}",
-        )
-
-        return jsonify({
-            "token": token,
-            "apiKey": get_public_api_key()
-        }), 200
-
-    except passkey_service.PasskeyAliasConflict as e:
-        current_app.logger.warning("Passkey registration refused: %s", e)
-        return jsonify({"error": e.public_message}), 409
-    except ValueError as e:
-        current_app.logger.error(f"Passwordless.dev configuration error: {e}")
-        return jsonify({"error": "Passkey service not configured"}), 503
-    except Exception as e:
-        current_app.logger.error(f"Error starting passkey registration: {e}")
-        return jsonify({"error": "Failed to start registration"}), 500
+    ctx = g.canonical_context
+    user = get_current_user()
+    if not user or ctx.actor_role != 'sysadmin':
+        abort(404)
+    username = session.get("sysadmin_auth_username") or user.auth_username or f"sysadmin_{user.id}"
+    return passkey_management.register_start(
+        user_id=user.id, alias=username, display_name=f"System administrator: {username}",
+        allow_signup_capability=False,
+    )
 
 
 @sysadmin_bp.route('/passkey/register/finish', methods=['POST'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_register_finish():
-    """
-    Finish passkey registration - Save credential metadata.
-
-    After frontend completes WebAuthn ceremony, store credential metadata.
-    """
-    try:
-        ctx = g.canonical_context
-        user = get_current_user()
-        if (
-            not user
-            or ctx.actor_role != 'sysadmin'
-            or getattr(user.user_role, "value", user.user_role) != UserRole.SYSADMIN.value
-        ):
-            return jsonify({"error": "Canonical system admin identity is missing"}), 409
-        data = request.get_json(silent=True) or {}
-
-        # The token from p.register() is verified here, and the credential it
-        # names is recorded for this system admin only.
-        passkey_service.complete_registration(
-            user,
-            data.get('token'),
-            authenticator_name=data.get('authenticatorName', 'Unnamed Passkey'),
-        )
-
-        flash("Passkey registered successfully!", "success")
-        return jsonify({"success": True}), 200
-
-    except passkey_service.PasskeyError as e:
-        db.session.rollback()
-        current_app.logger.warning("Passkey registration refused: %s", e)
-        return jsonify({"error": e.public_message}), 400
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error finishing passkey registration: {e}")
-        return jsonify({"error": "Failed to register passkey"}), 500
+    """FEAT-IDEN-102: verify the registration and complete the enrollment or replacement."""
+    return passkey_management.register_finish(
+        user_id=g.canonical_context.user_id, login_endpoint="sysadmin.login",
+    )
 
 
 @sysadmin_bp.route('/passkey/auth/start', methods=['POST'])
@@ -392,29 +345,28 @@ def passkey_auth_finish():
 
 @sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['DELETE'])
 @system_admin_required
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_delete(credential_id):
-    """Delete a passkey."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({"error": "Canonical system admin identity is missing"}), 409
-        # passwordless.dev first: a passkey removed only here would still work.
-        if not passkey_service.remove_passkey(user.id, credential_id):
-            return jsonify({"error": "Passkey not found"}), 404
+    """FEAT-IDEN-107: revoke one passkey after fresh TOTP, remote-first."""
+    return passkey_management.revoke(
+        user_id=g.canonical_context.user_id, passkey_id=credential_id, login_endpoint="sysadmin.login",
+    )
 
-        flash("Passkey deleted successfully.", "success")
-        return jsonify({"success": True}), 200
 
-    except passkey_service.PasskeyServiceUnavailable as e:
-        db.session.rollback()
-        current_app.logger.error("Passkey removal failed remotely: %s", e)
-        return jsonify({"error": e.public_message}), 503
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error deleting passkey: {e}")
-        return jsonify({"error": "Failed to delete passkey"}), 500
+@sysadmin_bp.route('/passkey/resume', methods=['POST'])
+@system_admin_required
+@limiter.limit("10 per minute")
+def passkey_resume():
+    """FEAT-IDEN-102/107: finish a committed passkey replacement or removal that the provider did not confirm."""
+    return passkey_management.resume(user_id=g.canonical_context.user_id, login_endpoint="sysadmin.login")
+
+
+@sysadmin_bp.route('/passkey/cancel', methods=['POST'])
+@system_admin_required
+@limiter.limit("10 per minute")
+def passkey_cancel():
+    """FEAT-IDEN-102: cancel a passkey change that has not yet committed its retirement."""
+    return passkey_management.cancel(user_id=g.canonical_context.user_id)
 
 
 @sysadmin_bp.route('/passkey/settings')
@@ -430,7 +382,15 @@ def passkey_settings():
 
     return render_template("system_admin_passkey_settings.html",
                          admin=user,
-                         credentials=credentials)
+                         credentials=credentials,
+                         operation_state=credential_lifecycle.open_passkey_operation_state(user.id),
+                         passkey_urls={
+                             "start": url_for("sysadmin.passkey_register_start"),
+                             "finish": url_for("sysadmin.passkey_register_finish"),
+                             "cancel": url_for("sysadmin.passkey_cancel"),
+                             "resume": url_for("sysadmin.passkey_resume"),
+                             "delete": url_for("sysadmin.passkey_delete", credential_id=0),
+                         })
 
 
 # -------------------- DASHBOARD --------------------

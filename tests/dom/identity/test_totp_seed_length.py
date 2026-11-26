@@ -428,7 +428,7 @@ def test_open_operation_refuses_an_assertion_for_passkey_work(client, app, fake_
     assert refused.value.category == "proof_kind_mismatch"
 
 
-def test_the_signup_capability_is_not_accepted_without_an_issuer(client, app, fake_passwordless):
+def test_an_unissued_signup_capability_is_refused(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
 
     with pytest.raises(CredentialOperationRefused) as refused:
@@ -1004,34 +1004,6 @@ def test_deleting_the_principal_removes_its_operation(app):
 # ---------------------------------------------------------------------------
 # review findings
 # ---------------------------------------------------------------------------
-
-def test_removing_the_authorizing_passkey_stops_the_pending_replacement(client, app, fake_passwordless):
-    from app.services import passkey_service
-
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    operation_id = _open_replacement(user_id, fake_passwordless)
-    secret, _ = _hold(user_id, operation_id)
-    before = _stored_seed(user_id)
-    row_id = PasskeyCredential.query.filter_by(user_id=user_id).one().id
-
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:remove-passkey"):
-        assert passkey_service.remove_passkey(user_id, row_id)
-    assert _user(user_id).credential_generation == 2
-
-    with pytest.raises(CredentialOperationRefused) as refused:
-        _activate(user_id, operation_id, _code(secret))
-    assert refused.value.category == "stale_generation"
-    assert _stored_seed(user_id) == before
-
-
-def test_removing_nothing_does_not_advance_the_generation(client, app, fake_passwordless):
-    from app.services.admin_identity_service import delete_admin_credential
-
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:remove-nothing"):
-        assert not delete_admin_credential(10**9, user_id)
-    assert _user(user_id).credential_generation == 1
-
 
 def test_the_provider_is_called_with_no_transaction_open(client, app, fake_passwordless):
     seen = []

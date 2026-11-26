@@ -149,13 +149,15 @@ Teacher and operator ceremonies are structurally identical and separately regist
 | POST | `/admin/passkey/auth/start` · `/finish` | — ‡ | `admin_login.html` |
 | POST | `/admin/passkey/register/start` · `/finish` | A | `admin_passkey_settings.html` |
 | DELETE | `/admin/passkey/<int:passkey_id>/delete` | A | `admin_passkey_settings.html` |
+| POST | `/admin/passkey/resume` · `/cancel` | A | `admin_passkey_settings.html` |
 | POST | `/sysadmin/passkey/auth/start` · `/finish` | — ‡ | `system_admin_login.html` |
 | POST | `/sysadmin/passkey/register/start` · `/finish` | O | `system_admin_passkey_settings.html` |
-| POST | `/sysadmin/passkey/<int:credential_id>/delete` | O | `system_admin_passkey_settings.html` |
+| DELETE | `/sysadmin/passkey/<int:credential_id>/delete` | O | `system_admin_passkey_settings.html` |
+| POST | `/sysadmin/passkey/resume` · `/cancel` | O | `system_admin_passkey_settings.html` |
 | GET | ~~`/admin/passkey/list`~~ | A | **removed 2026-09-27 — see §VII-D** |
 | GET | ~~`/sysadmin/passkey/list`~~ | O | **removed 2026-09-27 — see §VII-D** |
 
-‡ The `auth/start` and `auth/finish` ceremonies are unauthenticated by definition — they *are* the login. Both are rate limited to 20/min; registration and deletion to 10/min.
+‡ The `auth/start` and `auth/finish` ceremonies are unauthenticated by definition — they *are* the login. Both are rate limited to 20/min; registration, deletion, resume and cancel to 10/min. `register/start` and `delete` require a fresh `totp_code` in the JSON body (`register/start` takes `replace_passkey_id` for a selected replacement, and on `/admin` a `signup_capability` in place of the code for a teacher's first passkey); a completed change answers `{"success", "message", "redirect"}` and ends the sign-in (FEAT-IDEN-102/107).
 
 ### VI-H. Hybrid page routes
 

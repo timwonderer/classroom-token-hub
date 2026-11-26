@@ -174,6 +174,10 @@ _CLASSLESS_ADMIN_ENDPOINTS = frozenset({
     'admin.select_class_context',
     'admin.passkey_register_start',
     'admin.passkey_register_finish',
+    'admin.passkey_delete',
+    'admin.passkey_resume',
+    'admin.passkey_cancel',
+    'admin.passkey_settings',
     'admin.passkey_auth_start',
     'admin.passkey_auth_finish',
 })
