@@ -12,7 +12,7 @@ Flask-SQLAlchemy==3.1.1
 # Upgraded to 26.5.0 in PR #1203 after comprehensive v2.0 compatibility testing
 gevent==26.5.0
 greenlet==3.5.6
-gunicorn==26.2.0
+gunicorn==27.0.1
 iniconfig==2.3.1
 itsdangerous==2.2.0
 Jinja2==3.1.6
