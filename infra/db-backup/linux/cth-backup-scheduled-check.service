@@ -1,0 +1,7 @@
+# systemd user unit. Replacement baseline after a protected destruction; see infra/db-backup/README.md.
+[Unit]
+Description=CTH database backup: destruction check
+
+[Service]
+Type=oneshot
+ExecStart=%h/cth-backup-venv/bin/python %h/cth-backup/scheduled/bin/cth_backup_scheduled.py check

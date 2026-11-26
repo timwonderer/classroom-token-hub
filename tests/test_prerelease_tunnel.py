@@ -239,3 +239,64 @@ def test_restore_without_an_identity_still_closes_the_tunnel(env):
     assert result.returncode != 0
     assert "missing" in result.stdout
     assert not tunnel_open(env)
+
+
+def _point(folder, stamp):
+    (folder / "points").mkdir(parents=True, exist_ok=True)
+    for ext in ("dump.age", "manifest.json"):
+        (folder / "points" / f"cth-db-{stamp}-manual.{ext}").write_text("x")
+
+
+def test_a_passing_restore_deletes_every_older_prerelease_point(env):
+    """Owner ruling 2026-11-25 (SOP-DB-005 §VIII): a verified point invalidates every older one."""
+    backups = env["home"] / "cth-backup"
+    current, older, newer, empty = (backups / f"prerelease-{n}" for n in ("2026-11-26", "2026-11-20", "2026-11-27", "x"))
+    _point(older, "20261120T200000Z")
+    _point(newer, "20261127T200000Z")
+    empty.mkdir()
+    (backups / "prerelease-v2.2.1.sh").write_text("# a script, not a point\n")
+    assert run(env, "backup", CTH_BACKUP_STATE_DIR=current).returncode == 0
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert current.exists() and newer.exists()
+    assert not older.exists() and not empty.exists()
+    assert (backups / "prerelease-v2.2.1.sh").exists()
+
+
+def test_a_failed_restore_deletes_no_older_point(env):
+    backups = env["home"] / "cth-backup"
+    current, older = backups / "prerelease-2026-11-26", backups / "prerelease-2026-11-20"
+    _point(older, "20261120T200000Z")
+    _point(current, "20261126T200000Z")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current)  # no identity: refuses before restoring
+
+    assert result.returncode != 0
+    assert older.exists()
+
+
+def test_restore_accepts_an_identity_that_is_one_of_several_recipients(env):
+    """recipients.txt holds the owner's key and two YubiKey recipients (SOP-DB-005 D6)."""
+    backups = env["home"] / "cth-backup"
+    (backups / "recipients.txt").write_text("age1yubikey1one\nage1fake\nage1yubikey1two\n")
+    current = backups / "prerelease-2026-11-26"
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    assert run(env, "restore", CTH_BACKUP_STATE_DIR=current).returncode == 0
+
+
+def test_restore_refuses_an_identity_that_is_no_recipient(env):
+    backups = env["home"] / "cth-backup"
+    current = backups / "prerelease-2026-11-26"
+    _point(current, "20261126T200000Z")
+    (backups / "identity.txt").write_text("AGE-SECRET-KEY-FAKE\n")
+
+    result = run(env, "restore", CTH_BACKUP_STATE_DIR=current, FAKE_RECIPIENT="age1someoneelse")
+
+    assert result.returncode != 0
+    assert "not one of the keys" in result.stdout

@@ -19,7 +19,8 @@
 set -euo pipefail
 
 export PATH="${CTH_BACKUP_PG_BIN:-/opt/homebrew/opt/postgresql@14/bin}:$PATH"   # client major must match the server (14); override via CTH_BACKUP_PG_BIN
-export DOCKER_HOST=${DOCKER_HOST:-unix://$HOME/.colima/default/docker.sock}
+# colima on macOS; elsewhere Docker's own default socket.
+[ -n "${DOCKER_HOST:-}" ] || [ ! -S "$HOME/.colima/default/docker.sock" ] || export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
 export CTH_BACKUP_SOURCE_URL="$(cat ~/cth-backup/source_url)"
 export CTH_BACKUP_VERIFY_URL='postgresql://postgres:verify@127.0.0.1:55432/cth_backup_verify'
 export CTH_BACKUP_AGE_RECIPIENTS_FILE=~/cth-backup/recipients.txt
@@ -45,6 +46,20 @@ close_tunnel() {
 }
 
 latest() { ls -t "$CTH_BACKUP_STATE_DIR"/points/*."$1" 2>/dev/null | head -1 || true; }   # this run's state dir only
+# Newest point's UTC stamp in a directory of points ("" when it has none). Stems are cth-db-<YYYYmmddTHHMMSSZ>-<reason>,
+# so stamps compare as strings.
+newest_stamp() { [ -d "$1" ] || return 0; find "$1" -maxdepth 1 -name 'cth-db-*.manifest.json' 2>/dev/null | sed -E 's#.*/cth-db-([0-9TZ]+)-.*#\1#' | sort | tail -1; }
+# Owner ruling 2026-11-25 (SOP-DB-005 §VIII): a verified point invalidates every older one, so drop every
+# pre-release folder whose points are all older than $1. A folder with no point is an abandoned run.
+drop_older_prerelease() {
+  local d s
+  for d in ~/cth-backup/prerelease-*/; do
+    [ -d "$d" ] || continue
+    [ -n "${2:-}" ] && [ "$d" -ef "$2" ] && continue
+    s=$(newest_stamp "${d}points")
+    if [ -z "$s" ] || [[ "$s" < "$1" ]]; then rm -rf "$d"; echo "deleted older point folder ${d%/}"; fi
+  done
+}
 
 case "${1:-}" in
 backup)
@@ -127,8 +142,9 @@ restore)
   # Last step: the tunnel is closed and any identity deleted however this exits, including the guards below.
   trap 'if [ -f "$ID" ]; then { rm -P "$ID" 2>/dev/null || rm -f "$ID"; }; echo "identity deleted"; fi; close_tunnel' EXIT
   [ -f "$ID" ] || { echo "missing $ID"; exit 1; }
-  diff <(age-keygen -y "$ID") "$CTH_BACKUP_AGE_RECIPIENTS_FILE" >/dev/null \
-    || { echo "identity does not match recipients.txt"; exit 1; }
+  # recipients.txt may hold several keys (the owner's and two YubiKeys, SOP-DB-005 D6); this identity must be one.
+  grep -qxF "$(age-keygen -y "$ID")" "$CTH_BACKUP_AGE_RECIPIENTS_FILE" \
+    || { echo "identity is not one of the keys in recipients.txt"; exit 1; }
   P=$(latest dump.age); [ -n "$P" ] || { echo "no point in $CTH_BACKUP_STATE_DIR (set CTH_BACKUP_STATE_DIR to the backup's directory)"; exit 1; }
   open_tunnel   # --live-url reaches production through it for the no-resurrection check
   "$PY" "$TOOL" restore \
@@ -140,6 +156,7 @@ restore)
   # the script above on either failing); `evidence` requires this receipt rather than trusting that a
   # manifest alone means restore was ever actually run.
   touch "$CTH_BACKUP_STATE_DIR/restore.ok"
+  drop_older_prerelease "$(newest_stamp "$CTH_BACKUP_STATE_DIR/points")" "$CTH_BACKUP_STATE_DIR"
   ;;
 evidence)
   # Signs and uploads the one artifact infra/release-gate/guarded-deploy.sh will accept: proof that

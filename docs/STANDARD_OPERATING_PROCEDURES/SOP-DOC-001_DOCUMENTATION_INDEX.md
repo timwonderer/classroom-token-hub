@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.69 | 2026-11-25 | 3.68 | Normative |
+| SOP-DOC-001 | 3.70 | 2026-11-25 | 3.69 | Normative |
 
 ---
 
@@ -178,6 +178,7 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-002 — Deprecated Symbols Registry](DATABASE/SOP-DB-002_Deprecated_Symbols_Registry.md)
 - [SOP-DB-003 — Schema Change Gate](DATABASE/SOP-DB-003_Schema_Change_Proposals.md)
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
+- [SOP-DB-005 — Database Backup and Restore](DATABASE/SOP-DB-005_Database_Backup_And_Restore.md) — v0.1 (DRAFT): not binding until the owner settles its §XI decisions and ratifies v1.0.
 
 ### Procedures — Deployment (SOP-DEP)
 - [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.13: initial-host and rehearsal scope; §VI lists `CONFIGURATION_EXPORT_KEY`; §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
@@ -285,6 +286,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.70 (2026-11-25):**
+- Register SOP-DB-005 v0.1 (DRAFT, Database Backup and Restore): scheduled, encrypted, verified recovery points taken from the operator's computer (macOS or Linux) to an encrypted external drive with the existing `cth_db_backup.py`, the replacement-baseline purge after a destruction, and the eleven owner decisions issue #1639's failure-mode review must settle. Not binding.
 
 **Version 3.69 (2026-11-25):**
 - Register SOP-DEP-003 v1.0 (User Guide Publication) and SOP-DEP-002 v1.25: production serves user guides from a separately published documentation artifact. SOP-DEP-003 covers eligibility, compatibility with deployed behavior, droplet-side scope enforcement, deployment, rollback and evidence; SOP-DEP-002 step 10a publishes a release's guides before the gate reopens. Owner ruling 2026-11-25.
