@@ -28,10 +28,10 @@ and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 
 ## V. Authorization and registration
 
-Resolve the authenticated teacher principal at the request boundary. TOTP must already
-be activated. Existing teachers prove fresh TOTP bound to the requested operation;
-initial enrollment may instead consume the explicit five-minute signup capability
-from FEAT-IDEN-101. A login session alone is insufficient. Replacement always requires
+Resolve the authenticated teacher or sysadmin principal at the request boundary. TOTP must already
+be activated. Existing principals prove fresh TOTP bound to the requested operation;
+initial enrollment by a teacher may instead consume the explicit five-minute signup capability
+from FEAT-IDEN-101 (a sysadmin has no such capability and always proves fresh TOTP). A login session alone is insufficient. Replacement always requires
 fresh TOTP and exact selection of an owned activated credential.
 
 In a short transaction, validate current generation/session/expiry and reserve one

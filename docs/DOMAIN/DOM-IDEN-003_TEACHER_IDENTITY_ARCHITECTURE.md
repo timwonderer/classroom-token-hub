@@ -268,7 +268,8 @@ replacement, retirement and maintenance use the single Identity-owned implementa
 
 After authentication, a principal whose credential state fails mandatory dual
 enrollment, or whose stored TOTP seed is below the minimum in SPEC-SEC-001 §V
-(noncompliant), may reach only credential maintenance and sign-out until it complies.
+(noncompliant), may reach only credential maintenance, sign-out and, for a teacher, account destruction under
+FEAT-IDEN-007 with its own confirmation and authorization, until it complies.
 Compliance is evaluated from current credential state on every request; no completion
 flag is stored. Rendering the gate mutates nothing (INV-ARC-007).
 
