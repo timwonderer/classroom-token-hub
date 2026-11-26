@@ -103,6 +103,32 @@ class UserRole(str, enum.Enum):
     TEACHER = 'teacher'
     SYSADMIN = 'sysadmin'
 
+
+class CredentialOperationPurpose(str, enum.Enum):
+    """What a credential operation does (SPEC-IDEN-002 §V; immutable once opened)."""
+    TOTP_REPLACE = 'totp_replace'
+    PASSKEY_ENROLL = 'passkey_enroll'
+    PASSKEY_REPLACE = 'passkey_replace'
+    PASSKEY_REVOKE = 'passkey_revoke'
+
+
+class CredentialOperationStage(str, enum.Enum):
+    """Logical stages of a credential operation (SPEC-IDEN-002 §V workflow table)."""
+    AUTHORIZED = 'authorized'
+    REGISTRATION_PENDING = 'registration_pending'
+    CANDIDATE_VERIFIED = 'candidate_verified'
+    RETIREMENT_COMMITTED = 'retirement_committed'
+    PROVIDER_UNCERTAIN = 'provider_uncertain'
+    COMPLETED = 'completed'
+    CANCELLED = 'cancelled'
+
+
+# Stages after which the operation no longer occupies the principal's single slot.
+CREDENTIAL_OPERATION_TERMINAL_STAGES = (
+    CredentialOperationStage.COMPLETED,
+    CredentialOperationStage.CANCELLED,
+)
+
 # Alerting history is represented in alert_events (DOM-OPS-001)
 
 
@@ -138,6 +164,9 @@ class User(db.Model):
     current_session_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_nonce = db.Column(db.String(128), nullable=True, index=True)
+    # Identity's monotonic credential generation (DOM-IDEN-003 §VII.A): advanced by
+    # credential activation, replacement or removal; never reset or reused.
+    credential_generation = db.Column(db.Integer, nullable=False, default=1, server_default='1')
     # Student recovery fields
     reset_code = db.Column(db.String(8), nullable=True)
     reset_code_generated_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -489,6 +518,59 @@ class PasskeyCredential(db.Model):
 
     def __repr__(self):
         return f'<PasskeyCredential {self.authenticator_name or "Unnamed"} for User {self.user_id}>'
+
+
+class CredentialOperation(db.Model):
+    """Identity-owned, per-principal credential-lifecycle operation state.
+
+    SPEC-IDEN-002 §VI / DOM-CORE-002. Carries no class scope, no PII and no
+    provider-response archive. At most one open (non-terminal) operation exists
+    per principal, enforced by a partial unique index. Removed with the principal.
+    """
+
+    __tablename__ = 'credential_operations'
+    __table_args__ = (
+        db.Index(
+            'uq_credential_operations_one_open_per_user', 'user_id', unique=True,
+            postgresql_where=sa.text("stage NOT IN ('completed', 'cancelled')"),
+        ),
+    )
+
+    id = db.Column(
+        db.Uuid(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        server_default=db.text('gen_random_uuid()'),
+    )
+    user_id = db.Column(
+        db.Uuid(as_uuid=False), db.ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    purpose = db.Column(
+        db.Enum(CredentialOperationPurpose, values_callable=lambda x: [e.value for e in x],
+                name='credential_operation_purpose_enum'),
+        nullable=False,
+    )
+    stage = db.Column(
+        db.Enum(CredentialOperationStage, values_callable=lambda x: [e.value for e in x],
+                name='credential_operation_stage_enum'),
+        nullable=False,
+    )
+    authorized_generation = db.Column(db.Integer, nullable=False)
+    session_binding_hash = db.Column(db.String(64), nullable=False)
+    deadline_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    pending_totp_encrypted = db.Column(db.String(200), nullable=True)
+    old_credential_id = db.Column(db.Text, nullable=True)
+    new_credential_id = db.Column(db.Text, nullable=True)
+    retirement_intent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    retry_after_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    attempt_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    error_category = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now, nullable=False)
+
+    def __repr__(self):
+        return f'<CredentialOperation {self.purpose} {self.stage}>'
 
 
 class Transaction(db.Model):

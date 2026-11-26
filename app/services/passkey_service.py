@@ -114,6 +114,11 @@ def complete_registration(user: User, token: str, *, authenticator_name: str):
     )
 
 
+def verify_token(token: str):
+    """Ask passwordless.dev to verify ``token``: provider I/O, no local state read or written."""
+    return _verify(token)
+
+
 def verify_sign_in(token: str, *, expected_role: str, expected_user_id: str | None = None) -> User:
     """The principal a passkey sign-in token authenticates.
 
@@ -121,26 +126,22 @@ def verify_sign_in(token: str, *, expected_role: str, expected_user_id: str | No
     recorded for the user it names, and that user must hold ``expected_role``.
     When the sign-in began from a username, ``expected_user_id`` is that user,
     and the token must name them.
+
+    The ownership and role checks are the pure evaluation in
+    ``credential_lifecycle.evaluate_passkey_assertion``, shared with every other
+    assertion consumer. Only the ``last_used`` stamp below is this command's own write.
     """
-    verified = _verify(token)
-    if not getattr(verified, "success", False) or getattr(verified, "type", None) != SIGNIN_TOKEN_TYPE:
-        raise PasskeyError("not a successful passkey sign-in token")
-
-    user_id = parse_passkey_external_id(getattr(verified, "user_id", None))
-    credential_id = getattr(verified, "credential_id", None)
-    if user_id is None or not credential_id:
-        raise PasskeyError("token names no current principal")
-    if expected_user_id is not None and str(expected_user_id) != user_id:
-        raise PasskeyError("token names a different principal than the username entered")
-
-    user = db.session.get(User, user_id)
-    if user is None or getattr(user.user_role, "value", user.user_role) != expected_role:
-        raise PasskeyError("principal missing or wrong role")
+    from app.services.credential_lifecycle import SIGN_IN_PURPOSE, evaluate_passkey_assertion
+    evaluation = evaluate_passkey_assertion(
+        token, expected_role=expected_role, expected_user_id=expected_user_id,
+        purpose=SIGN_IN_PURPOSE,
+    )
+    user = evaluation.user
 
     credentials = _credentials()
     result = db.session.execute(
         sa.update(credentials)
-        .where(credentials.c.user_id == user.id, credentials.c.credential_id == credential_id)
+        .where(credentials.c.user_id == user.id, credentials.c.credential_id == evaluation.credential_id)
         .values(last_used=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc)
     )
     if not result.rowcount:
