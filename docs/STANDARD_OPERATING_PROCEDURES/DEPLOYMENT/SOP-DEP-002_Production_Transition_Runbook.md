@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.25 | 2026-11-25 | 1.24 | Normative |
+| SOP-DEP-002 | 1.26 | 2026-11-25 | 1.25 | Normative |
 
 ## I. Purpose
 
@@ -133,9 +133,21 @@ advisory and are recorded as such, never as the independent verifier.
    followed by `, highlight`. The blank line ends the HTML comment block so GitHub renders the
    paragraph as Markdown. Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
-2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
-   Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
-   record says so and later records the result.
+2. **Full suite on the release SHA or its validated equivalence**. A full suite SHALL be ran on the release SHA prior to deployment. If a documentation-only change occured after the full suite, it must perform applicable documentation and template tests. Any changes outside of `CHANGELOG.md` and documentation directories such as `user-guide` and `docs` would require a new full-suite result.
+
+   |Changes since full-suite validation | Required Validation|
+   | -- | -- |
+   | Changelog wording| Applicable changelog tests|
+   | User-guide wording| Applicable documentation and accesibility tests|
+   | Developer guide | Applicable documenation tests |
+   | Application code | Full Suite|
+   | Templates| Full Suite|
+   | Database migrations| Full Suite|
+   | Test code and/or configurations| Full Suite |
+   | Uncertain imapct | Full Suite|
+
+   The release record should identify which validation was performed against each SHA
+
 3. **Configuration and migration checks.**
    - `flask db heads` shows one head; `bash scripts/check-migrations.sh` reports "Safe to deploy".
    - `git diff vPREV <SHA> -- requirements.txt migrations/versions` lists what is new.
