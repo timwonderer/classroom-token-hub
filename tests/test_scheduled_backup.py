@@ -248,3 +248,19 @@ def test_a_tunnel_that_never_listens_fails_the_run(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="did not come up"):
         with mod.tunnel({"tunnel_port": 1, "ssh_host": "nowhere"}):
             pass
+
+
+def test_a_port_already_in_use_is_never_taken_for_production(tmp_path, monkeypatch):
+    """Review on #1873: with another listener on the port the run went ahead after ssh had failed."""
+    import socket
+    mod = _load()
+    stub = tmp_path / "ssh"
+    stub.write_text("#!/bin/sh\nexit 255\n")
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:/usr/bin:/bin")
+    with socket.socket() as other:
+        other.bind(("127.0.0.1", 0))
+        other.listen()
+        with pytest.raises(RuntimeError, match="already in use"):
+            with mod.tunnel({"tunnel_port": other.getsockname()[1], "ssh_host": "nowhere"}):
+                pass

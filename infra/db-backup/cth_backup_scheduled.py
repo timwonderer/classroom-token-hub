@@ -191,6 +191,9 @@ def one_copy(remote, state_dir, out):
 @contextlib.contextmanager
 def tunnel(cfg):
     """`ssh -L` to production for the length of the run. BatchMode: a key needing a prompt fails, never hangs."""
+    # Something else on the port would be connected to as production with the stored credentials.
+    if port_open(cfg["tunnel_port"]):
+        raise RuntimeError(f"port {cfg['tunnel_port']} is already in use; the tunnel was not opened")
     proc = subprocess.Popen(["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
                              "-L", f"{cfg['tunnel_port']}:127.0.0.1:5432", cfg["ssh_host"]])
     try:
@@ -199,6 +202,8 @@ def tunnel(cfg):
             if proc.poll() is not None or time.monotonic() > deadline:
                 raise RuntimeError("tunnel to production did not come up")
             time.sleep(0.5)
+        if proc.poll() is not None:
+            raise RuntimeError("tunnel to production did not come up")
         yield
     finally:
         proc.terminate()
