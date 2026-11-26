@@ -192,8 +192,13 @@ that lock.
    rm -f /tmp/docs_deploy_key.pub
    ```
 
-3. **First publication, in two passes.** The application can only be pointed at `/srv/cth-docs/current`
-   once it exists.
+3. **First publication, in two passes.** Steps 1 and 2 can be done at any time; this step cannot. Start it
+   only once the **deployed** application release reads `CTH_USER_GUIDES_DIR` (the first release after
+   v2.6.0). An earlier release ignores the variable and keeps serving its bundled guides, yet the final check
+   would still pass, because it reads the variable from the service's environment, not from what the app
+   serves. A good moment is that release's maintenance window, before the gate reopens, so the restart below
+   happens while the gate is closed. The application can only be pointed at `/srv/cth-docs/current` once it
+   exists.
    1. Dispatch `docs-deploy.yml` with the deployed release's SHA. It publishes and switches `current`, then
       reports that the service does not serve the artifact yet. That report is expected on this pass only.
    2. Point the service at the artifact with a systemd drop-in, which a deploy's `git reset` cannot
