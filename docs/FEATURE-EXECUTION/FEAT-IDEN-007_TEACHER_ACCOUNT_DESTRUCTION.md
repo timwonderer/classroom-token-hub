@@ -125,6 +125,14 @@ permanent rejection. Revalidate authority, operation stage and current local sta
 a new transaction before final atomic destruction. Scheduled retention entry points
 also recheck their governing policy at the applicable local boundary.
 
+The committed destruction intent is itself the durable authority for completion. Final
+revalidation checks that intent, the generation it recorded, that the principal still exists
+and that no higher-precedence operation superseded it; it does not require the already revoked
+session or credential authority. If the final local transaction fails, the intent remains
+durable and the principal is not restored to authentication. A bounded retry in the same
+request and then system reconciliation (FEAT-IDEN-108) resume only that recorded destruction,
+never a new or wider one. The manual requester was authenticated and confirmed before intent was committed.
+
 Bounded provider failure SHALL NOT block lawful local destruction. Delete all local
 operation state with the principal, without tombstones or historical identity references.
 System reconciliation later discovers residue from provider inventory. Local auth,

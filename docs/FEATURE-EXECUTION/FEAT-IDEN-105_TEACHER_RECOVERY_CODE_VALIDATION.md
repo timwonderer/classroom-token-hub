@@ -48,13 +48,16 @@ pending username/TOTP material. In that same local transaction, apply DOM-IDEN-0
 §VII.A supersession: advance credential generation, invalidate existing sessions and
 outstanding authentication/routine-management grants, and record the non-identifying
 audit event. Bind setup to that generation. Repeating the same success cannot repeat
-invalidation or create a second setup grant. Recovery initiation alone has no such effect. Otherwise increment submission_round and return a
+invalidation or create a second setup grant from the aggregate success itself. Recovery initiation alone has no such effect. Otherwise increment submission_round and return a
 single generic failure. Previous-round codes and proofs then become inert without
 a cross-class mutation sweep. Recipients remain frozen and all classes require
 fresh codes. No progress endpoint exposes private satisfaction.
 
 Resume PINs retain the attempt and confirmations without storing student codes.
-A valid unambiguous PIN rotates the access nonce and invalidates old setup grants.
+A valid unambiguous PIN rotates the access nonce, invalidates old setup grants and, when the
+attempt has already reached aggregate success, issues one replacement setup grant bound to the
+current credential generation and the new nonce. That resume does not advance the generation
+or repeat any invalidation.
 This does not reset selections or silently renew the five-day deadline. Completion
 is owned by FEAT-IDEN-106 and still checks the live nonce and complete proof set.
 

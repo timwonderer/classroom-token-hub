@@ -71,7 +71,9 @@ Each operation has an immutable purpose and target plus a constrained stage:
 Stage names are logical states, not a requirement for a particular ORM representation.
 Do not accept browser-supplied stage, principal, generation or pending secret as authority.
 Interactive lifetime is fixed: ten minutes maximum, or five for signup, capped by session
-validity. Every request and completion rechecks it. New provider tokens must not outlive
+validity. Every new request and every uncommitted completion rechecks it; a retirement committed
+before the deadline and its local completion are exempt from the deadline and session expiry,
+and still check the recorded target, generation and supersession state. New provider tokens must not outlive
 the applicable registration deadline. Retries never renew the operation.
 
 Only one discretionary credential operation is current per principal. A new operation

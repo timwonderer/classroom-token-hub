@@ -222,7 +222,9 @@ and MUST NOT initiate queries, samplers, verifiers or mutations.
 
 ### INV-OPS-011: No Hidden Remediation
 *   **Statement**: Any automatic remediation MUST be explicit, logged, and separately classified from detection.
-*   **Prohibited Action**: A background job "cleaning up" data without logging the specific records changed and the rationale.
+*   **Constraints**:
+    *   Credential-lifecycle provider cleanup is the sole exception to record-level logging: it is logged only as the non-identifying outcome envelope of DOM-OPS-002 §2.5, because retaining the exact orphan-deletion targets would preserve the identity association that the credential lifecycle forbids. The cleanup remains explicit, separately classified from detection, and rationale-bearing.
+*   **Prohibited Action**: A background job "cleaning up" data without logging the specific records changed and the rationale, except as the Constraint above provides.
 
 ### INV-OPS-012: Class/Seat/User Trace Boundaries
 *   **Statement**: Classroom operational records MUST use `seat_id` (economic actor) under `class_id` (universe). Authentication principal IDs belong only to the Identity references allowed by INV-ARC-019.

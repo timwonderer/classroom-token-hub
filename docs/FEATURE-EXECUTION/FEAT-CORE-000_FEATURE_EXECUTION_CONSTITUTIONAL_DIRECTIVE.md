@@ -148,6 +148,13 @@ requirement of this directive applies, including §III.2, §III.3, §III.4 and �
 ### 2. Single Transaction Boundary (MANDATORY)
 A FEAT **MUST** execute within a single atomic transaction.
 
+The sole exception is a credential-provider workflow (§IV.6): it is a sequence of
+local atomic transactions under one FEAT identifier and correlation id, with the
+provider call made between them and no transaction open. Each local transaction
+commits or rolls back whole; a provider effect is never rolled back by the database,
+and a later local failure leaves the durable committed operation state to be resumed or
+reconciled as SPEC-IDEN-002 defines.
+
 The transaction **MUST** include:
 * all ledger entries
 * all domain state mutations derived from the action

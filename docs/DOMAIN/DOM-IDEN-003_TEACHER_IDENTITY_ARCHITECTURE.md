@@ -544,7 +544,9 @@ The attempt has a random server-verified access nonce; knowing its ID or reenter
 roster pairs does not grant access to another browser's selected attempt. A teacher
 can obtain a six-digit resume PIN, stored only as a separate-purpose verifier.
 Resuming rotates the attempt access nonce, clears prior setup authorization, and
-retains fixed selections and private class confirmations. Ambiguous PIN matches
+retains fixed selections and private class confirmations. If aggregate success was already
+reached, resuming issues one replacement setup grant bound to the current generation and
+new nonce, without advancing the generation again. Ambiguous PIN matches
 fail closed. No plaintext student codes are saved for later replay.
 
 Successful full-set verification grants one server-bound setup nonce and applies the generation/session supersession boundary in §VII.A. Store its

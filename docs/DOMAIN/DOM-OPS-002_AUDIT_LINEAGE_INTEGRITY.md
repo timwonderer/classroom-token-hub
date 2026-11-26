@@ -70,7 +70,7 @@ Constitutional. Subordinate to `INV-ARC-016` and `DOM-OPS-001`. Supersedes any p
 | `table_name` | String(64) | No | Protected table name |
 | `row_pk` | String(64) | No | String-cast primary key of the protected row |
 | `operation` | String(16) | No | `INSERT` / `UPDATE` / `DELETE` / `TRANSITION` |
-| `actor_type` | String(32) | Yes | `"teacher"` / `"student"` / `"system"` |
+| `actor_type` | String(32) | Yes | `"teacher"` / `"student"` / `"sysadmin"` / `"system"` |
 | `actor_id_hash` | String(64) | Yes | Hashed seat actor identifier; never a User identifier |
 | `class_id` | String(36) | Yes | UUID of the owning class |
 | `seat_id` | Integer | Yes | Seat anchor if applicable |
