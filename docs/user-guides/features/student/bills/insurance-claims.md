@@ -38,7 +38,7 @@ The top of the form restates the policy's terms so you can check them before fil
 2. Under **What happened**, describe it. Up to 1000 characters.
 3. Press **Submit claim**.
 
-The dropdown only offers your recent **money-out** transactions, and it deliberately leaves out things insurance is not for: transfers between your own accounts, rent and other bills, and insurance premiums themselves. If the purchase you want is not listed, it is not claimable.
+The dropdown only offers your recent **store purchases**. Store purchases are the only thing a Transaction policy can cover. It never lists rent, late fees or other bills, fines, insurance premiums, transfers between your own accounts, pay, refunds, or corrections your teacher made. If the purchase you want is not listed, it is not claimable.
 
 ### Claiming lost work time (Productivity policies)
 

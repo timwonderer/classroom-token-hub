@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.67 | 2026-11-25 | 3.66 | Normative |
+| SOP-DOC-001 | 3.69 | 2026-11-25 | 3.68 | Normative |
 
 ---
 
@@ -184,6 +184,7 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.3: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens; validation is development and operations alone (§V.5).
 - [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.3: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row; validation is development and operations alone, and no check expects a teacher or student to act (the operator may use a test account of their own in a live class); the required check follows what the release changed (browser for what a browser observes, server-side evidence of the changed behaviour for server-only changes); each row separates evidence type from result.
 - [SOP-DEP-002 — Production Release Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
+- [SOP-DEP-003 — User Guide Publication](DEPLOYMENT/SOP-DEP-003_User_Guide_Publication.md)
 
 ### Procedures — DevOps (SOP-DEV)
 - [SOP-DEV-001 — Refactor Best Practices](DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md)
@@ -284,6 +285,12 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.69 (2026-11-25):**
+- Register SOP-DEP-003 v1.0 (User Guide Publication) and SOP-DEP-002 v1.25: production serves user guides from a separately published documentation artifact. SOP-DEP-003 covers eligibility, compatibility with deployed behavior, droplet-side scope enforcement, deployment, rollback and evidence; SOP-DEP-002 step 10a publishes a release's guides before the gate reopens. Owner ruling 2026-11-25.
+
+**Version 3.68 (2026-11-25):**
+- Register SOP-DEP-002 v1.24 and SOP-DEP-001 v2.15: the supported fresh-install release is declared once in `migrations/fresh/supported_release.json`, kept separate from the latest stable release, and advanced only deliberately (SOP-DEP-002 §VII.B). New installations start from it and upgrade before classroom use (SOP-DEP-001 §IX.5). Owner ruling 2026-11-25.
 
 **Version 3.67 (2026-11-25):**
 - Register SOP-DB-001 v1.9 and SOP-DB-004 v1.4: schema eras and the v2 launch baseline (owner rulings 2026-11-24). The supported v2 lineage begins at the v2.0.0 launch revision `d7a3e9b1c5f2`; the 171 pre-launch revisions are provenance in `migrations/archive/v2_prelaunch/`; SOP-DB-001 §V.B is retired as an exception; SOP-DB-004 §V.1 now separates what production executed, what the lineage contains and what a new installation executes. Evidence: `docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`.

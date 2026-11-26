@@ -12,15 +12,49 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: internal -->
 
+  **User guides can be published to production without an application release** (SOP-DEP-003; SOP-DEP-002 1.25; owner ruling 2026-11-25). Production can serve `docs/user-guides/` from a separately published documentation artifact (`CTH_USER_GUIDES_DIR`, read only for `user-guides/` pages and search; unset, the checkout serves them as before), with its own source revision and rollback. `docs-deploy.yml` publishes one commit's guides through a new dedicated key whose root-owned forced command (`infra/release-gate/guarded-docs.sh`, `docs_publish.py`) runs no client text and checks four things: the commit is on main; the artifact holds only regular Markdown and image files under `docs/user-guides/`; no commit since the deployed release changed guides together with anything else (screening for guides that describe undeployed code); and, after an atomic switch, the served tree is byte-for-byte the commit's and the running service serves it. A formal release and a publication share one droplet lock, and a release publishes its own guides before the gate reopens. Needs one-time setup on the droplet (`infra/release-gate/README.md`); the first publication waits until the next application release, which carries this support, is deployed (SOP-DEP-003 1.1).
+
+### Changed
+
+- <!-- notes: fixed -->
+
+  **User guides catch up with the app** (#1856, #1857, #1858, #1859). The install guide is now *Installing the App (Internet Required)* and says plainly that the installed app (PWA) does not work offline. The Classroom Economy Guide is rewritten against the current Economic Engine ranges: rent at 30% to 55% of weekly pay by mode, store economic roles, insurance price versus coverage, collective-goal amounts and savings-interest ceilings; it no longer mentions a "utilities" charge CTH does not have. The guides now state session lengths (students 10 minutes and teachers 60 minutes from sign-in, not extended by activity; signing out does not clock a student out), how students see a fine, that transaction insurance covers store purchases only, and how projected pay prices a session still running. The public timeline adds v2.4.2 through v2.6.0.
+
+### Fixed
+
+- **Release-gate key installation no longer joins a new key onto the last line of `authorized_keys`** (`infra/release-gate/README.md`). When the file lacked a final newline, the documented `>>` append made the new key part of the previous key's comment, so sshd ignored it. Both key procedures now add the missing newline first, and the docs key procedure ends with a per-line check and a `transport-check`.
+
+## [2.6.0] - 2026-11-25 — Privacy-safe logs, true simple interest, and a launch-anchored migration baseline
+
+Released as `6f0089f` on 2026-11-25 at 20:04 UTC by release run [45691308002](https://github.com/timwonderer/classroom-token-hub/actions/runs/45691308002). Migration `4fad9d362d0d`. Record: [DEPLOY_2026-11-25_6f0089f.md](docs/ops/audits/DEPLOY_2026-11-25_6f0089f.md).
+
+### Added
+
+- <!-- notes: internal -->
+
   **Draft contracts for the HTTP error pages, for owner ratification** (`docs/TRACKING/HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`, revision 5, final for ratification). Proposes `SPEC-DES-002` (presentation, through INV-ARC-020) and `SPEC-OPS-007` (communication, disclosure, outcome-safe recovery and response semantics for every application-generated error response, through DOM-OPS-001), a `SPEC-OPS-003` amendment for privacy-safe error-response logging, and the incorporation amendments. Findings are classified as invariant violations, implementation inconsistencies, new requirements and unverified findings; two confirmed violations (full request URLs in error log lines; a caller-supplied request identifier adopted, logged and persisted) are remediated separately under existing authority, and a read-only production check of the retained database stores found no trace endpoint with a numeric segment or a character a route pattern cannot contain, and no request id outside the generated shape; both are indicators only, so neither question is closed (an all-letter raw path, or a well-formed caller id encoding personal data, would pass); logs not yet examined. No owner decision remains; four conflicts with ratified documents are listed with the amendments that resolve them. Unratified and unnumbered: it governs nothing and changes no template, handler or ratified document.
 
-- An easter egg: the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
+- <!-- notes: new -->
+
+  **An easter egg** (#1839): the icon at the top of the 404 page links to `/teapot`, which answers `418 I'm a teapot` (RFC 2324 §2.3.2) with a styled error page. It writes nothing, is not logged as an application error, and the status sampler leaves it out of the 4xx request-error count (SPEC-OPS-006 1.8).
+
+- <!-- notes: internal -->
+
+  **Test coverage for disabling rent while the next period's early bill is partly paid** (#1824). One test in `tests/dom/obligations/test_rent_disablement_surviving_state.py` drives the advance-assessed preview cycle carrying a partial payment when rent is disabled before its boundary (`DOM-OBL-001` §V.8, §IX.15-16). No application change.
 
 ### Changed
 
 - <!-- notes: internal -->
 
+  **The self-hosting handbook now names one supported fresh-install release, separate from the latest stable release** (SOP-DEP-002 1.24 §VII.B, SOP-DEP-001 2.15; owner ruling 2026-11-25). `migrations/fresh/supported_release.json` declares it (currently v2.5.0, bundle `a0faf8b2a35d`); the README and `before-you-begin.md` name it, and a no-database CI check in `check-migrations.yml` (`scripts/check_supported_release.py`) fails unless all three agree, the tag resolves to the declared commit, its migration head is the declared revision, and the release ships an intact bundle identical to the one CI derives. New installations start from that release and follow the upgrade walkthrough to the latest stable release before real students join. Fresh-install bundles are generated only when the supported release is deliberately advanced; ordinary releases need none and are not blocked. If the supported release becomes unsafe even as a temporary starting point, it is advanced or the installation instructions are suspended.
+
+- <!-- notes: internal -->
+
   **The supported v2 migration lineage now starts at the v2.0.0 public launch** (SOP-DB-001 v1.9 §V.C, SOP-DB-004 v1.4; owner rulings 2026-11-24). Revision `d7a3e9b1c5f2` is now the era baseline: it executes the frozen, hashed launch schema (`migrations/baseline/d7a3e9b1c5f2_v2_launch_schema.sql`) and refuses any database that already holds an application-owned object. The 171 pre-launch revisions, the 2026-09-28 frozen SQL and the prior registers move unchanged to `migrations/archive/v2_prelaunch/` as provenance; the 21 post-launch revisions are byte-identical, so production (`a0faf8b2a35d`) and every installation at or after launch keep their revision with no re-stamp, schema change or data change. **Retired revisions:** a database recorded at any of the 170 pre-launch revisions other than `d7a3e9b1c5f2` (for example `0001`, `7c3d4e5f6a7b`, `c7a7b8c9d0e1`) is refused by `flask db upgrade`; no known supported installation is at one. The 27-entry lint baseline is now empty, the forward-only register drops its pre-launch entries and adds the baseline, SOP-DB-001 §V.B is retired as an exception, and tests that replayed pre-launch revisions are retired with their lasting schema assertions moved to `tests/dom/core/test_v2_era_baseline.py`. Classified `M4` / `H0` / High, MINOR. Supersedes PR #1834 and issue #1649. Evidence: `docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`.
+
+- <!-- notes: internal -->
+
+  **CI now proves every committed release bundle is derived from the migration lineage.** A new `fresh-bundle-derivation` job in `check-migrations.yml` re-derives each `migrations/fresh/<revision>/` bundle from the commit under test on PostgreSQL 14 (`scripts/verify_fresh_bundles.py`, using `generate_fresh_database.py --revision`) and fails unless `schema.sql` and every derived manifest field match exactly; manual review alone no longer stands between a bundle and the lineage. New manifests name their derivation commit `source_sha` instead of the ambiguous `release_sha` (the release commit is named in the release record, so neither depends on the other's hash); the existing `a0faf8b2a35d` bundle is unchanged and read under its old field name. `docs/self-hosting/fresh-database.md` records a measured collation comparison: production's `C.UTF-8` and the installer's `C` agree on ordering, equality and `LIKE` but not on non-ASCII case mapping, `ILIKE` or regex character classes. CTH's database-side uses (two ASCII `ILIKE` prefixes and the ledger-compensation trigger's ASCII-only locator regex) were measured to behave identically under both. A checkout whose head has no validated bundle still refuses to install, now held by `tests/test_fresh_bundle_derivation.py`.
 
 ### Removed
 
@@ -28,23 +62,15 @@ and this project follows semantic versioning principles.
 
   **`Issue.eligible_for_reward` is gone.** The column was already unread and unset after the sysadmin bug reward's retirement (#1677, DOM-SUP-001 v1.10); migration `4fad9d362d0d` physically drops `issues.eligible_for_reward` (#1678, DOM-SUP-001 v1.11). The `bug_reward` ledger type remains separately removed (migration `e3b7c1d9a2f4`, DOM-LED-001 v2.18).
 
-### Security
+- <!-- notes: internal -->
 
-- <!-- notes: security-reliability -->
-
-  **Logs and request traces no longer carry request URLs or a caller-chosen request id** (INV-ARC-005 §V, DOM-OPS-001 §7, DOM-OPS-001 INV-OPS-004). The 400/401/403/404/429/503 error handlers logged the full request URL, whose query could hold a student's name (`?student=`) or an internal class id (`?class_id=`); they, every log record's `endpoint` field, the unhandled-exception record, the Cloudflare-origin warning, the admin class-context refusals, operational events and `actor_request_trace.endpoint` now record the registered route pattern, or `<unmatched>` when no route matched (`loggable_route()`). The request id is always generated by the application: a caller's `X-Request-Id` or `X-Correlation-Id` is no longer adopted, echoed, logged or persisted.
-
-- <!-- notes: security-reliability -->
-
-  **The banking page's Student filter no longer puts a name in the URL** (INV-ARC-005 §V, DOM-OPS-001 §7). It was a free-text name box on a GET form, so a typed name travelled in `/admin/banking?student=…` into the nginx access log, browser history and any Referer, and the pagination links carried it forward. It is now a dropdown of the class's claimed students whose value is the seat's `public_id`; the route filters by `Seat.public_id` within the selected `class_id` and no longer accepts a name or an internal seat id. A sweep of the other GET forms and query-string builders found no other name or PII in a URL.
-
-- <!-- notes: security-reliability -->
-
-  **A failed database statement no longer writes its values into the logs** (INV-ARC-005 §V, DOM-OPS-001 §7). The engine now runs with `hide_parameters=True`, so a statement error's text keeps the SQL and drops the `[parameters: ...]` dump. That dump carried plaintext free text (support ticket explanations and notes, claim explanations, announcements, transaction descriptions, recovery usernames) and internal ids into every `logger.exception(...)` and f-string that quoted the exception. Postgres can still echo values itself (`DETAIL: Failing row contains (...)`), so the eight handlers that write free text — student issue submission (general, transaction, attendance), announcement create and update, manual payment, and sysadmin ticket update and resolution — log the exception class only.
+  **The teacher banking page no longer repeats the no-overdraft-fee ruling in an alert** (#1829). The banking page's behavior (no overdraft fee, the overdraft-protection toggle) is unchanged; only the redundant notice is gone.
 
 ### Fixed
 
-- The 404 page's "What can you do?" list uses real bullets, like the other error pages, so wrapped lines on phones line up with the text instead of starting under the bullet.
+- <!-- notes: fixed -->
+
+  **The 404 page's list uses real bullets** (#1839): the 404 page's "What can you do?" list uses real bullets, like the other error pages, so wrapped lines on phones line up with the text instead of starting under the bullet.
 
 - <!-- notes: fixed, highlight -->
 
@@ -56,7 +82,7 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: fixed -->
 
-  **Simple interest no longer earns interest on previously credited interest** (#1646, KD-1). Once a payout window was credited, the credit joined the posted savings balance, and every later day's earning base was that posted balance "for every calculation type" (§9.2) — so under simple interest, a class configured for `interest_calculation_type = simple` silently drifted toward compounding at the payout frequency, contrary to SPEC-ECON-001 §4.1. Simple interest's daily earning base is now a principal-only series: the ledger's savings history, reconstructed exactly as before, with every row already tagged as a savings-interest credit (`type == "Interest"`, `idempotency_key` prefixed `savings-interest:{class_id}:{seat_id}:`) excluded from the running sum (`_end_of_day_balances(..., principal_only=True)` in `app/services/ledger_interest_service.py`). An ordinary deposit or withdrawal still moves the earning base exactly as before; only credited interest is excluded, and only for `calculation_type == "simple"`. The forecast (`forecast_savings`/`project_savings_balances`) tracks the same principal-only base for projected windows, so the projection and the runtime payout agree (§10). Compound (`daily`/`weekly`/`monthly`) interest is unchanged — it still folds credited interest into the base exactly as before. SPEC-ECON-001 Appendix A's KD-1 entry is updated accordingly, pending owner sign-off on that normative amendment.
+  **Simple interest no longer earns interest on previously credited interest** (#1646, KD-1). Once a payout window was credited, the credit joined the posted savings balance, and every later day's earning base was that posted balance "for every calculation type" (§9.2) — so under simple interest, a class configured for `interest_calculation_type = simple` silently drifted toward compounding at the payout frequency, contrary to SPEC-ECON-001 §4.1. Simple interest's daily earning base is now a principal-only series: the ledger's savings history, reconstructed exactly as before, with every row already tagged as a savings-interest credit (`type == "Interest"`, `idempotency_key` prefixed `savings-interest:{class_id}:{seat_id}:`) excluded from the running sum (`_end_of_day_balances(..., principal_only=True)` in `app/services/ledger_interest_service.py`). An ordinary deposit or withdrawal still moves the earning base exactly as before; only credited interest is excluded, and only for `calculation_type == "simple"`. The forecast (`forecast_savings`/`project_savings_balances`) tracks the same principal-only base for projected windows, so the projection and the runtime payout agree (§10). Compound (`daily`/`weekly`/`monthly`) interest is unchanged — it still folds credited interest into the base exactly as before. The teacher banking page's *Known issue* caveat under **Interest Type** is removed, and the student `savings-interest.md` and teacher `banking-interest.md` guides now describe this behavior instead of carrying a known-issue note (#1859). SPEC-ECON-001 Appendix A's KD-1 entry is updated accordingly, pending owner sign-off on that normative amendment.
 
 - <!-- notes: fixed -->
 
@@ -66,7 +92,7 @@ and this project follows semantic versioning principles.
 
   **Two concurrent bill-cycle succession commands racing for the same lineage could both succeed, one creating a duplicate, overlapping-period cycle instead of being refused** (#1667; `DOM-OBL-001` §V.7 case 3). `schedule_next_bill_cycle` read eligibility and derived the next cycle number with no lock: two commands reading before either committed correctly collided on `uq_bill_cycles_ref_cycle` and the loser failed closed, but a loser whose read merely landed after the winner's commit instead saw the already-advanced lineage and legitimately derived — and wrote — a further cycle carrying the exact terms it had originally raced for, in violation of the rule that a losing command "MUST NOT re-evaluate against the advanced lineage and create a later successor instead." `schedule_next_bill_cycle` now takes a transaction-scoped Postgres advisory lock on `(class_id, internal_ref)` before reading eligibility. The deciding question after acquiring it is never whether this call had to wait — a losing command and a command that starts after the winner has already fully committed are indistinguishable by lock-wait timing alone, and an earlier revision of this fix only caught the former. Instead, every call compares its own `cycle_boundary_at` against the freshly-read latest cycle's: if the lineage has already reached or passed the exact boundary this call targeted, it is a conflict regardless of contention, and if the lock-holder ahead of it rolled back without changing the lineage (`pg_advisory_xact_lock` releases on rollback exactly as on commit), it is not. `tests/dom/obligations/test_bill_cycle_succession.py::test_distinct_commands_racing_for_one_successor_conflict_without_falling_forward` failed nondeterministically and now passes consistently — alone, in the full file (30 repeated runs), and alongside three new tests covering a rollback while waiting, a same-command replay race, and a zero-contention duplicate attempt — across 150+ combined repeated runs. The test's own blocking barrier is also scoped to the exact lineage lock and the racing command's own backend PID, rather than any ungranted lock cluster-wide, which could previously release the winning command before the race was actually exercised.
 
-- <!-- notes: fixed, security -->
+- <!-- notes: fixed -->
 
   **The Economic Engine rebalance preview judges insurance premiums against their own billing cadence.** `resolve_insurance()` always resolved a WEEKLY coverage period regardless of a policy's actual `charge_frequency`, so a correctly-priced MONTHLY-billed policy's premium was compared against a weekly-scaled recommended band (~30/7 too narrow) and could be wrongly flagged "out of range" in `/admin/economic-engine?review_rebalance=1`. `coverage_period` is no longer defaulted — every caller now states the policy's own cadence explicitly, the same way rent already has no engine-side default (#1762). Advisory-only; this page never applies insurance changes and no ledger or money data is affected.
 
@@ -90,6 +116,24 @@ and this project follows semantic versioning principles.
 - <!-- notes: internal -->
 
   **Session establishment, class selection and sign-out now run under a dedicated FEAT contract** (#1777). These writes to `users.current_session_nonce`/`current_session_started_at`/`current_session_expires_at`/`last_active_class_id`/`last_active_seat_id` previously ran under `FEAT-IDEN-001` (Unauthenticated Student Seat Claim — read-only, no-authenticated-principal by contract) or, for two sysadmin routes and one teacher passkey route, `FEAT-OPS-001` (Maintenance/Cleanup Operations). Both were architecturally wrong FEATs for an authenticated-session write. New `FEAT-IDEN-009` (Identity Session Lifecycle, `docs/FEATURE-EXECUTION/FEAT-IDEN-009_IDENTITY_SESSION_LIFECYCLE.md`, submitted for owner review) and matching `app/services/identity_service.py` commands now own these writes for all three roles. No behavior change to session timing, locking or scope — the fixed 60-minute teacher window, student session window, idle-only sysadmin window, and nonce-conditional locked revocation are all unchanged; only which FEAT the writes execute under moved.
+
+- <!-- notes: internal -->
+
+  **The documentation index lists FEAT-IDEN-009 and FEAT-LED-003** (#1850). Both FEAT contracts had been committed without an entry in `SOP-DOC-001`, so `test_every_numbered_document_is_indexed` failed on `main`. Neither contract changes.
+
+### Security
+
+- <!-- notes: security-reliability -->
+
+  **Logs and request traces no longer carry request URLs or a caller-chosen request id** (INV-ARC-005 §V, DOM-OPS-001 §7, DOM-OPS-001 INV-OPS-004). The 400/401/403/404/429/503 error handlers logged the full request URL, whose query could hold a student's name (`?student=`) or an internal class id (`?class_id=`); they, every log record's `endpoint` field, the unhandled-exception record, the Cloudflare-origin warning, the admin class-context refusals, operational events and `actor_request_trace.endpoint` now record the registered route pattern, or `<unmatched>` when no route matched (`loggable_route()`). The request id is always generated by the application: a caller's `X-Request-Id` or `X-Correlation-Id` is no longer adopted, echoed, logged or persisted.
+
+- <!-- notes: security-reliability -->
+
+  **The banking page's Student filter no longer puts a name in the URL** (INV-ARC-005 §V, DOM-OPS-001 §7). It was a free-text name box on a GET form, so a typed name travelled in `/admin/banking?student=…` into the nginx access log, browser history and any Referer, and the pagination links carried it forward. It is now a dropdown of the class's claimed students whose value is the seat's `public_id`; the route filters by `Seat.public_id` within the selected `class_id` and no longer accepts a name or an internal seat id. A sweep of the other GET forms and query-string builders found no other name or PII in a URL.
+
+- <!-- notes: security-reliability -->
+
+  **A failed database statement no longer writes its values into the logs** (INV-ARC-005 §V, DOM-OPS-001 §7). The engine now runs with `hide_parameters=True`, so a statement error's text keeps the SQL and drops the `[parameters: ...]` dump. That dump carried plaintext free text (support ticket explanations and notes, claim explanations, announcements, transaction descriptions, recovery usernames) and internal ids into every `logger.exception(...)` and f-string that quoted the exception. Postgres can still echo values itself (`DETAIL: Failing row contains (...)`), so the eight handlers that write free text — student issue submission (general, transaction, attendance), announcement create and update, manual payment, and sysadmin ticket update and resolution — log the exception class only.
 
 ## [2.5.0] - 2026-11-23 — Self-hosting and reliable sign-in sessions
 

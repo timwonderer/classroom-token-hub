@@ -221,4 +221,6 @@ and restore drill in Part 7 passes. You have a teacher account, a class and a cl
 [Teacher Manual](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/teacher_manual.md).
 
 **Next:** [Part 7: Keep it running](part-7-keep-it-running.md). Set up backups
-before real students join.
+before real students join. Then, if the [latest stable release](before-you-begin.md#which-release-this-guide-matches)
+is newer than the supported fresh-install release you installed, follow the
+[upgrade walkthrough](upgrades.md) to it, still before real students join.
