@@ -187,8 +187,9 @@ Settings are environment variables, or `KEY=VALUE` lines in `~/cth-backup/schedu
    `cth_backup_verify`. Do not reuse the pre-release URL: it names the application role, which can write.
 
 3. **Drive.** Name the volume `CTH-Backup` and encrypt it: APFS (Encrypted) in Disk Utility on macOS, LUKS on Linux
-   (`gnome-disks`, "Encrypt with LUKS + ext4"). Unlocking it unattended (the keychain on macOS; a key file in
-   `/etc/crypttab` on Linux) is `SOP-DB-005` D3. The points are already encrypted to the owner's keys, so the
+   (`gnome-disks`, "Encrypt with LUKS + ext4"). Let it unlock unattended (`SOP-DB-005` D3): on macOS
+   tick "Remember this password in my keychain" when first mounting it; on Linux add a key file to the LUKS volume
+   and list it in `/etc/crypttab`. The points are already encrypted to the owner's keys, so the
    volume's own encryption protects only file names, dates and sizes. No age identity is ever stored on it.
 
 4. **Keep the points out of other backups.** A copy of a point in another backup outlives the purge that deletes it.

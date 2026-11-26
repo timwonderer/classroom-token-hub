@@ -5,7 +5,7 @@
 | SOP-DB-005       | 0.1 (DRAFT) | —          | —          | Normative once ratified |
 
 > [!IMPORTANT]
-> **DRAFT.** Nothing here binds until the owner settles §XI and ratifies v1.0. Until then
+> **DRAFT.** Nothing here binds until the owner ratifies v1.0 (every §XI decision is settled). Until then
 > `docs/ops/DATABASE_BACKUP_PLAN.md` stays input to the failure-mode review that issue #1639 requires, and the only
 > recovery points are the pre-release points of `SOP-DEP-002` §VII.A.
 
@@ -117,13 +117,13 @@ Every failed run posts a desktop notification where the platform has one (D10).
 
 ## XI. Owner decisions required before v1.0
 
-Unless marked settled, these are the author's proposals, not rulings. Plan §7 and §8 give the background.
+Plan §7 and §8 give the background.
 
 | # | Decision | Proposed | Plan ref |
 |---|---|---|---|
 | D1 | Placement: operator's computer + drive, droplet + B2 bucket, or both | **Settled 2026-11-25:** the operator's computer + SSD, with the existing `cth_db_backup.py`; macOS or Linux | §3.6, F1 |
 | D2 | Points kept | **Settled 2026-11-25:** one copy of the newest verified point (§VIII.1) | §7.2, F4, F6 |
-| D3 | Drive unlocks from the keychain unattended | Yes: otherwise a purge waits for a manual unlock | new |
+| D3 | Drive unlocks from the keychain unattended | **Settled 2026-11-25:** yes (the keychain on macOS, a `/etc/crypttab` key file on Linux), so a purge never waits for a manual unlock | new |
 | D4 | Longest a pre-destruction point may survive (computer asleep, drive detached, baseline failing) | **Settled 2026-11-25:** nothing beyond the job itself. It deletes outdated points, a failed run notifies, and the owner deletes by hand any it could not. A solo-maintained project, not a service: no deadline | F2, F3 |
 | D5 | Pre-release points | **Settled 2026-11-25:** §VIII.3. The 14 older ones in `~/cth-backup/` were deleted the same day | new |
 | D6 | Second `age` recipient kept offline | **Settled 2026-11-25:** three recipients, the owner's key (password manager) and two YubiKeys (`age-plugin-yubikey`), one kept away from the computer | F7 |
@@ -147,5 +147,5 @@ Unless marked settled, these are the author's proposals, not rulings. Plan §7 a
 **Version 0.1 (2026-11-25), DRAFT:** First draft. Places the existing `cth_db_backup.py` on the operator's Mac under
 launchd with an encrypted external drive as the off-host copy, and lists the decisions issue #1639's failure-mode
 review must settle. Same day: owner ruling that only one copy of the newest verified point exists, whatever took it (D2, D5
-settled, §VIII rewritten). Owner rulings settle D1, D4, D6, D7, D8, D9 (§X.3 rewritten), D10 and D11; D3 remains. Same day: placement made platform-neutral (macOS or Linux), `mac-scheduled.sh` replaced by
+settled, §VIII rewritten). Owner rulings settle D1, D4, D6, D7, D8, D9 (§X.3 rewritten), D10 and D11, then D3; every decision is settled. Same day: placement made platform-neutral (macOS or Linux), `mac-scheduled.sh` replaced by
 `cth_backup_scheduled.py`.
