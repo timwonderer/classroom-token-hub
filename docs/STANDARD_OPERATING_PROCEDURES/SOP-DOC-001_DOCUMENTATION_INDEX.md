@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.72 | 2026-11-26 | 3.71 | Normative |
+| SOP-DOC-001 | 3.73 | 2026-11-26 | 3.72 | Normative |
 
 ---
 
@@ -288,6 +288,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.73 (2026-11-26):**
+
+- Register owner rulings of 2026-11-26 (mandatory dual enrollment, TOTP seed-length floor, credential compliance gate): DOM-IDEN-003 v2.13, FEAT-IDEN-101 v1.5, FEAT-IDEN-102 v1.2, FEAT-IDEN-106 v1.3, FEAT-IDEN-107 v1.4, FEAT-CORE-000 v1.4, SPEC-SEC-001 v1.8, SPEC-IDEN-002 v1.1, SPEC-OPS-004 v1.7 (sysadmin personal credential management), DOM-CORE-002 v1.22 (`credential_operations`, `users.credential_generation`) and SOP-DEP-002 v1.27 (§VII.C pyotp gating). Target behavior, not implementation.
 
 **Version 3.72 (2026-11-26), merge of the 2026-11-23 credential-lifecycle branch entry (originally numbered 3.64 on that branch):**
 

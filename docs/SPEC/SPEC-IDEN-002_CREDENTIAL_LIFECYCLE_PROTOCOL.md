@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-IDEN-002 | 1.0 | 2026-11-23 | N/A (new) | Technical Specification |
+| SPEC-IDEN-002 | 1.1 | 2026-11-26 | 1.0 | Technical Specification |
 
 ## I. Purpose
 
@@ -51,7 +51,7 @@ with its local changes and mandatory audit. A completed retry has none of those 
 
 The registry contains only lawful activated bindings; pending material belongs to current
 operation state and cannot be accepted by registry readers. Initial signup initializes
-the principal generation; later optional passkey activation invalidates the signup session.
+the principal generation; later passkey activation invalidates the signup session.
 No provider inventory entry may be imported as an activated binding.
 
 ### Workflow stages
@@ -118,7 +118,7 @@ irrelevant to an operation. No generic JSON provider-response archive is authori
 | Session binding verifier | Bind interactive authorization; sensitive verifier | Purpose-separated nonreversible verifier | Erase on interactive expiry, consumption into retirement intent or supersession |
 | Capability/challenge verifier | Purpose-bound, single-use proof; sensitive verifier | Purpose-separated nonreversible verifier | Erase when consumed, expired or superseded; never retain raw token |
 | Authorization deadline | Fixed interactive lifetime; nonsecret metadata | Canonical UTC timestamp | Operation lifetime; never extend |
-| Pending TOTP seed | Validate candidate authenticator; authentication secret | Approved encryption only | Erase upon activation, cancellation, expiry or supersession; no old-secret copy |
+| Pending TOTP seed (generated per SPEC-SEC-001 §V seed-length requirement) | Validate candidate authenticator; authentication secret | Approved encryption only | Erase upon activation, cancellation, expiry or supersession; no old-secret copy |
 | Old/new credential IDs | Exact provider work; credential metadata | Exact identifiers inside Identity only | While fixed retirement/activation work needs them; delete with principal |
 | Provider issuance deadline/status | Protect unknown-ID pending registration; operational metadata | Fixed UTC deadline and bounded state | Until issuance ambiguity ends or principal is destroyed |
 | Retirement intent/result | Retry exact work; nonsecret operational state with target binding above | Fixed purpose/targets, timestamp, bounded outcome | Until verified completion/supersession cleanup or principal destruction |
@@ -228,7 +228,7 @@ completion must not be reported as successful just because external retirement s
 - Fixed reconciliation continues after session expiry without renewing/creating a session.
 - Maintenance succeeds without active class selection but grants no classroom authority.
 - Signup authorization requires explicit prior election and cannot be replayed, duplicated,
-  renewed, regenerated from login or repurposed; skip preserves the signup session.
+  renewed, regenerated from login or repurposed; skip preserves the signup session and leaves the principal noncompliant.
 - Principal destruction during provider work cannot restore local authority. Outage,
   transient/permanent failure and the 15-second/three-attempt cap preserve lawful local
   destruction, while local auth/database/audit failures prevent false completion.
@@ -251,4 +251,4 @@ production readiness. No destructive production experiment is implied by this co
 
 Increment version/date, reconcile the owning INV/DOM and affected FEAT contracts, update
 SOP-DOC-001, and preserve the distinction between approved requirements and implementation
-proposals. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.
+proposals. The 2026-11-26 revision applies the owner rulings on mandatory dual enrollment and the seed-length floor. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.

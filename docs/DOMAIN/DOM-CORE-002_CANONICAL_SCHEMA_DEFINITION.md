@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002 | 1.21 | 2026-11-10 | 1.20 | Constitutional |
+| DOM-CORE-002 | 1.22 | 2026-11-26 | 1.21 | Constitutional |
 
 ---
 
@@ -167,7 +167,32 @@ authority in v2 and must not be treated as canonical schema surfaces.
 - `student_recovery_codes` — per-student verification codes; child of `recovery_requests`, CASCADE-deleted
 - `recovery_class_challenges` — per-class proof and confirmation state for one teacher recovery attempt; child of `recovery_requests`, CASCADE-deleted (DOM-IDEN-003 §IX)
 - `passkey_credentials` — WebAuthn/FIDO2 credential bindings; owned by `users.id`
+- `credential_operations` — Identity-owned, per-principal credential-lifecycle operation state (SPEC-IDEN-002; DOM-IDEN-003 §VII.A); holds no class scope and no PII (registered in 1.22)
 - `teacher_signup_attempts` — encrypted, expiring staging record for initial teacher provisioning; grants no authority; consumed atomically by provisioning (DOM-IDEN-003 §V, §VII; registered in 1.10)
+
+**`users.credential_generation`:** `Integer`, NOT NULL, default `1`. Identity's monotonic credential generation; advanced atomically by credential activation, replacement or removal (DOM-IDEN-003 §VII.A).
+
+**`credential_operations`** (no `class_id`; no PII; Identity-owned):
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | Primary key |
+| `user_id` | FK `users.id` | `ON DELETE CASCADE` |
+| `purpose` | enum | `totp_replace`, `passkey_enroll`, `passkey_replace`, `passkey_revoke` |
+| `stage` | enum | `authorized`, `registration_pending`, `candidate_verified`, `retirement_committed`, `provider_uncertain`, `completed`, `cancelled` |
+| `authorized_generation` | Integer | Generation the operation was authorized against |
+| `session_binding_hash` | String(64) | Hash binding the operation to its session |
+| `deadline_at` | timestamptz | Interactive deadline |
+| `pending_totp_encrypted` | String(200) | Encrypted pending TOTP seed; erased on activation, cancellation, expiry or supersession |
+| `old_credential_id`, `new_credential_id` | Text, nullable | Exact credentials the operation concerns |
+| `retirement_intent_at` | timestamptz, nullable | Set when remote-retirement intent is committed |
+| `retry_after_at` | timestamptz, nullable | Bounded reconciliation retry |
+| `attempt_count` | Integer | Bounded attempts |
+| `error_category` | String, nullable | Non-identifying category only |
+| `created_at`, `updated_at` | timestamptz | |
+
+A partial unique index on `user_id` where `stage` is not `completed` or `cancelled`
+permits at most one open operation per principal.
 
 ---
 
@@ -446,6 +471,8 @@ and display `name`. Class deletion cascades groups. Policies reference it throug
 class-scoped composite foreign key. This is group identity, not policy versioning.
 
 ## VIII. Amendment
+
+Version 1.22 (2026-11-26) registers `credential_operations` and `users.credential_generation` for the credential lifecycle contract (SPEC-IDEN-002 v1.1; DOM-IDEN-003 v2.13). Schema contract only; implementation requires its own migration.
 
 Version 1.20 (2026-11-04) removes `payroll_fines` and `payroll_rewards` from the canonical table set. Neither table exists (both were dropped in the v2 migration); there is no fine or reward catalog (owner ruling 2026-11-04, issue #1701). A one-time teacher credit is a PROD `manual_credit` event. A teacher-applied fine is a `ledger_transaction` row of type `penalty` (`DOM-LED-001` v2.19, `FEAT-LED-006`).
 

@@ -28,6 +28,10 @@ and this project follows semantic versioning principles.
 
   **Credential lifecycle governing contracts define routine authenticator maintenance.** Coordinated INV, DOM, FEAT and SPEC amendments establish principal-scoped authority, atomic TOTP replacement, recoverable selected-passkey replacement, shared pure assertion validation, session invalidation, provider reconciliation and bounded external cleanup during local destruction. This is documentation only; application implementation and provider integration readiness remain separate review gates.
 
+- <!-- notes: internal -->
+
+  **Mandatory dual enrollment, TOTP seed-length floor and credential compliance gate (owner rulings 2026-11-26).** Teacher and sysadmin principals must hold verified TOTP and at least one activated passkey; seeds decode to at least 112 bits and are generated at 160; a noncompliant principal reaches only credential maintenance and sign-out; revoking the only passkey is refused; sysadmin provisioning stays CLI-only with the same enrollment and gate; `pyotp==2.10.0` stays pinned until the noncompliant-seed count is zero (SOP-DEP-002 §VII.C). Amends DOM-IDEN-003, FEAT-IDEN-101/102/106/107, FEAT-CORE-000, SPEC-SEC-001, SPEC-IDEN-002, SPEC-OPS-004, DOM-CORE-002 and SOP-DEP-002. Documentation only.
+
 
 ### Fixed
 

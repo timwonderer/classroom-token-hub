@@ -2,15 +2,15 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-102 | 1.1 | 2026-11-23 | 1.0 | Normative |
+| FEAT-IDEN-102 | 1.2 | 2026-11-26 | 1.1 | Normative |
 
 ## I. Purpose
 
-Enroll an optional passkey or replace one explicitly selected passkey, preserving unrelated credentials and remote-first retirement.
+Enroll a required passkey or replace one explicitly selected passkey, preserving unrelated credentials and remote-first retirement.
 
 ## II. Scope
 
-Teacher initial/additional enrollment and selected replacement. Principal credential-maintenance scope; no classroom/Seat prerequisite.
+Teacher or sysadmin principal initial/additional enrollment and selected replacement; the signup-capability path is teacher-only. Principal credential-maintenance scope; no classroom/Seat prerequisite.
 
 ## III. Authority Level
 
@@ -97,5 +97,5 @@ CSRF/rate limits, accessible manual/error flows and GHSA credential-ownership gu
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. This 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-26 revision makes the enrolled passkey required (DOM-IDEN-003 §VII.A) and widens scope to sysadmin principals. The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.

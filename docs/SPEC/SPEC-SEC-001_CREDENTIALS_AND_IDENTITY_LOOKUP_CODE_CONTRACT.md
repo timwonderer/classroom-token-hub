@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-SEC-001 | 1.7 | 2026-11-23 | 1.6 | Technical Specification |
+| SPEC-SEC-001 | 1.8 | 2026-11-26 | 1.7 | Technical Specification |
 
 ## I. Purpose
 
@@ -43,6 +43,7 @@ Technical Specification. `SPEC-SEC-001` is not an independent level of runtime a
 4. Code MUST store only the resulting verifier; it MUST NOT store plaintext passphrases, reversible passphrase encryption, or a recoverable copy in logs, events, sessions, URLs, caches, test output, or error objects.
 5. Verification MUST use the stored verifier and MUST return only a boolean/typed success result to its caller. Algorithm and parameters MUST be centralized in the canonical primitive, not duplicated in FEAT documents or route code.
 6. Malformed, missing, expired, or otherwise unusable verifiers MUST fail closed and MUST not disclose which condition occurred.
+7. A TOTP seed MUST decode to at least 112 bits. New seeds MUST be generated at 160 bits (32 base32 characters) by one Identity-owned generator; no other code path generates seeds. A stored seed below the minimum is noncompliant and subjects its principal to the credential compliance gate (DOM-IDEN-003 §VII.A).
 
 ### V.1a Required runtime environment
 
@@ -195,5 +196,7 @@ username and TOTP seed use the approved encryption facility; neither is stored i
 the signed cookie. Receipt responses reveal no code/class validity; only complete
 set validation returns a generic result. Failed rounds invalidate earlier-round
 codes/proofs while preserving recipient selection.
+
+**2026-11-26 amendment (owner ruling 2026-11-26):** §V.1 adds the TOTP seed-length floor, generation length and single generator.
 
 **2026-11-23 amendment:** Records the approved credential-lifecycle validation/outcome boundary. No identity archive, financial lineage relaxation or deployed-behavior claim is introduced.

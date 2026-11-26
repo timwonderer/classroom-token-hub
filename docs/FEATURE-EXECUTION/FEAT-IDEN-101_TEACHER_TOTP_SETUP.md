@@ -2,11 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-101 | 1.4 | 2026-11-23 | 1.3 | Normative |
+| FEAT-IDEN-101 | 1.5 | 2026-11-26 | 1.4 | Normative |
 
 ## I. Purpose
 
-Provision a teacher and activate verified initial TOTP atomically, optionally issuing one explicit signup-derived passkey enrollment authorization.
+Provision a teacher and activate verified initial TOTP atomically, optionally issuing one explicit signup-derived authorization for the required initial passkey enrollment.
 
 ## II. Scope
 
@@ -31,7 +31,7 @@ and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 Declare the FEAT-CORE-000 identity-establishment scope. Follow DOM-IDEN-005's lawful
 provisioning sequence; do not require an existing teacher, Seat or active classroom.
 Stage class metadata and teacher display metadata first, then username and pending
-TOTP, in the encrypted server signup record authorized by INV-ARC-018. The browser
+TOTP (generated per SPEC-SEC-001 §V seed-length requirement), in the encrypted server signup record authorized by INV-ARC-018. The browser
 holds only a random 256-bit capability; its purpose-separated SHA-256 verifier keys
 the record. Its fixed lifetime is 30 minutes, never extended by retries.
 
@@ -40,10 +40,10 @@ pending secret within the original deadline. Restart deletes the previous attemp
 hourly signup cleanup deletes expired rows. No plaintext staging enters cookies,
 logs, URLs, telemetry or audit. This flow issues no backup codes or recovery request.
 
-## VI. Atomic provisioning and optional enrollment
+## VI. Atomic provisioning and deferrable enrollment
 
-Before submitting signup TOTP verification, the teacher may explicitly elect optional
-passkey enrollment. Verify the submitted code against server-held pending material.
+Before submitting signup TOTP verification, the teacher may explicitly elect to
+enroll the required passkey now. Verify the submitted code against server-held pending material.
 Lock/revalidate the signup attempt; atomically create User, initial ClassEconomy,
 administrative Seat and IdentityProfile, activate verified TOTP, initialize credential
 generation, consume staging and emit the required non-identifying outcome. Failure
@@ -56,15 +56,16 @@ consumes it into one enrollment operation, never renews it, and never reconstruc
 from an authenticated session. A later request executes that FEAT; no nested FEAT call.
 
 Establish the post-provisioning session through the normal session command. Offer
-optional passkey enrollment or skip. Skip retains that session. Optional failure does
-not undo signup. Successful passkey activation invalidates the signup session and
+passkey enrollment, which may be deferred. Skipping retains that session but leaves the
+principal noncompliant (DOM-IDEN-003 §VII.A Credential compliance gate). Enrollment
+failure does not undo signup. Successful passkey activation invalidates the signup session and
 requires fresh sign-in under the same rule as other credential mutations.
 
 ## VII. Failure, display and audit
 
 No identity is durable before valid TOTP verification. Display accessible QR and manual
 entry for the pending authenticator; do not require physical device separation or
-restrict synchronized credentials. Explain that passkeys are optional and SATAR is
+restrict synchronized credentials. Explain that a passkey is required and may be enrolled now or at next sign-in, and that SATAR is
 independent recovery. Do not reveal an activated seed again.
 Audit uses ACT-IDEN-101 and DOM-OPS-002 §2.5, without identifiers or secret material.
 
@@ -72,14 +73,14 @@ Audit uses ACT-IDEN-101 and DOM-OPS-002 §2.5, without identifiers or secret mat
 
 Cover atomic provisioning/rollback, staging expiry/restart, wrong/new username,
 invalid TOTP, duplicate completion, secret non-retention, explicit enrollment election,
-skip/session preservation, failed optional enrollment, capability expiry/consumption,
+skip/session preservation, failed enrollment, noncompliance after skip, capability expiry/consumption,
 replay/renewal/repurposing denial and fresh sign-in after initial passkey activation.
 Preserve the existing signup security and accessibility tests.
 
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. This 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-26 revision makes passkey enrollment required but deferrable (DOM-IDEN-003 §VII.A). The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.
 
 ### Revision History

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-CORE-000 | 1.3 | 2026-11-23 | 1.2 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
+| FEAT-CORE-000 | 1.4 | 2026-11-26 | 1.3 | Constitutional. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and `INV-ARC-006`. |
 
 ---
 
@@ -124,7 +124,7 @@ directive.
    under host authority from the command line (`SPEC-OPS-004` §V: operator
    provisioning is out-of-band). The new system principal has no class or seat.
 
-6. **Principal credential maintenance.** Teacher initial/additional passkey enrollment,
+6. **Principal credential maintenance.** Teacher or sysadmin initial/additional passkey enrollment,
    TOTP replacement, selected-passkey replacement and removal (DOM-IDEN-003 §VII.A)
    resolve explicit principal context without a Seat or Class. Fresh purpose-bound
    authorization, current generation and applicable session binding remain required.
@@ -428,5 +428,7 @@ To ensure compliance, the implementation SHOULD utilize:
 - `docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
 - `docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
+
+**2026-11-26 amendment:** Scope item 6 covers sysadmin principals as well as teachers (DOM-IDEN-003 §VII.A).
 
 **2026-11-23 amendment:** Records the owner-approved credential lifecycle scope, activation, reconciliation and retention boundaries. Class isolation and foundational lifecycle requirements remain unchanged.

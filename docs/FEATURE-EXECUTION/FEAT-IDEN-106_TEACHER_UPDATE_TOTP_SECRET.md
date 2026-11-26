@@ -2,15 +2,15 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-106 | 1.2 | 2026-11-23 | 1.1 | Normative |
+| FEAT-IDEN-106 | 1.3 | 2026-11-26 | 1.2 | Normative |
 
 ## I. Purpose
 
-Atomically activate a verified replacement TOTP for routine maintenance, or complete independently authorized SATAR recovery.
+Atomically activate a verified replacement TOTP for a teacher or sysadmin principal's routine maintenance, or complete independently authorized (teacher-only) SATAR recovery.
 
 ## II. Scope
 
-Principal-scoped teacher TOTP replacement and teacher recovery completion. These have distinct authorization paths; neither requires an active classroom.
+Principal-scoped teacher or sysadmin TOTP replacement and teacher recovery completion (SATAR is teacher-only). These have distinct authorization paths; neither requires an active classroom.
 
 ## III. Authority Level
 
@@ -28,9 +28,9 @@ and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 
 ## V. Routine TOTP replacement
 
-Require an authenticated eligible teacher with activated TOTP and a fresh, purpose-bound
+Require an authenticated eligible teacher or sysadmin principal with activated TOTP and a fresh, purpose-bound
 assertion from that teacher's activated passkey. Apply INV-ARC-019 local validation;
-provider proof alone is insufficient. Stage only an encrypted new secret on the current
+provider proof alone is insufficient. Stage only an encrypted new secret (generated per SPEC-SEC-001 §V seed-length requirement) on the current
 operation and expose QR/manual-entry material to its authorized browser.
 
 Until final verification/commit, the existing TOTP remains unchanged. Verify a submitted
@@ -61,7 +61,9 @@ through the canonical builder, activate the new TOTP, remove superseded passkey 
 advance generation, invalidate sessions/challenges/management grants, mark the recovery
 verified/completed_at, erase setup/resume material and emit the audit outcome. Username
 conflict or local failure rolls back local activation; it cannot undo prior provider
-retirement. Recovery never changes Seats, class ownership or economic records.
+retirement. Recovery never changes Seats, class ownership or economic records. Completion leaves the
+principal with the new TOTP and no passkey; the credential compliance gate (DOM-IDEN-003
+§VII.A) directs passkey enrollment at the next sign-in, authorized by the fresh recovery TOTP.
 
 ## VII. Idempotency, audit and presentation
 
@@ -87,5 +89,5 @@ all SATAR selection, class-confirmation and independent-recovery tests.
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. This 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-26 revision widens routine replacement to sysadmin principals, requires seed-length-compliant generation and records the post-SATAR gate (DOM-IDEN-003 §VII.A). The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.

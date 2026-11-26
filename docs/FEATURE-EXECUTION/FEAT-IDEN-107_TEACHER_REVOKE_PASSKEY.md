@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-107 | 1.3 | 2026-11-23 | 1.2 | Normative |
+| FEAT-IDEN-107 | 1.4 | 2026-11-26 | 1.3 | Normative |
 
 ## I. Purpose
 
@@ -10,7 +10,7 @@ Remove exactly one owned passkey after fresh TOTP proof, with remote-first retir
 
 ## II. Scope
 
-Principal-scoped teacher passkey removal. Multiple passkeys are independent; TOTP remains activated. Account destruction is a separate FEAT and failure policy.
+Principal-scoped teacher or sysadmin passkey removal. Multiple passkeys are independent; TOTP remains activated. Account destruction is a separate FEAT and failure policy.
 
 ## III. Authority Level
 
@@ -28,11 +28,14 @@ and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 
 ## V. Authorization and intent
 
-Resolve the authenticated teacher principal, current generation/session and fresh
+Resolve the authenticated teacher or sysadmin principal, current generation/session and fresh
 purpose-bound TOTP proof. Verify the exact selected local credential belongs to that
 principal and is activated, and TOTP remains available. Require no active class or Seat.
 Commit an immutable retirement intent bound to the operation and consume interactive
 authorization before calling the provider. A mere existence read is not an idempotency lock.
+
+Revocation of the only activated passkey is refused; selected-passkey replacement
+(FEAT-IDEN-102) is the lawful path.
 
 ## VI. Remote retirement and local completion
 
@@ -65,12 +68,12 @@ credential label, credential hash or principal attribution fabricated from a cla
 Cover fresh TOTP gate, foreign/missing credential, pending-credential denial, no active
 classroom, multiple-passkey preservation, remote failure, lost response, local failure,
 concurrent and repeated completion, supersession, session expiry and later-session
-preservation. Retain GHSA remote-before-local and local-binding regression coverage.
+preservation, refusal to revoke the only passkey. Retain GHSA remote-before-local and local-binding regression coverage.
 
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. This 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-26 revision widens scope to sysadmin principals and refuses revocation of the only activated passkey (DOM-IDEN-003 §VII.A). The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.
 
 ### Revision History

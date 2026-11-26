@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.12 | 2026-11-23 | 2.11 | Constitutional |
+| DOM-IDEN-003 | 2.13 | 2026-11-26 | 2.12 | Constitutional |
 
 ---
 
@@ -124,7 +124,7 @@ Teacher-specific fields:
 
 > [!IMPORTANT]
 >
-> Teacher users may optionally enable passkey for authentication. Passkey-related metadata is stored on the unified `passkey_credentials` table with the following fields: `id`, `user_id` (FK to `users.id`), `credential_id`, `authenticator_name`, `created_at`, `last_used`. Actual field requirements should consult Bitwarden Passwordless SDK requirements.
+> Every teacher principal holds at least one activated passkey (mandatory dual enrollment, §VII.A). Passkey-related metadata is stored on the unified `passkey_credentials` table with the following fields: `id`, `user_id` (FK to `users.id`), `credential_id`, `authenticator_name`, `created_at`, `last_used`. Actual field requirements should consult Bitwarden Passwordless SDK requirements.
 
 Student-specific fields (`pin_hash`, `passphrase_hash`, `money_action_cooldown_until`) SHALL be `NULL` for teacher rows.
 
@@ -165,7 +165,7 @@ Defined by DOM-IDEN-001. No teacher-specific delta. Teacher display names are st
    current_session_nonce.
 ```
 
-TOTP is required for all teacher accounts. Passkey is an optional second authentication method — when enrolled, it replaces the TOTP step for that device.
+TOTP and at least one activated passkey are both required for every teacher account (§VII.A Mandatory dual enrollment). Sign-in may use either factor; a passkey assertion replaces the TOTP step for that device.
 
 Active seat and class context restoration follows DOM-IDEN-006. Sysadmin authentication may share the same login surface but is not governed by this document.
 
@@ -181,9 +181,11 @@ Teacher account provisioning follows DOM-IDEN-005 §VI. The constitutional provi
 6. Permit runtime participation through DOM-IDEN-006.
 
 TOTP verification precedes durable initial provisioning and is required before
-`has_completed_setup = true`. Optional passkey enrollment follows successful atomic
-provisioning; skipping or failing that optional step does not undo signup. The explicit
-dual-purpose signup ceremony in §VII.A may authorize that one enrollment.
+`has_completed_setup = true`. Passkey enrollment follows successful atomic
+provisioning and may be deferred; skipping or failing that step does not undo signup,
+but leaves the principal noncompliant until a passkey is enrolled (§VII.A Credential
+compliance gate). The explicit dual-purpose signup ceremony in §VII.A may authorize
+that one enrollment.
 
 Per DOM-IDEN-005 §VI, the initial Class and administrative Seat MUST be provisioned atomically with the User. Failure to provision the initial Class SHALL invalidate the entire teacher provisioning transaction.
 
@@ -238,12 +240,42 @@ class or Seat. It confers no classroom capability. Identity exposes pure capabil
 checks and explicit mutation commands; FEAT orchestrates them. No route, GET, query
 or validator may mutate credentials, reconcile inventory or issue authorization.
 
-TOTP is required; passkeys remain optional and multiple passkeys may coexist. Existing
+Mandatory dual enrollment applies (below); multiple passkeys may coexist. Existing
 teachers prove fresh TOTP for passkey enrollment, selected-passkey replacement and
 removal. TOTP replacement requires a fresh assertion using an activated, locally
 owned passkey. Missing proof does not authorize a weaker maintenance path: SATAR
 remains independent recovery. No contact information, backup codes, administrative
 overrides, physical-device separation or synchronization restrictions are introduced.
+
+### Mandatory dual enrollment
+
+A teacher principal SHALL hold one activated TOTP credential and at least one activated
+passkey. Ordinary sign-in may use either. Maintenance of each requires its own fresh,
+purpose-bound proof: fresh TOTP for passkey enrollment, replacement and revocation;
+a fresh assertion from an activated passkey for TOTP replacement. Enrollment may be
+deferred past signup; a principal without an activated passkey is noncompliant until
+one is enrolled (see Credential compliance gate). The signup-derived five-minute
+capability remains the proof for the first enrollment. Multiple passkeys may coexist.
+
+A sysadmin principal is subject to the same obligations, proofs and gate after initial
+authentication. Principal provisioning and credential enrollment are distinct: sysadmin
+provisioning remains exclusively the CLI bootstrap (FEAT-IDEN-008), no application-level
+operator registration or provisioning surface exists, and unifying credential
+enrollment expands neither role's capabilities. Personal credential enrollment,
+replacement, retirement and maintenance use the single Identity-owned implementation.
+
+### Credential compliance gate
+
+After authentication, a principal whose credential state fails mandatory dual
+enrollment, or whose stored TOTP seed is below the minimum in SPEC-SEC-001 §V
+(noncompliant), may reach only credential maintenance and sign-out until it complies.
+Compliance is evaluated from current credential state on every request; no completion
+flag is stored. Rendering the gate mutates nothing (INV-ARC-007).
+
+Revoking the only activated passkey is refused; selected-passkey replacement is the
+lawful path. SATAR recovery completion leaves the principal with a new TOTP and no
+passkey; the gate directs enrollment at the next sign-in, authorized by the fresh
+recovery TOTP.
 
 ### Activation, generation and sessions
 
@@ -252,22 +284,23 @@ or removal atomically advances it, invalidates all existing login sessions and
 outstanding authentication/management challenges, and emits the DOM-OPS-002 §2.5
 outcome. Require fresh sign-in; do not establish a new session automatically.
 The first signup activation initializes the generation with no prior session; its
-optional subsequent passkey activation invalidates the signup session.
+subsequent passkey activation invalidates the signup session.
 All consuming commands recheck generation and applicable session binding against
 current state. Already-completed retries and cleanup do not advance it again or
 invalidate a later sign-in. An old provider response grants no authority.
 
 ### Signup-derived enrollment
 
-Before submitting signup TOTP verification, the teacher may explicitly elect optional
-passkey enrollment. Successful dual-purpose verification atomically provisions the
+Before submitting signup TOTP verification, the teacher may explicitly elect to enroll
+the required passkey now; enrollment may instead be deferred. Successful dual-purpose verification atomically provisions the
 account and creates one five-minute enrollment authorization bound to the principal,
 generation and signup browser/session. It authorizes one initial enrollment operation,
 not replacement or general maintenance. Starting consumes it into that operation;
 retries resume only that operation and never renew expiry. Skipping, expiry, session
 invalidation or SATAR supersession ends it. A session alone cannot regenerate it.
 Successful activation ends the signup session and requires fresh sign-in; skipping
-retains the session. Optional enrollment failure never rolls back completed signup.
+retains the session but leaves the principal noncompliant until a passkey is enrolled.
+Enrollment failure never rolls back completed signup.
 
 ### Distinct lifetimes and concurrency
 
@@ -548,7 +581,7 @@ A failed account transaction rolls back; a later sweep can retry.
 |------------|---------|
 | Username | `username_hash` / `username_lookup_hash` |
 | Primary auth factor | TOTP (`totp_secret_encrypted`) |
-| Secondary / optional factor | Passkey metadata owned by `users.id` |
+| Required second factor | Passkey metadata owned by `users.id` (at least one activated) |
 | Passphrase | N/A |
 | DOB | **Not stored** |
 | Recovery | Student-assisted distributed trust |
@@ -594,5 +627,7 @@ Revisions to this document SHALL:
 2. Update the effective date.
 3. Maintain consistency with DOM-IDEN-001 and DOM-IDEN-005.
 4. Maintain consistency with INV-CORE-000.
+
+**2026-11-26 amendment (owner rulings 2026-11-26):** Passkeys are mandatory for teacher and sysadmin principals (dual enrollment); adds the credential compliance gate, the sysadmin credential-maintenance clause and the TOTP seed-length consequence. Signup passkey wording changes from optional to deferrable.
 
 **2026-11-23 amendment:** Applies the approved credential lifecycle contract, principal-scoped authority, generation supersession and provider/local completion distinction. No application implementation is asserted.
