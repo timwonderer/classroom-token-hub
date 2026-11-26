@@ -10,6 +10,7 @@ from enum import Enum, auto
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import event
 from app.extensions import db
+from app.utils.helpers import loggable_token
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,9 @@ class InvariantViolation(Exception):
 
 # Canonical FEAT Registry
 FEAT_REGISTRY = {
+    "FEAT-CLASS-009": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Issue configuration export"},
+    "FEAT-CLASS-010": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Import configuration"},
+    "FEAT-CLASS-011": {"domain": "Class Configuration", "blast_radius": "LOW", "desc": "Expire configuration receipts"},
     "FEAT-IDEN-101": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Initial Signup and TOTP Setup"},
     "FEAT-IDEN-103": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Initiation"},
     "FEAT-IDEN-104": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Confirmation for Teacher Recovery"},
@@ -206,6 +210,7 @@ FEAT_REGISTRY = {
     "FEAT-LED-003": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Settlement Sweep"},
     "FEAT-LED-004": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Payroll Execution"},
     "FEAT-LED-005": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Internal Account Transfer"},
+    "FEAT-LED-006": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Apply Teacher Penalty"},
     "FEAT-IDEN-001": {"domain": "Identity", "blast_radius": "LOW", "desc": "Unauthenticated Student Seat Claim"},
     "FEAT-IDEN-002": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Credential Setup"},
     "FEAT-IDEN-003": {"domain": "Identity", "blast_radius": "MED", "desc": "Teacher Reset Code Generation"},
@@ -213,6 +218,8 @@ FEAT_REGISTRY = {
     "FEAT-IDEN-005": {"domain": "Identity", "blast_radius": "MED", "desc": "Authenticated Class Binding"},
     "FEAT-IDEN-006": {"domain": "Identity", "blast_radius": "MED", "desc": "Provision Student Seat in Existing Class"},
     "FEAT-IDEN-007": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Account Destruction"},
+    "FEAT-IDEN-008": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Operator Sysadmin Bootstrap"},
+    "FEAT-IDEN-009": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Identity Session Lifecycle (Establish / Select Class / Revoke)"},
     "FEAT-STOR-001": {"domain": "Store", "blast_radius": "MED", "desc": "Store Purchase and Entitlement Grant"},
     "FEAT-STOR-002": {"domain": "Store", "blast_radius": "MED", "desc": "Entitlement Terminal Lifecycle"},
     "FEAT-STOR-003": {"domain": "Store", "blast_radius": "MED", "desc": "Insurance Claim Lifecycle"},
@@ -437,8 +444,8 @@ class FEATContext:
 
         self.log_event("FEAT-ENTRY", {
             "feat": self.feat_name,
-            "correlation_id": self.correlation_id,
-            "idempotency_key": self.idempotency_key or "NONE",
+            "correlation_id": loggable_token(self.correlation_id),
+            "idempotency_key": loggable_token(self.idempotency_key),
         })
         return self
 
@@ -491,13 +498,13 @@ def increment_commit_count():
         if _feat_context.commit_count == 1:
             logger.info(
                 f"FEAT-COMMIT-OWNERSHIP: {name} | First commit owned by {name} | "
-                f"Correlation={get_correlation_id()}"
+                f"Correlation={loggable_token(get_correlation_id())}"
             )
 
         if _feat_context.commit_count > 1:
             msg = (
                 f"FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in {name}. "
-                f"Count={_feat_context.commit_count}. Correlation={get_correlation_id()}"
+                f"Count={_feat_context.commit_count}. Correlation={loggable_token(get_correlation_id())}"
             )
             
             if meta["blast_radius"] == "HIGH":
@@ -628,15 +635,24 @@ def audit_protected(
         raise
 
 
-def requires_feat_context(feat_name: str):
+def requires_feat_context(feat_name: str, *, key_per_call: bool = False):
     """
     Decorator to ensure a function is executed within a FEAT context.
+
+    ``key_per_call`` declares that every invocation is a distinct command whose
+    replay is already refused by the state it acts on (a consumed challenge, a
+    locked status transition, a convergent sweep), so the key is generated here
+    when the caller supplies none (FEAT-CORE-000 §III.3, "accepted or
+    generated"). Never declare it for a command a caller can resubmit with the
+    same effect, such as a purchase: that caller must supply a stable key.
     """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             correlation_id = kwargs.get("correlation_id")
             idempotency_key = kwargs.get("idempotency_key")
+            if idempotency_key is None and key_per_call:
+                idempotency_key = f"{feat_name.lower()}:{f.__name__}:{uuid.uuid4().hex}"
             with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=idempotency_key):
                 return f(*args, **kwargs)
         return decorated_function

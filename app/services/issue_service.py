@@ -20,7 +20,7 @@ def create_support_ticket(*, actor_public_id: str, class_public_id: str, categor
 
     from flask import request
     from app.utils.ip_handler import get_real_ip
-    from app.utils.canonical_temporal_resolver import utc_now
+    from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
     report = Issue(
         actor_public_id=actor_public_id,
@@ -31,7 +31,9 @@ def create_support_ticket(*, actor_public_id: str, class_public_id: str, categor
         support_permissions={'student_report': True},
         share_class_name_with_sysadmin=share_class_name,
         context_snapshot={
-            'timestamp': utc_now().isoformat(), 'page_url': page_url or request.url,
+            'timestamp': canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+            ).canonical_now_utc.isoformat(), 'page_url': page_url or request.url,
             'ip_address': get_real_ip(), 'user_agent': request.headers.get('User-Agent'),
         },
         title=title,

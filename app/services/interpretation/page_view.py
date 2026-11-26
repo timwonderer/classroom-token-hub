@@ -13,6 +13,7 @@ yet — e.g. a newly created class before its first payroll completion — is
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from app.services.interpretation.presentation import (
     InterpretationCycleSummary,
@@ -23,9 +24,18 @@ from app.services.interpretation.read_service import (
     get_latest_cycle_view,
     list_cycle_summaries,
 )
+from app.utils.temporal_display import format_date
 
 STATE_HAS_HISTORY = "has_history"
 STATE_AWAITING_FIRST_CYCLE = "awaiting_first_completed_cycle"
+
+
+@dataclass(frozen=True)
+class CycleOption:
+    """One entry in the completed-cycle selector, its date as class-local text."""
+
+    payroll_cycle_id: str
+    cycle_completed_display: str
 
 
 @dataclass(frozen=True)
@@ -36,6 +46,8 @@ class InterpretationPageView:
     latest_cycle: InterpretationCycleView | None
     history: tuple[InterpretationCycleSummary, ...]
     selected_cycle_id: str | None
+    history_options: tuple[CycleOption, ...] = ()
+    latest_cycle_completed_display: str | None = None
 
 
 def build_interpretation_page_view(
@@ -58,9 +70,18 @@ def build_interpretation_page_view(
         resolved_selection = latest_cycle.cycle.payroll_cycle_id if latest_cycle else None
 
     state = STATE_HAS_HISTORY if history else STATE_AWAITING_FIRST_CYCLE
+    # Dates render in the class's own timezone (CLE), as the page always has.
+    temporal_context = SimpleNamespace(class_id=class_id)
     return InterpretationPageView(
         state=state,
         latest_cycle=latest_cycle,
         history=history,
         selected_cycle_id=resolved_selection,
+        history_options=tuple(
+            CycleOption(s.payroll_cycle_id, format_date(temporal_context, s.cycle_completed_at))
+            for s in history
+        ),
+        latest_cycle_completed_display=(
+            format_date(temporal_context, latest_cycle.cycle.cycle_completed_at) if latest_cycle else None
+        ),
     )

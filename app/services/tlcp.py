@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import random
 import uuid
-from datetime import timedelta
 
 import sqlalchemy as sa
 from flask import has_request_context, request, current_app
@@ -13,7 +12,7 @@ from flask import has_request_context, request, current_app
 from app.extensions import db
 from app.models import ActorRequestTrace, ClassEconomy, Seat
 from app.services.context_resolver import CanonicalContext
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 CORRELATION_VERSION = 1
 DEFAULT_TRACE_LIMIT = 20
@@ -30,6 +29,7 @@ DEFAULT_NOISE_ENDPOINT_PREFIXES = (
     "/sw.js",
     "/favicon.ico",
     "/api/set-timezone",
+    "/api/student-status",  # the dashboard polls it every 10s
 )
 
 def _int_env(name: str, default: int) -> int:
@@ -89,6 +89,36 @@ def _is_noise_endpoint(endpoint: str | None) -> bool:
     return any(endpoint.startswith(prefix) for prefix in _noise_endpoint_prefixes())
 
 
+def _class_public_id(class_id: str | None) -> str | None:
+    """The alias a log line may carry for ``class_id`` (DOM-OPS-001 §7).
+
+    Best-effort: these lookups run inside exception handlers, where the
+    session's transaction may already be aborted. A failed lookup yields None
+    and leaves the caller's transaction and its own error handling alone.
+    """
+    if not class_id:
+        return None
+    try:
+        return db.session.query(ClassEconomy.class_public_id).filter_by(class_id=class_id).scalar()
+    except sa.exc.SQLAlchemyError:
+        return None
+
+
+def class_log_ref(class_id: str | None) -> str:
+    """A class as a log line may name it: its ``class_public_id``, never ``class_id``."""
+    return _class_public_id(class_id) or "-"
+
+
+def seat_log_ref(seat_id: int | None) -> str:
+    """A seat as a log line may name it: its ``public_id``, never ``seats.id``."""
+    if not seat_id:
+        return "-"
+    try:
+        return db.session.query(Seat.public_id).filter_by(id=seat_id).scalar() or "-"
+    except sa.exc.SQLAlchemyError:  # best-effort, as _class_public_id
+        return "-"
+
+
 def _log_invariant_violation(
     message: str,
     *,
@@ -99,19 +129,17 @@ def _log_invariant_violation(
     extra = {
         "actor_type": "-",
         "actor_public_id": "-",
-        "class_id": "-",
+        "class_public_id": "-",
         "error_class": "InvariantViolation",
         "correlation_version": CORRELATION_VERSION,
     }
     if context is not None:
-        extra.update(
-            actor_type=context.actor_role,
-            class_id=context.class_id,
-        )
+        extra["actor_type"] = context.actor_role
+        class_id = class_id or context.class_id
     if actor_type:
         extra["actor_type"] = actor_type
     if class_id:
-        extra["class_id"] = class_id
+        extra["class_public_id"] = _class_public_id(class_id) or "-"
     current_app.logger.error(f"TLCP-INVARIANT-VIOLATION: {message}", extra=extra)
 
 
@@ -418,12 +446,16 @@ def resolve_actor_context(context: CanonicalContext | None, *, observation: dict
     actor_type = seat.role
     class_id = context.class_id
     actor_public_id = seat.public_id
+    class_public_id = _class_public_id(class_id)
 
-    endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
+    from app.utils.helpers import loggable_route
+
+    endpoint = loggable_route()
     return {
         "actor_type": actor_type,
         "actor_public_id": actor_public_id,
         "class_id": class_id,
+        "class_public_id": class_public_id,
         "endpoint": endpoint,
         "method": request.method,
     }
@@ -443,6 +475,9 @@ def persist_request_trace(
     committing (or rolling back) the provided session.
     """
     if not context or not context.get("actor_public_id") or not context.get("class_id"):
+        return
+    # Successful noise would evict real requests from the per-actor cap; failures stay.
+    if _is_noise_endpoint(context.get("endpoint")) and (status_code or 0) < 400:
         return
 
     sess = _session if _session is not None else db.session
@@ -472,8 +507,10 @@ def persist_request_trace(
 
     trace_limit = _int_env("TLCP_TRACE_LIMIT", DEFAULT_TRACE_LIMIT)
     ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)
-    now = utc_now()
-    ttl_cutoff = now - timedelta(days=ttl_days)
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    ttl_cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=-ttl_days * 86400,
+    ).shifted_timestamp_utc
 
     request_id = request_id or uuid.uuid4().hex
 
@@ -569,7 +606,7 @@ def save_error_event(
             "error_class": error_class,
             "error_message": _sanitize_error_message(error_message),
             "correlation_version": CORRELATION_VERSION,
-            "created_at": utc_now(),
+            "created_at": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
         },
     )
 
@@ -584,7 +621,10 @@ def has_recent_error_for_actor(
     Degrades to False when the ``error_events`` table is absent.
     """
     minutes = recent_minutes or _int_env("TLCP_RECENT_ERROR_MINUTES", DEFAULT_RECENT_ERROR_MINUTES)
-    cutoff = utc_now() - timedelta(minutes=minutes)
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=-minutes * 60,
+    ).shifted_timestamp_utc
     rows = _error_event_rows(
         """
         SELECT id FROM error_events
@@ -617,11 +657,16 @@ def create_ticket_correlation_pack(
     error_window_hours = _int_env("TLCP_ERROR_WINDOW_HOURS", DEFAULT_ERROR_WINDOW_HOURS)
 
     fetch_limit = trace_limit * _int_env("TLCP_TRACE_FETCH_MULTIPLIER", DEFAULT_TRACE_FETCH_MULTIPLIER)
+    # The TTL holds here regardless of when the probabilistic cleanup last ran.
+    trace_cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=ticket_created_at, elapsed_seconds=-ttl_days * 86400,
+    ).shifted_timestamp_utc
     trace_rows = (
         ActorRequestTrace.query.filter_by(
             actor_type=actor_type,
             actor_public_id=actor_public_id,
         )
+        .filter(ActorRequestTrace.created_at >= trace_cutoff)
         .order_by(ActorRequestTrace.created_at.desc(), ActorRequestTrace.id.desc())
         .limit(fetch_limit)
         .all()
@@ -643,7 +688,9 @@ def create_ticket_correlation_pack(
         for row in ranked_rows
     ]
 
-    error_window_start = ticket_created_at - timedelta(hours=error_window_hours)
+    error_window_start = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=ticket_created_at, elapsed_seconds=-error_window_hours * 3600,
+    ).shifted_timestamp_utc
     error_rows = (
         _error_event_rows(
             """
@@ -670,7 +717,9 @@ def create_ticket_correlation_pack(
     )
 
     if include_recent_error and not error_rows:
-        ttl_cutoff = ticket_created_at - timedelta(days=ttl_days)
+        ttl_cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+            timestamp=ticket_created_at, elapsed_seconds=-ttl_days * 86400,
+        ).shifted_timestamp_utc
         error_rows = _error_event_rows(
             """
             SELECT request_id, endpoint, method, error_class, error_message,
@@ -713,5 +762,5 @@ def create_ticket_correlation_pack(
         "class_id": class_id,
         "request_trace_json": request_trace_json,
         "error_refs_json": error_refs_json,
-        "created_at": utc_now(),
+        "created_at": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
     }

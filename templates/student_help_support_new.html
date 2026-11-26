@@ -209,7 +209,7 @@
                                         <small class="text-muted">
                                             Submitted
                                             {% if issue.submitted_at %}
-                                                {{ issue.submitted_at|fmt_timestamp }}
+                                                {{ submitted_displays[issue.id] }}
                                             {% else %}
                                                 N/A
                                             {% endif %}

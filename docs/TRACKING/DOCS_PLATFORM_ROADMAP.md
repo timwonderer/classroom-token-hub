@@ -2,7 +2,7 @@
 
 **Status:** Partially superseded — see note below
 **Created:** 2026-06-14
-**Last Reconciled:** 2026-09-19
+**Last Reconciled:** 2026-10-26
 **Branch:** `main` (this document was authored on `docs/cleanup-and-organization`)
 
 ---
@@ -71,6 +71,13 @@ the remaining documentation work.
 Two separate platforms, each serving a different audience and use case.
 
 ### A. Docusaurus Public Site
+
+> [!IMPORTANT]
+> **Now built with Hugo + Hextra (2026-10-24); Docusaurus retired (2026-10-26).**
+> The site at `classroomtokenhub.com/docs/` is built from `docs-generator-proof/`,
+> and the `docs-site/` workspace named below has been removed. The engineering
+> notes (content area 4's blog) are not authorized for publication and are no
+> longer published. The scope described in the next note is unchanged.
 
 > [!IMPORTANT]
 > **Built 2026-09-19, and narrower than described below.** The site publishes the

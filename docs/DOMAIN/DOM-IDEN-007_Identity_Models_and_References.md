@@ -3,10 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-007 | 1.3 | 2026-10-14 | 1.2 | Constitutional |
-
-> [!IMPORTANT]
-> **v1.3 (2026-10-14), documentation modernization.** §V named the table `identity_profile` (singular); every other reference in the repo (`DOM-CORE-002` §V.1, CLAUDE.md, the model itself) uses `identity_profiles` (plural). Corrected to match. No schema change.
+| DOM-IDEN-007 | 1.4 | 2026-11-25 | 1.3 | Constitutional |
 
 ---
 
@@ -451,3 +448,20 @@ This principle upholds the **Don't Repeat Yourself (DRY)** invariant and ensures
 it atomically. It identifies a claim lifecycle generation, not a principal or a
 class lifecycle state. Signed onboarding authorization and teacher Unclaim forms
 carry the generation and must match the server value at execution.
+
+---
+
+## X. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.4 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the v1.3 note below from the top of the document into
+> it, per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the
+> header table and §I Purpose. No content change.
+>
+> **v1.3 (2026-10-14), documentation modernization.** §V named the table `identity_profile` (singular); every other reference in the repo (`DOM-CORE-002` §V.1, CLAUDE.md, the model itself) uses `identity_profiles` (plural). Corrected to match. No schema change.
+
+Revisions to this document must increment the version number, update the Effective Date, and
+preserve the canonical identity chain this document defines.

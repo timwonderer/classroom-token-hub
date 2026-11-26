@@ -156,7 +156,7 @@
                             <td>
                                 <small>
                                     {% if report.submitted_at %}
-                                    {{ report.submitted_at|fmt_timestamp }}
+                                    {{ report.submitted_at_display }}
                                     {% else %}N/A{% endif %}
                                 </small>
                             </td>
@@ -196,7 +196,7 @@
                     <div class="fw-semibold mb-1 type-sm">{{ report.title }}</div>
                     <div class="text-muted mb-2 type-xs">
                         {{ issue_ref_for(report.id)[:12] }}...
-                        {% if report.submitted_at %} · {{ report.submitted_at|fmt_timestamp }}{% endif %}
+                        {% if report.submitted_at %} · {{ report.submitted_at_display }}{% endif %}
                     </div>
                     <a href="{{ url_for('sysadmin.view_issue', issue_ref=issue_ref_for(report.id)) }}"
                         class="btn btn-sm btn-outline-primary">View Ticket</a>
@@ -296,13 +296,13 @@
                             <div class="sysadmin-ticket-meta">
                                 {% if pill_id == 'pending' %}
                                 <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_up</span>
-                                Escalated {{ issue.escalated_at|fmt_timestamp }}
+                                Escalated {{ issue.escalated_at_display }}
                                 {% elif pill_id == 'review' %}
                                 <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
-                                In review since {{ (issue.sysadmin_reviewed_at or issue.escalated_at)|fmt_timestamp }}
+                                In review since {{ issue.in_review_since_display }}
                                 {% else %}
                                 <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-                                Resolved {{ issue.sysadmin_resolved_at|fmt_timestamp }}
+                                Resolved {{ issue.sysadmin_resolved_at_display }}
                                 {% endif %}
                             </div>
                         </a>

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-SEC-001 | 1.5 | 2026-09-15 | 1.4 | Technical Specification |
+| SPEC-SEC-001 | 1.6 | 2026-11-04 | 1.5 | Technical Specification |
 
 ## I. Purpose
 
@@ -67,7 +67,7 @@ The application MUST refuse to start in any non-test environment when a required
 4. `users.id`, `seats.id`, and `class_id` MUST retain their distinct meanings. `public_id` MUST be resolved under canonical class scope and MUST never grant authority.
 5. Lookup responses MUST return the minimum result needed by the owning contract. They MUST NOT expose credential material, lookup digests, encryption keys, internal identifiers, or unrelated class membership.
 
-#### Canonical lookup encoding (pre-launch cutover)
+#### Canonical lookup encoding
 
 `app.hash_utils.normalize_lookup_text` is the single text normalization primitive:
 Unicode NFKC, then strip leading/trailing whitespace; names additionally use
@@ -94,7 +94,9 @@ resolves class scope and includes that scope in its digest. Hall-pass verificati
 uses the name normalization primitive for in-memory profile comparison, with no
 persistent lookup digest or claim-artifact dependency.
 
-This is a pre-launch replacement with no existing data to migrate. All current
+This encoding was introduced before the v2.0.0 launch. That historical cutover
+does not authorize replacing live credential data; subsequent changes follow
+`SOP-SEC-001` and `SOP-DB-004`. All current
 readers, writers and fixtures use this format; do not attempt old-digest lookup,
 dual writes, compatibility fallback, or inference from display names to repair a
 credential. Password hashing and teacher-recovery capability formats are separate

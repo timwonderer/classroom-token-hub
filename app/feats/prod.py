@@ -9,7 +9,6 @@ from app.extensions import db
 from app.feats.base import requires_feat_context, get_correlation_id, audit_protected
 from app.models import (
     AttendanceReasonCode,
-    AttendanceSession,
     ClassEconomy,
     EntitlementEvent,
     HallPassLog,
@@ -24,6 +23,10 @@ from app.services.attendance_writer_service import AttendanceSessionResult, reco
 from app.services.entitlement_service import (
     get_available_hall_pass_grant,
     get_hall_pass_balance,
+)
+from app.services.hall_pass_status_service import (
+    HALL_PASS_STATUS_RETURNED,
+    resolve_hall_pass_lifecycle_status,
 )
 from app.services.ledger_posting_service import create_pending_transaction
 from app.services.payroll.pricing import SUMMARY_PRICING_KEY, price_payable_attendance
@@ -69,25 +72,6 @@ def _resolve_class_economy(class_id: str) -> ClassEconomy:
     if not economy:
         raise LookupError(f"No class economy found for class_id={class_id!r}.")
     return economy
-
-
-def _latest_hall_pass_attendance_state(log: HallPassLog) -> str:
-    rows = (
-        AttendanceSession.query.filter_by(
-            class_id=log.class_id,
-            target_seat_id=log.requested_by_seat_id,
-            hall_pass_id=log.hall_pass_id,
-        )
-        .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-        .all()
-    )
-    left_seen = False
-    for row in rows:
-        if row.status == "inactive" and row.reason_code == AttendanceReasonCode.HALL_PASS.value:
-            left_seen = True
-        elif left_seen and row.status == "active":
-            return "returned"
-    return "left" if left_seen else "approved"
 
 
 def require_hall_pass_settings(class_id: str, reference_time_utc) -> HallPassSettings:
@@ -163,7 +147,9 @@ def _enforce_hall_pass_settings(
     # only state that frees the slot.
     currently_out = [
         log for log in todays_logs
-        if _latest_hall_pass_attendance_state(log) in ("approved", "left")
+        if resolve_hall_pass_lifecycle_status(
+            class_id=log.class_id, seat_id=log.requested_by_seat_id, hall_pass_id=log.hall_pass_id,
+        ).status != HALL_PASS_STATUS_RETURNED
     ]
 
     queue_limit = min(settings.max_queue_limit, sum(item.get("max_queue", 0) for item in pass_types)) if settings else None
@@ -236,16 +222,27 @@ def _record_hall_pass_log_impl(
     ctx = _require_context(ctx)
     if not requested_by_seat_id or not ctx.class_id:
         raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
-    # Lock the seat before _enforce_hall_pass_settings locks the class below.
-    # execute_account_transfer / allocate_creation_posting_sequence lock
-    # Seat then ClassEconomy; a hall-pass approval that locked them in the
-    # opposite order could deadlock against a concurrent transfer for the
+    # Lock the seat(s) before _enforce_hall_pass_settings locks the class
+    # below. execute_account_transfer / allocate_creation_posting_sequence
+    # lock Seat then ClassEconomy; a hall-pass approval that locked them in
+    # the opposite order could deadlock against a concurrent transfer for the
     # same student (PR #1550 review). Locking the seat first here, whether or
     # not this destination consumes a pass, keeps every writer that takes
     # both locks in the same Seat -> ClassEconomy order.
+    #
+    # The HallPassLog row written below also carries a foreign key to
+    # approved_by_seat_id (the approving teacher's seat, ctx.seat_id for an
+    # approval; equal to requested_by_seat_id for a self-recorded entry), so
+    # Postgres takes an implicit FOR KEY SHARE lock on it at insert time too.
+    # Since #1640 widened rent reconciliation's lock set to every seat in the
+    # class -- the approver's seat included -- an unlocked approver seat can
+    # complete the same circular wait against reconciliation that #1640
+    # otherwise closed (Codex review on PR #1832). Lock both, ascending,
+    # before any class-scoped work.
     from app.services.entitlement_service import lock_hall_pass_holder
 
-    lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
+    for sid in sorted({requested_by_seat_id, approved_by_seat_id}):
+        lock_hall_pass_holder(sid, ctx.class_id)
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
@@ -457,11 +454,28 @@ def _record_payroll_event_impl(
     # here — pay rate is resolved from `class_id` alone (INV-ARC-014 §V).
     _resolve_class_economy(ctx.class_id)
 
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): the PayrollEvent insert
+    # below carries a foreign key to actor_seat_id (the acting teacher's or
+    # system actor's seat), so Postgres takes an implicit FOR KEY SHARE lock on
+    # it at insert time. Since #1640 widened rent reconciliation's lock set to
+    # every seat in the class -- the actor's seat included, which reconciliation
+    # previously never touched -- an unlocked actor seat can complete the same
+    # circular wait against reconciliation that #1640 otherwise closed (Codex
+    # review on PR #1832). This must run before ANY seat-specific work below,
+    # not just before the insert: for payroll_event_type == "payroll",
+    # close_due_attendance_intervals() below locks the target seat on its own,
+    # well before an earlier version of this fix locked the actor seat --
+    # which left the same half-open window Codex's review caught. Lock every
+    # seat this call can touch or this insert's foreign keys will reference,
+    # ascending by id, before any of that.
+    for sid in sorted({target_seat_id, ctx.seat_id}):
+        lock_attendance_seat(sid, ctx.class_id)
+
     if payroll_event_type == "payroll":
         if amount is not None:
             raise ValueError("FEAT-PROD-003 derives a payroll event's amount; it cannot be supplied.")
         # Only closed, unpaid sessions are payable; an open session is settled
-        # in full by the run after it closes (DOM-PROD-001 §VI.3). Each is priced
+        # in full by the run after it closes (DOM-PROD-001 §XV.11). Each is priced
         # by the setting in force when it closed, never by the one in force now
         # (DOM-PROD-001 §XV.3), and the pricing inputs are recorded so the
         # amount is reproducible without storing it (INV-CORE-000 §III.3).
@@ -495,7 +509,6 @@ def _record_payroll_event_impl(
     if target_seat.claimed_at is None or target_seat.user_id is None:
         raise ValueError("A payroll event target seat must be claimed.")
 
-    lock_attendance_seat(target_seat_id, ctx.class_id)
     ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     event = PayrollEvent(
         class_id=ctx.class_id,

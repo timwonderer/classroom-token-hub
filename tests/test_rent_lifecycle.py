@@ -674,6 +674,35 @@ class TestRentLateFees:
                 assert a.correlation_id == f"{rent_corr}:late:{n}"
                 assert a.source_correlation_id == rent_corr
 
+    def test_INV_ARC_015__recurring_late_fee_period_starts_at_class_midnight_across_fall_back(self, app):
+        """INV-ARC-015 §VIII.1: a recurring late-fee period begins at class-local
+        midnight, not after N x 24 hours. Grace lapses at 00:00 PDT on Oct 30;
+        with a 3-day cadence the second period begins at 00:00 PST on Nov 2. The
+        Nov 1 fall-back makes that 73 hours later, so a 24-hour count ticked an
+        hour early, at 23:00 PST on Nov 1."""
+        from types import SimpleNamespace
+        from app.feats.reconcile_rent_feat import _late_fee_periods_elapsed
+
+        classroom = initialize("chemistry_p1", app)  # America/Los_Angeles
+        settings = SimpleNamespace(
+            class_id=classroom.class_id,
+            late_penalty_type="recurring",
+            late_penalty_frequency_days=3,
+        )
+        grace = datetime(2026, 10, 30, 7, 0, tzinfo=timezone.utc)  # 00:00 PDT Oct 30
+        with app.app_context():
+            def periods(now):
+                return _late_fee_periods_elapsed(settings, grace, now)
+
+            assert periods(grace) == 1
+            # 23:30 PST Nov 1: 72.5 h elapsed, but still the class day of Nov 1.
+            assert periods(datetime(2026, 11, 2, 7, 30, tzinfo=timezone.utc)) == 1
+            # 00:00 PST Nov 2: the class-local midnight 3 days after Oct 30.
+            assert periods(datetime(2026, 11, 2, 8, 0, tzinfo=timezone.utc)) == 2
+            # 00:00 PST Nov 5 (no DST change): the third period.
+            assert periods(datetime(2026, 11, 5, 7, 59, tzinfo=timezone.utc)) == 2
+            assert periods(datetime(2026, 11, 5, 8, 0, tzinfo=timezone.utc)) == 3
+
     def test_late_fee_disabled_when_penalty_amount_zero(self, app):
         """No penalty configured (amount 0) → no late fee obligations at all."""
         classroom = initialize("chemistry_p1", app)

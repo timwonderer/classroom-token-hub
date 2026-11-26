@@ -9,7 +9,7 @@
 {% call help.topic('sup-who', 'person_raised_hand', 'Who files, and against what') %}
 <ul class="ps-3 mb-0">
     <li class="mb-2"><strong>This form is for teacher problems.</strong> A student's issue has to start with the student — they open it, and you elevate it from the Student Issues queue. You cannot file on their behalf from here.</li>
-    <li class="mb-0"><strong>Scope it correctly.</strong> Pick your active class if the problem is with that class, or "My account" if it follows you everywhere. Only the class you have open is offered; switch classes first if you meant a different one.</li>
+    <li class="mb-0"><strong>Every ticket is filed under your active class.</strong> There is no separate "account-wide" scope to pick — switch to the correct class first if the problem belongs to a different one.</li>
 </ul>
 {% endcall %}
 
@@ -114,7 +114,7 @@
                                 <span class="badge {% if report.status == 'OPEN' %}bg-primary{% elif report.status in ['TEACHER_REVIEW', 'TEACHER_FINAL_REVIEW'] %}bg-info{% elif report.status == 'CLOSED' %}bg-secondary{% elif report.status in ['ESCALATED_TO_DEV', 'DEV_RESOLVED'] %}bg-warning text-dark{% else %}bg-light text-dark{% endif %}">{{ report.status|replace('_', ' ')|title }}</span>
                             </div>
                             <div class="small text-muted mt-1">
-                                Submitted {{ report.submitted_at|fmt_timestamp }}
+                                Submitted {{ report.submitted_at_display }}
                                 • Category: {{ (entry.issue_category or report.report_type)|replace('_', ' ')|title }}
                             </div>
                             <p class="mb-0 mt-2">{{ entry.clean_description[:220] }}{% if entry.clean_description|length > 220 %}...{% endif %}</p>

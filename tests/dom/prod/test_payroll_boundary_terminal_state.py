@@ -10,7 +10,7 @@ from app.models import AttendanceReasonCode, AttendanceSession
 from app.services.attendance_service import is_done_for_day, list_attendance_intervals
 from app.services.context_resolver import CanonicalContext
 from app.services.payroll.settlement import settle_class_payroll_cycle
-from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 from tests.helpers.class_domain import put_payroll_setting_in_force
 from tests.helpers.classroom_initializer import initialize
 
@@ -50,7 +50,7 @@ def test_payroll_prior_day_close_preserves_pair_and_allows_repeated_next_day_sta
     assert result.settled_seat_ids == [student.seat_id]
     closure = AttendanceSession.query.filter_by(class_id=classroom.class_id,
         target_seat_id=student.seat_id, status="inactive").one()
-    assert ensure_utc(closure.timestamp) == bounds.boundary_start_utc
+    assert closure.timestamp == bounds.boundary_start_utc
     assert closure.mechanism == "system"
     assert closure.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value
     pair = list_attendance_intervals(student.seat_id, classroom.class_id,
@@ -73,7 +73,7 @@ def test_payroll_prior_day_close_preserves_pair_and_allows_repeated_next_day_sta
     db.session.refresh(opening)
     assert {column.name: getattr(opening, column.name)
             for column in AttendanceSession.__table__.columns} == frozen
-    assert ensure_utc(closure.timestamp) == bounds.boundary_start_utc
+    assert closure.timestamp == bounds.boundary_start_utc
     assert not is_done_for_day(student.seat_id, classroom.class_id, ctx=student)
 
 

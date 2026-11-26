@@ -6,7 +6,6 @@ change (DOM-CLASS-003 §IX, FEAT-ECON-001):
 
 * rent and the rent late penalty → a new ``rent_settings`` row (DOM-POL-001 §VI.1)
 * a store price → a superseding ``store_products`` version
-* the overdraft fee → a new ``economic_engine`` version (FEAT-CLASS-005)
 
 There is no activation choice. Each change takes effect the one way its owner
 defines (owner ruling 2026-09-30, FEAT-ECON-001 §VI-§VIII):
@@ -17,8 +16,7 @@ defines (owner ruling 2026-09-30, FEAT-ECON-001 §VI-§VIII):
   (DOM-CLASS-003 §VII, §X). "Apply immediately" was removed: a rent period
   already billed keeps its frozen terms either way, so the two options did the
   same thing;
-* a store price and the overdraft fee have no later boundary and take effect
-  at once.
+* a store price has no later boundary and takes effect at once.
 """
 
 from __future__ import annotations
@@ -35,7 +33,10 @@ from app.services.class_configuration_query_service import (
     get_rent_settings,
     pending_economic_engines,
 )
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from app.utils.canonical_temporal_resolver import (
+    SYSTEM_LEVEL_EVALUATION,
+    canonical_temporal_resolver,
+)
 
 
 # FEAT-CLASS-005 §XI delegates each rebalance row to its owning command. Every
@@ -45,7 +46,6 @@ _CHANGE_TYPE_OWNERS = {
     "rent": "rent",
     "rent_late_penalty": "rent",
     "store_item": "store",
-    "overdraft_fee": "banking",
 }
 
 # The rent fields a scheduled change may set, by change type.
@@ -55,11 +55,10 @@ _RENT_FIELDS = {
 }
 
 # Store prices change by product-version supersession, which retires the live
-# version at once, and overdraft fees by Economic Engine evolution. Neither
-# owning domain defines a later activation boundary (FEAT-ECON-001 §VIII), so
-# these rows take effect at once; rent rows always wait for the next unbilled
-# period.
-IMMEDIATE_CHANGE_TYPES = frozenset({"store_item", "overdraft_fee"})
+# version at once. The owning domain defines no later activation boundary
+# (FEAT-ECON-001 §VIII), so these rows take effect at once; rent rows always
+# wait for the next unbilled period.
+IMMEDIATE_CHANGE_TYPES = frozenset({"store_item"})
 RENT_CHANGE_TYPES = frozenset(_RENT_FIELDS)
 
 
@@ -67,17 +66,12 @@ class UnsupportedRebalanceChange(ValueError):
     """A rebalance change has no owning command, or cannot run in the requested mode."""
 
 
-def _serialize_dt(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return ensure_utc(value).isoformat()
-
-
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return ensure_utc(datetime.fromisoformat(value))
+        # Only prepare_scheduled_rebalance_changes writes this field, always with a UTC offset.
+        return datetime.fromisoformat(value)
     except (TypeError, ValueError):
         return None
 
@@ -94,11 +88,13 @@ def _get_rent_effective_at(settings, reference_time: datetime) -> datetime:
     latest = get_latest_bill_cycle(f"rent:{settings.class_id}")
     if latest is None or latest.next_assessment_at is None:
         return reference_time
-    return ensure_utc(latest.next_assessment_at)
+    return latest.next_assessment_at
 
 
 def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, reference_time=None):
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    reference_time = reference_time or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     scheduled_changes = []
 
     for change in change_plan:
@@ -110,7 +106,9 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, refe
         if change.get("type") in {"rent", "rent_late_penalty"} and rent_settings is not None:
             effective_at = _get_rent_effective_at(rent_settings, reference_time)
 
-        enriched_change["effective_at"] = _serialize_dt(effective_at)
+        enriched_change["effective_at"] = None if effective_at is None else canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=effective_at
+        ).local_timestamp.isoformat()
         scheduled_changes.append(enriched_change)
 
     return scheduled_changes
@@ -129,7 +127,7 @@ def _get_effective_rent_settings(class_id: str | None):
 
 
 def _apply_change_list(class_id, changes, *, reference_time=None, canonical_context=None, actor_seat_id=None):
-    """Apply the changes that take effect at once (store prices, overdraft fee).
+    """Apply the changes that take effect at once (store prices).
 
     Rent terms never pass through here; ``schedule_rebalance_changes`` dates
     them to the next unbilled period.
@@ -137,7 +135,9 @@ def _apply_change_list(class_id, changes, *, reference_time=None, canonical_cont
     Returns:
         Tuple of (applied_labels, applied_changes)
     """
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    reference_time = reference_time or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     applied_labels = []
     applied_changes: list[dict[str, Any]] = []
 
@@ -167,34 +167,6 @@ def _apply_change_list(class_id, changes, *, reference_time=None, canonical_cont
                 actor_seat_id=actor_seat_id,
             )
             applied_labels.append(f"Store: {product.name}")
-            applied_changes.append(dict(change))
-        elif change_type == "overdraft_fee":
-            # FEAT-CLASS-005 §XI: overdraft/NSF fees change only through the
-            # Economic Engine evolution command. The rebalance already executes
-            # inside FEAT-CLASS-005 and a nested FEAT context is forbidden, so
-            # the command body is composed within the active context.
-            if canonical_context is None:
-                raise UnsupportedRebalanceChange(
-                    "An overdraft fee change requires the acting teacher's canonical context."
-                )
-            from app.feats.class_configuration.feat_class_005_economic_engine_evolution import (
-                _execute_evolve_economic_engine_impl,
-            )
-            from app.models import ClassFeature
-            from app.services.class_configuration_query_service import is_feature_enabled
-
-            result = _execute_evolve_economic_engine_impl.__wrapped__(
-                canonical_context=canonical_context,
-                class_id=class_id,
-                updates={"flat_overdraft_fee": Decimal(str(change.get("new_value")))},
-                feature_list=[
-                    feature for feature in ClassFeature.feature_names()
-                    if is_feature_enabled(class_id, feature)
-                ],
-            )
-            if not result.success:
-                raise ValueError(f"The overdraft fee could not be updated: {result.error_message}")
-            applied_labels.append("Banking: Overdraft / NSF fee")
             applied_changes.append(dict(change))
         else:
             raise UnsupportedRebalanceChange(
@@ -231,7 +203,9 @@ def apply_rebalance_changes(actor_seat_id, class_id, change_plan, *, reference_t
     applied_labels, _applied = _apply_change_list(
         class_id,
         change_plan,
-        reference_time=ensure_utc(reference_time) if reference_time else utc_now(),
+        reference_time=reference_time or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+        ).canonical_now_utc,
         canonical_context=canonical_context,
         actor_seat_id=actor_seat_id,
     )
@@ -242,10 +216,12 @@ def execute_rebalance(actor_seat_id, class_id, change_plan, *, rent_settings=Non
     """Carry out a teacher's rebalance: each change the one way its owner allows.
 
     Rent terms become one ``rent_settings`` row dated to the first unbilled rent
-    period; store prices and the overdraft fee take effect at once. Runs inside
-    the caller's FEAT; never commits. Returns ``(applied_labels, scheduled_rows)``.
+    period; store prices take effect at once. Runs inside the caller's FEAT;
+    never commits. Returns ``(applied_labels, scheduled_rows)``.
     """
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    reference_time = reference_time or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     for change in change_plan:
         _owner_for_change(change)
     rent_changes = [
@@ -284,8 +260,8 @@ def schedule_rebalance_changes(
 ) -> list[RentSettings]:
     """Record changes that take effect at the owning domain's next boundary.
 
-    Only rent terms can wait for a boundary (store prices and the overdraft fee
-    have none, FEAT-ECON-001 §VIII). The selected rent terms become one new
+    Only rent terms can wait for a boundary (store prices have none,
+    FEAT-ECON-001 §VIII). The selected rent terms become one new
     ``rent_settings`` row — one contract, not one row per term — whose
     ``rent_effective_at`` is the start of the first rent period not yet issued.
     Every period already issued keeps the policy it froze, so the open period is
@@ -295,7 +271,9 @@ def schedule_rebalance_changes(
     """
     if not class_id:
         return []
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    reference_time = reference_time or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
 
     updates: dict[str, Decimal] = {}
     effective_at: datetime | None = None
@@ -334,15 +312,21 @@ def get_pending_rebalance_effective_at(class_id: str | None, *, reference_time: 
     """
     if not class_id:
         return None
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    reference_time = reference_time or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     candidates: list[datetime] = []
     rent = get_rent_settings(class_id)
     if rent is not None and rent.rent_effective_at is not None:
-        rent_effective_at = ensure_utc(rent.rent_effective_at)
-        if rent_effective_at > reference_time:
-            candidates.append(rent_effective_at)
+        if canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION,
+            primitive="later_than",
+            candidate=rent.rent_effective_at,
+            reference=reference_time,
+        ).is_later:
+            candidates.append(rent.rent_effective_at)
     candidates.extend(
-        ensure_utc(engine.effective_at)
+        engine.effective_at
         for engine in pending_economic_engines(class_id, as_of=reference_time)
     )
     return min(candidates) if candidates else None

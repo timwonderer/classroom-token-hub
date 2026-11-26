@@ -205,22 +205,6 @@ def notice_view(notice: dict) -> dict:
             "headline": f"{area['name']}: {stage['headline']}"}
 
 
-def history_summary(card: dict | None) -> dict:
-    """The 90-day strip beside the main column, summarised in words."""
-    days = card["history"] if card else []
-    bars, ok_days, gap_days = [], 0, 0
-    for day in days:
-        if day["percent"] is None:
-            gap_days += 1
-            bars.append({"date": day["date"], "tone": "gap"})
-        elif day["percent"] == 100:
-            ok_days += 1
-            bars.append({"date": day["date"], "tone": "ok"})
-        else:
-            bars.append({"date": day["date"], "tone": "elevated"})
-    return {"bars": bars, "ok_days": ok_days, "gap_days": gap_days, "total": len(days)}
-
-
 def incident_entry(notice: dict, events: list[dict]) -> dict:
     view = notice_view(notice)
     ended = as_utc(notice.get("updated_at"))

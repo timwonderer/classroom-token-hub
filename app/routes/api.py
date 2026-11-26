@@ -8,10 +8,8 @@ and other interactive features. Most routes require authentication.
 import re
 import secrets
 import uuid
-import pytz
-from datetime import datetime, timedelta, timezone
+from datetime import date
 from decimal import Decimal
-from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app, g
 from sqlalchemy import func, or_
@@ -20,7 +18,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import verify_password
 
-from app.extensions import db, limiter, student_status_seat_limit_key, attendance_tap_seat_limit_key
+from app.extensions import db, limiter, student_status_seat_limit_key, attendance_tap_seat_limit_key, student_seat_limit_key
 from app.models import (
     Transaction, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
@@ -70,7 +68,10 @@ from app.services.class_configuration_query_service import (
 )
 from app.services.entitlement_service import consume_entitlement, get_hall_pass_balance, grant_hall_passes
 from app.services.hall_pass_status_service import (
+    HALL_PASS_STATUS_LEFT,
     HALL_PASS_STATUS_RETURNED,
+    HALL_PASS_STATUS_REVOKED,
+    hall_pass_revoked,
     resolve_hall_pass_lifecycle_status,
 )
 from app.feats.hall_pass_request_feat import (
@@ -83,9 +84,8 @@ from app.services.hall_pass_request_queue import HallPassRequestNotFound
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class, resolve_feature_class_for_class
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
-    utc_now,
 )
 from app.utils.join_code import get_display_join_code
 from app.utils.transaction_idempotency import (
@@ -93,7 +93,6 @@ from app.utils.transaction_idempotency import (
     get_idempotent_transaction,
     purchase_transaction_key,
 )
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 
 # Import external modules
 from app.services.attendance_service import (
@@ -101,6 +100,7 @@ from app.services.attendance_service import (
     calculate_worked_attendance_seconds_today,
     get_class_attendance_status,
     is_done_for_day,
+    is_live_session,
 )
 from app.services.ledger_posting_service import create_pending_transaction, create_pending_transaction_idempotent
 from app.services.ledger_balance_query_service import get_available_balances
@@ -134,63 +134,6 @@ def handle_api_context_resolution_error(e):
     if isinstance(e, (ContextForbidden, ContextMismatch)):
         return jsonify({"status": "error", "message": "Not Found", "error": "Not Found"}), 404
     return jsonify({"status": "error", "message": "Class context required", "error": "Class context required"}), 401
-
-
-
-# -------------------- Rent Helpers --------------------
-
-
-
-
-def _get_period_delta(rent_setting):
-    """Return the timedelta/relativedelta for a rent setting."""
-    if rent_setting.frequency_type == 'daily':
-        return timedelta(days=1)
-    if rent_setting.frequency_type == 'weekly':
-        return timedelta(weeks=1)
-    if rent_setting.frequency_type == 'monthly':
-        return relativedelta(months=1)
-    if rent_setting.frequency_type == 'custom':
-        unit = rent_setting.custom_frequency_unit or 'days'
-        value = rent_setting.custom_frequency_value or 1
-        if unit == 'days':
-            return timedelta(days=value)
-        if unit == 'weeks':
-            return timedelta(weeks=value)
-        if unit == 'months':
-            return relativedelta(months=value)
-    return timedelta(days=30)
-
-
-def _add_period(dt, delta):
-    """Add a timedelta or relativedelta to dt."""
-    return dt + delta
-
-
-def _calculate_due_dates(rent_setting, now):
-    """
-    Calculate the current and next due dates for a rent setting based on the provided time.
-    Returns (current_due, next_due). If first due date is not set, returns (None, None).
-    """
-    first_due = ensure_utc(rent_setting.first_rent_due_date)
-    if not first_due:
-        return (None, None)
-
-    delta = _get_period_delta(rent_setting)
-
-    # If before the first due date, the first due date is both current and next marker
-    if now < first_due:
-        return (first_due, _add_period(first_due, delta))
-
-    current_due = first_due
-    next_due = _add_period(first_due, delta)
-
-    # Advance until next_due is after now
-    while next_due and next_due <= now:
-        current_due = next_due
-        next_due = _add_period(next_due, delta)
-
-    return (current_due, next_due)
 
 
 def _resolve_class_display_label(class_id, fallback_block=None):
@@ -312,6 +255,7 @@ def _student_purchase_error(error_code):
 
 @api_bp.route('/purchase-item', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def purchase_item():
     """
     Purchase an item from the store.
@@ -336,6 +280,14 @@ def purchase_item():
     data = request.get_json(silent=True) or {}
     policy_uuid = data.get('policy_uuid')
     passphrase = data.get('passphrase')
+    # One rendered Confirm is one purchase command (FEAT-STOR-001 §IX): the shop
+    # sends the same id on a double-click or a retry, so the FEAT replays the
+    # original purchase instead of charging again. A client without one (a page
+    # cached before this field existed) still gets a keyed, if unprotected, write.
+    client_purchase_id = str(data.get('client_purchase_id') or '').strip() or uuid.uuid4().hex
+    idempotency_key = purchase_transaction_key(context.seat_id, client_purchase_id)
+    if len(idempotency_key) > MAX_IDEMPOTENCY_KEY_LENGTH:
+        return jsonify({"status": "error", "message": "Purchase request ID is too long."}), 400
 
     try:
         quantity = int(data.get('quantity', 1))
@@ -353,11 +305,21 @@ def purchase_item():
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 4. Call FEAT-STOR-001: Create entitlement grants via purchase
-    result = execute_store_purchase(
-        canonical_context=context,
-        policy_uuid=policy_uuid,
-        quantity=quantity,
-    )
+    try:
+        result = execute_store_purchase(
+            canonical_context=context,
+            policy_uuid=policy_uuid,
+            quantity=quantity,
+            idempotency_key=idempotency_key,
+        )
+    except ValueError as exc:
+        # The same purchase id sent with a different item or quantity.
+        if "Replay fingerprint mismatch" not in str(exc):
+            raise
+        return jsonify({
+            "status": "error",
+            "message": "This purchase changed after it was sent. Close the window and try again.",
+        }), 409
 
     if not result.success:
         # `result.error_message` is a diagnostic written for developers and
@@ -386,6 +348,7 @@ def purchase_item():
 
 @api_bp.route('/use-item', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def use_item():
     context = getattr(g, "canonical_context", None)
     if not context:
@@ -496,13 +459,20 @@ def use_item():
         .count()
     )
     from app.feats.entitlement_lifecycle_feat import execute_use_item_request
-    execute_use_item_request(
-        class_id=entitlement.class_id,
-        seat_id=student.id,
-        entitlement_id=entitlement.entitlement_id,
-        action_payload=action_payload,
-        idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
-    )
+    try:
+        execute_use_item_request(
+            class_id=entitlement.class_id,
+            seat_id=student.id,
+            entitlement_id=entitlement.entitlement_id,
+            action_payload=action_payload,
+            idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
+        )
+    except ValueError:
+        # Refused under the holder lock: expired, used, or already requested.
+        return jsonify({
+            "status": "error",
+            "message": "This item can't be used right now. It may have expired or already have a request waiting.",
+        }), 400
     return jsonify({"status": "success", "message": f"You have requested to use {store_item.name}. Awaiting admin approval."})
 
 
@@ -743,6 +713,7 @@ HALL_PASS_NOT_SET_UP = "Hall passes are not set up for this class yet. Ask your 
 
 @api_bp.route('/hall-pass/request', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def request_hall_pass():
     """Submit a hall-pass request for teacher approval (a ``pending_actions`` row)."""
     context = getattr(g, "canonical_context", None)
@@ -776,7 +747,7 @@ def request_hall_pass():
         .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
         .first()
     )
-    if not latest_event or latest_event.status != "active":
+    if not is_live_session(context, latest_event):
         return jsonify({"status": "error", "message": "Start work before requesting a hall pass."}), 400
 
     evaluation = canonical_temporal_resolver(
@@ -810,6 +781,7 @@ def request_hall_pass():
 
 @api_bp.route('/hall-pass/request/<request_id>/cancel', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def cancel_pending_hall_pass_request(request_id):
     """Cancel the current student's own pending hall-pass request."""
     context = getattr(g, "canonical_context", None)
@@ -898,16 +870,19 @@ def handle_hall_pass_action(pass_id, action):
 
     try:
         if action == 'leave':
-            latest_event = (
-                AttendanceSession.query.filter_by(
-                    target_seat_id=log_entry.requested_by_seat_id,
-                    class_id=log_entry.class_id,
-                )
-                .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-                .first()
+            # A pass leaves once: this pass's own attendance sequence decides,
+            # as it does for a return.
+            lifecycle = resolve_hall_pass_lifecycle_status(
+                class_id=log_entry.class_id,
+                seat_id=log_entry.requested_by_seat_id,
+                hall_pass_id=log_entry.hall_pass_id,
             )
-            if latest_event and latest_event.status == "inactive" and latest_event.reason_code == AttendanceReasonCode.HALL_PASS.value:
+            if lifecycle.status == HALL_PASS_STATUS_LEFT:
                 return jsonify({"status": "success", "message": "Student is already marked out."})
+            if lifecycle.status == HALL_PASS_STATUS_RETURNED:
+                return jsonify({"status": "error", "message": "This pass has already ended."}), 400
+            if hall_pass_revoked(ctx, log_entry, lifecycle):
+                return jsonify({"status": "error", "message": "This pass is no longer valid."}), 400
             record_attendance_session(
                 ctx=ctx,
                 target_seat_id=log_entry.requested_by_seat_id,
@@ -921,15 +896,14 @@ def handle_hall_pass_action(pass_id, action):
             )
             return jsonify({"status": "success", "message": "Student has left the class."})
         if action == 'return':
-            latest_event = (
-                AttendanceSession.query.filter_by(
-                    target_seat_id=log_entry.requested_by_seat_id,
-                    class_id=log_entry.class_id,
-                )
-                .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-                .first()
+            # This pass's own sequence, as in checkin_hall_pass: the seat's latest
+            # event being active says nothing about whether this pass has ended.
+            lifecycle = resolve_hall_pass_lifecycle_status(
+                class_id=log_entry.class_id,
+                seat_id=log_entry.requested_by_seat_id,
+                hall_pass_id=log_entry.hall_pass_id,
             )
-            if latest_event and latest_event.status == "active":
+            if lifecycle.status == HALL_PASS_STATUS_RETURNED:
                 return jsonify({"status": "success", "message": "Student is already marked returned."})
             record_attendance_session(
                 ctx=ctx,
@@ -981,6 +955,7 @@ def _enforce_hall_pass_student_context(student, log_entry):
 
 @api_bp.route('/hall-pass/checkout', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def checkout_hall_pass():
     """Append an inactive attendance row for an issued hall pass."""
     context = getattr(g, "canonical_context", None)
@@ -993,12 +968,10 @@ def checkout_hall_pass():
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
     current_app.logger.info(
-        "HALL_PASS_CHECKOUT_DEBUG: seat_id=%s pass_id=%s pass_requested_by_seat_id=%s pass_class_id=%s session_class_id=%s",
-        getattr(student, "id", None),
+        "HALL_PASS_CHECKOUT_DEBUG: pass_id=%s requested_by_this_seat=%s pass_in_session_class=%s",
         pass_id,
-        log_entry.requested_by_seat_id,
-        log_entry.class_id,
-        getattr(getattr(g, "canonical_context", None), "class_id", None),
+        student is not None and log_entry.requested_by_seat_id == student.id,
+        log_entry.class_id == getattr(getattr(g, "canonical_context", None), "class_id", None),
     )
     
     if not student or log_entry.requested_by_seat_id != student.id:
@@ -1008,20 +981,21 @@ def checkout_hall_pass():
         return context_error
 
     try:
-        latest_event = (
-            AttendanceSession.query.filter_by(
-                target_seat_id=student.id,
-                class_id=log_entry.class_id,
-            )
-            .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-            .first()
+        lifecycle = resolve_hall_pass_lifecycle_status(
+            class_id=log_entry.class_id,
+            seat_id=student.id,
+            hall_pass_id=log_entry.hall_pass_id,
         )
-        if latest_event and latest_event.status == "inactive" and latest_event.reason_code == AttendanceReasonCode.HALL_PASS.value:
+        if lifecycle.status == HALL_PASS_STATUS_LEFT:
             return jsonify({
                 "status": "success",
                 "message": "You are already checked out.",
                 "destination": log_entry.destination,
             })
+        if lifecycle.status == HALL_PASS_STATUS_RETURNED:
+            return jsonify({"status": "error", "message": "This pass has already ended."}), 400
+        if hall_pass_revoked(context, log_entry, lifecycle):
+            return jsonify({"status": "error", "message": "This pass is no longer valid."}), 400
 
         record_attendance_session(
             ctx=context,
@@ -1041,8 +1015,7 @@ def checkout_hall_pass():
         })
     except PermissionError as exc:
         current_app.logger.error(
-            "HALL_PASS_CHECKOUT_IDENTITY_MISSING: seat_id=%s pass_id=%s message=%s",
-            getattr(student, "id", None),
+            "HALL_PASS_CHECKOUT_IDENTITY_MISSING: pass_id=%s message=%s",
             pass_id,
             str(exc),
         )
@@ -1065,6 +1038,7 @@ def checkout_hall_pass():
 
 @api_bp.route('/hall-pass/checkin', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_seat_limit_key)
 def checkin_hall_pass():
     """Append an active attendance row when the student returns from hall pass."""
     context = getattr(g, "canonical_context", None)
@@ -1077,12 +1051,10 @@ def checkin_hall_pass():
     
     log_entry = db.get_or_404(HallPassLog, pass_id)
     current_app.logger.info(
-        "HALL_PASS_CHECKIN_DEBUG: seat_id=%s pass_id=%s pass_requested_by_seat_id=%s pass_class_id=%s session_class_id=%s",
-        getattr(student, "id", None),
+        "HALL_PASS_CHECKIN_DEBUG: pass_id=%s requested_by_this_seat=%s pass_in_session_class=%s",
         pass_id,
-        log_entry.requested_by_seat_id,
-        log_entry.class_id,
-        getattr(getattr(g, "canonical_context", None), "class_id", None),
+        student is not None and log_entry.requested_by_seat_id == student.id,
+        log_entry.class_id == getattr(getattr(g, "canonical_context", None), "class_id", None),
     )
     
     if not student or log_entry.requested_by_seat_id != student.id:
@@ -1121,8 +1093,7 @@ def checkin_hall_pass():
         })
     except PermissionError as exc:
         current_app.logger.error(
-            "HALL_PASS_CHECKIN_IDENTITY_MISSING: seat_id=%s pass_id=%s message=%s",
-            getattr(student, "id", None),
+            "HALL_PASS_CHECKIN_IDENTITY_MISSING: pass_id=%s message=%s",
             pass_id,
             str(exc),
         )
@@ -1184,7 +1155,7 @@ def update_hall_pass_settings():
             user_id=context.user_id if context else None,
             class_id=class_id,
             max_queue_limit=data["max_queue_limit"],
-            updated_at=utc_now(),
+            updated_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",
         )
@@ -1194,7 +1165,7 @@ def update_hall_pass_settings():
             "message": "Hall passes are not set up for this class yet. Add at least one pass type first.",
         }), 409
     except ValueError as exc:
-        _log_api_client_error("update_hall_pass_settings", exc, extra=f"class_id={class_id}")
+        _log_api_client_error("update_hall_pass_settings", exc)
         return jsonify({"status": "error", "message": "Hall pass settings are invalid."}), 400
 
     return jsonify({
@@ -1237,7 +1208,7 @@ def hall_pass_history():
 
         if start_date:
             try:
-                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_day = date.fromisoformat(start_date)
                 start_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1250,7 +1221,7 @@ def hall_pass_history():
 
         if end_date:
             try:
-                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                end_day = date.fromisoformat(end_date)
                 end_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1271,13 +1242,7 @@ def hall_pass_history():
         offset = (page - 1) * page_size
         records = query.offset(offset).limit(page_size).all()
 
-        from app.utils.temporal_display import format_timestamp as _fmt_display, resolve_display_timezone as _resolve_tz
-        _display_tz = _resolve_tz(context)
-
-        def format_timestamp(dt):
-            if not dt:
-                return None
-            return _fmt_display(dt, _display_tz)
+        from app.services.payroll.builders import build_hall_pass_history_times
 
         # Format records for response
         records_data = []
@@ -1304,17 +1269,19 @@ def hall_pass_history():
             )
             left_row = lifecycle.left_row
             return_row = lifecycle.return_row
-            status = lifecycle.status
+            status = HALL_PASS_STATUS_REVOKED if hall_pass_revoked(context, record, lifecycle) else lifecycle.status
             records_data.append({
                 "id": record.id,
                 "student_name": student_name,
                 "period": class_row.section if class_row else "",
                 "reason": record.destination,
                 "status": status,
-                "request_time": format_timestamp(record.timestamp),
+                **build_hall_pass_history_times(
+                    context, requested_at=record.timestamp,
+                    left_at=left_row.timestamp if left_row else None,
+                    returned_at=return_row.timestamp if return_row else None,
+                ),
                 "decision_time": None,
-                "left_time": format_timestamp(left_row.timestamp if left_row else None),
-                "return_time": format_timestamp(return_row.timestamp if return_row else None),
             })
 
         return jsonify({
@@ -1420,7 +1387,7 @@ def save_hall_pass_setup():
             hall_pass_enabled=hall_pass_enabled,
             pass_type_payload=pass_types,
             max_queue_limit=int(data.get('max_queue_limit', 10)),
-            updated_at=utc_now(),
+            updated_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
             correlation_id=f"corr_settings_setup_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-setup:{user_id}:{scope['class_id']}:{uuid.uuid4().hex}",
         )
@@ -1463,7 +1430,7 @@ def rotate_hall_pass_verify_token():
             idempotency_key=f"feat:settings:hall-pass-token:{user_id}:{uuid.uuid4().hex}",
         )
     except LookupError as exc:
-        _log_api_client_error("rotate_hall_pass_verify_token", exc, extra=f"user_id={user_id}")
+        _log_api_client_error("rotate_hall_pass_verify_token", exc)
         return jsonify({"status": "error", "message": "Hall pass verification settings were not found."}), 404
     except SQLAlchemyError:
         db.session.rollback()
@@ -1478,6 +1445,7 @@ def rotate_hall_pass_verify_token():
 
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
 @login_required
+@limiter.limit("120 per minute", key_func=student_seat_limit_key)
 def get_available_hall_pass_types():
     """Get available pass types for the current class.
 
@@ -1571,7 +1539,7 @@ def attendance_history():
 
         if start_date:
             try:
-                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_day = date.fromisoformat(start_date)
                 start_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1584,7 +1552,7 @@ def attendance_history():
 
         if end_date:
             try:
-                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                end_day = date.fromisoformat(end_date)
                 end_bounds = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
                     canonical_execution_context=context,
@@ -1645,12 +1613,8 @@ def attendance_history():
             student_class_id = seat_info['class_id']
             student_class_label = seat_info['class_label'] or student_class_id or 'Unknown'
 
-            timestamp_str = None
-            formatted_ts = None
-            if record.timestamp:
-                timestamp_str = ensure_utc(record.timestamp).isoformat().replace('+00:00', 'Z')
-                from app.utils.temporal_display import format_timestamp as _format_ts, resolve_display_timezone as _resolve_tz
-                formatted_ts = _format_ts(record.timestamp, _resolve_tz(context))
+            from app.services.payroll.builders import build_attendance_record_times
+            record_times = build_attendance_record_times(context, record.timestamp)
 
             records_data.append({
                 "id": record.id,
@@ -1661,8 +1625,7 @@ def attendance_history():
                 "period": seat_info['period'],
                 "status": record.status,
                 "reason": record.reason_code,
-                "timestamp": timestamp_str,
-                "formatted_timestamp": formatted_ts,
+                **record_times,
             })
 
         return jsonify({
@@ -1713,18 +1676,18 @@ def handle_tap():
 
 
     if not verify_password(pin, student_user.pin_hash or ''):
-        current_app.logger.warning(f"TAP ERROR: Invalid PIN for student {student_user.id}")
+        current_app.logger.warning("TAP ERROR: Invalid PIN")
         return jsonify({"error": "Invalid PIN"}), 403
 
     context = resolve_canonical_context()
     class_id = context.class_id if context else None
     if not class_id:
-        current_app.logger.warning("ATTENDANCE ERROR: Missing class_id context for user_id=%s", student_user.id)
+        current_app.logger.warning("ATTENDANCE ERROR: Missing class context")
         return jsonify({"error": "Unable to resolve class context for this period."}), 400
 
     action = data.get("action")
 
-    current_app.logger.info("TAP DEBUG: class_id=%s action=%s", class_id, action)
+    current_app.logger.info("TAP DEBUG: action=%s", action)
 
     # Support both old and new action names
     action_map = {
@@ -1752,7 +1715,7 @@ def handle_tap():
         .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
         .first()
     )
-    currently_active = bool(latest_event and latest_event.status == "active")
+    currently_active = is_live_session(context, latest_event)
 
     if normalized_action == "start_work" and currently_active:
         return jsonify({
@@ -1791,20 +1754,18 @@ def handle_tap():
             reason_code=reason_code,
             idempotency_key=f"prod_attendance:{class_id}:{seat_id}:{normalized_action}:{secrets.token_hex(12)}",
         )
-        current_app.logger.info("TAP success - seat %s class_id=%s action=%s", seat_id, class_id, action)
+        current_app.logger.info("TAP success - action=%s", action)
     except ValueError as e:
         db.session.rollback()
         current_app.logger.warning(
-            "TAP rejected for seat %s class_id=%s action=%s: %s",
-            seat_id,
-            class_id,
+            "TAP rejected - action=%s: %s",
             action,
             e,
         )
         return jsonify({"error": "Unable to record the attendance request."}), 409
     except SQLAlchemyError as e:
         db.session.rollback()
-        current_app.logger.error(f"TAP failed for seat {seat_id}: {e}", exc_info=True)
+        current_app.logger.error("TAP failed: %s", e, exc_info=True)
         return jsonify({"error": "Database error"}), 500
 
     refreshed_event = (

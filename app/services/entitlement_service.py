@@ -9,10 +9,12 @@ from __future__ import annotations
 import secrets
 
 from app.extensions import db
-from app.models import EntitlementEvent, Seat, StoreProduct
+from app.models import ClassEconomy, EntitlementEvent, Seat, StoreProduct
 from app.feats.base import generate_correlation_id
 from app.services.entitlement_read_service import (
+    _STORE_EXPIRING_TYPES,
     ended_entitlement_ids,
+    entitlement_past_expiry,
     entitlements_with_pending_action,
     get_entitlement_balance,
     get_entitlement_lineage_terminal_event,
@@ -24,11 +26,17 @@ from app.utils.canonical_temporal_resolver import (
 )
 
 
-def _current_utc():
-    return canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION,
-        primitive="current_time",
-    ).canonical_now_utc
+def can_adjust_hall_passes(ctx) -> bool:
+    """Evaluate class-owner teacher authority without mutation (INV-ARC-003)."""
+    return bool(
+        ctx.actor_role == "teacher"
+        and ClassEconomy.query.filter_by(
+            class_id=ctx.class_id, teacher_user_id=ctx.user_id,
+        ).first()
+        and Seat.query.filter_by(
+            id=ctx.seat_id, class_id=ctx.class_id, user_id=ctx.user_id, role="teacher",
+        ).first()
+    )
 
 
 def get_hall_pass_balance(seat_id: int, class_id: str) -> int:
@@ -48,6 +56,9 @@ def lock_hall_pass_holder(seat_id: int, class_id: str) -> Seat:
     approval and a revocation from both ending the same pass. Every such writer
     takes this lock on the holder's seat row first and only then reads whether
     the pass is spent. It is the same row the attendance writers lock.
+
+    Store expiry and redemption requests take it too, for every item type, so
+    a request and the expiry sweep cannot both land on one item.
     """
     seat = Seat.query.filter_by(id=seat_id, class_id=class_id).with_for_update().first()
     if seat is None:
@@ -213,7 +224,7 @@ def grant_hall_passes(
         grant_quantity=grant_quantity,
     )
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     grant_correlation_id = correlation_id or generate_correlation_id()
     resolved_actor = actor_seat_id if actor_seat_id is not None else seat.id
     for index in range(grant_quantity):
@@ -288,7 +299,7 @@ def grant_store_entitlements(
         grant_quantity=grant_quantity,
     )
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     grant_correlation_id = correlation_id or generate_correlation_id()
     resolved_actor = actor_seat_id if actor_seat_id is not None else seat.id
 
@@ -387,7 +398,7 @@ def grant_insurance_entitlement(
             "policy_uuid": policy_uuid,
             **({"continues_entitlement_id": continues_entitlement_id} if continues_entitlement_id else {}),
         },
-        timestamp=granted_at or _current_utc(),
+        timestamp=granted_at or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
     )
     db.session.add(event)
     db.session.flush()
@@ -397,54 +408,43 @@ def grant_insurance_entitlement(
 def remove_hall_passes(
     seat: Seat,
     quantity: int,
+    *,
+    actor_seat_id: int | None = None,
+    correlation_id: str | None = None,
 ) -> int:
-    """Remove available hall passes by appending REVOKED events.
-
-    Reuses the entitlement_id from the grant being revoked to maintain
-    lineage per DOM-STORE-001 §VII.
-    """
+    """Revoke unused direct grants only; purchases require Ledger reversal."""
     quantity_to_remove = int(quantity or 0)
     if quantity_to_remove <= 0:
         raise ValueError("Hall-pass removal quantity must be positive")
-
-    lock_hall_pass_holder(seat.id, seat.class_id)
-    current_balance = get_hall_pass_balance(seat.id, seat.class_id)
-    if quantity_to_remove > current_balance:
-        raise ValueError("Cannot remove more hall passes than the current available balance")
-
-    remaining = quantity_to_remove
-    while remaining:
-        grant = _available_hall_pass_grant(seat.id, seat.class_id)
-        if grant is None:
-            break
-        event = EntitlementEvent(
-            class_id=seat.class_id,
-            target_seat_id=seat.id,
-            actor_seat_id=seat.id,
-            entitlement_id=grant.entitlement_id,
-            product_id=grant.product_id,
-            entitlement_type="HALL_PASS",
-            acquisition_type=grant.acquisition_type,
-            event_type="REVOKED",
-            correlation_id=grant.correlation_id,
-            payload={
-                "source": "remove_hall_passes",
-            },
-            timestamp=_current_utc(),
-        )
-        db.session.add(event)
-        db.session.flush()
-        remaining -= 1
-
-    if remaining:
-        # The balance counts a pass with a request waiting, but such a pass
-        # cannot be removed until the request is resolved (owner ruling
-        # 2026-10-09). The whole removal rolls back.
+    # revoke_entitlement below locks {target, actor} ascending on its own, but
+    # locking only the target here first still leaves the same half-open
+    # window: a concurrent writer could take the (lower-id) actor seat and
+    # wait on this target between this lock and revoke_entitlement's own
+    # (CodeRabbit review on PR #1832). Lock both here, ascending, up front.
+    resolved_actor_seat_id = actor_seat_id if actor_seat_id is not None else seat.id
+    for sid in sorted({seat.id, resolved_actor_seat_id}):
+        lock_hall_pass_holder(sid, seat.class_id)
+    grants = EntitlementEvent.query.filter_by(
+        class_id=seat.class_id, target_seat_id=seat.id,
+        entitlement_type="HALL_PASS", event_type="GRANTED", acquisition_type="GRANT",
+    ).order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc()).all()
+    ids = [grant.entitlement_id for grant in grants]
+    unavailable = ended_entitlement_ids(seat.class_id, ids) | entitlements_with_pending_action(seat.class_id, ids)
+    available = [grant for grant in grants if grant.entitlement_id not in unavailable]
+    if len(available) < quantity_to_remove:
         raise ValueError(
-            "Cannot remove that many hall passes: a pass with a request waiting can't be "
-            "removed until the request is approved or rejected"
+            "Not enough unused teacher-granted hall passes. Purchased passes, rent perks, "
+            "and passes with a request waiting cannot be removed here."
         )
-
+    removal_correlation = correlation_id or generate_correlation_id()
+    for grant in available[:quantity_to_remove]:
+        revoke_entitlement(
+            class_id=seat.class_id, target_seat_id=seat.id,
+            actor_seat_id=resolved_actor_seat_id,
+            entitlement_id=grant.entitlement_id, product_id=grant.product_id,
+            entitlement_type="HALL_PASS", acquisition_type="GRANT",
+            correlation_id=removal_correlation, payload={"source": "remove_hall_passes"},
+        )
     db.session.flush()
     return get_hall_pass_balance(seat.id, seat.class_id)
 
@@ -468,7 +468,8 @@ def _available_hall_pass_grant(seat_id: int, class_id: str) -> EntitlementEvent 
     # 2026-10-09): only that request's approval or rejection resolves it.
     unavailable = ended_entitlement_ids(class_id, ids) | entitlements_with_pending_action(class_id, ids)
     for grant in grants:
-        if grant.entitlement_id not in unavailable:
+        # Expired between sweeps still counts as expired (FEAT-STOR-002 §VIII).
+        if grant.entitlement_id not in unavailable and not entitlement_past_expiry(grant):
             return grant
     return None
 
@@ -505,8 +506,14 @@ def consume_entitlement(
     use is the hall-pass log (FEAT-PROD-002 §III), and this refuses a pass
     that a log already names.
     """
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): see expire_entitlement's
+    # own comment -- the event this always flushes below carries a foreign key
+    # to actor_seat_id as well as target_seat_id, so both must be locked
+    # ascending before any seat-specific work, not just target (and not only
+    # when entitlement_type == "HALL_PASS").
+    for sid in sorted({target_seat_id, actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
     if entitlement_type == "HALL_PASS":
-        lock_hall_pass_holder(target_seat_id, class_id)
         if entitlements_with_pending_action(class_id, [entitlement_id]):
             raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
@@ -518,7 +525,7 @@ def consume_entitlement(
     if hall_pass_use_log(entitlement_id, class_id) is not None:
         raise ValueError(f"Entitlement {entitlement_id} is a hall pass already used")
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     event = EntitlementEvent(
         class_id=class_id,
         target_seat_id=target_seat_id,
@@ -570,10 +577,24 @@ def expire_entitlement(
     Idempotent: an already-EXPIRED lineage returns its existing event. A conflicting
     terminal disposition (e.g. REVOKED) fails closed.
     """
-    if entitlement_type == "HALL_PASS":
-        lock_hall_pass_holder(target_seat_id, class_id)
+    # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): the event this always
+    # flushes below carries a foreign key to actor_seat_id as well as
+    # target_seat_id, so Postgres takes an implicit FOR KEY SHARE lock on the
+    # actor seat at insert time regardless of entitlement_type. Locking only
+    # the target (the former scope of the call below, gated to
+    # _STORE_EXPIRING_TYPES) left the actor seat -- the teacher's, at every
+    # call site -- to be locked later via that implicit check, in whatever
+    # order the two ids fall: the same deadlock shape #1640's payroll fix
+    # closed elsewhere (Codex review on PR #1832). Lock both ascending,
+    # unconditionally, before any seat-specific work.
+    for sid in sorted({target_seat_id, actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
+    # A request sent before the boundary stays with the teacher (DOM-STORE-001
+    # §IX); the lock above makes that check and a concurrent request mutually
+    # exclusive.
+    if entitlement_type in _STORE_EXPIRING_TYPES:
         if entitlements_with_pending_action(class_id, [entitlement_id]):
-            raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
+            raise ValueError(f"Entitlement {entitlement_id} has a request waiting and cannot be ended")
     existing = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if existing is not None:
         if existing.event_type == "EXPIRED":
@@ -585,7 +606,7 @@ def expire_entitlement(
     if hall_pass_use_log(entitlement_id, class_id) is not None:
         raise ValueError(f"Entitlement {entitlement_id} is a hall pass already used")
 
-    now = effective_at or _current_utc()
+    now = effective_at or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     event = EntitlementEvent(
         class_id=class_id,
         target_seat_id=target_seat_id,
@@ -622,8 +643,13 @@ def revoke_entitlement(
     revocation is lawful. One terminal event per lineage (DOM-STORE-001
     §VIII), so a lineage that already terminated fails closed.
     """
+    # The event row below always references target_seat_id and actor_seat_id
+    # via foreign key, which takes an implicit lock on each at insert time
+    # regardless of entitlement_type. Lock both now, ascending, so this never
+    # races a payroll/reconciliation writer locking the same seats in order.
+    for sid in sorted({target_seat_id, actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
     if entitlement_type == "HALL_PASS":
-        lock_hall_pass_holder(target_seat_id, class_id)
         if entitlements_with_pending_action(class_id, [entitlement_id]):
             raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
@@ -646,7 +672,7 @@ def revoke_entitlement(
         event_type="REVOKED",
         correlation_id=correlation_id,
         payload=payload,
-        timestamp=_current_utc(),
+        timestamp=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
     )
     db.session.add(event)
     db.session.flush()
@@ -702,9 +728,12 @@ def expire_rent_perks(
 
     Returns the count of entitlements expired.
     """
-    # Hall passes among the perks: lock their holders first, in seat order, so
-    # an approval that would use one of them waits or is waited on.
-    holder_ids = sorted({
+    # Every perk grant's EXPIRED event below references both its target seat
+    # and actor_seat_id via foreign key, which takes an implicit lock on each
+    # at insert time regardless of entitlement_type. Lock the whole set,
+    # ascending, up front so this never races a payroll/reconciliation writer
+    # locking the same seats in order.
+    target_ids = {
         row[0]
         for row in db.session.query(EntitlementEvent.target_seat_id)
         .filter(
@@ -712,13 +741,12 @@ def expire_rent_perks(
             EntitlementEvent.correlation_id == correlation_id,
             EntitlementEvent.acquisition_type == "PERK",
             EntitlementEvent.event_type == "GRANTED",
-            EntitlementEvent.entitlement_type == "HALL_PASS",
         )
         .distinct()
         .all()
-    })
-    for holder_id in holder_ids:
-        lock_hall_pass_holder(holder_id, class_id)
+    }
+    for sid in sorted(target_ids | {actor_seat_id}):
+        lock_hall_pass_holder(sid, class_id)
 
     # Lock grant rows to serialize concurrent expiration attempts (FOR UPDATE).
     grants = (
@@ -733,7 +761,7 @@ def expire_rent_perks(
         .all()
     )
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     expired_count = 0
     ids = [grant.entitlement_id for grant in grants]
     # A used pass is already spent, and a pass with a request waiting cannot be

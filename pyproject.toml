@@ -14,7 +14,7 @@ exclude_links = [
   "https://cdn.jsdelivr.net/*",
   "https://img.shields.io/*",
   # Loopback addresses name a developer's own machine or the production host's
-  # local listeners (docs-site dev server, nginx→Grafana on :3000). No CI runner
+  # local listeners (docs preview server, nginx→Grafana on :3000). No CI runner
   # can reach them, so a failure says nothing about the document.
   "http://127.0.0.1*",
   "https://127.0.0.1*",

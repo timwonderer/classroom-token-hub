@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from flask import current_app, g, has_request_context, request, session
 
 from app.extensions import db
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Severity levels considered surface-worthy for operator error dashboards.
 _ERROR_LEVELS = ("ERROR", "CRITICAL")
@@ -69,12 +69,13 @@ def record(
     """
     if not event_type or not domain:
         return
+    from app.utils.helpers import loggable_route as _loggable_route
 
     payload = {
         "event_type": event_type,
         "severity": severity,
         "domain": domain,
-        "route": route or (request.path if has_request_context() else None),
+        "route": route or (_loggable_route() if has_request_context() else None),
         "actor_seat_id": (actor_seat_id if actor_seat_id is not None else (
             getattr(getattr(g, 'canonical_context', None), 'seat_id', None)
             if has_request_context() and getattr(getattr(g, 'canonical_context', None), 'class_id', None) == class_id
@@ -86,8 +87,18 @@ def record(
     }
 
     # Keep this as warning-or-info style operational telemetry, not exception noise.
+    # The row keeps internal ids; the log line names the same seat and class by
+    # their public ids only (DOM-OPS-001 §7).
+    from app.services.tlcp import class_log_ref, seat_log_ref
+    from app.utils.helpers import loggable_token
+    log_payload = {key: value for key, value in payload.items() if key not in ("actor_seat_id", "class_id")}
+    log_payload.update(
+        actor_seat=seat_log_ref(payload["actor_seat_id"]),
+        class_public_id=class_log_ref(class_id),
+        correlation_id=loggable_token(correlation_id),
+    )
     log_fn = current_app.logger.warning if severity in {"warning", "error", "critical", "security"} else current_app.logger.info
-    log_fn("OPERATIONAL_EVENT %s", payload)
+    log_fn("OPERATIONAL_EVENT %s", log_payload)
 
     level = _LEVEL_BY_SEVERITY.get((severity or "info").lower(), "INFO")
     try:
@@ -100,7 +111,7 @@ def record(
                 ),
                 {
                     "id": str(uuid.uuid4()),
-                    "created_at": utc_now(),
+                    "created_at": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
                     "correlation_id": correlation_id,
                     "domain": domain,
                     "level": level,

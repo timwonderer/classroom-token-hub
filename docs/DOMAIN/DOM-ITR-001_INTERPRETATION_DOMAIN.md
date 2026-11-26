@@ -2,13 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ITR-001      | 1.9     | 2026-10-18     | 1.8        | Constitutional  |
-
-> [!IMPORTANT]
-> **v1.9 (2026-10-18), owner ruling.** INV-ITR-015 inverted: Interpretation now classifies Ledger event origin by `mechanism` and a closed, schema-validated `Transaction.type` (`DOM-LED-001` INV-LED-017), not by `feat_code`. The prior rule's own rationale — `type` was unconstrained free text with inconsistent casing, "ruled untrustworthy for semantics" — is resolved by that constraint, not dropped; `feat_code` is retained as provenance metadata but is no longer part of this classification. No change to any other invariant in this document.
-
-> [!IMPORTANT]
-> **v1.8 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
+| DOM-ITR-001      | 1.13    | 2026-11-25     | 1.12       | Constitutional  |
 
 ## I-A. Authority Level and Dependencies
 
@@ -62,7 +56,7 @@ The Interpretation Domain is authorized to answer questions of participation, ec
 - **Economic calculation and reference values** → `SPEC-ECON-003` under CLASS authority (CWI derivation, per-mode bands, doubling-time, compound growth, economic coherence rules).
 - **Store product definitions or purchase truth** → STORE.
 - **Recovery / reset eligibility, triggering, execution, or gating** → not currently owned by any documented domain. Interpretation MAY produce observations that inform such a decision but MUST NOT itself specify or gate it.
-- **Overdraft / NSF assessment ownership** — RESOLVED (SPEC-ECON-003 §4.6.1.1): LEDGER executes (posts the fee) and stays domain-blind; OBLIGATIONS owns the fine, recorded by the originating business FEAT as an immediate obligation. Interpretation consumes the OBLIGATIONS fact per INV-ITR-016 (see §XIII.c).
+- **Overdraft / NSF assessment ownership** — RESOLVED (`DOM-OBL-001` v3.3 §II.C): no NSF fee is charged, and the fee was never an obligation; it is a LEDGER fee. Teacher fines are Ledger penalties (`FEAT-LED-006`). Interpretation consumes these facts per INV-ITR-016 (see §XIII.c).
 
 ---
 
@@ -128,7 +122,7 @@ Configuration input ranges, permissible policy-mode bands, and configured recomm
 | **Interpretive Signals** | Derived State | Descriptive inputs combined with a declared reference/model. |
 | **Trend Indicators** | Derived State | Requires a prior cycle record source. Available once `interpretation_cycle_record` accrues across cycles (§VIII, §IX). |
 | **Simulation Outputs** | Derived State | Hypothetical, non-persistent. Currently NOT IMPLEMENTED. |
-| **Cycle Interpretation Records** | Durable Authoritative Record | Immutable per-cycle materialization bound to `payroll_cycle_id`; self-describing via a versioned `reference_configuration` projection. Not a cache. Persistence surface IMPLEMENTED (`interpretation_cycle_record`, migration `b3d7f1a9c2e4`); materialization writer NOT IMPLEMENTED (§VIII, §IX). |
+| **Cycle Interpretation Records** | Durable Authoritative Record | Immutable per-cycle materialization bound to `payroll_cycle_id`; self-describing via a versioned `reference_configuration` projection. Not a cache. IMPLEMENTED: persistence surface (`interpretation_cycle_record`, migration `b3d7f1a9c2e4`) and materialization writer (`materialize_interpretation_cycle`), orchestrated by `FEAT-PROD-004` (§VIII, §IX). |
 | **Annotation Signals** | Derived State | Non-authoritative labels. Currently NOT IMPLEMENTED. |
 
 ---
@@ -210,7 +204,7 @@ Cycles that predate the cycle-bound materialization contract have no `interpreta
 - **Actor**: System
 - **Trigger**: economic-cycle boundary — successful payroll completion for the class (`DOM-PROD-001` §XV), orchestrated by `FEAT-PROD-004`.
 - **Behavior**: Computes the closed cycle's Interpretation and writes exactly one durable, immutable `interpretation_cycle_record` (§IX) bound to the run's `payroll_cycle_id`, capturing the economic reference values in effect for the cycle.
-- **Status**: Persistence surface IMPLEMENTED — the `interpretation_cycle_record` table, model, and schema certification exist via migration `b3d7f1a9c2e4` (§IX). Materialization writer NOT IMPLEMENTED — no row is written yet. Materialization is invoked only as a declared side effect of `FEAT-PROD-004`; Interpretation never decides on its own that some historical cycle is "ready" to materialize. The record is immutable and never recomputed. Building the writer remains subject to the provenance and certification requirements of its downstream contract (§X.9).
+- **Status**: IMPLEMENTED. The `interpretation_cycle_record` table, model, and schema certification exist via migration `b3d7f1a9c2e4` (§IX). The materialization writer (`materialize_interpretation_cycle`, `app/services/interpretation/materialization.py`) is invoked as a declared side effect of `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`), which orchestrates it directly after `compute_partial_payload`; Interpretation never decides on its own that some historical cycle is "ready" to materialize. The record is immutable and never recomputed.
 
 ### Invalidate Snapshot
 
@@ -228,7 +222,7 @@ Cycles that predate the cycle-bound materialization contract have no `interpreta
 
 ## IX. Derived Schema
 
-The schema declared in this section describes persistence for materialized cycle Interpretation. **As of v1.5, the `interpretation_cycle_record` table exists in the runtime schema and the migration chain (migration `b3d7f1a9c2e4`): the persistence surface is IMPLEMENTED.** No lawful materialization writer exists yet, so no row is written: all current Interpretation outputs are still computed on demand and returned as in-memory dataclasses. Populating this table requires the separately specified materialization slice, invoked only as a declared side effect of `FEAT-PROD-004` (§VIII, §X.9), which is NOT IMPLEMENTED.
+The schema declared in this section describes persistence for materialized cycle Interpretation. **As of v1.5, the `interpretation_cycle_record` table exists in the runtime schema and the migration chain (migration `b3d7f1a9c2e4`): the persistence surface is IMPLEMENTED.** The materialization writer is also IMPLEMENTED: `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`) invokes it as a declared side effect of each payroll-cycle completion, writing exactly one row per `(class_id, payroll_cycle_id)` (§VIII, §X.9). On-demand Interpretation outside that boundary is still computed and returned as in-memory dataclasses, not persisted.
 
 ### `interpretation_cycle_record`
 
@@ -335,7 +329,6 @@ Non-normative appendix. Records the divergences between doctrine and current run
 
 | Element | Doctrine Status | Runtime Status |
 |---|---|---|
-| Materialize Cycle Interpretation | SPECIFIED, cycle-bound (§VIII, §IX) | Persistence surface present: `interpretation_cycle_record` table + model + migration `b3d7f1a9c2e4` + schema certification (slice 8.1). Execution path absent: no materialization writer, so no row is written; invoked only as a declared side effect of `FEAT-PROD-004`, which is not built. |
 | Generate Simulation | Authorized (§VIII) | No simulation surface. |
 | Trend indicators with prior cycle-record source | Authorized (§V) | No prior cycle-record source available yet; `compute_trends` always receives `previous_snapshot=None` and returns `stable`. Unblocked once `interpretation_cycle_record` accrues. |
 
@@ -344,7 +337,7 @@ Non-normative appendix. Records the divergences between doctrine and current run
 | Element | Doctrinal Requirement | Runtime Behavior |
 |---|---|---|
 | ~~FEAT name for Compute~~ | ~~Compute Interpretation FEAT is `FEAT-ITR-001` under the Interpretation domain namespace.~~ | **RESOLVED.** Registered as `FEAT-ITR-001` under the `"Interpretation"` domain in `app/feats/base.py`. Consumer sites (`app/utils/analytics_engine.py`, `app/routes/analytics.py`) updated in the same slice. |
-| Historical Configuration Binding | §VII requires historical windows to be evaluated against their authoritative historical configuration. | **Contract resolved (§VII, §VIII, §IX):** cycle-bound materialization persists the governing reference values in an immutable `interpretation_cycle_record`, so cycles produced under the contract are self-describing and never reinterpreted. Runtime remains noncompliant only until the record is built; pre-contract cycles are declared **not replayable**, tracked toward zero. |
+| Historical Configuration Binding | §VII requires historical windows to be evaluated against their authoritative historical configuration. | **RESOLVED.** Cycle-bound materialization (`FEAT-PROD-004` → `materialize_interpretation_cycle`) persists reference values in an immutable `interpretation_cycle_record` for every cycle closed from slice 8.3d onward, so a materialized cycle never reinterprets against later configuration for what it captures. `capture_reference_configuration` (`app/services/interpretation/reference_configuration.py`) binds both halves of that capture to the same `cycle_completed_at` boundary: `hourly_pay_rate`/`policy` via `payroll_setting_in_force_before`, and `expected_weekly_hours`/`cwi` via the boundary-scoped `resolve_expected_weekly_hours_in_force_before` → `economic_engine_in_force_before` (v1.12) — closing the gap v1.11 left open, where the latter still read through `get_current_economic_engine`. A version saved between `cycle_completed_at` and the writer's actual execution can no longer leak into the materialized record. Pre-materialization cycles have no record and are declared **not replayable** (§VII); that gap is tracked toward zero as cycles accrue. |
 | Completed-cycle window discipline | §VII requires completed cycles only. | Runtime accepts arbitrary caller-supplied windows without enforcement. |
 | Output Property Declaration (INV-ITR-012) | Every output SHALL declare Semantic Kind, Subject / Observation Basis / Aggregation, and Reference Dependency. | Current outputs declare none of these. |
 | ~~Provenance via canonical fields (INV-ITR-015)~~ | ~~Classification of Ledger events uses `mechanism`, the closed `Transaction.type` vocabulary, `correlation_id`, reversal linkage, and authoritative source-domain event tables. `feat_code` is not used for this classification.~~ | **RESOLVED.** `ledger_provenance_query_service._student_originated_filter()` now classifies by `mechanism == SELF` plus the closed `SYSTEM_ORIGINATED_TYPE_VALUES` exclusion set (`{payroll, payroll_correction, interest, Interest, overdraft_fee}` per SPEC-ITR-001 §6.3); `SYSTEM_ORIGINATED_FEAT_CODES` and its `feat_code` membership test are removed. The DB `CHECK` constraint and write-time casing validator on `Transaction.type` (`DOM-LED-001` INV-LED-017) remain a separate, not-yet-landed PR — see SPEC-ITR-001 §6.6. |
@@ -357,5 +350,42 @@ Items in this section are not Interpretation-owned and cannot be resolved by ame
 
 | Element | Status |
 |---|---|
-| Overdraft / NSF fee assessment ownership | **RESOLVED (SPEC-ECON-003 §4.6.1.1).** LEDGER executes the money movement (posts the fee debit) and stays domain-blind (`DOM-LED-001` §II); OBLIGATIONS owns the fine as Economic Context — the NSF fee is an immediate obligation (`DOM-OBL-001` §II.C), recorded by the originating business FEAT's cross-domain orchestration, not by the Ledger primitive. An `AssessmentEvent` (NSF_FEE ASSESSMENT + PAYMENT settled by the fee debit) is now produced, so obligation-outcome observations can include overdraft / NSF. Scope: charged only for a failed purchase or obligation — never for transfers (lateral) or penalties (admin adjustments). Interpretation consumes the OBLIGATIONS fact per INV-ITR-016 and still does not itself decide ownership. |
+| Overdraft / NSF fee assessment ownership | **RESOLVED (owner ruling 2026-10-07; `DOM-OBL-001` v3.3 §II.C; `SPEC-ECON-003` §4.5.1.1).** CTH charges no NSF or overdraft fee. An NSF fee was never an obligation: it is a Ledger fee, a side effect of a negative balance, owned by LEDGER, and a historical one may be reversed like any other fee. `NSF_FEE` rows written to `assessment_events` before `DOM-OBL-001` 3.3 are history, not obligation facts. A teacher-applied fine is likewise not an obligation: it is a Ledger `penalty` (`FEAT-LED-006`). Interpretation consumes these facts per INV-ITR-016 and does not itself decide ownership. |
 | ~~Current runtime `suggested_action` alert content~~ | **RESOLVED (slice 8.4d) — by deletion.** The prescriptive alert content, its `generate_alerts` producer, and the V1 analytics engine and dashboard builder that carried it are removed from runtime. The teacher Interpretation page now renders DOM-ITR observations plus non-prescriptive guiding questions only; it prescribes no teacher action. |
+
+---
+
+## XIV. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.13 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the notes below from the top of the document into it,
+> per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the header
+> table and §I Purpose. No content change.
+>
+> **v1.12 (2026-11-11).** Implementation-status correction only: closes the narrow
+> compliance gap v1.11 opened in §XIII.b. `capture_reference_configuration`
+> (`app/services/interpretation/reference_configuration.py`) now binds
+> `expected_weekly_hours`/`cwi` to the cycle's closing boundary the same way it
+> already bound `hourly_pay_rate`/`policy` — through a new boundary-scoped
+> resolver, `class_configuration_query_service.economic_engine_in_force_before`
+> (mirroring `payroll_setting_in_force_before`) and
+> `resolve_expected_weekly_hours_in_force_before`, in place of
+> `get_current_economic_engine`. The Historical Configuration Binding row in
+> §XIII.b is marked RESOLVED. Already-materialized `interpretation_cycle_record`
+> rows are historical fact and are not recomputed (§VII, §IX): this closes the
+> gap for cycles materialized from this change forward only. No doctrine,
+> invariant, or runtime behavior changes outside that read.
+>
+> **v1.11 (2026-11-10).** Implementation-status correction only: §V, §VIII, §IX and §XIII.a/§XIII.b described the cycle-record materialization writer as absent from runtime ("materialization writer NOT IMPLEMENTED", "no row is written"). `materialize_interpretation_cycle` (`app/services/interpretation/materialization.py`) has been invoked directly by `FEAT-PROD-004` (`app/feats/complete_payroll_cycle.py`) since slice 8.3d. The affected status lines are corrected to IMPLEMENTED and the resolved `Materialize Cycle Interpretation` row is removed from the XIII.a absent-capability table. The Historical Configuration Binding row in XIII.b is marked PARTIALLY RESOLVED, not fully resolved: `capture_reference_configuration` binds `hourly_pay_rate`/`policy` to the cycle boundary correctly but reads `expected_weekly_hours`/`cwi` from the current Economic Engine rather than the boundary-scoped one, leaving a narrow open compliance gap. No doctrine, invariant, or runtime behavior changes.
+>
+> **v1.10 (2026-11-04).** Corrects the overdraft / NSF ownership entries (§II, §XIII.c), which still called the NSF fee an immediate obligation: since `DOM-OBL-001` 3.3 (owner ruling 2026-10-07) no NSF fee is charged and the fee was never an obligation. Records that a teacher-applied fine is a Ledger penalty (`FEAT-LED-006`). No Interpretation invariant changes.
+>
+> **v1.9 (2026-10-18), owner ruling.** INV-ITR-015 inverted: Interpretation now classifies Ledger event origin by `mechanism` and a closed, schema-validated `Transaction.type` (`DOM-LED-001` INV-LED-017), not by `feat_code`. The prior rule's own rationale — `type` was unconstrained free text with inconsistent casing, "ruled untrustworthy for semantics" — is resolved by that constraint, not dropped; `feat_code` is retained as provenance metadata but is no longer part of this classification. No change to any other invariant in this document.
+>
+> **v1.8 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
+
+Revisions to this document must increment the version number, update the Effective Date, and
+remain consistent with `INV-CORE-000` and `INV-ARC-009`.

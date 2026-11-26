@@ -38,7 +38,7 @@ from app.services.context_resolver import CanonicalContext
 from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.payroll.schedule import SCHEDULED_OCCURRENCE_KEY
 from app.services.payroll.settings import class_has_payroll_settings
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # FEAT-PROD-004 §II.1: which path started the run. SYSTEM is the automatic
 # schedule, TEACHER the teacher's own run. Only SYSTEM runs anchor the next
@@ -63,7 +63,7 @@ class PayrollNotConfiguredError(ClassSettlementError):
 class NoPayableAttendanceError(ClassSettlementError):
     """Raised when no seat in the class has a closed, unpaid session.
 
-    A payroll run settles closed work only (DOM-PROD-001 §VI.3), so a run with
+    A payroll run settles closed work only (DOM-PROD-001 §XV.11), so a run with
     nothing closed and unpaid has nothing to settle and is refused rather than
     recorded as an empty cycle. Students still working are paid by the first run
     after they clock out.
@@ -180,14 +180,25 @@ def settle_class_payroll_cycle(
     if scheduled_occurrence is not None:
         # The occurrence, not the run's wall-clock time, anchors the next
         # payroll date, so a late run does not move later paydays (§XV.5).
-        summary[SCHEDULED_OCCURRENCE_KEY] = ensure_utc(scheduled_occurrence).isoformat()
+        summary[SCHEDULED_OCCURRENCE_KEY] = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=scheduled_occurrence,
+        ).local_timestamp.isoformat()
 
     settled: list[int] = []
     skipped: list[int] = []
     events: list[PayrollEvent] = []
 
     seat_ids = _eligible_seat_ids(class_id)
-    for seat_id in seat_ids:
+    # The actor seat (the teacher running this cycle, or a system run's actor)
+    # is referenced by PayrollEvent.actor_seat_id on every event this loop
+    # writes, so it must be locked here too, not only the eligible students --
+    # otherwise it is first locked deep inside the per-seat
+    # record_payroll_event_command call below, after this loop has already
+    # locked every student ascending among themselves but without the actor.
+    # Rent reconciliation locks every seat in the class, ascending, including
+    # the actor's (#1640); leaving it out of this pre-lock set can complete
+    # that same circular wait (Codex review on PR #1832).
+    for seat_id in sorted(set(seat_ids) | {ctx.seat_id}):
         lock_attendance_seat(seat_id, class_id)
     for seat_id in seat_ids:
         if _already_settled(class_id, seat_id, payroll_cycle_id):

@@ -36,7 +36,7 @@ FEAT contracts in `docs/FEATURE-EXECUTION/`. When documents disagree, the higher
     ```bash
     python3 -m venv venv
     source venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r requirements-test.txt
     ```
 5.  **Configure your environment variables:**
     Create a `.env` file. The **Quick start** section of `README.md` shows how to
@@ -221,7 +221,7 @@ run only when the PR touches the paths they watch.
 | Accessibility Gate | `.github/workflows/accessibility-gate.yml` | `templates/`, `static/css/`, `app/routes/`, `app/forms.py` |
 | Documentation Link Checks | `.github/workflows/docs-links.yml` | `README.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`, `docs/`, `lychee.toml` |
 | Lint Workflows | `.github/workflows/actionlint.yml` | `.github/workflows/` |
-| Deploy GitHub Pages Site | `.github/workflows/github-pages.yml` | `github-pages/`, `docs-site/`, `docs/` (build only on PRs) |
+| Deploy GitHub Pages Site | `.github/workflows/github-pages.yml` | `github-pages/`, `docs-generator-proof/`, `docs/` (build only on PRs) |
 | Deploy status service to Google Cloud | `.github/workflows/deploy-status.yml` | `status/`, `status_service/`, `tests/test_status_*.py` (tests only on PRs) |
 
 The full test suite (`.github/workflows/full-suite.yml`) runs nightly and on manual

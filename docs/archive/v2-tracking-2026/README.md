@@ -7,10 +7,11 @@ First archived 2026-09-03, when `docs/TRACKING/` was reset around a single ship 
 batch followed on 2026-09-28, after v2.0.0 (2026-09-26) and v2.0.1 (2026-09-28) shipped and that
 ship tracker had done its job.
 
-**Current canonical tracker:** [`docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`](../../TRACKING/POST_LAUNCH_TRACKER_2026.md)
+**Current backlog:** GitHub Issues on this repository and the [CTH Backlog](https://github.com/users/timwonderer/projects/6) project. There is no tracker file.
 
 ## Why these were archived
 
+- `POST_LAUNCH_TRACKER_2026.md` — the post-launch tracker, archived 2026-10-22. It called itself canonical but was last brought up to date for v2.1.1, while releases ran on to v2.3.0 and their follow-ups landed in each release record instead. Its open items were re-verified against `main` and filed as issues #1635–#1659 (two folded into #1505 and #1507). The backlog now lives in GitHub Issues and the CTH Backlog project.
 - `DOMAIN_PROGRESS_MATRIX_2026.md` — the previous canonical tracker. Last updated 2026-08-20 and
   materially wrong by 2026-09-03: it listed Interpretation, Operations, and Support as NOT STARTED
   and Ledger and Payroll as BLOCKED, all contradicted by the code on this branch.

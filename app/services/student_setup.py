@@ -42,7 +42,10 @@ def client():
         raise SetupUnavailable('Temporary setup storage is unavailable.')
     try:
         conn = _connection(url)
-        config = conn.config_get('save', 'appendonly', 'slowlog-log-slower-than')
+        # One name per CONFIG GET: Redis 6 rejects several names in one call.
+        config = {}
+        for name in ('save', 'appendonly', 'slowlog-log-slower-than'):
+            config.update(conn.config_get(name))
         replication = conn.info('replication')
         persistence = conn.info('persistence')
         if (config.get('save') != '' or config.get('appendonly') != 'no'

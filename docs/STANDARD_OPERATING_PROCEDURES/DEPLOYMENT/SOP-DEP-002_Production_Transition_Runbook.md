@@ -1,19 +1,18 @@
-# v2 Production Transition Runbook
+# Production Release Runbook
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.11 | 2026-10-14 | 1.10 | Normative |
-
-> [!IMPORTANT]
-> **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
+| SOP-DEP-002 | 1.26 | 2026-11-25 | 1.25 | Normative |
 
 ## I. Purpose
 
-Provide the explicit operator workflow for moving the current v2 branch from live-test candidate to production transition.
+Define the operator workflow for recurring production releases: preparation, protected deployment, verification, rollback decisions, and release evidence.
 
 ## II. Scope
 
-Production transition work for `main` after successful live testing, including Cloudflare Access gating, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
+Tagged releases and untagged hotfixes from the approved `main` lineage, with or without database migrations. The v2 production launch completed with v2.0.0 on 2026-09-26; this runbook governs subsequent releases, not an unfinished v1-to-v2 transition.
+
+For a first deployment onto a new host or a fresh-database rehearsal, use `SOP-DEP-001` and `SOP-DEP-001A`. Recurring releases use the ordered procedure in §VII.A and the release-scoped browser validation in `SOP-DEP-001B`.
 
 ## III. Authority Level
 
@@ -44,7 +43,7 @@ solo-operator exception (`SOP-DEP-001` §XIII); it is not independent review. Ea
 When a second maintainer joins, add them as required reviewers on the `production` environment and remove this
 subsection.
 
-## VI. Pre-Production Checklist
+## VI. Pre-Release Checklist
 
 1. Enable Cloudflare Access gating if the deployment requires a protected window.
 2. Verify current production backup or snapshot and test restore instructions.
@@ -67,6 +66,12 @@ Current branch verification references:
   approved deployment path;
 - transport smoke test: `.github/workflows/tailscale-ssh-smoke-test.yml`
 - migration safety check: `bash scripts/check-migrations.sh`
+- droplet-side release gate: `infra/release-gate/` — two forced SSH commands, enforced by `sshd`,
+  independent of anything in this repository's own CI config. `guarded-deploy.sh`, on its own
+  dedicated key (`RELEASE_DEPLOY_KEY`), refuses every one of `release-v2.yml`'s calls to production
+  unless the Access gate is closed and step 7a's evidence is fresh and valid. `guarded-ci.sh`, on the
+  shared `DO_DEPLOY_KEY`, restricts `login-notice.yml` and `tailscale-ssh-smoke-test.yml` to exactly
+  those two operations, so that repository secret cannot be used for an ungated deploy.
 
 The production release lineage is configured as the protected environment
 variable `V2_RELEASE_LINEAGE_REF`. A release request MUST provide a full
@@ -78,7 +83,8 @@ name or moving branch tip is not itself a release artifact.
 Before a restricted work window, confirm an unauthenticated browser reaches Access,
 an unauthorized identity cannot enter, and an authorized operator can reach the
 normal application sign-in. Verify the origin cannot be reached around Cloudflare.
-Public health probes require authorized service-token headers; host-local probes
+Health endpoints are public and need no credential; while the gate is closed the status
+collector reads nothing from the application (SPEC-OPS-006 1.6). Host-local probes
 do not traverse Access. Never record tokens in logs or deployment evidence.
 
 At the end of the window, change the Access policy only when public access is
@@ -99,7 +105,10 @@ there is no application flag, sysadmin bypass, or query-token alternative.
 
 Every tagged release follows these steps in order, whether or not it carries a migration. A step is skipped only
 where this section says so, and the release record says which step and why. Commands run from the operator's Mac
-at the repository root; database reads use read-only, aggregate-only queries with class ids, never names.
+at the repository root; database reads use read-only, aggregate-only queries. Release records are published in this
+public repository, so nothing copied into one names a class by `class_id`, `join_code` or name, or a seat or user
+by its id (`DOM-OPS-001` §7); a record carries totals, and where it must point at one class it uses
+`class_public_id`.
 
 Roles are those of §V. A single operator may hold all three under the solo-operator exception (`SOP-DEP-001`
 §XIII), whose conditions the record must show met or name as a deviation. Checks run by an AI assistant are
@@ -111,11 +120,37 @@ advisory and are recorded as such, never as the independent verifier.
    every PR merged since the previous tag has an entry (`git log --merges vPREV..origin/main`) and that every entry
    in the section belongs to a PR in that range (`git merge-base --is-ancestor <merge> vPREV` is false). Subsections
    appear only from this list, in this order, each once: Added, Changed, Deprecated, Removed, Fixed, Security,
-   Investigated, no code change. Required checks green and review threads resolved; merge. The merge commit, now
+   Investigated, no code change. Each entry also names its release-notes section in an invisible tag after its
+   bullet (step 13), followed by a blank line and a two-space-indented Markdown paragraph:
+
+   ```markdown
+   - <!-- notes: new, highlight -->
+
+     **Headline** ...
+   ```
+
+   Valid tags are `new`, `fixed`, `security-reliability`, `accessibility` and `internal`, optionally
+   followed by `, highlight`. The blank line ends the HTML comment block so GitHub renders the
+   paragraph as Markdown. Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
-2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
-   Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
-   record says so and later records the result.
+2. **Full suite on the release SHA or a validated equivalent.** A full suite SHALL pass on the release SHA before
+   deployment. If only documentation changed after a full-suite run, that run stands and the applicable documentation
+   and template tests are run on the release SHA instead. Any change outside `CHANGELOG.md` and the documentation
+   directories (`docs/`, including `docs/user-guides/`) requires a new full-suite result.
+
+   | Changes since full-suite validation | Required validation |
+   |---|---|
+   | Changelog wording | Applicable changelog tests |
+   | User-guide wording | Applicable documentation and accessibility tests |
+   | Developer guide | Applicable documentation tests |
+   | Application code | Full suite |
+   | Templates | Full suite |
+   | Database migrations | Full suite |
+   | Test code or configuration | Full suite |
+   | Uncertain impact | Full suite |
+
+   The release record identifies which validation was performed against each SHA.
+
 3. **Configuration and migration checks.**
    - `flask db heads` shows one head; `bash scripts/check-migrations.sh` reports "Safe to deploy".
    - `git diff vPREV <SHA> -- requirements.txt migrations/versions` lists what is new.
@@ -136,10 +171,17 @@ advisory and are recorded as such, never as the independent verifier.
 7. **Restore check.** The owner copies the `age` key to the clipboard and runs
    `umask 077; pbpaste > ~/cth-backup/identity.txt`. Then `bash infra/db-backup/prerelease.sh restore` checks
    the key against `recipients.txt`, restores into the in-memory database, runs the manifest and no-resurrection
-   checks, deletes the identity with `rm -P`, and stops the verify container. Both checks must PASS.
+   checks, deletes the identity with `rm -P`, closes the SSH tunnel to production, and stops the verify container.
+   Both checks must PASS. A run abandoned before `restore` closes the tunnel with `prerelease.sh close-tunnel`.
+7a. **Evidence.** `bash infra/db-backup/prerelease.sh evidence <SHA>` signs proof that steps 5-7 just
+   passed, for this exact revision, and uploads it to the droplet. `release-v2.yml`'s SSH calls will
+   refuse without it — see `infra/release-gate/README.md`. This step cannot be skipped by anything
+   short of not installing the gate described there in the first place.
 8. **Balance baseline**, read with the application stopped. Each snapshot is compared only with the ledger rows
    at or below its `reconciled_through_posting_sequence` (`DOM-LED-001` §VIII.2); later rows are pending and are
-   reported apart:
+   reported apart. The query returns one row however many classes exist: totals, the number of class/account rows
+   whose posted ledger differs from their snapshots, and a fingerprint of the whole per-class table, so step 10 can
+   tell an unchanged table from one whose totals merely agree:
 
    ```sql
    WITH s AS (SELECT class_id, seat_id, account_type, posted_balance_cents, reconciled_through_posting_sequence AS cursor
@@ -152,15 +194,23 @@ advisory and are recorded as such, never as the independent verifier.
          LEFT JOIN s ON s.class_id = t.class_id AND s.seat_id = t.seat_id AND s.account_type = t.account_type
          GROUP BY 1, 2),
    ss AS (SELECT class_id, account_type, count(*) AS snapshots, sum(posted_balance_cents) AS snapshot_cents
-          FROM s GROUP BY 1, 2)
-   SELECT coalesce(l.class_id, ss.class_id) AS class_id, coalesce(l.account_type, ss.account_type) AS account,
-          l.txns, l.ledger_posted_cents, ss.snapshots, ss.snapshot_cents, l.pending_cents,
-          l.ledger_posted_cents IS NOT DISTINCT FROM ss.snapshot_cents AS posted_matches
-   FROM l FULL JOIN ss ON ss.class_id = l.class_id AND ss.account_type = l.account_type
-   ORDER BY 1, 2;
+          FROM s GROUP BY 1, 2),
+   r AS (SELECT coalesce(l.class_id, ss.class_id) AS class_id, coalesce(l.account_type, ss.account_type) AS account,
+                l.txns, l.ledger_posted_cents, ss.snapshots, ss.snapshot_cents, l.pending_cents,
+                l.ledger_posted_cents IS NOT DISTINCT FROM ss.snapshot_cents AS posted_matches
+         FROM l FULL JOIN ss ON ss.class_id = l.class_id AND ss.account_type = l.account_type)
+   SELECT count(DISTINCT class_id) AS classes, count(*) AS account_rows, sum(txns) AS txns,
+          sum(ledger_posted_cents) AS ledger_posted_cents, sum(snapshot_cents) AS snapshot_cents,
+          sum(pending_cents) AS pending_cents,
+          count(*) FILTER (WHERE NOT posted_matches) AS mismatched_rows,
+          md5(string_agg(concat_ws('|', class_id, account, txns, ledger_posted_cents, snapshots, snapshot_cents,
+                                   pending_cents), ',' ORDER BY class_id, account)) AS fingerprint
+   FROM r;
    ```
 
-   `posted_matches` is true in every row; keep the table, including `pending_cents`, for the record.
+   `mismatched_rows` is 0; keep the row, including `pending_cents` and the fingerprint, for the record. When it is
+   not 0, find the rows by rerunning `r` with `WHERE NOT posted_matches`, joined to `classes` for
+   `class_public_id`; the record names those classes by `class_public_id` only.
 9. **Tag and dispatch.** `git tag -a vX.Y.Z <SHA> -m "vX.Y.Z" && git push origin vX.Y.Z`, then
    `gh workflow run release-v2.yml -f revision=<full SHA> -f lineage_ref=main`. Dispatch once only: a second
    dispatch races the first. Watch the run through its health step.
@@ -169,12 +219,19 @@ advisory and are recorded as such, never as the independent verifier.
 
 10. **§VIII verification.** Host HEAD is the release SHA; the service is active; `127.0.0.1:8000/health` answers
     `ok`; `/docs` followed to its final response is 200 (`curl -L`), not just its 308; the scheduler has started; the journal has no `ERROR`, `CRITICAL`, `Traceback` or `WORKER TIMEOUT` lines
-    since the restart; `alembic_version` is the single head; the step 8 query matches the baseline, apart from
-    what the release itself is meant to change. The operator runs the browser checks in §VIII.
+    since the restart; `alembic_version` is the single head; the step 8 query returns `mismatched_rows` 0 and the
+    baseline's fingerprint. A different fingerprint is explained by what the release itself is meant to change,
+    or by activity after the application restarted (rows timestamped after the restart, by type), and the record
+    says which. The operator runs the browser checks in §VIII.
+10a. **Publish the release's user guides**, where production serves guides from a documentation artifact
+    (`SOP-DEP-003`). Dispatch `docs-deploy.yml` with the release SHA, and confirm its summary shows that
+    revision published and served, **before** reopening, so no one sees new behavior with old instructions.
 11. **Reopen** by changing the Access policy (§VI).
 12. **Release record PR.** `docs/ops/audits/DEPLOY_<UTC date>_<short SHA>.md`, in the shape of the previous one:
-    identity table, contents, migrations, §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
-    restore results), baseline, release run, §VIII results, rollback, follow-ups. In the same PR, update the
+    identity table, contents, migrations, user-guide revisions published since the previous release (`SOP-DEP-003`), §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
+    restore results), the step 8 summary row, release run, §VIII results, rollback, follow-ups. Each follow-up is an issue on the
+    [CTH Backlog](https://github.com/users/timwonderer/projects/6) project, opened before the record merges, and the record links it rather than
+    describing open work in prose. In the same PR, update the
     version in `README.md` and `DEVELOPMENT.md`, and make the first line of the CHANGELOG section exactly:
 
     ```text
@@ -192,30 +249,75 @@ advisory and are recorded as such, never as the independent verifier.
     gh release create vX.Y.Z --verify-tag --title "$(python3 scripts/release_notes.py X.Y.Z --title)" --notes-file /tmp/notes.md
     ```
 
-    The script refuses a section out of shape (heading, `Released as` line, subsection names and order) and a tag
-    that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes.
+    The notes are grouped for readers: Highlights (entries tagged `highlight`), then New, Fixed, Security & Reliability,
+    Accessibility and Internal Changes, each listing one headline per entry with the full entries collapsed, and
+    the deployment record and release run linked at the end (owner, 2026-10-22). The script refuses a section out
+    of shape (heading, `Released as` line, subsection names and order), an entry without a known notes tag, and a
+    tag that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes. `--raw` prints the section
+    verbatim.
 
-Untagged hotfixes follow steps 3-12 and record any step they skip; they have no tag, so no step 13.
+Untagged hotfixes follow steps 2-12 and record any step they skip, except step 2, which they never skip; they have
+no tag, so no step 13.
 
-## VIII. Post-Migration Verification
+Step 12's README update changes the deployment and latest-release lines only. The supported fresh-install release
+line changes only under §VII.B.
 
-Verify:
+### VII.B Supported fresh-install release
+
+Two release identities are kept apart:
+
+- **Latest stable release:** the newest published stable tag. Every tagged release under §VII.A becomes it.
+- **Supported fresh-install release:** the tagged release that the self-hosting handbook and its fresh-install
+  bundle (`migrations/fresh/<revision>/`, `SOP-DB-001` §V.C.1(4)) were validated against, and from which every new
+  installation starts (`SOP-DEP-001` §IX.5). It may be older than the latest stable release.
+
+The one authoritative declaration is `migrations/fresh/supported_release.json` (`tag`, `commit`, `revision`). The
+README and `docs/self-hosting/before-you-begin.md` each name it on one `Supported fresh-install release` line, and
+CI (`scripts/check_supported_release.py`, in `check-migrations.yml`) fails unless the three agree. CI also fails
+unless the declared tag resolves to the declared commit, that release's sole migration head is the declared revision,
+and the release ships an intact bundle for it, byte-identical to the one in `main`. `verify_fresh_bundles.py` already
+proves that bundle derives from the migration lineage.
+
+1. **Ordinary releases need no bundle.** A release that moves the migration head without a bundle is not blocked and
+   records no deviation for that reason. Migration compatibility and validation (`SOP-DB-001`, `SOP-DB-003`,
+   `SOP-DB-004`, §VII.A) apply in full, regardless of bundles. Such a release cannot be installed from empty. The
+   installer refuses a checkout whose head has no bundle, and new installations reach it by upgrading.
+2. **Advancing the supported release is a deliberate owner decision**, never automatic. The new supported release
+   must ship its own bundle, so the bundle exists before that release is tagged:
+   1. on the release candidate commit on `main`, generate the bundle for its head
+      (`scripts/generate_fresh_database.py --source-sha <commit>`, PostgreSQL 14) and merge it by PR, where
+      `fresh-bundle-derivation` verifies it;
+   2. tag and release that commit under §VII.A;
+   3. in one PR, set the declaration to the new tag, commit and revision, and update the README and handbook lines and
+      any handbook text that release changes. CI checks the result.
+
+   A release tagged without its bundle cannot become the supported fresh-install release. Choose a later release
+   that ships one.
+3. **Security.** The supported fresh-install release must remain a safe installation starting point, even for the
+   short time before the post-install upgrade. When a security defect makes it unsafe even as that temporary baseline,
+   the owner either advances it under rule 2 to a release without the defect, or suspends the handbook's installation
+   instructions with a notice in `before-you-begin.md` and the README until a safe release is declared. The security
+   release record says which was done.
+
+## VIII. Post-Release Verification
+
+Verify on the host:
 
 - app boots normally
-- `/admin/login` and `/student/login` load
-- `/docs` loads
-- teacher current-class switching works via `POST /admin/current-class`
-- student add-class and switch-class flows work
-- class-scoped admin actions respect membership
-- selected-class export works via `/admin/export-students` (class comes from the admin's session/sidebar context, not a query parameter)
-- hall-pass verification path works via `/verify/hallpass/<teacher_public_token>`
+- `/admin/login`, `/student/login` and `/docs` load
 - no unexpected migration head drift is present
+
+Then the browser validation: `SOP-DEP-001B` for a release (the features the release changes, features connected
+to those changes, and features with a known problem), or `SOP-DEP-001A` for a first deployment or a release the
+owner designates as full. Features outside a release's scope are covered by the release suite, not checked in the
+browser.
 
 ## IX. Rollback Policy
 
 - If migration fails before app reopen, rollback to the pre-deploy backup/snapshot.
 - If post-deploy smoke checks fail and cannot be corrected within the maintenance window, rollback.
 - If migration is structurally successful but business behavior is incorrect, keep Cloudflare Access restricted until rollback or fix-forward is approved.
+- An application rollback also publishes the user guides of the release rolled back to (`SOP-DEP-003` §VII.3), before reopening.
 
 ### IX.1 Exact-SHA Release Failure Handling
 
@@ -234,12 +336,12 @@ operator and rollback approver select rollback or fix-forward.
 Every failure record MUST include the requested SHA, approved lineage ref,
 migration result, service state, health result, and operator decision.
 
-## X. Transition Record Template
+## X. Release Record Template
 
-Use this template for the production transition record:
+Use this worksheet alongside the release-record requirements in §VII.A step 12. Record browser results using the applicable §VIII validation template:
 
 ```text
-Production Transition Record
+Production Release Record
 Date:
 Branch:
 Commit SHA:
@@ -251,6 +353,7 @@ Maintenance window:
 Pre-window confirmation
 - Backup/snapshot reference:
 - Restore procedure verified:
+- Release evidence uploaded (step 7a):
 - flask db heads:
 - flask db current:
 - bash scripts/check-migrations.sh:
@@ -294,16 +397,94 @@ Record:
 - reopen time
 - rollback decision
 
-## XII. Deferral Boundary
+## XII. Scope Boundary
 
-- This runbook is limited to launch-critical transition steps and operator records.
-- Broader operational taxonomy changes and route-family cleanup are outside this runbook and are tracked in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`.
+- This runbook governs production release execution and operator records.
+- Broader operational taxonomy changes and route-family cleanup are outside this runbook and are tracked as issues on the [CTH Backlog](https://github.com/users/timwonderer/projects/6) project.
 - Version 1.5 deferred them until after two documents. One, `SPECS/V2_ADMIN_ROUTE_REFACTOR.md`, was never written. The other, `MAP-CLASS-002` (archived 2026-09-28), described the `class_id`-first model that INV-ARC-019 and DOM-IDEN-001 now govern. Version 1.6 changes no procedure in this runbook.
 
 
 
 ## XIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
+
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.26 (2026-11-25):** §VII.A step 2: the full suite passes on the release SHA, or an earlier full-suite
+result stands when only `CHANGELOG.md` or documentation changed since, with the applicable documentation, changelog
+and accessibility tests run on the release SHA. Any other change needs a new full suite; the release record names
+the validation run against each SHA. Untagged hotfixes now take step 2 as well; the security and data-integrity
+exception for dispatching before the suite is removed, as the full suite no longer takes about four hours.
+
+**Version 1.25 (2026-11-25):** §VII.A step 10a publishes a release's user guides through `SOP-DEP-003` before the gate
+reopens, and §IX makes an application rollback publish the guides of the release rolled back to. The release record
+lists docs revisions published since the previous release. Owner ruling 2026-11-25.
+
+**Version 1.24 (2026-11-25):** §VII.B: the supported fresh-install release is declared once
+(`migrations/fresh/supported_release.json`) and kept separate from the latest stable release; bundles are generated
+only when it advances; ordinary releases need none; a security rule for an unsafe baseline. Step 12 no longer moves
+that README line. Owner ruling 2026-11-25.
+
+**Version 1.23 (2026-11-23):** §VII.A step 1: separate each release-notes metadata comment from its indented Markdown paragraph with a blank line. GitHub otherwise treats the following text as an HTML block and displays bold, code and links as raw Markdown. Tag meanings and generated release-note content are unchanged. Owner-reported rendering correction.
+
+**Version 1.22 (2026-11-08):** Reframe the title, purpose, scope and record worksheet around recurring production releases following the completed v2 launch. Distinguish initial-host validation from release validation. The existing source path remains unchanged so published links and historical release citations continue to resolve. No release safeguards or SQL procedures change.
+
+**Version 1.21 (2026-11-06):** §VII.A steps 1 and 13: a `new` release-notes tag and a *New* section, shown after Highlights and before Fixed, for something users can now do that they could not before (a feature, a guide page). Until now a new feature had to be tagged `fixed`, which misdescribed it, or `internal`, which hid it from teachers. Owner direction, 2026-11-04.
+
+**Version 1.20 (2026-11-05):** §VII.A: release records are published in this public repository, so they name no
+class by `class_id`, `join_code` or name (`DOM-OPS-001` §7, 2.15); a class a record must point at is named by
+`class_public_id`. Step 8's baseline query returns one summary row (totals, `mismatched_rows`, and an `md5`
+fingerprint of the per-class table) instead of a row per class and account, and step 10 compares the
+fingerprint. The old query printed every class's `class_id`, so every record from v2.1.1 (2026-10-04) to v2.4.3
+published them, and its table grew with the number of classes. Earlier records are left as published. Owner,
+2026-11-05.
+
+**Version 1.19 (2026-10-29):** v1.18 restricted `release-v2.yml` to its own dedicated key
+(`RELEASE_DEPLOY_KEY`) but left `DO_DEPLOY_KEY` itself unrestricted — and `DO_DEPLOY_KEY` is a
+repository secret, available to any workflow, so the same identity the whole gate exists to constrain
+could have simply pointed `release-v2.yml` (or a new workflow) back at `DO_DEPLOY_KEY` and deployed
+with no gate at all. `infra/release-gate/guarded-ci.sh` closes this: `DO_DEPLOY_KEY`'s
+`authorized_keys` line now carries its own forced command, restricted to exactly the two operations
+`login-notice.yml` and `tailscale-ssh-smoke-test.yml` use — a deploy-shaped command sent over this key
+is refused regardless of which workflow sent it. Every key GitHub Actions can use against the droplet
+is now forced-command-restricted to a fixed, hardcoded set of operations; none passes a client command
+through to a shell. Found before the v1.18 install was completed, so nothing needed to be undone.
+Owner direction, 2026-10-29.
+
+**Version 1.18 (2026-10-29):** `release-v2.yml`'s SSH authentication key is now `RELEASE_DEPLOY_KEY`, a
+key dedicated to that workflow, instead of the `DO_DEPLOY_KEY` secret shared with `login-notice.yml`
+and `tailscale-ssh-smoke-test.yml`. Discovered while installing v1.17's gate: `guarded-deploy.sh` only
+recognizes `release-v2.yml`'s three command shapes, so forcing it onto `DO_DEPLOY_KEY`'s
+`authorized_keys` line would have refused every request from those other two workflows the moment it
+was installed. `infra/release-gate/README.md` installs the new key directly with the forced command
+already on its line; `DO_DEPLOY_KEY`'s existing line is untouched. Owner direction, 2026-10-29.
+
+**Version 1.17 (2026-10-29):** §VI adds the droplet-side release gate (`infra/release-gate/`) and §VII.A
+adds step 7a, which produces the signed evidence that gate requires. Added after v2.4.0 (2026-10-29)
+was dispatched through the real, unmodified `release-v2.yml` before the maintenance window opened — an
+agent misread a time hint as a deadline and skipped steps 4-8. Investigated and rejected first: a
+required `workflow_dispatch` input/passphrase (the same shared GitHub identity can read or satisfy
+anything checked inside the workflow), a GitHub environment's required reviewers (self-approval is
+permitted there, unlike PR review), branch protection requiring review on `main` (this repository has
+one collaborator, so self-approval would either deadlock every PR or be skipped via admin bypass), and
+narrowing the GitHub connector's scope (owner confirmed 2026-10-29 it cannot be changed). None of those
+act on anything outside the identity the incident itself used. The gate in `infra/release-gate/` is
+enforced by `sshd` on the droplet from a root-owned file no PR can reach, and its evidence is signed
+by a key that has never been issued to any GitHub-authenticated identity. Owner direction, 2026-10-29.
+
+**Version 1.16 (2026-10-23):** §VI Cloudflare Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23.
+
+**Version 1.15 (2026-10-22):** §VII.A step 12: each release-record follow-up is filed as an issue on the CTH Backlog project and linked from the record; §XII names the project instead of the archived post-launch tracker. Owner, 2026-10-22: the backlog moved to GitHub Issues.
+
+**Version 1.14 (2026-10-22):** §VII.A steps 1 and 13: each CHANGELOG entry carries an invisible release-notes tag (`fixed`, `security-reliability`, `accessibility`, `internal`, optionally `highlight`); `scripts/release_notes.py` renders Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes with full entries collapsed and the deployment record linked last, and refuses an untagged entry. Owner, 2026-10-22: the verbatim notes were unreadable. Follows 1.13 (#1632).
+
+**Version 1.13 (2026-10-22):** §VII.A step 7: `prerelease.sh restore` also closes the SSH tunnel to production, and an abandoned run closes it with `prerelease.sh close-tunnel`. The tunnel had never been closed: the v2.2.4 one was still listening six days later and blocked the v2.3.0 backup.
+
+**Version 1.12 (2026-10-22):** §VIII's fixed browser list is replaced by `SOP-DEP-001B` for releases and `SOP-DEP-001A` for a first deployment or a release the owner designates as full; the host checks stay. Owner rulings, 2026-10-22 (v2.3.0).
 
 **Version 1.10 (2026-10-13):** adds §V.1, the single-maintainer limitation: the `production` environment has no
 required reviewers, and environment approval means the branch policy plus the operator's recorded go-ahead under

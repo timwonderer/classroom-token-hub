@@ -35,10 +35,6 @@
                         <p class="mb-0">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">tag</span>
                             <code>{{ issue.actor_public_id }}</code>
-                            <small class="text-muted d-block mt-1">
-                                Deidentified class-scoped actor reference -- sysadmin sees only this,
-                                never a name or role, regardless of who filed the ticket.
-                            </small>
                         </p>
                     </div>
 
@@ -122,7 +118,7 @@
                         </div>
                         <span class="text-muted small">
                             {% if tz_mode == 'class' %}
-                                Showing class time ({{ class_timezone }}). Stored evidence is unchanged -- UTC.
+                                Showing class time ({{ class_timezone }}). Server stores all timestamps as UTC.
                             {% elif class_timezone %}
                                 Showing UTC. Class timezone is {{ class_timezone }}.
                             {% else %}
@@ -137,7 +133,7 @@
                             <h4 class="h6 text-muted mb-2">Submitted</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
-                                {{ issue.submitted_at|fmt_timestamp }}
+                                {{ issue.submitted_at_display }}
                             </p>
                         </div>
                         {% if issue.escalated_at %}
@@ -145,7 +141,7 @@
                             <h4 class="h6 text-muted mb-2">Escalated</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>
-                                {{ issue.escalated_at|fmt_timestamp }}
+                                {{ issue.escalated_at_display }}
                             </p>
                         </div>
                         {% endif %}
@@ -154,7 +150,7 @@
                             <h4 class="h6 text-muted mb-2">Reviewed</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">visibility</span>
-                                {{ issue.sysadmin_reviewed_at|fmt_timestamp }}
+                                {{ issue.sysadmin_reviewed_at_display }}
                             </p>
                         </div>
                         {% endif %}
@@ -163,7 +159,7 @@
                             <h4 class="h6 text-muted mb-2">Resolved</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>
-                                {{ issue.sysadmin_resolved_at|fmt_timestamp }}
+                                {{ issue.sysadmin_resolved_at_display }}
                             </p>
                         </div>
                         {% endif %}
@@ -284,15 +280,17 @@
                                         <th scope="col">Timestamp</th>
                                         <th scope="col">Method</th>
                                         <th scope="col">Endpoint</th>
+                                        <th scope="col">Status</th>
                                         <th scope="col">Request ID</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for trace in correlation_pack.request_trace_json %}
                                     <tr>
-                                        <td>{{ trace.timestamp|fmt_timestamp }}</td>
+                                        <td>{{ trace.timestamp_display }}</td>
                                         <td><code>{{ trace.method }}</code></td>
                                         <td><code>{{ trace.endpoint }}</code></td>
+                                        <td><code>{{ trace.status_code or 'n/a' }}</code></td>
                                         <td>
                                             <code>{{ trace.request_id or 'n/a' }}</code>
                                             {% if trace.request_id %}
@@ -315,7 +313,7 @@
                             <div class="list-group-item">
                                 <div class="d-flex justify-content-between">
                                     <strong>{{ error_ref.error_class }}</strong>
-                                    <small>{{ error_ref.timestamp|fmt_timestamp }}</small>
+                                    <small>{{ error_ref.timestamp_display }}</small>
                                 </div>
                                 <div class="small mt-1">
                                     <code>{{ error_ref.endpoint }}</code>
@@ -357,24 +355,7 @@
                             <label for="resolution_note" class="form-label">Resolution Notes</label>
                             <textarea class="form-control" id="resolution_note" name="resolution_note" rows="4"
                                       placeholder="Describe how the issue was resolved or what action was taken..." required></textarea>
-                            <small class="form-text text-muted">This will be visible to the teacher. Developers cannot close the ticket.</small>
-                        </div>
-
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="eligible_for_reward" name="eligible_for_reward">
-                            <label class="form-check-label" for="eligible_for_reward">
-                                Legitimate bug found, issue student reward
-                            </label>
-                        </div>
-
-                        <div class="mb-3" id="reward_amount_field" hidden>
-                            <label for="reward_amount" class="form-label">Reward Amount</label>
-                            <div class="input-group">
-                                <span class="input-group-text">$</span>
-                                <input type="number" class="form-control" id="reward_amount" name="reward_amount"
-                                       min="0" step="0.01" placeholder="0.00">
-                            </div>
-                            <small class="form-text text-muted">Creates a bug reward transaction for the student.</small>
+                            <small class="form-text text-muted">This ticket will be returned to the teacher for final review and resolution.</small>
                         </div>
 
                         <button type="submit" class="btn btn-success w-100">
@@ -455,7 +436,7 @@
                                     </small>
                                 </div>
                                 <small class="text-muted">
-                                    {{ entry.changed_at|fmt_timestamp }}
+                                    {{ entry.changed_at_display }}
                                 </small>
                             </div>
                         </div>
@@ -471,23 +452,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const checkbox = document.getElementById('eligible_for_reward');
-    const amountField = document.getElementById('reward_amount_field');
-    const amountInput = document.getElementById('reward_amount');
-
-    if (checkbox && amountField && amountInput) {
-        checkbox.addEventListener('change', function() {
-            if (this.checked) {
-                amountField.hidden = false;
-                amountInput.required = true;
-            } else {
-                amountField.hidden = true;
-                amountInput.required = false;
-                amountInput.value = '';
-            }
-        });
-    }
-
     const copyButtons = document.querySelectorAll('.copy-correlation-value');
 
     function fallbackCopyTextToClipboard(text) {

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-004 | 1.0 | 2026-07-27 | N/A | Normative |
+| FEAT-STOR-004 | 1.1 | 2026-11-04 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -64,7 +64,7 @@ The FEAT SHALL NOT reconstruct teacher authority from route-local lookups or dis
 The FEAT accepts:
 
 - canonical request context;
-- `policy_uuid` — exact immutable policy locator;
+- `policy_uuid` — exact immutable policy locator for product-backed grants; independent teacher hall-pass grants (§VII.C) omit it;
 - `target_seat_id` — seat receiving the direct grant;
 - `idempotency_key` — request replay guard;
 - optional canonical grant payload required by the product type.
@@ -88,7 +88,7 @@ Verify:
 
 ### B. Policy validation
 
-Read the configured product definition through the lawful Class Configuration / Policies interface.
+For product-backed grants, read the configured product definition through the lawful Class Configuration / Policies interface. Independent teacher hall-pass adjustments follow §VII.C.
 
 Validate, as applicable:
 
@@ -113,7 +113,7 @@ For each granted unit:
 - `class_id` = canonical context class;
 - `target_seat_id` = target seat;
 - `actor_seat_id` = teacher seat;
-- `product_id` = configured product identifier;
+- `product_id` = configured product identifier, or NULL for an independent teacher hall-pass grant;
 - `acquisition_type` = `GRANT`;
 - `event_type` = `GRANTED`;
 - `entitlement_type` = lawful entitlement kind for the product;
@@ -129,7 +129,13 @@ The FEAT SHALL NOT persist a direct-grant balance counter.
 
 ### C. Teacher hall-pass grant
 
-Hall-pass grants are direct grants when the policy permits them.
+Independent teacher hall-pass grants require no Store product or policy UUID
+(DOM-STORE-001 §VIII.E.6, owner ruling 2026-11-04). Validate the current teacher's
+authority and a claimed student seat in the canonical class; serialize on the
+target seat before checking replay and appending grants. Reject quantities outside
+1–100 per student per adjustment before mutation (DOM-STORE-001 §VIII.E.6). Product-backed grants
+continue to validate their product policy. Removing unused direct grants belongs
+to FEAT-STOR-002, not this FEAT.
 
 The FEAT SHALL NOT create a hall-pass balance row.
 
@@ -149,6 +155,10 @@ On successful direct grant:
 `idempotency_key` SHALL protect the complete grant lifecycle.
 
 A replay of the same lawful direct grant SHALL NOT produce duplicate entitlement events.
+Each intentional teacher adjustment SHALL carry a new client request identifier,
+scoped to the class and target seat. Retries SHALL retain that identifier. Reuse
+with a different quantity, action, or actor SHALL fail. A permanent per-seat key
+SHALL NOT suppress later intentional grants.
 
 ## X. Failure Contract
 

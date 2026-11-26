@@ -223,6 +223,8 @@ def test_already_claimed_transaction_is_excluded_from_the_dropdown(app, client):
         claimed_txn_id = _make_claimable_txn(student.seat)
         still_eligible_txn_id = _make_claimable_txn(student.seat)
         login_student(client, student)
+        teacher_context = _teacher_ctx(classroom)
+        class_id, seat_id = classroom.class_id, student.seat.id
 
     client.post(f"/student/insurance/claim/{policy_uuid}",
                 data={"transaction_id": str(claimed_txn_id)})
@@ -233,6 +235,15 @@ def test_already_claimed_transaction_is_excluded_from_the_dropdown(app, client):
     assert f'value="{claimed_txn_id}"' not in page, (
         "an already-claimed transaction is still offered in the dropdown"
     )
+    from app.feats.insurance_claim_feat import resolve_insurance_claim
+    with app.app_context():
+        claim = InsuranceClaim.query.filter_by(class_id=class_id, target_seat_id=seat_id).one()
+        rejected = resolve_insurance_claim(canonical_context=teacher_context, claim_id=claim.claim_id,
+                                          approved=False, override_reason="Please correct the claim")
+        assert rejected.success, rejected.error_message
+    page = client.get(f"/student/insurance/claim/{policy_uuid}").get_data(as_text=True)
+    assert f'value="{claimed_txn_id}"' in page
+
 
 
 def test_file_claim_fails_closed_without_coverage(app, client):
@@ -309,13 +320,15 @@ def test_file_claim_productivity_form_renders_and_submits(app, client):
 
 
 def _make_tier(classroom, group, level, premium="10.00"):
+    from tests.helpers.insurance_domain import provision_tier_group
+    group_id = provision_tier_group(classroom.class_id, group)
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
             insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
-            title=f"{group} {level}", tier_group=group, tier_level=str(level),
+            title=f"{group} {level}", tier_group_id=group_id, tier_level=str(level),
         ),
         canonical_context=_teacher_ctx(classroom),
         correlation_id=f"corr_{uuid4().hex}",
@@ -484,3 +497,64 @@ def test_cancel_modal_promises_the_date_cancelling_actually_gives(app, client):
     assert "You cancelled this coverage" in after
     assert f"through <strong>{promised.group(1)}</strong>" in after
     assert f'id="cancel-{policy_uuid}"' not in after, "no second cancel once cancelled"
+
+
+def test_resubmitted_claim_form_returns_the_original_claim(app, client):
+    """A double-submitted claim form is one submission (FEAT-STOR-003 §XIII):
+    the repeat lands on the same claim and succeeds, rather than being refused
+    as a duplicate subject or filing a second claim."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        student = classroom.students[0]
+        _fund(student.seat)
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        txn_id = _make_claimable_txn(student.seat)
+        class_id, seat_id = classroom.class_id, student.seat.id
+        login_student(client, student)
+
+    form = {"transaction_id": str(txn_id), "claim_nonce": uuid4().hex}
+    first = client.post(f"/student/insurance/claim/{policy_uuid}", data=form)
+    second = client.post(f"/student/insurance/claim/{policy_uuid}", data=form)
+
+    assert first.status_code == 302
+    assert second.status_code == 302, "the resubmission was refused instead of replayed"
+    with app.app_context():
+        assert InsuranceClaim.query.filter_by(class_id=class_id, target_seat_id=seat_id).count() == 1
+
+
+def test_resubmitted_claim_form_with_changed_evidence_is_not_reported_as_filed(app, client):
+    """Going back and changing the evidence keeps the nonce; that must not be
+    answered with the earlier claim's success while dropping the change."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        student = classroom.students[0]
+        _fund(student.seat)
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        txn_id = _make_claimable_txn(student.seat)
+        class_id, seat_id = classroom.class_id, student.seat.id
+        login_student(client, student)
+
+    nonce = uuid4().hex
+    first = client.post(f"/student/insurance/claim/{policy_uuid}", data={"transaction_id": str(txn_id), "claim_nonce": nonce})
+    changed = client.post(
+        f"/student/insurance/claim/{policy_uuid}",
+        data={"transaction_id": str(txn_id), "description": "added later", "claim_nonce": nonce},
+    )
+
+    assert first.status_code == 302
+    assert changed.status_code == 200, "changed evidence was answered as the filed claim"
+    assert b"already used for a different claim" in changed.data
+    with app.app_context():
+        claims = InsuranceClaim.query.filter_by(class_id=class_id, target_seat_id=seat_id).all()
+        assert len(claims) == 1
+        assert claims[0].claim_basis.get("description") is None

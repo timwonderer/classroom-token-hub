@@ -131,9 +131,9 @@ Check server logs or contact support with:
 
 **5. Verify Rent Perk Grants Are Healthy:**
 
-- Paid students with per-use perks should have an active grant row (`uses_remaining > 0` or `-1` for unlimited).
-- Exhausted legacy grant rows (`uses_remaining = 0`) no longer block new free-use grants, but older data may need one fresh rent payment to normalize.
-- Hall-pass top-offs now reconcile against actual pass balance if `rent_hall_passes` drifted out of sync.
+- A paid student with a per-use perk should show it as available, with uses left (or unlimited).
+- An old, fully-used perk grant from before a fix no longer blocks a student from getting a new one for free — but a student with stale data may need one fresh rent payment to bring it back in sync.
+- Hall-pass top-offs reconcile against the student's actual pass balance if it had drifted out of sync.
 
 ### Badge Colors Meaning
 - 🟢 **Green:** Included in paid rent (automatic)

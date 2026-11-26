@@ -16,7 +16,7 @@ Natural idempotency on (class_id, feature, effective_at) primary key tuple
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime as dt, timezone as tz
+from datetime import datetime as dt
 from typing import Optional
 import uuid
 
@@ -39,13 +39,17 @@ class FeatureEnablementError(Exception):
 
 
 def _parse_effective_at_timestamp(effective_at: str):
-    """Parse ISO 8601 effective_at into a timezone-aware datetime."""
+    """Parse ISO 8601 effective_at into a timezone-aware datetime.
+
+    A string without an offset names no instant, so it is rejected rather than
+    assumed to be UTC (SPEC-TIME-001 §VI).
+    """
     try:
         effective_at_ts = dt.fromisoformat(effective_at)
     except ValueError:
         return None
     if effective_at_ts.tzinfo is None:
-        effective_at_ts = effective_at_ts.replace(tzinfo=tz.utc)
+        return None
     return effective_at_ts
 
 

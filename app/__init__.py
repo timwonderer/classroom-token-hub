@@ -62,7 +62,7 @@ if missing_vars:
 
 # -------------------- UTILITIES --------------------
 from app.utils.encryption import PIIEncryptedType
-from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown, docs_url_for, sanitize_for_log
+from app.utils.helpers import is_safe_url, render_markdown, docs_url_for, loggable_route, sanitize_for_log
 from app.utils.constants import THEME_PROMPTS
 
 
@@ -94,7 +94,20 @@ def nl2br_filter(s):
 
 # -------------------- APPLICATION FACTORY --------------------
 
-REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
+# Every field is public: the class appears only as its class_public_id (DOM-OPS-001 §7).
+DEFAULT_LOG_FORMAT = (
+    "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
+    "[actor=%(actor_type)s:%(actor_public_id)s class_public_id=%(class_public_id)s] "
+    "[endpoint=%(endpoint)s method=%(method)s] "
+    "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s"
+)
+JSON_LOG_FORMAT = (
+    '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
+    '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_public_id)s",'
+    '"class_public_id":"%(class_public_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
+    '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
+    '"message":"%(message)s"}'
+)
 
 
 class RequestIdFilter(logging.Filter):
@@ -109,24 +122,11 @@ class RequestIdFilter(logging.Filter):
             record.actor_type = context.get("actor_type", "-") if context else "-"
         if not hasattr(record, "actor_public_id"):
             record.actor_public_id = context.get("actor_public_id", "-") if context else "-"
-        if not hasattr(record, "class_id"):
-            record.class_id = context.get("class_id", "-") if context else "-"
+        if not hasattr(record, "class_public_id"):
+            # Never the internal class_id: it does not leave the database (DOM-OPS-001 §7).
+            record.class_public_id = context.get("class_public_id", "-") if context else "-"
         if not hasattr(record, "endpoint"):
-            if has_request_context():
-                if request.url_rule and request.url_rule.rule:
-                    record.endpoint = request.url_rule.rule
-                else:
-                    # request.url_rule is None for any unmatched route (every
-                    # 404), so this falls back to the raw, attacker-supplied
-                    # path -- unlike url_rule.rule, which is always one of
-                    # this app's own registered route patterns. Every log
-                    # record on every request carries this field, so an
-                    # unsanitized path here is log injection on a much wider
-                    # surface than the few explicit logger.warning(request.url)
-                    # call sites CodeQL's py/log-injection query flagged.
-                    record.endpoint = request.path
-            else:
-                record.endpoint = "-"
+            record.endpoint = loggable_route()
         record.endpoint = sanitize_for_log(record.endpoint)
         if not hasattr(record, "method"):
             record.method = request.method if has_request_context() else "-"
@@ -140,13 +140,10 @@ class RequestIdFilter(logging.Filter):
 
 
 def _get_request_id():
-    for header in REQUEST_ID_HEADERS:
-        header_value = request.headers.get(header)
-        if not header_value:
-            continue
-        header_value = header_value.strip()
-        if 0 < len(header_value) <= 128:
-            return header_value
+    # Generated here, never taken from the caller's X-Request-Id or
+    # X-Correlation-Id: a request's identity is created at the entry point
+    # (DOM-OPS-001 INV-OPS-004), so nothing a caller sends is adopted, echoed,
+    # logged or persisted as it.
     return uuid.uuid4().hex
 
 
@@ -160,17 +157,17 @@ def register_error_handlers(app):
         from app.services.tlcp import CORRELATION_VERSION, save_error_event
 
         context = getattr(g, "correlation_context", None) or {}
-        endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
+        endpoint = loggable_route()
         sanitized_message = " ".join(str(e).split())[:500]
         app.logger.exception(
             "Unhandled exception",
             extra={
-                "route": request.path,
+                "route": endpoint,
                 "method": request.method,
                 "request_id": getattr(g, "request_id", None),
                 "actor_type": context.get("actor_type"),
                 "actor_public_id": context.get("actor_public_id"),
-                "class_id": context.get("class_id"),
+                "class_public_id": context.get("class_public_id"),
                 "endpoint": endpoint,
                 "error_class": e.__class__.__name__,
                 "error_message": sanitized_message,
@@ -183,7 +180,7 @@ def register_error_handlers(app):
             # then persist the TLCP error event in a fresh, independent transaction.
             db.session.rollback()
             with db.engine.begin() as conn:
-                from app.utils.canonical_temporal_resolver import utc_now
+                from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
                 if context.get("actor_type") and context.get("actor_public_id"):
                     from app.services.tlcp import _sanitize_error_message
                     inspector = sa.inspect(conn)
@@ -211,7 +208,9 @@ def register_error_handlers(app):
                                 "error_class": e.__class__.__name__,
                                 "error_message": _sanitize_error_message(sanitized_message),
                                 "correlation_version": CORRELATION_VERSION,
-                                "created_at": utc_now(),
+                                "created_at": canonical_temporal_resolver(
+                                    SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+                                ).canonical_now_utc,
                             },
                         )
         except Exception:
@@ -297,6 +296,10 @@ def create_app():
         SECRET_KEY_FALLBACKS=secret_key_fallbacks,
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # Statement errors otherwise quote every bound value (free text, usernames,
+        # internal ids) into exception text that reaches logs (INV-ARC-005 §V).
+        SQLALCHEMY_ENGINE_OPTIONS={"hide_parameters": True},
+        CONFIGURATION_EXPORT_KEY=os.getenv("CONFIGURATION_EXPORT_KEY", "").strip(),
         SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -350,27 +353,22 @@ def create_app():
     db.init_app(app)
     init_feat_enforcement(app)
     migrate.init_app(app, db)
+    @app.before_request
+    def configuration_upload_limits():
+        # Apply before CSRF parses the form so a valid 1 MiB file remains uploadable.
+        if request.blueprint == "configuration":
+            request.max_content_length = 4 * 1024 * 1024
+            request.max_form_memory_size = 3 * 1024 * 1024
+
     csrf.init_app(app)
     limiter.init_app(app)
 
     # -------------------- LOGGING --------------------
     log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, log_level_name, logging.INFO)
-    log_format = os.getenv(
-        "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
-        "[actor=%(actor_type)s:%(actor_public_id)s class_id=%(class_id)s] "
-        "[endpoint=%(endpoint)s method=%(method)s] "
-        "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
-    )
+    log_format = os.getenv("LOG_FORMAT", DEFAULT_LOG_FORMAT)
     if log_format.strip().lower() == "json":
-        log_format = (
-            '{"timestamp":"%(asctime)s","level":"%(levelname)s","module":"%(module)s",'
-            '"request_id":"%(request_id)s","actor":"%(actor_type)s:%(actor_public_id)s",'
-            '"class_id":"%(class_id)s","endpoint":"%(endpoint)s","method":"%(method)s",'
-            '"error_class":"%(error_class)s","correlation_version":"%(correlation_version)s",'
-            '"message":"%(message)s"}'
-        )
+        log_format = JSON_LOG_FORMAT
 
     # The handlers live on the root logger, not on app.logger. A root logger
     # with no handlers is configured implicitly by the first module-level
@@ -450,7 +448,8 @@ def create_app():
         if request.endpoint in {"main.health_check"}:
             return None
 
-        from app.models import User
+        from app.models import User, UserRole
+        from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
         from app.utils.user_ids import session_user_id
         if not session.get("user_id"):
             return None
@@ -468,6 +467,19 @@ def create_app():
         if not session_nonce or user.current_session_nonce != session_nonce:
             session.clear()
             return None
+        # A teacher sign-in is a fixed window (DOM-IDEN-003); past it the cookie
+        # is ended here, before any route, so no path accepts it. A sign-in
+        # without a window predates it and is ended the same way.
+        if user.user_role == UserRole.TEACHER:
+            expires_at = user.current_session_expires_at
+            if expires_at is None or not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                candidate=canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+                reference=expires_at,
+            ).is_earlier:
+                session.clear()
+                g.teacher_session_expired = True
         return None
 
     @app.before_request
@@ -516,7 +528,9 @@ def create_app():
             response.headers.setdefault("X-Request-Id", request_id)
         # Prometheus is an infrastructure caller, not a CTH user request. It
         # has no canonical actor/class context and must not enter TLCP traces.
-        if request.path == "/metrics":
+        # Static assets are not relevant traces (DOM-SUP-001): ~20 per page
+        # crowded real routes out of the ticket correlation pack.
+        if request.path == "/metrics" or request.endpoint == "static":
             return response
         if not app.config.get("TLCP_REQUEST_TRACE_ENABLED", not app.config.get("TESTING")):
             # Off under TESTING unless a test opts in (the tlcp_trace_enabled
@@ -555,10 +569,7 @@ def create_app():
     # Add built-in functions to Jinja2 globals
     app.jinja_env.globals['min'] = min
     app.jinja_env.globals['max'] = max
-    app.jinja_env.globals['format_utc_iso'] = format_utc_iso
 
-    from app.utils.temporal_display import register_temporal_filters
-    register_temporal_filters(app)
     
     from app.utils.join_code import get_display_join_code
     app.jinja_env.globals['get_display_join_code'] = get_display_join_code
@@ -607,7 +618,7 @@ def create_app():
                         text("SET LOCAL app.current_user_id = :user_id"),
                         {"user_id": user_id}
                     )
-                    app.logger.debug(f"RLS context set for user_id={user_id}")
+                    app.logger.debug("RLS context set")
             except Exception as e:
                 # Log but don't fail the request - RLS will just filter to empty results
                 app.logger.error(f"Failed to set RLS tenant context: {str(e)}")
@@ -631,10 +642,8 @@ def create_app():
         # nginx: it is a host-local caller such as the Prometheus /metrics
         # scrape or an operator's curl over Tailscale. It cannot have
         # bypassed Cloudflare, so there is nothing to warn about.
-        if request.remote_addr in ('127.0.0.1', '::1') and not any(
-            request.headers.get(h)
-            for h in ('X-CF-Edge-IP', 'X-Real-IP', 'X-Forwarded-For', 'CF-Connecting-IP')
-        ):
+        from app.utils.ip_handler import is_host_local_request
+        if is_host_local_request():
             return None
 
         # Only check in production
@@ -645,10 +654,10 @@ def create_app():
                 if not validate_cloudflare_request():
                     real_ip = get_real_ip()
                     app.logger.warning(
-                        "Request not from Cloudflare IP: %s (real_ip: %s, path: %s, method: %s)",
+                        "Request not from Cloudflare IP: %s (real_ip: %s, route: %s, method: %s)",
                         sanitize_for_log(request.remote_addr),
                         sanitize_for_log(real_ip),
-                        sanitize_for_log(request.path),
+                        sanitize_for_log(loggable_route()),
                         sanitize_for_log(request.method),
                     )
             except Exception as e:
@@ -962,6 +971,8 @@ def create_app():
     app.register_blueprint(sysadmin_bp)
     app.register_blueprint(student_bp)
     app.register_blueprint(admin_bp)
+    from app.routes.configuration import configuration_bp
+    app.register_blueprint(configuration_bp)
     app.register_blueprint(docs_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(recovery_bp)
@@ -983,7 +994,8 @@ def create_app():
     def prometheus_metrics():
         # Exempt from the per-client default limits: only a local scraper can
         # reach it, and a one-minute scrape alone exceeds "500 per day".
-        if request.remote_addr not in {"127.0.0.1", "::1"}:
+        from app.utils.ip_handler import is_host_local_request
+        if not is_host_local_request():
             return "Not Found", 404
         return metrics_payload(), 200, {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"}
 

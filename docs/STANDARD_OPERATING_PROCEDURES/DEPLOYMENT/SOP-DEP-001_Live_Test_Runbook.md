@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.9     | 2026-10-16     | 2.8 | Normative |
+| SOP-DEP-001      | 2.15    | 2026-11-25     | 2.14 | Normative |
 
 ## I. Purpose
 
@@ -17,10 +17,12 @@ policy. A successful boot, or a passing subset of routes, is not certification.
 ## II. Scope
 
 Test deployments of the repository `main` branch onto the deployment host, from
-release gate through go/no-go decision. Production transition after a successful
-live test is governed by SOP-DEP-002.
+release gate through go/no-go decision. Recurring production releases are governed
+by SOP-DEP-002. The v2 launch completed on 2026-09-26; this runbook remains applicable
+to initial-host deployments and controlled rehearsals. Its fresh-database steps
+are not instructions to recreate an existing production database.
 
-Version 2.0 is a rewrite. Version 1.2 described the pre-v2 identity model
+Version 2.0 of this runbook was a rewrite. Version 1.2 described the pre-v2 identity model
 (`ClassMembership`, `TeacherBlock`), a fixed 664-test baseline, a `join_code`
 form of the student switch-class route, a `/health/deep` endpoint, and record
 storage under `docs/LOGS/` — each of which is now false or prohibited. It was
@@ -54,8 +56,9 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 - Host access: the approved Tailscale/SSH path to the deployment host.
 - Service: `classroom-economy` systemd unit, fronted by Nginx, with PostgreSQL
   on the host.
-- The v1 application, its service units, and its database are already removed;
-  PostgreSQL and the Nginx holding page remain.
+- The original v1 removal and Nginx holding page were pre-launch host state.
+  For an existing host, establish its current service, deployed revision and database
+  from the release record and fresh read-only checks; do not assume an empty host.
 - Local dev and test databases are never deployment targets. The test database
   is addressed only by `TEST_DATABASE_URL` and its name contains `test`.
 
@@ -192,7 +195,8 @@ git status --porcelain  # must be empty
 Before a restricted work window, confirm an unauthenticated browser reaches Access,
 an unauthorized identity cannot enter, and an authorized operator can reach the
 normal application sign-in. Verify the origin cannot be reached around Cloudflare.
-Public health probes require authorized service-token headers; host-local probes
+Health endpoints are public and need no credential; while the gate is closed the status
+collector reads nothing from the application (SPEC-OPS-006 1.6). Host-local probes
 do not traverse Access. Never record tokens in logs or deployment evidence.
 
 At the end of the window, change the Access policy only when public access is
@@ -213,7 +217,11 @@ never print or commit values.
   independent of all other keys. Rotation is an identity-reset ceremony, not a
   transparent re-key.
 - `AUDIT_HMAC_KEY` — audit-lineage key, independent of all other keys.
-- `DATABASE_URL` — the new v2 database only.
+- `CONFIGURATION_EXPORT_KEY` — signing key for class configuration files and
+  import confirmations (SPEC-CLASS-001), independent of all other keys. If it is
+  missing or blank, every export and import is refused. Rotation invalidates every outstanding
+  configuration file and confirmation.
+- `DATABASE_URL` — the explicitly verified database for this deployment target.
 - `FLASK_ENV=production`, and `FLASK_APP` where CLI operations require it.
 - `PASSWORDLESS_API_KEY` / `PASSWORDLESS_API_PUBLIC` — deployment pair.
 - `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY` — pair registered for the
@@ -234,12 +242,19 @@ service is restarted only after the completeness check passes.
 2. Confirm the connection target is not a local, test, or legacy database.
 3. Confirm PostgreSQL version and required extensions match the rehearsal.
 4. Confirm no application process is writing to the database.
-5. Run the upgrade from the release artifact with the deployment `DATABASE_URL`:
-
-```bash
-flask db upgrade
-flask db current
-```
+5. A new installation starts from the **supported fresh-install release** (`SOP-DEP-002`
+   §VII.B), declared in `migrations/fresh/supported_release.json`. Follow the
+   [fresh database installation procedure](../../self-hosting/fresh-database.md) with a checkout
+   of that release. Install only on an explicitly identified, enrolled, offline, empty target.
+   Verify the complete installed schema and required initial data before recording
+   its single Alembic revision. If verification fails, keep the database offline
+   and unversioned; do not stamp or serve it. When the intended release is newer, the
+   installation then reaches it by `flask db upgrade` through the supported lineage, as an
+   ordinary upgrade, before any classroom use. No other release is initialized from empty:
+   replaying the lineage from the era baseline is the CI and test path, not an installation
+   path. If no safe supported fresh-install release is declared, no new installation starts.
+   Existing installations continue to use the migration path under SOP-DB-004 and
+   SOP-DEP-002; never enroll or initialize them as new.
 
 6. Confirm `flask db current` reports the expected single head.
 7. Confirm the schema contains no v1-only objects. The v1 identity tables
@@ -266,62 +281,19 @@ flask db current
 7. Point Nginx at the service only after local health passes, then confirm
    HTTPS certificate, host routing, and security headers.
 
-## XI. Full-App First Test
+## XI. Browser Validation
 
-Exercise these in a real browser while the Cloudflare Access gate remains restricted. Each
-line records owner, timestamp, one result from the set defined below this list, and its
-evidence or defect link.
+Browser validation follows one of two templates:
 
-- `/admin/login` renders and submits.
-- `/student/login` renders and submits.
-- `/docs` renders.
-- Passwordless enrollment and authentication with deployment credentials.
-- Turnstile renders on every configured route and real verification succeeds.
-- Teacher creates or accesses a class boundary.
-- Student seat claim, then a student session.
-- Teacher current-class switching via `POST /admin/current-class`.
-- Student add-class via `/student/add-class`, and switch-class via
-  `POST /student/switch-class/<class_id>`. The route takes the canonical
-  `class_id`; a `join_code` in that position is the retired alias form.
-- Selected-class export via `/admin/export-students`. The export scopes to the
-  session's active class — a query parameter does not choose the class — and
-  lists claimed seats only.
-- Hall-pass verification via `/verify/hallpass/<teacher_public_token>`.
-- Class-scoped admin actions cannot cross the selected class boundary.
-- Attendance, productivity, payroll, obligations, ledger and store paths load
-  and execute through their canonical routes.
-- Audit/lineage records are produced for protected mutations.
-- Export and support/operations surfaces load without 500 responses.
-- No PII appears in URLs, logs, errors, or browser-visible diagnostics.
-- Accessibility smoke checks cover the public, login, teacher and student
-  surfaces reached in this test (INV-ARC-020).
+- **`SOP-DEP-001A`, Initial Deployment Browser Validation:** the first deployment of the v2 application onto a
+  host, a rehearsal host or fresh database, or a release the owner designates as full. Every item is checked and
+  evidenced before the gate opens.
+- **`SOP-DEP-001B`, Release Functional Browser Validation:** every other release. The scope comes from the release
+  diff: features the release changes directly, features connected to those changes, and features with a known
+  problem. A feature outside that scope needs no row.
 
-**Results.** Every line takes exactly one of these five results:
-
-- *Evidenced*: the features the operator exercised ran through the line and it
-  behaved as the line asserts, whether or not it was a separate step. A student
-  sign-in that passes Turnstile's server-side check could not have done so unless
-  the widget rendered and issued a token.
-- *In part*: a line with several parts, some of which ran and behaved as asserted
-  while no exercised feature reached the others. The evidence names both.
-- *Failed*: the line ran and did not behave as it asserts. The row links the
-  defect.
-- *Blocked*: the line could not be run, for a reason outside the application
-  under test (a missing credential, an unavailable dependency, the Access gate).
-  The row names the blocker.
-- *Not exercised*: nothing the operator ran reached the line, and nothing
-  prevented it.
-
-Only *evidenced* satisfies a line for §XIII; every other result is stated as a
-known risk or deviation before the go/no-go decision.
-
-**Results are recorded as the checks run, not reconstructed afterward.** The
-release record carries one row per line above, in this order, with the columns
-*§XI line*, *Result*, *Owner*, *Time (UTC)* and *Evidence or defect*, filled in
-during the checks and complete before the go/no-go decision (§XIII). A row's
-evidence names what ran (route, action, status, the build it ran on), not a
-verdict (§XI.A item 6). The table lives in the record under `docs/ops/audits/`,
-never in a copy of this runbook (§II).
+Both record results during or after the checks from contemporaneous evidence, and both use §XI.A below for items
+that assert something cannot happen.
 
 ### XI.A How to exercise the adversarial items
 
@@ -433,9 +405,9 @@ Named roles for each rehearsal or smoke pass:
 
 Primary operator and escalation owner may be the same person. In a
 single-operator environment the operator MAY assume all three roles provided
-the test suite passes with no unexplained failures, every §XI line is executed
-and recorded, results are written into the record, and known risks or
-deviations are stated before the go/no-go decision.
+the test suite passes with no unexplained failures, the browser validation the
+deployment requires (`SOP-DEP-001A` or `SOP-DEP-001B`) is executed and recorded,
+and results and known risks are written into the record.
 
 AI assistance MAY be used to look for defects or invariant violations. Its
 output is advisory only and is **not** independent verification authority.
@@ -476,7 +448,7 @@ output is advisory only and is **not** independent verification authority.
 ## XV. Record Storage
 
 Capture: migration head before and after, the `pytest_result/` artifact
-reference, health output, §XI results, failures, and the go/no-go decision.
+reference, health output, browser validation results (`SOP-DEP-001A` or `SOP-DEP-001B`), failures, and the go/no-go decision.
 
 Store the finalized record as a repository artifact under `docs/ops/audits/`,
 or as a retained PR/ticket comment. **Do not create `docs/LOGS/`** — that root
@@ -510,7 +482,7 @@ immutable once finalized.
 ## XVI. Completion Condition
 
 The first test deployment is complete only when the exact SHA runs from a fresh
-database, the required integrations work, every §XI path has recorded evidence,
+database, the required integrations work, every `SOP-DEP-001A` item has recorded evidence,
 and the operator/verifier decision is stored.
 
 ## XVII. Amendment
@@ -524,6 +496,12 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.15 | 2026-11-25 | §IX.5: a new installation starts from the declared supported fresh-install release (`SOP-DEP-002` §VII.B) and reaches a newer intended release by ordinary upgrade before classroom use. Initializing any other release from empty is withdrawn; replaying the lineage is the CI/test path. Owner ruling 2026-11-25. |
+| 2.14 | 2026-11-15 | §IX: distinguish the release-specific, verified empty-database installation from Alembic upgrades of existing installations. |
+| 2.13 | 2026-11-04 | Clarify initial-host/rehearsal scope after the completed v2 launch, replace the stale holding-page assumption with target verification, and point recurring releases to SOP-DEP-002. |
+| 2.12 | 2026-10-26 | §VI secrets: add `CONFIGURATION_EXPORT_KEY`, required by class configuration export/import (SPEC-CLASS-001). If it is missing or blank, the page loads but every transfer is refused, which the browser check before release found. |
+| 2.11 | 2026-10-23 | §VI Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23. |
+| 2.10 | 2026-10-22 | §XI's checklist is extracted into two templates with separate mechanisms: `SOP-DEP-001A` (initial deployment: every item evidenced before the gate opens) and `SOP-DEP-001B` (release: scope from the diff, covering directly changed, connected and known-problem features; out-of-scope features need no row). Both allow results recorded after the checks from contemporaneous evidence. §XI.A stays here. §XIII, §XV and §XVI cite the templates; §XIII drops the before-go/no-go ordering for known risks. Owner rulings, 2026-10-22 (v2.3.0). |
 | 2.9 | 2026-10-16 | §XI: one result set for every line (*evidenced*, *in part*, *failed*, *blocked*, *not exercised*), replacing pass/fail/blocked; a line is evidenced when the exercised features ran through it and behaved as asserted; a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |
 | 2.8 | 2026-10-06 | §XIV: the forward-only list is `migrations/forward_only_register.txt`, enforced against the chain by a test; the prose list was incomplete. Dependencies: `SOP-DB-009` (archived) replaced by `SOP-DB-004`. |
 | 2.7 | 2026-10-04 | §XIV: register the three attendance/payroll recovery revisions that reject all downgrades; preserve snapshot restore or reviewed fix-forward recovery. |

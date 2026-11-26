@@ -29,7 +29,7 @@ from app.services.insurance_coverage_service import (
     premium_lineage_ref,
 )
 from app.services.insurance_definition_service import get_insurance_definition
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from tests.helpers import temporal
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 
 
@@ -50,8 +50,8 @@ def establish_paid_premium_lineage(
     """
     policy = get_insurance_definition(policy_uuid, class_id=class_id)
     premium = Decimal(str(policy.premium))
-    start = ensure_utc(start_utc)
-    through = ensure_utc(through_utc) if through_utc is not None else utc_now()
+    start = start_utc
+    through = through_utc if through_utc is not None else temporal.now()
     anchor = class_local_date(class_id, start)
     lineage = premium_lineage_ref(entitlement_id)
 
@@ -101,3 +101,16 @@ def establish_paid_premium_lineage(
             return cycles
         cycle_start = cycle_end
         n += 1
+
+
+def provision_tier_group(class_id, key):
+    """Stable explicit test identity; labels are never queried for membership."""
+    from uuid import uuid5, NAMESPACE_URL
+    from app.extensions import db
+    from app.models import InsuranceTierGroup
+    from app.feats.base import FEATContext
+    group_id = str(uuid5(NAMESPACE_URL, class_id + key))
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"group:{uuid4()}"):
+        if db.session.get(InsuranceTierGroup, (class_id, group_id)) is None:
+            db.session.add(InsuranceTierGroup(class_id=class_id, group_id=group_id, name=key))
+    return group_id

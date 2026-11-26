@@ -5,12 +5,12 @@ All SQLAlchemy models are defined here with proper relationships and properties.
 Times are stored as UTC in the database.
 """
 
-from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
 import logging
 import secrets
 import uuid
+from types import SimpleNamespace
 
 import pytz
 import sqlalchemy as sa
@@ -22,7 +22,11 @@ from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import JSONB
 from app.extensions import db
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
+    canonical_temporal_resolver,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +60,10 @@ def _quantize_currency(value):
         # Handle NaN, Infinity, or unparseable values
         return Decimal('0.00')
 
-def _current_utc_month():
-    return utc_now().month
-
-def _current_utc_year():
-    return utc_now().year
+def _resolver_now():
+    """Column default/onupdate callable: SQLAlchemy needs a callable, so this is the
+    one sanctioned indirection (SPEC-TIME-001 migration playbook). Platform stamps are SLE."""
+    return canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
 
 
@@ -157,8 +160,11 @@ class User(db.Model):
     )
     provisioning_expires_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now, nullable=False)
+
+    configuration_export_verifier = db.Column(db.String(64), nullable=True)
+    configuration_export_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Hall pass public verification token (256-bit, capability-based, rotatable)
     # Used for /verify/hallpass/<token> and not derived from teacher authority
@@ -216,8 +222,8 @@ class IdentityProfile(db.Model):
     last_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
     notes = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=True)
     # No recovery artifacts on IdentityProfile
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now, nullable=False)
 
     __table_args__ = (
         db.Index('ix_identity_profiles_type_name', 'profile_type', 'last_name'),
@@ -257,8 +263,8 @@ class Seat(db.Model):
     claimed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     has_received_rent_exemption = db.Column(db.Boolean, nullable=False, default=False)
 
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now, nullable=False)
 
     identity_profile = db.relationship(
         'IdentityProfile',
@@ -325,7 +331,7 @@ class ClassEconomy(db.Model):
     # canonicalize_class_timezone in app/services/classroom_setup.py). It is
     # NOT NULL and immutable once set. Confirmed-UTC is persisted as 'Etc/UTC'.
     class_timezone = db.Column(db.String(64), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     # When the class's teacher dismissed the notice for work recorded before the
     # class's first payroll setting (DOM-PROD-001 §XV.6). NULL = not dismissed.
     # Write-once, only through FEAT-CLASS-008 (DOM-CLASS-001 §VII.1); who
@@ -422,12 +428,12 @@ class EconomicEngine(db.Model):
     )
 
     # Audit
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     # When this version governs from. Never earlier than ``created_at``; an
     # unspecified one is in force from the moment it is recorded.
     effective_at = db.Column(
         db.DateTime(timezone=True),
-        default=lambda context: context.get_current_parameters().get('created_at') or utc_now(),
+        default=lambda context: context.get_current_parameters().get('created_at') or _resolver_now(),
         nullable=False,
     )
 
@@ -476,7 +482,7 @@ class PasskeyCredential(db.Model):
     # Sign-in requires a row matching both user_id and credential_id.
     credential_id = db.Column(db.Text, unique=True, nullable=False)
     authenticator_name = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     last_used = db.Column(db.DateTime(timezone=True))
 
     user = db.relationship('User', backref=db.backref('passkey_credentials', lazy='dynamic', cascade='all, delete-orphan'))
@@ -510,13 +516,13 @@ class Transaction(db.Model):
     # Float causes bugs: -0.00 overdraft fees, unpayable rent balances
     amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     # All times stored as UTC (see header note)
-    timestamp = db.Column(db.DateTime(timezone=True), default=utc_now)
+    timestamp = db.Column(db.DateTime(timezone=True), default=_resolver_now)
     account_type = db.Column(db.String(20), default='checking')
 
     # Ledger Fields
     amount_cents = db.Column(db.Integer, nullable=False)  # Signed integer (e.g. 100 = $1.00)
     posted_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
+    effective_at = db.Column(db.DateTime(timezone=True), default=_resolver_now)
 
     description = db.Column(db.String(255))
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
@@ -538,7 +544,7 @@ class Transaction(db.Model):
     correction_intent_locator = db.Column(db.String(128), nullable=True)
 
     # All times stored as UTC
-    date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)
+    date_funds_available = db.Column(db.DateTime(timezone=True), default=_resolver_now)
 
     # Audit lineage — proof that this row entered through a lawful CTH execution path.
     # lineage_token is a fast provenance pointer (copy of AuditEvent.hmac_signature).
@@ -596,7 +602,9 @@ class Transaction(db.Model):
         # the separate write-time casing validator (FEAT-LED-005 §IX) retires
         # them; this constraint only closes the vocabulary, it does not enforce
         # canonical spelling on new rows. Migration a4d7e9c2f1b6 adds this NOT
-        # VALID so it is documentation here, not itself re-applied by Alembic.
+        # VALID, e3b7c1d9a2f4 re-creates it without bug_reward and a0faf8b2a35d
+        # adds penalty, so it is documentation here, not itself re-applied by
+        # Alembic.
         db.CheckConstraint(
             "type IS NULL OR type IN ("
             "'interest', 'Interest', "
@@ -612,7 +620,7 @@ class Transaction(db.Model):
             "'payroll', "
             "'payroll_correction', "
             "'manual_payment', "
-            "'bug_reward', "
+            "'penalty', "
             "'issue_reversal', "
             "'issue_compensation', "
             "'rent_payment', "
@@ -907,7 +915,7 @@ class LedgerBalanceSnapshot(db.Model):
     )
 
     last_settlement_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now)
 
     __table_args__ = (
         db.UniqueConstraint('class_id', 'seat_id', 'account_type', name='uq_balance_snapshot_scope'),
@@ -924,7 +932,7 @@ class LedgerCommandReservation(db.Model):
     idempotency_key = db.Column(db.String(128), nullable=False)
     replay_fingerprint = db.Column(db.String(128), nullable=False)
     fingerprint_version = db.Column(db.Integer, nullable=False)
-    accepted_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    accepted_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     effects = db.relationship("Transaction", back_populates="command_reservation")
     __table_args__ = (
@@ -949,7 +957,7 @@ class AttendanceSession(db.Model):
     reason_code = db.Column(db.String(32), nullable=False, index=True)
     # Hall-pass rows carry the consumed entitlement instance id, not the log row id.
     hall_pass_id = db.Column(db.String(100), nullable=True, index=True)
-    timestamp = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+    timestamp = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False, index=True)
 
     target_seat = db.relationship("Seat", foreign_keys=[target_seat_id], backref=db.backref("attendance_sessions", passive_deletes=True))
     actor_seat = db.relationship("Seat", foreign_keys=[actor_seat_id], post_update=True)
@@ -978,7 +986,7 @@ class HallPassLog(db.Model):
 
     # CRITICAL: class_id is the source of truth for class isolation
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-    timestamp = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    timestamp = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     requested_by_seat = db.relationship('Seat', foreign_keys=[requested_by_seat_id], post_update=True)
     approved_by_seat = db.relationship('Seat', foreign_keys=[approved_by_seat_id], post_update=True)
@@ -1012,7 +1020,7 @@ class PayrollEvent(db.Model):
     policy_uuid = db.Column(db.String(36), nullable=True, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="TEACHER")
     payroll_event_type = db.Column(db.String(20), nullable=False)
-    recorded_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+    recorded_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False, index=True)
     # Economic-cycle attribution (DOM-PROD-001 §XV). NULL for events recorded
     # outside a completed class-level cycle (e.g. ad-hoc per-seat runs, manual
     # credits, reversals); stamped by class-wide cycle settlement so every event
@@ -1247,7 +1255,7 @@ class PayrollCycleCompletion(db.Model):
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     idempotency_key = db.Column(db.String(255), nullable=False)
     payroll_cycle_id = db.Column(db.String(36), nullable=False, index=True)
-    completed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    completed_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint('class_id', 'idempotency_key', name='uq_payroll_cycle_completion_class_key'),
@@ -1280,7 +1288,7 @@ class HallPassSettings(db.Model):
 
     max_queue_limit = db.Column(db.Integer, nullable=False, default=10)
     pass_type_payload = db.Column(db.JSON, nullable=False, default=list)
-    effective_date = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+    effective_date = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False, index=True)
 
     # Immutable definition payload (DOM-POL-001 §VI.1); see the guard below.
     _FROZEN_POLICY_FIELDS = ('max_queue_limit', 'pass_type_payload', 'effective_date')
@@ -1442,7 +1450,7 @@ class StoreProduct(db.Model):
         db.String(16), nullable=False, server_default='IN_USE', default='IN_USE'
     )
 
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True)
     retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -1781,10 +1789,10 @@ class RentSettings(db.Model):
     satisfaction_benefits = db.Column(db.JSON, nullable=True)
 
     # Metadata
-    rent_configured_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=True, index=True)
+    rent_configured_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=True, index=True)
     rent_effective_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     cycle_length_days = db.Column(db.Integer, nullable=False, default=30)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now)
 
     # Version tracking is modeled in canonical policy tables.
 
@@ -1919,7 +1927,7 @@ class ObligationAssessment(db.Model):
     # Canonical timestamp — DOM-OBL-001 §VII.1
     # Single timestamp represents when the obligation event occurred (replaces created_at/assessed_at/viewable_at)
     # Per DOM-OBL-001 v2.5: no due_at here (on bill_cycles), no viewable_at (Class Configuration), no separate created_at/assessed_at
-    timestamp = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    timestamp = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     # Bill cycle linkage — DOM-OBL-001 §VII.3
     bill_cycle_id = db.Column(db.Integer, db.ForeignKey('bill_cycles.id', ondelete='SET NULL'), nullable=True, index=True)
@@ -1998,7 +2006,7 @@ class ObligationCommandReservation(db.Model):
     replay_fingerprint = db.Column(db.String(128), nullable=False)
     fingerprint_version = db.Column(db.Integer, nullable=False)
     bill_cycle_id = db.Column(db.Integer, db.ForeignKey('bill_cycles.id', ondelete='CASCADE'), nullable=False, index=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -2036,7 +2044,7 @@ class EntitlementEvent(db.Model):
     event_type = db.Column(db.String(20), nullable=False, index=True)  # GRANTED, CONSUMED, EXPIRED, REVOKED
     correlation_id = db.Column(db.String(200), nullable=True, index=True)  # Cross-domain lineage
     payload = db.Column(db.JSON, nullable=True)  # Type-specific canonical facts
-    timestamp = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    timestamp = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     target_seat = db.relationship('Seat', foreign_keys=[target_seat_id], backref=db.backref('target_entitlement_events', passive_deletes=True))
     actor_seat = db.relationship('Seat', foreign_keys=[actor_seat_id], backref=db.backref('actor_entitlement_events', passive_deletes=True))
@@ -2068,7 +2076,7 @@ class PendingAction(db.Model):
     correlation_id = db.Column(db.String(200), nullable=False, unique=True, index=True)  # Identifies the action lifecycle
     authoritative_feat = db.Column(db.String(100), nullable=False, index=True)  # FEAT-STOR-002, FEAT-STOR-003, etc.
     payload = db.Column(db.JSON, nullable=False)  # Typed request envelope validated by submitting FEAT
-    submitted_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    submitted_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     seat = db.relationship('Seat', backref=db.backref('pending_actions', passive_deletes=True))
 
@@ -2115,7 +2123,7 @@ class InsuranceClaim(db.Model):
     # {claimed_dates: [...]} for PRODUCTIVITY). Never frozen policy terms.
     claim_basis = db.Column(db.JSON, nullable=False)
 
-    submitted_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    submitted_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     # Decision fields — nullable until the claim reaches a terminal state.
     decided_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True)
@@ -2154,13 +2162,9 @@ class InsuranceClaimProductivityDate(db.Model):
     teacher's adjudicated hours, an optional per-date adjustment note, and the
     immutable recognized economic result.
 
-    The ``UNIQUE(entitlement_id, claim_date)`` constraint is the structural
-    enforcement of the settled invariant (FEAT-STOR-003 §V.B): within one
-    entitlement a class-local date may participate in at most one PRODUCTIVITY
-    claim lifecycle, regardless of SUBMITTED / APPROVED / REJECTED. Rejection does
-    NOT free the date — the row remains, so a same-date re-file collides with the
-    constraint. ``UNIQUE(claim_id, claim_date)`` forbids a date appearing twice
-    within a single case.
+    Pending and approved claims reserve a date under the GRANTED entitlement
+    row lock. Rejection releases it while retaining immutable date evidence.
+    ``UNIQUE(claim_id, claim_date)`` forbids repeats within a single case.
 
     No mutable counters live here. Weekly claimed hours, weekly/period recognized
     payout consumption, and date-allowance-used are all re-derived by reading this
@@ -2211,7 +2215,6 @@ class InsuranceClaimProductivityDate(db.Model):
     )
 
     __table_args__ = (
-        db.UniqueConstraint('entitlement_id', 'claim_date', name='uq_icpd_entitlement_date'),
         db.UniqueConstraint('claim_id', 'claim_date', name='uq_icpd_claim_date'),
         db.Index('ix_icpd_claim_id', 'claim_id'),
         db.Index('ix_icpd_entitlement_id', 'entitlement_id'),
@@ -2238,7 +2241,7 @@ class ActorRequestTrace(db.Model):
     method = db.Column(db.String(10), nullable=False)
     endpoint = db.Column(db.String(500), nullable=False)
     status_code = db.Column(db.Integer, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False, index=True)
 
     __table_args__ = (
         db.Index('ix_actor_trace_actor_public_created', 'actor_type', 'actor_public_id', 'created_at'),
@@ -2267,7 +2270,7 @@ class IssueCategory(db.Model):
     category_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     display_order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now)
 
     # Relationships
     issues = db.relationship('Issue', backref='category', lazy='dynamic')
@@ -2322,7 +2325,7 @@ class Issue(db.Model):
     # Student submission (immutable after submission)
     student_explanation = db.Column(db.Text, nullable=False)
     student_expected_outcome = db.Column(db.Text, nullable=True)
-    submitted_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+    submitted_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False, index=True)
 
     # Context attachment (transaction/record-specific issues)
     related_transaction_id = db.Column(db.Integer, db.ForeignKey('ledger_transaction.id'), nullable=True)
@@ -2350,7 +2353,6 @@ class Issue(db.Model):
     teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Diagnostic note for sysadmin
     support_permissions = db.Column(db.JSON, nullable=False, default=dict, server_default='{}')
     share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Consent for class disclosure
-    eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Marks if student may receive reward for a legitimate bug
 
     # Sysadmin review and resolution
     sysadmin_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -2362,8 +2364,8 @@ class Issue(db.Model):
     closed_by_type = db.Column(db.String(20), nullable=True)  # 'reviewer', 'sysadmin', 'system'
 
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now)
 
     # Relationships
     related_transaction = db.relationship('Transaction', backref='related_issues')
@@ -2434,7 +2436,7 @@ class TicketCorrelationPack(db.Model):
     class_public_id = db.Column(db.String(36), nullable=True)
     request_trace_json = db.Column(db.JSON, nullable=False, default=list)
     error_refs_json = db.Column(db.JSON, nullable=False, default=list)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     __table_args__ = (
         db.Index('ix_ticket_correlation_actor_public', 'actor_type', 'actor_public_id'),
@@ -2454,7 +2456,7 @@ class IssueStatusHistory(db.Model):
 
     previous_status = db.Column(db.String(50), nullable=True)
     new_status = db.Column(db.String(50), nullable=False)
-    changed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    changed_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     changed_by_type = db.Column(db.String(20), nullable=False)  # 'student', 'teacher', 'sysadmin', 'system'
     changed_by_public_id = db.Column(db.String(64), nullable=True)  # actor_public_id of who made the change
     notes = db.Column(db.Text, nullable=True)
@@ -2487,7 +2489,7 @@ class IssueResolutionAction(db.Model):
     before_value = db.Column(db.Text, nullable=True)
     after_value = db.Column(db.Text, nullable=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     # Relationships
     related_transaction = db.relationship('Transaction')
@@ -2513,7 +2515,7 @@ class RecoveryRequest(db.Model):
         nullable=False,
         default='pending'
     )  # pending, verified, expired, cancelled
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)  # Auto-expire after X days
     completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -2561,7 +2563,7 @@ class StudentRecoveryCode(db.Model):
     code_hash = db.Column(db.String(64), nullable=True)
     verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    notified_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    notified_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     dismissed = db.Column(db.Boolean, default=False, nullable=False)
 
     seat = db.relationship('Seat', backref=db.backref('recovery_codes', lazy='dynamic'))
@@ -2595,7 +2597,7 @@ class PayrollSettings(db.Model):
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     pay_rate = db.Column(db.Numeric(precision=18, scale=8), nullable=False)  # $ per minute
     effective_date = db.Column(db.DateTime(timezone=True), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_resolver_now)
     overtime_threshold = db.Column(db.Float, nullable=True)
     overtime_threshold_unit = db.Column(db.String(20), nullable=True)  # seconds/minutes/hours
     max_time_per_day = db.Column(db.Float, nullable=True)
@@ -2667,9 +2669,9 @@ class ClassFeature(db.Model):
     )
     feature = db.Column(db.String(32), nullable=False)
     economic_version_id = db.Column(db.String(36), nullable=True, index=True)
-    effective_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    effective_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_resolver_now)
     deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
 
     __table_args__ = (
         db.PrimaryKeyConstraint('class_id', 'feature', 'effective_at', name='pk_class_features'),
@@ -2774,13 +2776,13 @@ class FeatureSettings(db.Model):
 
     # Economy policy and rebalance tracking
     economy_policy_mode = db.Column(db.String(20), default='default', nullable=False)
-    economy_policy_updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    economy_policy_updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     economy_policy_alignment_status = db.Column(db.String(32), nullable=True)
     economy_last_rebalanced_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now)
 
     def __repr__(self):
         return f'<FeatureSettings class_id={self.class_id}>'
@@ -2811,6 +2813,26 @@ class FeatureSettings(db.Model):
 # half, so no catalog item had a resolvable ``policy_uuid`` and every purchase
 # was refused. Typed columns replace the JSON payload; ``availability_state``
 # replaces ``is_retired``.
+
+
+class InsuranceTierGroup(db.Model):
+    """POL-owned identity; names never determine membership (INV-ARC-014)."""
+    __tablename__ = 'insurance_tier_groups'
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), primary_key=True)
+    group_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(60), nullable=False)
+
+
+class ConfigurationImportReceipt(db.Model):
+    """Temporary class-owned request deduplication, never permanent audit history."""
+    __tablename__ = 'configuration_import_receipts'
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), primary_key=True)
+    operation_id = db.Column(db.String(36), primary_key=True)
+    actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False)
+    fingerprint = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    accepted_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    result = db.Column(db.JSON, nullable=False)
 
 
 class InsurancePolicy(db.Model):
@@ -2874,6 +2896,7 @@ class InsurancePolicy(db.Model):
     description = db.Column(db.Text, nullable=True)
     tier_name = db.Column(db.String(60), nullable=True)
     tier_group = db.Column(db.String(60), nullable=True)
+    tier_group_id = db.Column(db.String(36), nullable=True)
     marketing_badge = db.Column(db.String(40), nullable=True)  # key into insurance_policy_service.MARKETING_BADGES
     # The version this row replaces (edit or reactivation), same class; NULL = replaces nothing.
     # Set at creation, never changed (DOM-POL-001A §D). Decides where holders continue.
@@ -2882,7 +2905,7 @@ class InsurancePolicy(db.Model):
     # Availability projection over the immutable row (DOM-POL-001 §IX).
     availability_state = db.Column(db.String(16), nullable=False, server_default='IN_USE')
 
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True)
     retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -2958,6 +2981,7 @@ class InsurancePolicy(db.Model):
             ")",
             name='ck_insurance_policies_type_subset',
         ),
+        db.ForeignKeyConstraint(['class_id', 'tier_group_id'], ['insurance_tier_groups.class_id', 'insurance_tier_groups.group_id'], name='fk_insurance_policy_group'),
         db.Index('ix_insurance_policies_class_avail', 'class_id', 'availability_state'),
         # Tier-group backstop: at most one IN_USE policy per (class, group, rank),
         # so a group holds at most three active tiers (basic/mid/premium). Primary
@@ -2966,10 +2990,10 @@ class InsurancePolicy(db.Model):
         # hidden versions are excluded, so editing (mint new + retire old) is free.
         db.Index(
             'uq_insurance_policies_group_rank_in_use',
-            'class_id', 'tier_group', 'tier_level',
+            'class_id', 'tier_group_id', 'tier_level',
             unique=True,
             postgresql_where=sa.text(
-                "availability_state = 'IN_USE' AND tier_group IS NOT NULL"
+                "availability_state = 'IN_USE' AND tier_group_id IS NOT NULL"
             ),
         ),
     )
@@ -2985,13 +3009,10 @@ def _seed_default_class_features(mapper, connection, target):
     a teacher who wants to withhold savings/interest can still disable it.
 
     Per SPEC-TIME-001, temporal logic must use canonical resolver.
-    However, event listeners execute at the connection level before session/context
-    is available. The utc_now() helper is a low-level primitive in canonical_temporal_resolver
-    suitable for initialization side effects at the connection level.
+    The SLE ``current_time`` primitive needs no session or class context, so it
+    is safe at the connection level.
     """
-    from app.utils.canonical_temporal_resolver import utc_now as _get_utc_now
-
-    now = _get_utc_now()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     economic_version_id = str(uuid.uuid4())
 
     connection.execute(
@@ -3058,8 +3079,8 @@ class Announcement(db.Model):
     priority = db.Column(db.String(20), default='normal', nullable=False)
 
     # Timestamps
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now, nullable=False)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
@@ -3071,7 +3092,14 @@ class Announcement(db.Model):
     def is_expired(self):
         if self.expires_at is None:
             return False
-        return utc_now() > ensure_utc(self.expires_at)
+        ctx = SimpleNamespace(class_id=self.class_id)
+        now = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="current_time"
+        ).canonical_now_utc
+        return canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="earlier_than",
+            candidate=self.expires_at, reference=now,
+        ).is_earlier
 
     def should_display(self):
         return self.is_active and not self.is_expired()
@@ -3195,7 +3223,7 @@ class InterpretationCycleRecord(db.Model):
     payroll_cycle_id = db.Column(db.String(36), nullable=False, index=True)
     cycle_started_at = db.Column(db.DateTime(timezone=True), nullable=False)
     cycle_completed_at = db.Column(db.DateTime(timezone=True), nullable=False)
-    computed_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    computed_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     reference_configuration = db.Column(JSONB(none_as_null=True), nullable=False)
     observations_json = db.Column(JSONB(none_as_null=True), nullable=False)
 

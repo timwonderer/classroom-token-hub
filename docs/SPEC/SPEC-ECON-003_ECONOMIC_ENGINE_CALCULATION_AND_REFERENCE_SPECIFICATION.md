@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-003    |  2.3    |     2026-10-07 |        2.2 |       Normative |
+| SPEC-ECON-003    |  2.5    |     2026-11-10 |        2.4 |       Normative |
 
 ---
 
@@ -259,7 +259,7 @@ Weekly coverage has a `coverage_week_equivalent` of exactly `1`.
 Period-normalized values then derive from the actual duration, e.g.:
 
 ```text
-period_allowance      = ceil(weekly_allowance × coverage_week_equivalent)   # § 4.4.8
+weekly_filing_allowance = ceil(weekly_allowance)             # § 4.4.8
 maximum_policy_payout = period_premium × payout_multiple      # where applicable
 ```
 
@@ -291,7 +291,7 @@ monetary model mirrors `PRODUCTIVITY`: reimbursement is a percentage of the cove
 transaction loss, the period ceiling is `period_premium × payout_multiple`, and premiums are
 selected from the mode band per § 4.4.8.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
+Canonical preset values (weekly filing limits; payout economics per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -443,7 +443,7 @@ capacity could actually pay, CTH MUST NOT silently rewrite the configuration; it
 surface both the calculated dollar policy ceiling and the applicable weekly `CWI` reference
 clearly.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
+Canonical preset values (weekly filing limits; payout economics per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range | Mechanical bound |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -458,8 +458,8 @@ Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
 by the remaining period payout capacity (`actual_payout` above), and submission is bounded by
 the configured daily payroll limit and remaining claim allowance per `FEAT-STOR-003`. The
 weekly `1 CWI` and `expected_weekly_hours` figures are advisory economic-coherence guidance,
-not mechanical caps. These preset values are settled; only the monthly allowance rounding
-convention was flagged for confirmation and is fixed in § 4.4.8.
+not mechanical caps. These preset values are settled; the weekly filing allowance rule
+is defined in § 4.4.8, independent of billing cadence.
 
 #### 4.4.5 `NON_MONETARY` Insurance
 
@@ -493,7 +493,7 @@ The teacher remains free to set the premium outside that recommendation.
 - monetary payout ceiling;
 - actuarial / risk calculation.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
+Canonical preset values (weekly filing limits; payout economics per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -511,7 +511,7 @@ value the external benefit. The `Single` column uses the mode-band midpoint (equ
 
 As of v1.2 the insurance economic model is numerically complete. The canonical preset tables
 for all three products (§ 4.4.3, § 4.4.4, § 4.4.5), the deterministic premium-selection rule,
-and the monthly allowance rounding convention (§ 4.4.8) are **settled**.
+and the weekly filing allowance rule (§ 4.4.8) are **settled**.
 
 No insurance numerical value remains intentionally TBD. Any future change to these values is
 a normative amendment to this specification, not an implementation choice. Implementations
@@ -555,7 +555,7 @@ authored, so the recommendation uses a fixed normalization of **30** class-local
 days: `coverage_week_equivalent = 30 / 7` for a `MONTHLY` recommendation. This constant
 applies to authoring recommendations only. It never defines a billing period (periods come
 from anchored recurrence, `SPEC-TIME-001` § IX.12), and it never replaces the actual
-covered-day count used for claim allowances and payout-period scaling.
+covered-day count used for coverage-period economic normalization. Filing allowances remain weekly.
 
 For monetary products (`TRANSACTION`, `PRODUCTIVITY`):
 
@@ -563,18 +563,7 @@ For monetary products (`TRANSACTION`, `PRODUCTIVITY`):
 maximum_policy_payout = period_premium × payout_multiple
 ```
 
-**Allowance rounding (settled).** Integer per-period allowances (claims per week-equivalent,
-claimable days per week-equivalent) scale to the coverage interval by rounding **up**:
-
-```text
-period_allowance = ceil(weekly_allowance × coverage_week_equivalent)
-```
-
-`ceil` is chosen deliberately: it keeps monthly allowances at least proportional to the
-weekly value, and — because every individual approval is still bounded by the remaining
-period payout capacity (§ 4.4.4) — a slightly generous **claim count** cannot inflate total
-economic exposure. Rounding governs how many separate claims may be filed, never how much
-may be paid.
+**Weekly filing allowance (owner ruling 2026-11-03).** The configured transaction-claim or productivity-date limit is enforced at submission within the class-local Monday–Sunday filing week. It is `ceil(weekly_allowance)` regardless of billing cadence; monthly coverage never pools several weeks of filing slots. Rejected filings retain usage, and resubmitting a released date consumes another slot. Payout capacity remains coverage-period based. See DOM-STORE-001 §VIII.E.1 and FEAT-STOR-003 §XII.
 
 ---
 
@@ -595,17 +584,25 @@ fine = CWI × fine_rate
 ```
 #### 4.5.1 Internal Fines
 
-Fines such as overdraft or non-sufficient funds (NSF) fees and late fees shall use the same formula as generic classroom fines recommendations — `fine = CWI × rate`. These recommendations shall surface the recommended price range of the fines, not a single recommended price.
+**Historical persistence design, superseded by § 4.5.1.1 (issue #1647).** This
+subsection originally specified how the retired overdraft/NSF fee was priced
+and persisted. That fee is retired and nothing below is a live requirement;
+it is kept only so the historical meaning of the `flat_overdraft_fee` /
+`progressive_overdraft_fee` `economic_engine` columns, and any rows they
+produced before the 2026-10-07 ruling, stays readable. The flat recommendation
+band still has one live consumer, described after the table.
 
-An internal fine may be configured in one of two shapes, and the two are priced
-against **different** reference sets:
+Overdraft/NSF fees and late fees used the same formula as generic classroom
+fines recommendations — `fine = CWI × rate`. These recommendations surfaced
+the recommended price range of the fine, not a single recommended price.
 
-- **Flat.** Persisted as `flat_overdraft_fee`. A flat internal fee is an ordinary
-  fine and SHALL be recommended against the generic fine band of § 4.5.
-- **Progressive.** Persisted as the precomputed `progressive_overdraft_fee` JSON
-  object, using the escalating schedule below.
+An internal fine could be configured in one of two shapes, priced against
+**different** reference sets:
 
-Economic engine table shall persist the chosen overdraft fee under `flat_overdraft_fee` or persist the precomputed `progressive_overdraft_fee` as json object with the following fine schedule
+- **Flat.** Persisted as `flat_overdraft_fee`. A flat internal fee was an
+  ordinary fine, recommended against the generic fine band of § 4.5.
+- **Progressive.** Persisted as the precomputed `progressive_overdraft_fee`
+  JSON object, using the escalating schedule below.
 
 | Economic Mode | Tier 1 | Tier 2 | Tier 3|
 | --- | --- | --- | --- |
@@ -613,22 +610,26 @@ Economic engine table shall persist the chosen overdraft fee under `flat_overdra
 | `default` | 5% CWI | 10% CWI | 15% CWI|
 | `comfortable` | 4% CWI | 8% CWI | 12% CWI |
 
-This progressive schedule is a **self-contained reference set**, not a subdivision
-of the § 4.5 generic fine band. Its purpose is escalation across repeat
-occurrences, so its upper tiers are expected to sit above the generic band's
-ceiling and its first tier may sit below the generic band's floor. Implementations
-MUST NOT clamp, rescale, or validate the progressive tiers against the § 4.5 band,
-and MUST NOT raise an out-of-band finding for a progressive tier that falls outside
-it. The § 8 instruction that system-defined fines reference the canonical table
-applies to the flat shape; the progressive shape is governed by this table.
+This progressive schedule was a **self-contained reference set**, not a
+subdivision of the § 4.5 generic fine band: its purpose was escalation across
+repeat occurrences, so its upper tiers sat above the generic band's ceiling
+and its first tier could sit below the generic band's floor. Nothing
+computes or persists a progressive fee today; `resolve_overdraft_fine`
+(`app/services/economic_engine.py`) still returns this schedule as part of
+its result, but no caller reads that part of it.
 
-The two schedules also order the economic modes differently, and this is deliberate.
-The generic band of § 4.5 rises from `tight` to `comfortable` alongside rent and the
-savings target. The progressive schedule instead escalates hardest under `tight`,
-because repeat-occurrence pressure is the lever a leaner economy uses. A mode that
-carries a lower generic fine band may therefore carry a higher tier-3 internal fee.
+The two schedules ordered the economic modes differently, by design: the
+generic band of § 4.5 rises from `tight` to `comfortable` alongside rent and
+the savings target, while the progressive schedule escalated hardest under
+`tight`, since repeat-occurrence pressure is the lever a leaner economy uses.
 
-Internal fines are only active if their value is not `NULL` for the economic policy being enforced. When disabling fines, the backend shall create a new economic policy with the value set to `NULL`
+**Live consumer.** `resolve_overdraft_fine` still surfaces the generic flat
+band (`fine = CWI × fine_rate`, § 4.5) as a recommended range for the
+unrelated teacher-issued-penalty feature (`FEAT-LED-006`, the admin "Issue
+Fine" page). That feature never persists to `economic_engine`: the teacher
+picks an amount within the recommended range and it is posted as an ordinary
+ledger penalty transaction. It never reads or sets the progressive schedule
+above.
 
 ##### 4.5.1.1 Overdraft / NSF Fee Applicability
 
@@ -640,44 +641,18 @@ assessments, and is subject to late fees under its own policy. An NSF fee was
 never an obligation: it is a Ledger fee, a side effect of a negative balance, and
 a historical one may be reversed like any other fee (`DOM-OBL-001` §II.C).
 
-The rest of §4.5.1.1 (the fee's scope, amount and recording) and the economic
-engine's overdraft-fee settings describe the retired fee and are superseded by
-the paragraph above; they are removed in the next revision of this
-specification. §4.5.1.1A (charge and deduction funding, including overdraft
-protection) is unaffected.
+A **Store purchase** is not charged an NSF fee. A purchase requires sufficient
+funds: when checking, together with any full overdraft-protection transfer
+under §4.5.1.1A, does not cover it, the Store refuses it before anything posts
+(`FEAT-STOR-001` §VI.E). No agreement was formed, so there is no failed
+agreement and no fee, as a declined card purchase costs nothing. §4.5.1.1A
+(charge and deduction funding, including overdraft protection) is unaffected.
 
-A **Store purchase** is not charged an NSF fee (owner ruling 2026-10-07). A purchase requires
-sufficient funds: when checking, together with any full overdraft-protection
-transfer under §4.5.1.1A, does not cover it, the Store refuses it before anything
-posts (`FEAT-STOR-001` §VI.E). No agreement was formed, so there is no failed
-agreement and no fee, as a declined card purchase costs nothing.
-
-An NSF fee SHALL NOT be charged for:
-
-- **Transfers** — a transfer is a lateral movement between the seat's OWN
-  accounts (e.g. checking↔savings). It is not spending and not an agreement. On
-  insufficient funds a transfer is simply **invalid**: it does not proceed and
-  incurs no fee.
-- **Penalties** — a teacher-applied deduction (an admin adjustment / fine) is
-  itself a penalty, neither a purchase nor an obligation. A penalty **cannot
-  generate a fine**; it posts as a direct debit (settling below zero if the
-  balance cannot cover it), after applying the shared protection rule of §4.5.1.1A. Savings eligibility for funding and fee applicability are separate decisions.
-- **Payroll corrections** — interval or residual recovery is a separately authorized corrective debit, not a failed agreement. It incurs no NSF fee and creates no obligation or deferred deduction.
-
-Fee amount (authority): the **teacher sets** the fee amount. The Economic Engine
-does not determine it; per §4.5.1 the CWI helper surfaces a **CWI-normed
-recommended range** for the teacher's reference (not a single value) and displays
-a warning when the chosen amount falls outside that range. The teacher's chosen
-value is persisted on the engine (`flat_overdraft_fee` /
-`progressive_overdraft_fee`); when a fee is charged, the Ledger posts that
-teacher-set amount.
-
-Recording and layering (informative): the Ledger posts the fee debit and stays
-domain-blind (`DOM-LED-001` §II). Because the NSF fee is a fine, it is also an
-obligation (`DOM-OBL-001` §II.C, immediate charge), recorded by the
-**originating business FEAT's** cross-domain orchestration — never by the Ledger
-resolution primitive. This resolves the
-overdraft/NSF ownership question previously open in `DOM-ITR-001` §XIII.c.
+The fee's former scope, amount and recording (the teacher-set
+`flat_overdraft_fee` / `progressive_overdraft_fee` and the business FEAT's
+NSF-obligation orchestration) are retired along with the fee: the engine
+columns and any historical rows they produced are untouched, but nothing
+reads or writes them for a new fee going forward (issue #1647).
 
 ---
 
@@ -700,12 +675,12 @@ savings sweeps are prohibited. Resolution uses current authoritative available
 balances while holding the seat serialization lock through posting.
 
 Own-account transfers are excluded: insufficient source funds deny the transfer,
-with no protection transfer or fee. A Store purchase is eligible only when this
+with no protection transfer. A Store purchase is eligible only when this
 rule leaves checking at or above zero (`FEAT-STOR-001` §VI.E); a purchase never
-takes the "applies the debit to checking, which may become negative" branch. Fee applicability remains the separate
-failed-agreement test in §4.5.1.1. Funding an NSF fee does not generate another
-NSF fee. A payroll correction always has zero NSF fee and cannot generate an
-obligation, deferred debt or future deduction.
+takes the "applies the debit to checking, which may become negative" branch.
+No overdraft or NSF fee is ever assessed (§4.5.1.1); this funding rule governs
+only whether and how much savings transfers to cover a shortfall. A payroll
+correction cannot generate an obligation, deferred debt or future deduction.
 
 | Checking | Savings | Debit | Protection | Transfer | Final checking | Final savings |
 |---:|---:|---:|:---:|---:|---:|---:|
@@ -1012,7 +987,7 @@ The following table is the canonical reference set for the Economic Engine.
 
 The `Insurance premium` row is the **premium pricing envelope only** (the economic-mode / cost axis of § 4.4), and is engine guidance rather than a hard cap. It does not define any coverage, reimbursement percentage, payout cap, or claim allowance. Those belong to the insurance-tier / coverage axis and are defined by the canonical preset tables in § 4.4.3–§ 4.4.5 with the deterministic selection rule in § 4.4.8; this table MUST NOT be read as a complete insurance economic model. For `NON_MONETARY` this band is affordability guidance only (§ 4.4.5). For `PRODUCTIVITY` the settled mechanical bounds in § 4.4.4 (remaining period payout capacity and remaining claim allowance, with the configured daily payroll limit as the submission-time hours ceiling) bound exposure independently of this row; the weekly `expected_weekly_hours` and `CWI` figures are advisory economic-coherence guidance.
 
-System-defined fines such as rent late fees and overdraft fees shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. Progressive internal fee schedules are the one exception: they are priced against the self-contained tier table in § 4.5.1 and are not bounded by the `Fine` row above. Actual configured fine amount shall persist on `economic_engine` for overdraft fines and `rent_settings` for rent late fees.
+System-defined fines such as rent late fees, and the teacher-issued internal fine recommendation of § 4.5.1 (`resolve_overdraft_fine`, read-only and non-persisted), shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. The progressive tier table § 4.5.1 historically described was the one exception to this flat-band reference; that persistence design is superseded (§ 4.5.1.1), and `resolve_overdraft_fine`'s surviving teacher-penalty consumer never reads it. Actual configured fine amount shall persist on `rent_settings` for rent late fees; no fine persists on `economic_engine` (§ 4.5.1.1, § 4.5.1).
 
 Store economic-role reference:
 
@@ -1078,6 +1053,8 @@ Revisions to this document must:
 3. remain consistent with the class-economy authority chain.
 
 ### Revision history
+
+- **2.5 (2026-11-10)** — Completes the §4.5.1.1 revision that **2.3** flagged as pending: removes the retired fee's scope/amount/recording text and the teacher-facing fee settings and warning it described, and marks §4.5.1's persistence/schedule description, §4.5.1.1A's fee-applicability sentence, and §8's overdraft-fee and progressive-fee-schedule references as historical (issue #1647). No calculation or formula changes. `flat_overdraft_fee` / `progressive_overdraft_fee` remain persisted engine columns and continue to carry forward unchanged on every engine evolution (the carry-forward is not a write of a new value); no caller — including configuration transfer's explicit-update path, which is closed too — can set either field to a new value going forward.
 
 - **2.3 (2026-10-07)**, owner rulings 2026-10-07: no overdraft or NSF fee is assessed; a failed obligation payment leaves the obligation unpaid, accumulating, and subject to late fees (§4.5.1.1; `DOM-OBL-001` 3.3). A Store purchase requires sufficient funds and is refused before posting, with no fee, when checking and any full protection transfer do not cover it (§4.5.1.1, §4.5.1.1A; `FEAT-STOR-001` 3.2). Funding semantics for authorized charges are unchanged.
 

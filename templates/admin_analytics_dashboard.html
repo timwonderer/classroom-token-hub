@@ -115,10 +115,10 @@
     <div>
       <label for="itr-cycle-select" class="form-label">Completed cycle</label>
       <select id="itr-cycle-select" name="cycle" class="form-select itr-cycle-select">
-        {% for summary in view.history %}
-        <option value="{{ summary.payroll_cycle_id }}"
-                {% if summary.payroll_cycle_id == view.selected_cycle_id %}selected{% endif %}>
-          Cycle completed {{ summary.cycle_completed_at | fmt_date }}
+        {% for option in view.history_options %}
+        <option value="{{ option.payroll_cycle_id }}"
+                {% if option.payroll_cycle_id == view.selected_cycle_id %}selected{% endif %}>
+          Cycle completed {{ option.cycle_completed_display }}
         </option>
         {% endfor %}
       </select>
@@ -129,7 +129,7 @@
   {% if cycle %}
   <p class="itr-cycle-meta">
     Interpretation of the cycle completed
-    {{ cycle.cycle.cycle_completed_at | fmt_date }}. These are the
+    {{ view.latest_cycle_completed_display }}. These are the
     observations CTH recorded when this cycle closed.
   </p>
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level     |
 |------------------|---------|----------------|------------|---------------------|
-| SPEC-TEST-001    | 1.0     | 2026-07-17     | N/A        | Implementation Spec |
+| SPEC-TEST-001    | 1.1     | 2026-10-24     | 1.0        | Implementation Spec |
 
 ---
 
@@ -228,7 +228,7 @@ from tests.helpers.classroom_initializer import initialize
 from tests.helpers.canonical_classroom import provision_classroom
 from app.extensions import db
 from app.models import Seat
-from app.utils.time import utc_now
+from tests.helpers import temporal
 
 def test_class_switching(client, app):
     classroom_a = initialize("chemistry_p1", app)        # DB self-test runs
@@ -239,7 +239,7 @@ def test_class_switching(client, app):
         user_id=student.user.id,
         class_id=classroom_b.class_id,
         role="student",
-        claimed_at=utc_now(),
+        claimed_at=temporal.now(),
     )
     db.session.add(extra_seat)
     db.session.flush()
@@ -264,3 +264,29 @@ When you call any initializer function, you do not need to write:
 | Nonce generation and DB write | `set_canonical_context()` internally |
 | `resolve_canonical_context()` verification | `_assert_canonical_context()` |
 | Re-querying entities to verify DB state | `_assert_db_invariants()` |
+
+---
+
+## X. Time in Tests
+
+A test obtains every temporal value from production time logic, never from its own. `tests/helpers/temporal.py` is the only time tool tests use: each of its functions is one `canonical_temporal_resolver` call (`SPEC-TIME-001`), so a test's "now", "three days later" or "09:00 class time" is the production answer.
+
+| Need | Use |
+| --- | --- |
+| Pin "now" for the code under test | `temporal.pinned_clock(instant)` (patches the resolver's clock, the one seam `SPEC-TIME-001` §XIII names) |
+| The current instant | `temporal.now()` |
+| An instant N seconds/minutes/hours away | `temporal.shifted(instant, minutes=…)` |
+| N calendar days later, keeping the local clock | `temporal.calendar_days_later(instant, days, class_id=…)` |
+| A class-local wall-clock time | `temporal.class_wall_time(class_id, date, hour, minute)` |
+| The class-local date of an instant | `temporal.class_date_of(instant, class_id)` |
+| A class-local day's bounds | `temporal.class_day_bounds(class_id, date)` |
+| Seconds between two instants | `temporal.seconds_between(start, end)` |
+
+A test does not read the wall clock, convert timezones or do date arithmetic itself (`INV-ARC-015` §VII binds tests as well as runtime code). If a test needs something the helper does not offer, the helper gains a function that calls the resolver; the test never writes the logic inline.
+
+## Revision History
+
+| Version | Date | Change |
+| --- | --- | --- |
+| 1.1 | 2026-10-24 | §X: time in tests comes from `tests/helpers/temporal.py`, thin wrappers over the production resolver (owner, 2026-10-24). §VIII's example no longer imports `utc_now` from `app.utils.time`, a module that no longer exists. |
+| 1.0 | 2026-07-17 | Initial version. |

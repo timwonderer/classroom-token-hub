@@ -26,6 +26,8 @@
 <ul class="mb-0">
   <li>Filter by student, account type, or date to investigate a specific concern.</li>
   <li>Common entries include payroll deposits, rent charges, store purchases, and savings transfers.</li>
+  <li>The <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">cancel</span> button only appears on an unused Store purchase that has not already been reversed — it reverses that one purchase with an offsetting entry. An overpaid payroll deposit has its own correction, <strong>Recover payment</strong>, on Payroll History. Rent, insurance, and other charges have no reversal here; use a manual credit instead.</li>
+  <li>If the purchase still has a pending request, the button stays hidden: return it in the <strong>Store</strong> if it's a pending redemption, or reject it on the <strong>Hall Pass</strong> page if it's a pending hall-pass request.</li>
 </ul>
 {% endcall %}
 
@@ -140,7 +142,7 @@
               {% for tx in transactions[:10] %}
               <tr>
                 <td>
-                  {% if tx.timestamp %}{{ tx.timestamp|fmt_timestamp }}{% else %}N/A{% endif %}
+                  {% if tx.timestamp %}{{ transaction_time_displays[tx.id] }}{% else %}N/A{% endif %}
                 </td>
                 <td>
                   <a href="{{ student_detail_url(tx.actor_public_id) }}">{{ tx.student_name }}</a>
@@ -216,8 +218,12 @@
             </div>
             <div class="col-md-2">
               <label for="student" class="form-label fw-bold">Student:</label>
-              <input type="text" name="student" id="student" class="form-control form-control-sm" placeholder="Name..."
-                value="{{ request.args.get('student', '') }}">
+              <select name="student" id="student" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% for public_id, name in student_filter_options %}
+                <option value="{{ public_id }}" {% if request.args.get('student')==public_id %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+              </select>
             </div>
           </div>
           <div class="row mt-3">
@@ -255,7 +261,7 @@
               {% for tx in transactions %}
               <tr>
                 <td>
-                  {% if tx.timestamp %}{{ tx.timestamp|fmt_timestamp }}{% else %}N/A{% endif %}
+                  {% if tx.timestamp %}{{ transaction_time_displays[tx.id] }}{% else %}N/A{% endif %}
                 </td>
                 <td>
                   <a href="{{ student_detail_url(tx.actor_public_id) }}">{{ tx.student_name }}</a>
@@ -382,7 +388,7 @@
               <div class="mb-4">
                 <label for="interest_calculation_type" class="form-label fw-bold">Interest Type</label>
                 <select name="interest_calculation_type" id="interest_calculation_type" class="form-select"
-                  aria-describedby="interest_calculation_type_help interest_calculation_type_caveat">
+                  aria-describedby="interest_calculation_type_help">
                   <option value="simple" {% if interest_calculation_type != 'compound' %}selected{% endif %}>
                     Simple</option>
                   <option value="compound" {% if interest_calculation_type == 'compound' %}selected{% endif %}>
@@ -390,10 +396,6 @@
                 </select>
                 <small class="text-muted d-block" id="interest_calculation_type_help">Compound interest also earns on
                   interest that has built up but not been paid yet. Simple interest does not.</small>
-                <small class="text-muted d-block" id="interest_calculation_type_caveat"><strong>Known issue:</strong>
-                  with Simple, interest that has already been paid into savings still earns interest in later
-                  payout periods, so Simple currently grows a little like compounding once per payout. We are
-                  tracking a fix.</small>
               </div>
 
               <div class="mb-4" id="compoundFrequencyGroup">
@@ -440,44 +442,6 @@
                 <div><small class="text-muted">When on, a negative checking transaction pulls from savings before
                   it overdraws.</small></div>
               </div>
-
-              <div class="mb-4">
-                <label for="flat_overdraft_fee" class="form-label fw-bold">Overdraft Fee (flat)</label>
-                <div class="input-group">
-                  <span class="input-group-text">{{ currency_symbol|default('$') }}</span>
-                  <input type="number" step="0.01" min="0" class="form-control" name="flat_overdraft_fee"
-                    id="flat_overdraft_fee" placeholder="Leave blank to disable"
-                    value="{% if flat_overdraft_fee is not none %}{{ "%.2f"|format(flat_overdraft_fee|float) }}{% endif %}">
-                </div>
-                <small class="text-muted">Charged when an account overdraws. Leave blank to charge no fee.</small>
-                {% if overdraft_reco and overdraft_reco.cwi %}
-                <div class="mt-2 small text-success">
-                  <span class="material-symbols-outlined align-middle icon-xs" aria-hidden="true">recommend</span>
-                  Economic Engine range: <strong>{{ overdraft_reco.flat_fee_lower }}–{{ overdraft_reco.flat_fee_upper }}</strong>
-                  for <em>{{ overdraft_reco.mode }}</em> mode
-                  ({{ "%.0f"|format(overdraft_reco.fine_rate_lower|float * 100) }}%–{{ "%.0f"|format(overdraft_reco.fine_rate_upper|float * 100) }}% of CWI).
-                  Progressive tiers: {{ overdraft_reco.progressive_fees|join(' / ') }}.
-                </div>
-                {% else %}
-                <div class="mt-2 small text-muted">
-                  Set a payroll pay rate and expected weekly hours to see the Economic Engine's
-                  recommended overdraft-fee range.
-                </div>
-                {% endif %}
-                {# Advisory out-of-range alert (non-blocking): the teacher sets the
-                   fee; the CWI helper only recommends a range (SPEC-ECON-003
-                   §4.6.1.1). Mirrors the rent/store balance alerts. #}
-                {% for w in overdraft_fee_warnings|default([]) %}
-                <div class="mt-2 small text-danger">
-                  <span class="material-symbols-outlined align-middle icon-xs" aria-hidden="true">warning</span>
-                  {{ w.message }}
-                </div>
-                {% endfor %}
-              </div>
-
-              {% call cards.alert_card('warning', 'Overdraft fees use the fine band', icon='warning', body_class='mb-0') %}
-                <p class="mb-0">Overdraft fees reuse the classroom fine band. A fee is only active while a value is set.</p>
-              {% endcall %}
             </div>
           </div>
         </div>
@@ -494,7 +458,10 @@
 <script>
   // Void Transaction
   async function voidTransaction(transactionId) {
-    if (!confirm('Reverse this transaction? A compensating entry will be added to its history.')) return;
+    const confirmed = await window.AppCore.confirm('Reverse this transaction? A compensating entry will be added to its history.', {
+      title: 'Reverse transaction', confirmLabel: 'Reverse', danger: true,
+    });
+    if (!confirmed) return;
 
     try {
       const resp = await window.AppCore.csrfFetch(`/admin/void-transaction/${transactionId}`, {

@@ -3,12 +3,11 @@
 The calling FEAT authorizes teacher/class/seat access and owns the transaction.
 Both teacher issuance paths compose this command, never a nested FEAT.
 """
-from datetime import timedelta
 import secrets
 
 from app.extensions import db
 from app.models import User
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 RESET_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -40,11 +39,13 @@ def issue_student_recovery_code(user_id: int) -> str | None:
     from app.services.student_setup import forget_owner
     forget_owner(f'user:{user.id}')
     code = _generate_reset_code()
-    now = utc_now()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     user.recovery_setup_nonce_hash = None
     user.recovery_setup_expires_at = None
     user.reset_code = code
     user.reset_code_generated_at = now
-    user.reset_code_expires_at = now + timedelta(minutes=10)
+    user.reset_code_expires_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp", timestamp=now, elapsed_seconds=10 * 60,
+    ).shifted_timestamp_utc
     db.session.flush()
     return code

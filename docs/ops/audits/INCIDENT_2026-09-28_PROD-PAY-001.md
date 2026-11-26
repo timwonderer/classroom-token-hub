@@ -108,6 +108,6 @@ class.
 
 - [ ] At the next payroll run in any class, confirm new events carry `settlement_rule` and that AP CSP and Chemistry A receive the amounts in §5.
 - [ ] Remove the correction tool after 2026-10-31: `app/services/payroll/corrections.py`, the `/admin/payroll/correction` route, its template, and the banner flags and include.
-- [x] Advanced-mode time rounding was applied only by the unused `calculate_payroll_breakdown`, never by the real run. Rounding was removed as a payroll setting, and `app/payroll.py` with it, in #1450 (`46af1c873`); no remediation (see `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`).
+- [x] Advanced-mode time rounding was applied only by the unused `calculate_payroll_breakdown`, never by the real run. Rounding was removed as a payroll setting, and `app/payroll.py` with it, in #1450 (`46af1c873`); no remediation (see `docs/archive/v2-tracking-2026/POST_LAUNCH_TRACKER_2026.md` (archived 2026-10-22)).
 - [ ] "Time Today" can count a session left open from a previous day as running into today (tracked separately).
 - [ ] `test_history_reports_returned_and_ignores_an_unrelated_stray_active_row` uses the UTC date against a class-local endpoint and fails between 00:00 UTC and local midnight (tracked separately).

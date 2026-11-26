@@ -7,9 +7,9 @@ from dataclasses import dataclass
 import uuid
 from app.extensions import db
 from app.models import PayrollEvent
-from app.services.attendance_service import list_attendance_interval_evidence, _day_end_utc
+from app.services.attendance_service import list_attendance_interval_evidence
 from app.services.historical_attendance_assessment import HistoricalAssessmentDenied, _scope, _setting_for
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 @dataclass(frozen=True)
@@ -93,22 +93,29 @@ def _weights(segments, intervals):
     grouped = {}
     seen = {}
     for start, end in segments:
-        if end < start:
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=end, reference=start).is_earlier:
             _deny('CONFLICTING_SELECTION')
-        matches = [i for i in intervals if i.opened_at <= start and end <= i.closed_at]
-        if end == start:
-            exact = [i for i in matches if i.opened_at == start and i.closed_at == end]
+        matches = [i for i in intervals
+            if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=i.opened_at, reference=start).is_later
+            and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=i.closed_at).is_later]
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=end, reference=start).is_same:
+            exact = [i for i in matches
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=i.opened_at, reference=start).is_same
+                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=i.closed_at, reference=end).is_same]
             if exact: matches = exact
         if len(matches) != 1 or matches[0].closing_event_id is None:
             _deny('INCOMPLETE_CANONICAL_PAIR')
         pair = matches[0]
         key = (pair.opening_event_id, pair.closing_event_id)
-        if any(start < b and a < end for a, b in seen.get(key, ())):
+        if any(canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=start, reference=b).is_earlier
+                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=a, reference=end).is_earlier
+                for a, b in seen.get(key, ())):
             _deny('CONFLICTING_SELECTION')
         seen.setdefault(key, []).append((start, end))
         grouped[key] = grouped.get(key, 0) + _microseconds(start, end)
     pairs = {(i.opening_event_id, i.closing_event_id): i for i in intervals}
-    return tuple(HistoricalPairWeight(a,b,ensure_utc(pairs[a,b].closed_at).isoformat(),duration)
+    return tuple(HistoricalPairWeight(a,b,canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp",
+        timestamp=pairs[a,b].closed_at).local_timestamp.isoformat(),duration)
         for (a,b),duration in sorted(grouped.items()))
 
 
@@ -116,40 +123,47 @@ def _legacy_segments(rows, *, ctx, previous, at):
     """c42f882b _calculate_attendance_seconds_since: restart; >= lower bound."""
     result, opened = [], None
     for row in rows:
-        timestamp = ensure_utc(row.timestamp)
-        if timestamp > at:
+        timestamp = row.timestamp
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=timestamp, reference=at).is_later:
             break
-        if previous is not None and timestamp < previous:
+        if previous is not None and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                candidate=timestamp, reference=previous).is_earlier:
             continue
         if row.status == 'active':
             opened = timestamp
         elif row.status == 'inactive' and opened is not None:
-            result.append((opened, min(timestamp, _day_end_utc(ctx, opened))))
+            result.append((opened, min(timestamp, canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="evaluation_day_boundaries", reference_time_utc=opened).boundary_end_utc)))
             opened = None
     if opened is not None:
-        result.append((opened, min(at, _day_end_utc(ctx, opened))))
+        result.append((opened, min(at, canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="evaluation_day_boundaries", reference_time_utc=opened).boundary_end_utc)))
     return tuple(result)
 
 
 def _worked_segments(intervals, previous, at):
     return tuple((max(i.opened_at, previous) if previous else i.opened_at,min(i.closed_at,at))
-        for i in intervals if i.opened_at < at and (previous is None or i.closed_at > previous))
+        for i in intervals
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=i.opened_at, reference=at).is_earlier
+        and (previous is None or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+            candidate=i.closed_at, reference=previous).is_later))
 
 
 def _difference(worked, paid):
     """Exact nonoverlapping temporal set difference, never scalar subtraction."""
     result = list(worked)
     for start,end in paid:
-        containing = [(a,b) for a,b in worked if a <= start and end <= b]
-        if end < start or len(containing) != 1:
+        containing = [(a,b) for a,b in worked
+            if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=a, reference=start).is_later
+            and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=b).is_later]
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=end, reference=start).is_earlier or len(containing) != 1:
             _deny('PAID_OUTSIDE_WORKED')
         next_result = []
         for a,b in result:
-            if end <= a or start >= b:
+            if (not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=a).is_later
+                    or not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=start, reference=b).is_earlier):
                 next_result.append((a,b))
             else:
-                if a < start: next_result.append((a,start))
-                if end < b: next_result.append((end,b))
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=a, reference=start).is_earlier: next_result.append((a,start))
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=end, reference=b).is_earlier: next_result.append((end,b))
         result = next_result
     return tuple(result)
 
@@ -162,13 +176,15 @@ def _share(settings, instant, segments, intervals, window, *, paid=None, legacy=
     rate = setting.legacy_rate_per_minute if legacy else setting.rate_per_minute
     if not isinstance(rate,str): _deny('MISSING_OR_AMBIGUOUS_SETTING')
     return HistoricalReconstructedShare(setting.policy_locator,rate,
-        sum(_microseconds(a,b) for a,b in segments)//1000000,weights,window,paid,tuple((a.isoformat(),b.isoformat()) for a,b in segments))
+        (canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration",
+            intervals=list(segments)).elapsed_seconds if segments else 0),weights,window,paid,tuple((a.isoformat(),b.isoformat()) for a,b in segments))
 
 
 def _event(event, shares, rule, references=(), candidates=()):
     return HistoricalReconstructedEvent(event.id,event.class_id,event.target_seat_id,
         event.actor_seat_id,event.mechanism,event.payroll_event_type,event.correlation_id,
-        event.idempotency_key,ensure_utc(event.recorded_at),rule,tuple(shares),tuple(references),tuple(candidates))
+        event.idempotency_key,canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp",
+        timestamp=event.recorded_at).local_timestamp,rule,tuple(shares),tuple(references),tuple(candidates))
 
 
 def reconstruct_historical_payroll_graph(*,ctx,target_seat_id,setting_inputs,
@@ -195,15 +211,17 @@ def reconstruct_historical_payroll_snapshot(*,ctx,target_seat_id,rows,intervals,
     _scope(ctx,ctx.class_id,target_seat_id)
     if any(r.class_id != ctx.class_id or r.target_seat_id != target_seat_id for r in (*rows,*events)):
         _deny('UNAUTHORIZED_SCOPE')
-    settings = tuple(sorted(setting_inputs,key=lambda s:(ensure_utc(s.effective_at),ensure_utc(s.created_at))))
+    settings = tuple(sorted(setting_inputs,key=lambda s:(s.effective_at,s.created_at)))
     if any(s.class_id != ctx.class_id for s in settings): _deny('UNAUTHORIZED_SCOPE')
-    ordered = sorted(events,key=lambda e:(ensure_utc(e.recorded_at),e.id))
+    ordered = sorted(events,key=lambda e:(e.recorded_at,e.id))
     payroll = [e for e in ordered if e.payroll_event_type == 'payroll']
-    if len({ensure_utc(e.recorded_at) for e in payroll}) != len(payroll):
+    if any(canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=a.recorded_at, reference=b.recorded_at).is_same
+            for a, b in zip(payroll, payroll[1:])):
         _deny('TIED_PAYROLL_BOUNDARY')
     result, window_facts, previous, legacy_times = [], {}, None, []
     for event in payroll:
-        at = ensure_utc(event.recorded_at)
+        at = event.recorded_at
         if event.summary_json is not None and not isinstance(event.summary_json,dict):
             _deny('MALFORMED_PAYROLL_EVIDENCE')
         summary = event.summary_json or {}
@@ -231,7 +249,8 @@ def reconstruct_historical_payroll_snapshot(*,ctx,target_seat_id,rows,intervals,
                         _deny('RECORDED_MEMBERSHIP_MISMATCH')
                     key = (source.get('opening_event_id'),source.get('closing_event_id'))
                     matches = [i for i in intervals if (i.opening_event_id,i.closing_event_id) == key]
-                    if (key in seen or len(matches) != 1 or matches[0].closed_at > at
+                    if (key in seen or len(matches) != 1 or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                            candidate=matches[0].closed_at, reference=at).is_later
                             or matches[0].as_evidence() != source):
                         _deny('RECORDED_MEMBERSHIP_MISMATCH')
                     seen.add(key)
@@ -253,11 +272,15 @@ def reconstruct_historical_payroll_snapshot(*,ctx,target_seat_id,rows,intervals,
             groups = {}
             for interval in intervals:
                 end = interval.closed_at
-                if end > at or (previous and end <= previous): continue
+                if (canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=at).is_later
+                        or (previous and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                            candidate=end, reference=previous).is_later)):
+                    continue
                 start = interval.opened_at
-                earlier = [t for t in legacy_times if t < end]
+                earlier = [t for t in legacy_times
+                    if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=t, reference=end).is_earlier]
                 if earlier: start = max(start,max(earlier))
-                if end < start: continue
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=end, reference=start).is_earlier: continue
                 setting = _setting_for(settings,end)
                 if setting is None: _deny('MISSING_OR_AMBIGUOUS_SETTING')
                 groups.setdefault(setting.policy_locator,[]).append((start,end))
@@ -295,20 +318,24 @@ def reconstruct_historical_payroll_snapshot(*,ctx,target_seat_id,rows,intervals,
             if (not isinstance(references,list) or not references
                     or any(type(i) is not int for i in references) or len(set(references)) != len(references)
                     or any(i not in window_facts
-                        or ensure_utc(window_facts[i][0].recorded_at) >= ensure_utc(event.recorded_at)
+                        or not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                            candidate=window_facts[i][0].recorded_at, reference=event.recorded_at).is_earlier
                         for i in references)):
                 _deny('TOPUP_MEMBERSHIP_UNAVAILABLE')
             candidates = []
             for ref,(original,paid,worked) in window_facts.items():
-                if ensure_utc(original.recorded_at) >= ensure_utc(event.recorded_at):
+                if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                        candidate=original.recorded_at, reference=event.recorded_at).is_earlier:
                     continue
-                paid_seconds = sum(_microseconds(a,b) for a,b in paid)//1000000
-                worked_seconds = sum(_microseconds(a,b) for a,b in worked)//1000000
+                paid_seconds = (canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration",
+            intervals=list(paid)).elapsed_seconds if paid else 0)
+                worked_seconds = (canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration",
+            intervals=list(worked)).elapsed_seconds if worked else 0)
                 if worked_seconds <= paid_seconds:
                     continue
                 _weights(paid,intervals)
                 loss = _difference(worked,paid)
-                base = _share(settings,ensure_utc(original.recorded_at),worked,intervals,ref,paid=paid_seconds)
+                base = _share(settings,original.recorded_at,worked,intervals,ref,paid=paid_seconds)
                 candidates.append(HistoricalReconstructedShare(base.policy_locator,base.rate_per_minute,
                     base.credited_seconds,_weights(loss,intervals),ref,paid_seconds,
                     tuple((a.isoformat(),b.isoformat()) for a,b in loss)))
@@ -332,7 +359,8 @@ def reconstruct_historical_payroll_snapshot(*,ctx,target_seat_id,rows,intervals,
             reversals.append(HistoricalReconstructedReversal(ref,_event(event,(),'reversal')))
     return HistoricalReconstructedGraph(ctx.class_id,target_seat_id,tuple(r.id for r in rows),
         tuple(intervals),tuple(sorted(result,key=lambda e:(e.recorded_at,e.event_id))),tuple(reversals),tuple(recoveries),
-        tuple((r.id,ensure_utc(r.timestamp).isoformat(),r.status) for r in rows),settings)
+        tuple((r.id,canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp",
+            timestamp=r.timestamp).local_timestamp.isoformat(),r.status) for r in rows),settings)
 
 
 def get_historical_reconstruction_business_records(*,ctx,target_seat_id):

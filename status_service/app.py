@@ -13,13 +13,14 @@ from itsdangerous import BadSignature, URLSafeSerializer
 from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 from .identity import authenticated_operator_email
 from .log_setup import configure_logging
-from .presentation import (AREAS, STAGES, area_cards, detections, format_status_time, history_summary,
+from .presentation import (AREAS, STAGES, area_cards, detections, format_status_time,
                            incident_entry, iso_utc, notice_view, overall_observation, parse_offset,
                            resolve_next_update, suggest_reference)
 from status.measurements import (COMPONENT_KEYS, classify_component, unavailable_component,
                                  validate_snapshot)
 from status.platform import platform_rows
 from .store import FirestoreNoticeStore, ResolutionTooLarge
+from .request_errors import error_summary
 
 COMPONENT_NAMES = {"service": "Application requests", "login": "Login requests",
                    "attendance": "Attendance requests", "hall_pass": "Hall pass requests",
@@ -33,7 +34,7 @@ STATE_LABELS = {"NORMAL": "Within expected range", "ELEVATED_ERRORS": "Elevated 
 PUBLISHABLE_STAGES = ("AWARE", "INVESTIGATING", "IDENTIFIED", "MONITORING")
 
 
-def measurement_cards(attempt, history, *, now):
+def measurement_cards(attempt, *, now):
     snapshot = attempt.get("snapshot") if attempt else None
     if snapshot is not None:
         try:
@@ -48,15 +49,8 @@ def measurement_cards(attempt, history, *, now):
             "http_500_percent": None, "http_5xx_percent": None, "http_404_failure_percent": None}
         if result["state"] in {"STALE", "MONITOR_UNAVAILABLE"}:
             component = unavailable_component(key)
-        daily = []
-        for day in history:
-            counts = day["components"].get(key, {})
-            measured = counts.get("measured", 0)
-            daily.append({"date": day["date"], **counts,
-                          "percent": 100 * counts.get("normal", 0) / measured if measured else None,
-                          "coverage": min(100, 100 * measured / day["scheduled_minutes"]) if day["scheduled_minutes"] else 0})
         cards.append({**(component or unavailable_component(key)), **result, "name": COMPONENT_NAMES[key],
-                      "label": STATE_LABELS[result["state"]], "history": daily})
+                      "label": STATE_LABELS[result["state"]]})
     return cards
 
 
@@ -124,17 +118,16 @@ def create_app(store=None) -> Flask:
         active_notices = store.list_active_notices()
         now = datetime.now(timezone.utc)
         attempt = current_attempt()
-        measurements = measurement_cards(attempt, store.measurement_history(), now=now)
+        measurements = measurement_cards(attempt, now=now)
         checks = platform_rows(store.current_platform(), now=now)
         recent, _ = store.list_resolved_notices(page=1, page_size=3)
-        service = next((card for card in measurements if card["key"] == "service"), None)
         overall = overall_observation(checks, measurements, active_notices, now=now)
         cards = area_cards(measurements, attempt, active_notices, now=now,
                            maintenance=overall["state"] == "maintenance")
         return render_template("public_status.html", notices=[notice_view(n) for n in active_notices],
                                attempt=attempt, snapshot=attempt.get("snapshot") if attempt else None,
                                capability_cards=cards, measurements=measurements, platform_checks=checks,
-                               history=history_summary(service),
+                               errors=error_summary(store.error_history()),
                                recent_incidents=[notice_view(n) for n in recent],
                                overall_status=overall)
 
@@ -174,7 +167,7 @@ def create_app(store=None) -> Flask:
             notice["resolution_token"] = signer.dumps([notice["id"], notice["last_event_id"]]) if (
                 notice.get("incident_ref") and notice.get("last_event_id")) else None
         attempt = current_attempt()
-        measurements = measurement_cards(attempt, [], now=now)
+        measurements = measurement_cards(attempt, now=now)
         found = detections(measurements, open_notices,
                            (attempt.get("snapshot") or {}).get("sampled_at") if attempt else None)
 

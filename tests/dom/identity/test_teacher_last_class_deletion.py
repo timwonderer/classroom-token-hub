@@ -78,3 +78,27 @@ def test_non_final_class_delete_surface_says_the_account_survives(client, app):
 
     body = client.get("/admin/class-delete").get_data(as_text=True)
     assert "Your teacher account is not deleted by this." in body
+
+
+def test_the_class_delete_page_posts_to_a_url_that_accepts_its_post(client, app):
+    """Follow the URL the page renders, not one the test hardcodes.
+
+    2026-10-20: the endpoint also carried a DELETE-only rule `/admin/join-code`,
+    registered first, so `url_for` built that one. The page POSTed there and got
+    405, and Delete Class did nothing. Every other test POSTed to the literal
+    `/admin/join-code/delete` and so never saw it.
+    """
+    import re
+
+    surviving = initialize("ap_csp_p3", app)
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    assert surviving.teacher_user.id == classroom.teacher_user.id
+
+    body = client.get("/admin/class-delete").get_data(as_text=True)
+    target = re.search(r"fetch\('([^']+)'", body).group(1)
+
+    response = client.post(target, json=valid_destruction_gate(_class_delete_phrase(classroom.class_id)))
+
+    assert response.status_code == 200, (target, response.status_code)
+    db.session.expire_all()
+    assert db.session.get(ClassEconomy, classroom.class_id) is None

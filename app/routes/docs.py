@@ -5,6 +5,7 @@ Serves feature-based documentation with markdown rendering,
 allowing users to access help without leaving the app or losing their session.
 """
 
+import os
 import re
 from pathlib import Path
 from flask import Blueprint, abort, current_app, g, session, request, url_for, redirect, make_response
@@ -32,6 +33,24 @@ docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
 
 # Documentation root directory
 DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
+
+# SOP-DEP-003: production may serve the user guides from a separately published documentation
+# artifact instead of the application checkout. The variable names the artifact's ``docs`` directory
+# (the one holding ``user-guides/``); unset, the checkout serves them as before.
+USER_GUIDES_ROOT_ENV = 'CTH_USER_GUIDES_DIR'
+
+
+def user_guides_docs_root():
+    """The docs root that serves ``user-guides/``: the published artifact if configured."""
+    configured = os.environ.get(USER_GUIDES_ROOT_ENV, '').strip()
+    return Path(configured) if configured else DOCS_ROOT
+
+
+def docs_root_for(doc_path):
+    """The docs root for one request path. Only ``user-guides/`` ever leaves the checkout."""
+    if is_user_guide_doc_path(doc_path):
+        return user_guides_docs_root()
+    return DOCS_ROOT
 
 # Directories excluded from ALL search audiences (internal documentation only)
 EXCLUDED_DIRECTORIES = {'security'}
@@ -137,7 +156,7 @@ def _redirect_to_public_docs(doc_path=None):
     if normalized_doc_path:
         # The technical site publishes the docs/ tree at its own
         # repository-relative paths, so an unmapped path forwards unchanged and
-        # the reader lands on the document they asked for. route-map.json only
+        # the reader lands on the document they asked for. docs_route_map.json only
         # carries the exceptions: paths that were renamed on the way over.
         mapped = EXTERNAL_DOCS_ROUTE_MAP.get(normalized_doc_path)
         external_target = (mapped or normalized_doc_path).strip("/")
@@ -396,24 +415,13 @@ def build_breadcrumbs(doc_path, docs_root):
 
 # -------------------- ROUTES --------------------
 
-def get_docs_audience():
-    """The in-app site serves one audience.
-
-    Operators used to be able to flip a cookie to 'devops' and browse the
-    technical tree in here. That tree is published by the technical site now, so
-    the toggle would only produce a second, staler rendering of the same files.
-    """
-    return 'user'
-
-
 @docs_bp.route('/')
 def index():
     """Documentation homepage with categories."""
     if should_redirect_public_docs():
         return _redirect_to_public_docs()
 
-    audience = get_docs_audience()
-    return render_template_with_fallback('docs/index.html', audience=audience)
+    return render_template_with_fallback('docs/index.html')
 
 
 @docs_bp.route('/timeline')
@@ -532,7 +540,7 @@ def view_doc(doc_path):
 
         # Ensure we have a safe, absolute docs root
         try:
-            docs_root = DOCS_ROOT
+            docs_root = docs_root_for(doc_path)
         except NameError:
             # Fallback: constrain to a 'docs' directory under the application root
             docs_root = Path(current_app.root_path) / "docs"
@@ -629,8 +637,6 @@ def view_doc(doc_path):
         elif getattr(getattr(g, 'canonical_context', None), 'actor_role', None) == 'sysadmin':
             user_role = 'sysadmin'
 
-        audience = get_docs_audience()
-        
         return render_template_with_fallback(
             'docs/view.html',
             content=html_content,
@@ -643,7 +649,6 @@ def view_doc(doc_path):
             related=related_articles,
             user_role=user_role,
             doc_path=doc_path,
-            audience=audience,
         )
 
     except HTTPException:
@@ -673,10 +678,8 @@ def search():
         return _redirect_to_public_docs('search')
 
     query = request.args.get('q', '').strip()
-    audience = get_docs_audience()
-
     if not query:
-        return render_template_with_fallback('docs/search.html', query='', results=[], audience=audience)
+        return render_template_with_fallback('docs/search.html', query='', results=[])
 
     results = []
     query_lower = query.lower()
@@ -687,15 +690,15 @@ def search():
         # Note: This implementation reads all files on every search request.
         # For production with many documentation files, consider implementing
         # a search index (in-memory or cached) built at startup for better performance.
-        for doc_file in DOCS_ROOT.rglob('*.md'):
+        search_root = user_guides_docs_root()
+        for doc_file in search_root.rglob('*.md'):
             try:
-                # Skip if not relative to DOCS_ROOT (safety check)
-                if not doc_file.is_relative_to(DOCS_ROOT.resolve()):
+                # Skip anything that resolves outside the root (safety check)
+                if not doc_file.resolve().is_relative_to(search_root.resolve()):
                     continue
 
-                rel_path = doc_file.relative_to(DOCS_ROOT)
+                rel_path = doc_file.relative_to(search_root)
 
-                # Enforce audience context directory filtering
                 top_dir_raw = rel_path.parts[0] if rel_path.parts else ''
                 top_dir = top_dir_raw.lower()
                 
@@ -822,5 +825,4 @@ def search():
         'docs/search.html',
         query=query,
         results=results,
-        audience=audience
     )

@@ -1,0 +1,7 @@
+{{ define "main" }}
+{{ partial "sidebar.html" (dict "context" . "disableSidebar" true) }}
+<main id="content">
+  <div id="all-documents">{{ partial "cth-catalog-hero.html" . }}</div>
+  <div class="cth-catalog content">{{ .Content }}</div>
+</main>
+{{ end }}

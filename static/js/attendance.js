@@ -25,11 +25,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Handle contextual productivity actions.
   document.querySelectorAll(".attendance-action-btn").forEach(button => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const action = button.dataset.action;
 
       if (action === 'start_work') {
-        const pin = prompt("Enter your PIN to Start Work:");
+        const pin = await window.AppCore.prompt('Enter your PIN to start work.', {
+          title: 'Start Work', label: 'Your PIN', type: 'password', inputmode: 'numeric',
+          confirmLabel: 'Start Work', requiredMessage: 'Enter your PIN first.',
+        });
         if (!pin) return;
         performTap(action, pin);
         return;
@@ -358,9 +361,19 @@ function configureBreakButton(button, isActive, hallPass, doneForDay = false) {
 
 function openBreakChoiceModal() {
   hideBreakDestinations();
+  const pinInput = document.getElementById('breakPinInput');
+  if (pinInput) {
+    pinInput.value = '';
+    window.AppCore.clearInvalid(pinInput);
+  }
 
   const modalEl = document.getElementById('breakChoiceModal');
   if (modalEl && window.bootstrap) {
+    // Opened from script, so Bootstrap will not return focus on close.
+    const opener = document.activeElement;
+    modalEl.addEventListener('hidden.bs.modal', () => {
+      if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+    }, { once: true });
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   }
 
@@ -408,8 +421,10 @@ function renderBreakDestinations(passTypes) {
     button.className = 'btn btn-outline-primary text-start';
     button.textContent = destination;
     button.addEventListener('click', () => {
-      requestHallPass(destination);
+      const pin = readBreakPin();
+      if (!pin) return;
       closeBreakChoiceModal();
+      requestHallPass(destination, pin);
     });
     list.appendChild(button);
   });
@@ -420,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const doneBtn = document.getElementById('doneForDayBreakBtn');
   if (!doneBtn) return;
   doneBtn.addEventListener('click', () => {
-    const pin = prompt("Enter your PIN to mark done for the day:");
+    const pin = readBreakPin();
     if (!pin) return;
     closeBreakChoiceModal();
     performTap('break', pin, "Done for the day");
@@ -493,8 +508,11 @@ function refreshUi() {
   return pollStatusSoon();
 }
 
-function cancelHallPass(passId) {
-  if (!confirm('Are you sure you want to cancel this hall pass request?')) {
+async function cancelHallPass(passId) {
+  const confirmed = await window.AppCore.confirm('Are you sure you want to cancel this hall pass request?', {
+    title: 'Cancel hall pass request', confirmLabel: 'Cancel request', cancelLabel: 'Keep request', danger: true,
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -517,15 +535,30 @@ function cancelHallPass(passId) {
     });
 }
 
-function requestHallPass(destination) {
-  if (!destination || !destination.trim()) {
+document.addEventListener('DOMContentLoaded', () => {
+  const pinInput = document.getElementById('breakPinInput');
+  if (!pinInput) return;
+  pinInput.addEventListener('input', () => {
+    if (pinInput.value.trim()) window.AppCore.clearInvalid(pinInput);
+  });
+});
+
+// FEAT-IDEN-002 "Credential boundary": hall-pass use and "done for the day"
+// take the PIN, read from the break modal's own field. An empty field keeps
+// the modal open with an error rather than closing it silently.
+function readBreakPin() {
+  const input = document.getElementById('breakPinInput');
+  const pin = input ? input.value.trim() : '';
+  if (!pin && input) {
+    window.AppCore.markInvalid(input, 'breakPinError');
+  }
+  return pin || null;
+}
+
+function requestHallPass(destination, pin) {
+  if (!destination || !destination.trim() || !pin) {
     return;
   }
-
-  // FEAT-IDEN-002 "Credential boundary": hall-pass use takes the PIN. Prompted
-  // the same way as "done for the day", which is the neighbouring break action.
-  const pin = prompt(`Enter your PIN to request a hall pass to ${destination.trim()}:`);
-  if (!pin) return;
 
   window.AppCore.csrfFetch('/api/hall-pass/request', {
     method: 'POST',
@@ -547,8 +580,11 @@ function requestHallPass(destination) {
     });
 }
 
-function checkOutHallPass(passId) {
-  if (!confirm('Ready to check out? This will mark you as leaving the classroom.')) {
+async function checkOutHallPass(passId) {
+  const confirmed = await window.AppCore.confirm('Ready to check out? This will mark you as leaving the classroom.', {
+    title: 'Leave the classroom', confirmLabel: 'Leave',
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -572,8 +608,11 @@ function checkOutHallPass(passId) {
     });
 }
 
-function checkInHallPass(passId) {
-  if (!confirm('Ready to check in? This will mark you as returned to class.')) {
+async function checkInHallPass(passId) {
+  const confirmed = await window.AppCore.confirm('Ready to check in? This will mark you as returned to class.', {
+    title: 'Return to class', confirmLabel: 'Return',
+  });
+  if (!confirmed) {
     return;
   }
 

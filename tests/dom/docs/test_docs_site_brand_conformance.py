@@ -1,7 +1,7 @@
 """The docs site is a brand surface and must carry the canonical brand values.
 
-SPEC-DES-001 §XIII: ``docs-site/`` maintains its own stylesheet and is outside
-the runtime token layer, but it MUST NOT contradict the canonical values in
+SPEC-DES-001 §XIII: the developer docs site (``docs-generator-proof/``, Hugo +
+Hextra) maintains its own stylesheet and is outside the runtime token layer, but it MUST NOT contradict the canonical values in
 §VI.4. The same section records a live brand split on ``github-pages/`` as the
 shape this failure takes when nothing checks it — a published surface rendering
 a colour the design system retired, with no symptom anywhere.
@@ -18,7 +18,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 APP_TOKENS = REPO_ROOT / "static" / "css" / "tokens.css"
-SITE_TOKENS = REPO_ROOT / "docs-site" / "src" / "css" / "tokens.css"
+SITE = REPO_ROOT / "docs-generator-proof"
+SITE_TOKENS = SITE / "brand" / "css" / "tokens.css"
+SITE_CUSTOM = SITE / "assets" / "css" / "custom.css"
 PUBLIC_TOKENS = REPO_ROOT / "github-pages" / "style.css"
 
 # The values SPEC-DES-001 §VI.4 names as canonical, plus the pinned text token
@@ -96,9 +98,7 @@ def test_the_docs_site_stylesheet_states_no_colour_of_its_own():
     SPEC-DES-001 §XII: the token layer conforms when the component layer
     contains no raw colour outside a token definition.
     """
-    custom = (REPO_ROOT / "docs-site" / "src" / "css" / "custom.css").read_text(
-        encoding="utf-8"
-    )
+    custom = SITE_CUSTOM.read_text(encoding="utf-8")
     without_comments = re.sub(r"/\*.*?\*/", "", custom, flags=re.DOTALL)
 
     literals = re.findall(
@@ -116,19 +116,20 @@ def test_the_brand_mark_is_text_not_an_image():
     An image cannot take the role theme, cannot be recoloured by a token, and
     needs a redundant alt string to be read aloud.
     """
-    home = (REPO_ROOT / "docs-site" / "src" / "pages" / "index.js").read_text(
+    # The site renders the shared wordmark macro rather than a copy of its own.
+    assert "macros/docs_hero.html" in (SITE / "build.py").read_text(encoding="utf-8")
+    hero = (REPO_ROOT / "templates" / "macros" / "docs_hero.html").read_text(
         encoding="utf-8"
     )
-
     for word in ("CLASSROOM", "TOKEN", "HUB"):
-        assert f'"{word}"' in home
+        assert f"<span>{word}</span>" in hero
     for icon in ("local_atm", "store", "finance_mode"):
-        assert f'"{icon}"' in home
+        assert f">{icon}</span>" in hero
 
-    assets = REPO_ROOT / "docs-site" / "static"
     logos = [
         path
-        for path in assets.rglob("*")
+        for directory in ("assets", "brand", "layouts")
+        for path in (SITE / directory).rglob("*")
         if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".webp"}
     ]
     assert logos == [], f"image assets that could stand in for the brand: {logos}"
@@ -137,8 +138,8 @@ def test_the_brand_mark_is_text_not_an_image():
 def referenced_tokens(css_source):
     """Project custom properties a stylesheet consumes via var().
 
-    Infima's own namespaces are excluded: --ifm-* and --docusaurus-* are
-    defined by the theme, not by this workspace.
+    Hextra's own namespaces are excluded: --hx-* and --hextra-* are defined
+    by the theme, not by this workspace.
 
     Pure over the source text, so the detector can be run against a synthetic
     stylesheet that references a token nobody defines.
@@ -147,7 +148,7 @@ def referenced_tokens(css_source):
     return {
         name
         for name in names
-        if not name.startswith(("--ifm-", "--docusaurus-"))
+        if not name.startswith(("--hx-", "--hextra-"))
     }
 
 
@@ -167,18 +168,14 @@ def test_referenced_tokens_reports_a_token_nobody_defines():
 
 
 def test_every_token_the_stylesheet_uses_is_defined():
-    site_css_dir = REPO_ROOT / "docs-site" / "src" / "css"
-    all_css = "".join(
-        stylesheet.read_text(encoding="utf-8")
-        for stylesheet in site_css_dir.glob("*.css")
-    )
+    # The site loads the public stylesheet and its own token layer ahead of custom.css.
+    sheets = (SITE_TOKENS, PUBLIC_TOKENS, SITE_CUSTOM)
+    all_css = "".join(sheet.read_text(encoding="utf-8") for sheet in sheets)
     defined = {name for name, _ in _DECLARATION.findall(all_css)}
 
     used = referenced_tokens(
-        (site_css_dir / "custom.css").read_text(encoding="utf-8")
-    ) | referenced_tokens(
-        (site_css_dir / "tokens.css").read_text(encoding="utf-8")
-    )
+        SITE_CUSTOM.read_text(encoding="utf-8")
+    ) | referenced_tokens(SITE_TOKENS.read_text(encoding="utf-8"))
 
     assert used <= defined, f"undefined token(s): {sorted(used - defined)}"
 

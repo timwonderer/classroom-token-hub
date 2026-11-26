@@ -89,13 +89,13 @@ def test_failure_after_decision_insert_rolls_back_decision_and_audit(app,monkeyp
     assert AttendanceIntervalInvalidation.query.count()==0 and AuditEvent.query.count()==before
 
 
-def _paid_sources(app,posted=True):
+def _paid_sources(app,posted=True,**source_options):
     from datetime import datetime, timezone
     from app.feats.base import FEATContext
     from app.feats.prod import record_payroll_event
     from app.services.ledger_settlement_service import settle_balances
     from tests.helpers.ledger import record_ledger_fixture
-    classroom,ctx,target,pairs=_sources(app,count=2)
+    classroom,ctx,target,pairs=_sources(app,count=2,**source_options)
     with FEATContext('FEAT-LED-001',idempotency_key='correction-seed'):
         record_ledger_fixture(seat_id=target,class_id=ctx.class_id,amount=0,posted=True)
     event=record_payroll_event(ctx=ctx,target_seat_id=target,payroll_event_type='payroll',
@@ -213,8 +213,14 @@ def _cent_payment(app,seconds):
     classroom=initialize('chemistry_p1',app);ctx=CanonicalContext(classroom.teacher_user.id,classroom.class_id,classroom.teacher_seat.id,'teacher');target=classroom.students[0].seat.id
     from unittest.mock import patch
     base=datetime.now(timezone.utc)-timedelta(days=3)
+    # The provisioned setting is recorded at the real now, after the pinned
+    # instant, so carry its terms explicitly rather than looking them up there.
+    from app.models import PayrollSettings
+    from app.services.payroll.settings import current_payroll_setting
+    provisioned=current_payroll_setting(ctx.class_id)
+    carried={field:getattr(provisioned,field) for field in PayrollSettings.SETTING_FIELDS}
     with patch('app.utils.canonical_temporal_resolver.utc_now',return_value=base-timedelta(days=1)):
-        put_payroll_setting_in_force(ctx.class_id,pay_rate=Decimal('0.01'))
+        put_payroll_setting_in_force(ctx.class_id,**{**carried,'pay_rate':Decimal('0.01')})
     pairs=[]
     for index,duration in enumerate(seconds):
         start=base+timedelta(days=index)

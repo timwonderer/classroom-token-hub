@@ -58,10 +58,10 @@ def shop(app):
         }
 
 
-def _banking(shop, *, protection, fee="25.00", key):
+def _banking(shop, *, protection, key):
     changed = execute_evolve_economic_engine(
         canonical_context=shop["teacher"], class_id=shop["class_id"],
-        updates={"overdraft_protection_enabled": protection, "flat_overdraft_fee": Decimal(fee)},
+        updates={"overdraft_protection_enabled": protection},
         feature_list=["banking"], idempotency_key=f"funds:{key}",
     )
     assert changed.success

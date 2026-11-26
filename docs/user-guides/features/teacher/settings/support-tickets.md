@@ -44,7 +44,7 @@ You get a confirmation that the ticket went to system administration, and the pa
 
 **My Tickets** shows your most recent 20, newest first, filtered to your active class seat. Switching classes changes the list.
 
-Each entry shows the saved class label and class reference, the submitted date, the category, the first 220 characters of your description, and a status badge.
+Each entry shows the title you gave it, the saved class label and class reference, the submitted date, the category, the first 220 characters of your description, and a status badge.
 
 The statuses a ticket moves through are **Open**, **Teacher review**, **Escalated to dev**, **Dev resolved**, **Teacher final review**, and **Closed**. See the caution below about how they are displayed.
 
@@ -53,14 +53,11 @@ The statuses a ticket moves through are **Open**, **Teacher review**, **Escalate
 > [!IMPORTANT]
 > **A student's problem has to start with the student.** You cannot open a ticket on a student's behalf from here. The student raises it from their own account, and it then reaches you for review — that queue is covered in [Student Issues](../classroom/student-issues.md). Only after that can it be escalated to the support team.
 
-> [!WARNING]
-> **The Title is not saved.** It is required, and it is discarded on submission — every entry in **My Tickets** is labelled *Support Ticket* regardless of what you typed, and support does not receive it either. Put anything that matters in **What happened?**, whose first 220 characters are what you will actually see in the list.
-
 > [!CAUTION]
-> **Two tickets with the same title, in the same scope, are treated as one submission.** The title is used for duplicate detection even though it is not stored. If a second ticket seems not to have been created, give it a different title.
+> **An exact resubmission only creates one ticket.** If the form submits twice with every field identical — a double-click, or a browser retry after a slow connection — only one ticket is created. Changing anything, including just the description, makes it a new ticket even if you reuse the same title.
 
 > [!NOTE]
-> **The status badge is always yellow.** The colour does not track the status — read the words, not the colour. The wording is also raw in places: an escalated ticket reads *Escalated_To_Dev*.
+> **The status badge's colour tracks the status**, and the wording is spaced out and capitalised (an escalated ticket reads *Escalated To Dev*, not a raw database value).
 
 > [!NOTE]
 > **There are no replies on this page.** My Tickets shows what you sent and where it has got to, not any response. Support replies arrive by whatever contact route your account is set up with.

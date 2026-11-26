@@ -74,9 +74,9 @@
             <details class="disclosure">
               <summary>{{ icon('chevron_right', 'sm', 'chev') }}What the numbers mean</summary>
               <p>We check the app and its database every minute. A check expires after five minutes if polling stops, and it doesn't test every classroom action.</p>
-              <p>The areas above describe the requests we saw in the last five minutes. A quiet area shows when it was last seen, kept for up to seven days as history rather than a claim about now. One server error is enough to show. Refusals and missing pages aren't errors and never mean an outage. One exception: when a teacher approves or rejects a hall-pass request, or a student cancels one, and the app can't find it at least three times in five minutes, making up more than 2% of hall-pass requests, Hall passes shows errors seen and the summary at the top flags it. That's a sign of a possible problem, not an outage.</p>
+              <p>The areas above describe the requests we saw in the last five minutes. A quiet area shows when it was last seen, kept for up to seven days as history rather than a claim about now. One server error is enough to show. 4xx responses may be rejected inputs or application defects; the response code alone does not establish fault or an outage. One exception: when a teacher approves or rejects a hall-pass request, or a student cancels one, and the app can't find it at least three times in five minutes, making up more than 2% of hall-pass requests, Hall passes shows errors seen and the summary at the top flags it. That's a sign of a possible problem, not an outage.</p>
               <p>We flag HTTP 5xx above 2%, HTTP 404 above 5%, hall-pass requests not found (at least three, above 2%), and p95 above 1,500 ms. p80 and p95 are the response times that 80% and 95% of requests came in under. Application requests include our own health checks.</p>
-              <p>History counts the five-minute windows that stayed within those thresholds, sampled once a minute. It isn't uptime or request success. Empty windows and missing or stale monitoring are left out, and older windows required 20 requests. Dates use UTC.</p>
+              <p>The 30-day error tracker counts application responses in separate five-minute windows, so each observed request is counted once. Missing or stale monitoring leaves a gap. Successfully observed empty windows count toward coverage. Dates use UTC, including today; the latest unfinished window is excluded. Last-recorded times identify a window, not an individual request. Older reliability rollups cannot supply error totals.</p>
             </details>
             {% for card in measurements %}
             <div class="platform-row request-metrics-row">
@@ -101,27 +101,7 @@
                   <p>{% for family in ['1xx','2xx','3xx','4xx','5xx'] %}{{ family }}: {{ card['http_' ~ family ~ '_count'] if card['http_' ~ family ~ '_count'] is not none else 'unavailable' }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
                   <p>4xx responses may be expected refusals or missing pages.</p>
                 </details>
-                <details class="disclosure history-disclosure">
-                  <summary>{{ icon('chevron_right', 'sm', 'chev') }}90-day measured history</summary>
-                  <div class="history-table-scroll">
-                    <table>
-                      <caption>{{ card.name }} — daily observed windows</caption>
-                      <thead>
-                        <tr><th scope="col">UTC date</th><th scope="col">Within thresholds</th><th scope="col">Coverage</th><th scope="col">Eligible / sampled</th></tr>
-                      </thead>
-                      <tbody>
-                        {% for day in card.history %}
-                        <tr>
-                          <th scope="row">{{ day.date }}</th>
-                          <td>{{ ('%.1f%%'|format(day.percent)) if day.percent is not none else 'No eligible measurements' }}</td>
-                          <td>{{ '%.1f%%'|format(day.coverage) }}</td>
-                          <td>{{ day.measured|default(0) }} / {{ day.sampled|default(0) }}</td>
-                        </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
+
               </div>
             </div>
             {% endfor %}
@@ -129,16 +109,34 @@
         </details>
       </div>
 
-      <aside class="rail" aria-label="Recent reliability">
-        <section>
-          <h2 class="rail-h">Last {{ history.total }} days</h2>
-          {% if history.total %}
-          <div class="history-strip" aria-hidden="true">{% for bar in history.bars %}<span class="bar--{{ bar.tone }}" title="{{ bar.date }}"></span>{% endfor %}</div>
-          <div class="history-legend" aria-hidden="true"><span>{{ history.total }} days ago</span><span>Today</span></div>
-          <p class="rail-sum"><b>{{ history.ok_days }} of {{ history.total }} days</b> with no problems measured.{% if history.gap_days %} {{ history.gap_days }} {{ 'day' if history.gap_days == 1 else 'days' }} had too little data to tell.{% endif %}</p>
-          {% else %}
-          <p class="rail-sum">No measured history yet.</p>
-          {% endif %}
+      <aside class="rail" aria-label="Request errors and recent incidents">
+        <section aria-labelledby="errors-heading">
+          <h2 class="rail-h" id="errors-heading">Request errors · Last 30 days</h2>
+          <p class="rail-sum">{{ errors.start }} – {{ errors.end }} (UTC, including today)</p>
+          <svg class="error-chart" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+            <circle class="error-ring" cx="60" cy="60" r="46" />
+            {% if errors.total %}
+            <circle class="error-ring error-ring--5xx" cx="60" cy="60" r="46" />
+            <circle class="error-ring error-ring--4xx" cx="60" cy="60" r="46" pathLength="100" stroke-dasharray="{{ errors.share_4xx }} 100" transform="rotate(-90 60 60)" />
+            {% endif %}
+            <text class="error-chart-total" x="60" y="58" text-anchor="middle">{{ '{:,}'.format(errors.total) if errors.observed else '—' }}</text>
+            <text class="error-chart-label" x="60" y="73" text-anchor="middle">Errors recorded</text>
+          </svg>
+          <dl class="error-counts">
+            {% for category in errors.categories %}
+            <div>
+              <dt><span class="error-key error-key--{{ category.key }}" aria-hidden="true"></span>{{ category.label }}</dt>
+              <dd><strong>{{ '{:,}'.format(category.count) if errors.observed else 'Unavailable' }}</strong>
+                {% if category.last %}<small>Last recorded in the five-minute window ending {{ when(category.last) }}.</small>
+                {% elif errors.observed %}<small>No events recorded in the observed windows.</small>
+                {% else %}<small>No observations available for this period.</small>{% endif %}
+              </dd>
+            </div>
+            {% endfor %}
+          </dl>
+          <p class="rail-sum">{% if errors.observed %}{{ '{:,}'.format(errors.requests) }} requests observed. {% endif %}{{ errors.observed }} of {{ errors.scheduled }} completed five-minute windows observed ({{ '%.1f'|format(errors.coverage) }}% coverage).</p>
+          {% if errors.gap_days %}<p class="rail-sum">{{ errors.gap_days }} days have missing observations. Counts cover observed windows only.</p>{% endif %}
+          <p class="rail-sum">This chart shows the distribution of recorded errors, not reliability. Request errors may result from rejected inputs or application defects; these measurements do not establish fault.</p>
         </section>
         <section>
           <h2 class="rail-h">Recent incidents</h2>

@@ -30,7 +30,7 @@ def page(monkeypatch):
                 "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
                                 "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
     store = SimpleNamespace(current_platform=lambda: platform_record(now), list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
-                            measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}],
+                            error_history=lambda **kwargs: [{"date": now.date().isoformat(), "errors": None, "scheduled_windows": 144}],
                             list_resolved_notices=lambda page=1, page_size=20: ([], False))
     monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
     # Import the module-level app without real credentials or a Firestore client.
@@ -68,8 +68,9 @@ def test_public_page_separates_measurements_and_notices(page):
     assert "The app is responding and its database connection check passed." in html
     assert "Everything is working" not in html and "Platform health" not in html
     # One per component, hall passes included (SPEC-OPS-006 v1.4).
-    assert html.count('class="disclosure history-disclosure"') == 7
-    assert "No eligible measurements" in html
+    assert "90-day measured history" not in html
+    assert "Request errors · Last 30 days" in html
+    assert "No observations available for this period" in html
 
 
 def test_stale_snapshot_never_displays_old_latency_as_current(page):
@@ -301,8 +302,8 @@ def test_rail_summarises_history_and_recent_incidents_without_their_reports(page
     rail = html.split('<aside class="rail"', 1)[1].split('</aside>', 1)[0]
     assert '<strong>Payroll</strong>' in rail and 'href="/incidents"' in rail
     assert 'Detailed investigation' not in rail
-    assert rail.count('class="bar--gap"') == 1
-    assert 'too little data to tell' in rail
+    assert "history-strip" not in rail
+    assert "days have missing observations" in rail
 
 
 def test_public_footer_matches_public_site_with_absolute_links(page):

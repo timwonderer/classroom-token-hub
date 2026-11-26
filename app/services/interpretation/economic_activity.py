@@ -27,7 +27,7 @@ from app.services.interpretation.observation_builders import (
     observation_entry,
     rate_value,
 )
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 def _window_days(window_start, window_end) -> int:
@@ -37,8 +37,15 @@ def _window_days(window_start, window_end) -> int:
     is day-aligned). A degenerate or inverted window yields ``0`` days, which the
     rate builder handles as a zero-denominator (value ``0``).
     """
-    delta = ensure_utc(window_end) - ensure_utc(window_start)
-    return max(delta.days, 0)
+    if canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+        candidate=window_end, reference=window_start,
+    ).is_earlier:
+        return 0
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration",
+        intervals=[(window_start, window_end)],
+    ).elapsed_seconds // 86400
 
 
 def compute_q2(class_id: str, window_start, window_end) -> list[dict[str, Any]]:

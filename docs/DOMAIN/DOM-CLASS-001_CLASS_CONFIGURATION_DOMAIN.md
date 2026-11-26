@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.8 | 2026-10-03 | 3.7 | Constitutional |
+| DOM-CLASS-001 | 3.10 | 2026-11-10 | 3.9 | Constitutional |
 
 ## I. Purpose
 
@@ -160,8 +160,10 @@ Rules:
 
 Class Configuration owns the class-scoped overdraft-protection setting and explicitly incorporates `SPEC-ECON-003` §4.5.1.1A for its shared charge-funding semantics. Under `INV-CORE-000` §III.3 and `INV-ARC-009` §V, configuration truth is exposed by pure scoped queries; this domain does not read Ledger balances, move money, or determine another domain's business eligibility. `FEAT-LED-000` coordinates the configuration query and Ledger monetary queries under `INV-ARC-021` §V, VII. Banking product rules remain outside this domain; the shared protection setting is a class-level economic configuration fact.
 
-`get_banking_directive(class_id, effective_at?, include_fees=False)` is a pure Class-owned query returning an immutable `BankingDirective`: canonical `class_id`, opaque `version_locator`, boolean `protection_enabled`, optional decimal `flat_fee`, nullable immutable `progressive_fee` tier/rate pairs, optional decimal `cwi`, and optional UTC `fee_period_start` derived from canonical class-local period evaluation. These fields project the effective Class economic configuration; they do not establish business fee applicability, read account balances, move money or resolve Identity. The initiating FEAT passes the directive to Ledger. By default (`include_fees=False`) the query returns no fee/CWI/period inputs and performs no fee/CWI/period evaluation; corrections use this mode. Only an initiating FEAT with independent fee applicability asks for fee inputs. Missing banking configuration means disabled protection and absent fee configuration, never invented monetary authority. `progressive_fee` is `()` when absent or not requested, a tuple of canonical tier/rate pairs when available, and `None` when configured progressive-fee evidence is unavailable or malformed. This preserves uncertainty without inventing a zero fee. Ledger rejects unavailable/malformed fee evidence only when that fee is independently applicable; `NONE` authority and fully funded charges do not consult irrelevant progressive-fee inputs. Unsupported/malformed configuration needed by an applicable fee fails closed.
+`get_banking_directive(class_id, effective_at?)` is a pure Class-owned query returning an immutable `BankingDirective`: canonical `class_id`, opaque `version_locator`, and boolean `protection_enabled`. This field projects the effective Class overdraft-protection configuration; it does not establish business fee applicability (no overdraft/NSF fee is assessed — owner ruling 2026-10-07, `SPEC-ECON-003` §4.5.1.1), read account balances, move money or resolve Identity. The initiating FEAT passes the directive to Ledger. Missing banking configuration means disabled protection, never invented monetary authority.
 
+
+**3.10 (2026-11-10)** supersedes 3.9 to drop `get_banking_directive`'s retired `include_fees` parameter and `BankingDirective`'s `flat_fee` / `progressive_fee` / `cwi` / `fee_period_start` fields, along with the fee-applicability text they supported: no overdraft/NSF fee has been assessed since the 2026-10-07 owner ruling, and the fee-resolution machinery those fields fed is retired (issue #1647). `protection_enabled` and the shared charge-funding rule are unaffected. No runtime configuration or data changes are performed by this amendment.
 
 **3.7 (2026-10-03)** supersedes 3.6 solely to incorporate the universal charge/deduction funding rule: cover the entire checking shortfall from savings or leave savings untouched. Own-account transfers retain sufficient-funds requirements. No runtime configuration or data changes are performed by this amendment.
 
@@ -180,6 +182,23 @@ execution transaction. An outdated, narrower confirmation must be rejected.
 Unclaim retains the Seat and does not trigger this rule. Initial empty-class
 creation remains valid until roster setup; there is no empty-class or stale-class
 background inference.
+
+## Configuration portability (owner ruling 2026-10-25)
+
+Class Configuration owns the class-scoped `configuration_import_receipts` execution
+records: `(class_id, operation_id)` primary key, actor Seat, request fingerprint,
+expiry, accepted timestamp and minimal result. Class deletion cascades receipts.
+Receipts contain no uploaded file, product definitions or principal references.
+They expire with the export and may be deleted by an explicit, logged cleanup command;
+this does not delete audit evidence. Expired confirmation authority is always rejected,
+including after cleanup. Receipts are not audit records or permanent import history.
+
+FEAT-CLASS-009 issues exports, FEAT-CLASS-010 previews/confirms imports, and
+FEAT-CLASS-011 cleans expired receipts for one class. Each owns one execution boundary
+and composes domain guards/queries/commands, never another FEAT. The referenced
+SPEC-CLASS-001 is incorporated in full. Import neither enables features nor rebalances
+prices. It cannot modify class identity, labels, timezone, membership or past activity.
+
 
 ## XI. Amendment
 

@@ -14,7 +14,6 @@ was red.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -167,9 +166,8 @@ def _route_map(client) -> dict:
             recovery_codes=["123456"],
             resume_pin="123456",
             codes_saved=2,
-            recovery_request=SimpleNamespace(
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=1)
-            ),
+            # Presentation input, as the page builder supplies it (SPEC-UI-001 §X).
+            recovery=SimpleNamespace(expires_at_display="Jan 14, 2030, 4:00 AM UTC"),
         ),
         "templates/admin_reset_credentials.html": lambda: _render_direct(
             "admin_reset_credentials.html",

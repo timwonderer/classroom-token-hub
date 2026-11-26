@@ -193,11 +193,11 @@ def execute_purchase_insurance(
             error_message="Seat already holds active coverage for this policy",
         )
 
-    # Tier-group mutual exclusion: at most one active coverage per tier_group
+    # Tier-group mutual exclusion: at most one active coverage per tier_group_id
     # (FEAT-CLASS-003 §VIII.3). A student who holds Basic cannot also buy Mid/Premium
     # of the same group without cancelling first. Ungrouped policies are exempt.
-    if definition.tier_group and entitlement_read_service.has_active_coverage_in_group(
-        seat_id, class_id, definition.tier_group
+    if definition.tier_group_id and entitlement_read_service.has_active_coverage_in_group(
+        seat_id, class_id, definition.tier_group_id
     ):
         return InsurancePurchaseResult(
             success=False, correlation_id=correlation_id,

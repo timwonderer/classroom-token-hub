@@ -2,10 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.9 | 2026-10-14 | 1.8 | Constitutional |
-
-> [!IMPORTANT]
-> **v1.9 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
+| DOM-SUP-001 | 1.11 | 2026-11-24 | 1.10 | Constitutional |
 
 ## I. Purpose
 
@@ -149,7 +146,6 @@ Key fields:
   - `resolved_at`
   - `support_permissions` — per-ticket boolean grants for individual diagnostic categories (§X)
   - `share_class_name_with_sysadmin` — explicit teacher consent for escalation context
-  - `eligible_for_reward`
   - `escalated_at`
   - `escalation_reason`
   - `diagnostic_note`
@@ -259,20 +255,16 @@ Key fields:
 - `page_url`
 - `submitted_at`
 - `ip_address` / `user_agent`
-- `status` — `new` | `reviewed` | `rewarded` | `closed` | `spam`
+- `status` — `new` | `reviewed` | `closed` | `spam`
 - `admin_notes`
 - `reviewed_at`
-- `reward_amount` / `reward_sent_at`
-- Internal FK (hidden from sysadmin): `actor_public_id` — UUID-encoded `seats.public_id`
-  used for reverse-routing a reward; never surfaced in sysadmin views
+- Internal FK (hidden from sysadmin): `actor_public_id` — UUID-encoded `seats.public_id`;
+  never surfaced in sysadmin views
 
 Rules:
 
 - `anonymous_code` and `user_type` are the only actor identifiers surfaced in sysadmin
-  views. `actor_public_id` is for internal reward routing only and must not appear in
-  any sysadmin display.
-- Sysadmin reward delivery uses `actor_public_id` to route the reward through FEAT →
-  Ledger; that cross-domain effect does not transfer ledger ownership.
+  views. `actor_public_id` must not appear in any sysadmin display.
 - Report submission content (`title`, `description`, `steps_to_reproduce`,
   `expected_behavior`) is immutable after creation.
 
@@ -356,8 +348,6 @@ Constraints:
   is a separate new transaction.
 - `related_transaction_id` on `issue_resolution_actions` is a read-only reference to
   the Ledger domain for audit traceability. It does not transfer ledger write authority.
-- Sysadmin reward delivery for `user_reports` is initiated via FEAT; the resulting
-  ledger credit is owned by Ledger, not Support.
 - `ticket_correlation_packs` read from `actor_request_trace` and `error_events` at
   issue-submission time. After pack creation, the Support domain is self-contained;
   it does not re-query observability tables for existing packs.
@@ -456,6 +446,16 @@ not a ticket failure. Credentials, webhook URL, payload, response bodies, and
 exception text must never be logged or traced. Logs record delivery outcome only.
 
 ## XII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.11 (2026-11-24), issue #1678.** `issues.eligible_for_reward` is physically dropped by migration `4fad9d362d0d`, completing the v1.10 ruling below. `Issue.eligible_for_reward` no longer exists on the model; there is nothing left to read, set, or migrate.
+
+> [!IMPORTANT]
+> **v1.10 (2026-10-27), owner ruling 2026-10-27.** The sysadmin bug reward is retired until badges are formally implemented. Resolving an escalated issue records the technical fix and returns the ticket to the teacher; it moves no money. `issues.eligible_for_reward` is no longer set and is dropped by a later contract migration; `user_reports` loses its reward status and fields.
+
+> **v1.9 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
 
 Revisions require version increment, effective-date update, and continued consistency
 with higher-order invariants.

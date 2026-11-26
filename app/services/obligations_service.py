@@ -12,14 +12,14 @@ from datetime import datetime
 from dataclasses import dataclass
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from app.extensions import db
 from app.models import (
     ObligationAssessment, BillCycle, LedgerMechanism, ObligationCommandReservation, Transaction,
 )
 from app.utils.canonical_temporal_resolver import (
-    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc,
+    CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver,
 )
 
 
@@ -69,10 +69,9 @@ def get_seat_ids_with_self_payments(class_id: str, window_start, window_end) -> 
         db.session.query(ObligationAssessment.seat_id)
         .join(Transaction, Transaction.id == ObligationAssessment.ledger_transaction_id)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == "PAYMENT",
-            ObligationAssessment.timestamp >= ensure_utc(window_start),
-            ObligationAssessment.timestamp < ensure_utc(window_end),
+            ObligationAssessment.timestamp >= window_start,
+            ObligationAssessment.timestamp < window_end,
             Transaction.mechanism == LedgerMechanism.SELF,
         )
         .distinct()
@@ -127,13 +126,12 @@ def get_obligation_events_for_window(
     """
     if not class_id or window_start is None or window_end is None:
         return []
-    start = ensure_utc(window_start)
-    end = ensure_utc(window_end)
+    start = window_start
+    end = window_end
 
     assessments = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == "ASSESSMENT",
             ObligationAssessment.timestamp >= start,
             ObligationAssessment.timestamp < end,
@@ -149,7 +147,6 @@ def get_obligation_events_for_window(
     withdrawn = {
         row.correlation_id
         for row in db.session.query(ObligationAssessment.correlation_id).filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == "WITHDRAWN",
             ObligationAssessment.timestamp < end,
         )
@@ -176,7 +173,6 @@ def get_obligation_events_for_window(
         db.session.query(ObligationAssessment, Transaction.amount_cents)
         .outerjoin(Transaction, Transaction.id == ObligationAssessment.ledger_transaction_id)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.correlation_id.in_(correlation_ids),
             ObligationAssessment.event_type.in_(["PAYMENT", "WAIVED"]),
             ObligationAssessment.timestamp < end,
@@ -415,8 +411,21 @@ def get_paid_magnitude_through_event(
     total = Decimal('0.00')
     for event in get_satisfaction_events(correlation_id):
         if event.event_type == 'PAYMENT' and (
-            event.timestamp < boundary_event.timestamp
-            or (event.timestamp == boundary_event.timestamp and event.id <= boundary_event.id)
+            canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION,
+                primitive="earlier_than",
+                candidate=event.timestamp,
+                reference=boundary_event.timestamp,
+            ).is_earlier
+            or (
+                canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION,
+                    primitive="same_instant",
+                    candidate=event.timestamp,
+                    reference=boundary_event.timestamp,
+                ).is_same
+                and event.id <= boundary_event.id
+            )
         ) and event.ledger_transaction_id:
             from app.models import Transaction
             txn = db.session.get(Transaction, event.ledger_transaction_id)
@@ -464,9 +473,15 @@ def get_obligation_state(
 
     satisfied_amount = Decimal("0.00")
     is_waived = False
-    cutoff = ensure_utc(as_of) if as_of is not None else None
+    cutoff = as_of
     for event in get_satisfaction_events(correlation_id):
-        if cutoff is not None and ensure_utc(event.timestamp) > cutoff:
+        if cutoff is not None and canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(assessment.class_id),
+            primitive="later_than",
+            candidate=event.timestamp,
+            reference=cutoff,
+        ).is_later:
             continue
         if event.event_type == "PAYMENT":
             satisfied_amount += payment_event_magnitude(event)
@@ -476,7 +491,13 @@ def get_obligation_state(
     assessed_amount = resolve_assessment_amount(assessment)
     withdrawal = get_withdrawal_event(correlation_id)
     is_withdrawn = withdrawal is not None and (
-        cutoff is None or ensure_utc(withdrawal.timestamp) <= cutoff
+        cutoff is None or not canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(assessment.class_id),
+            primitive="later_than",
+            candidate=withdrawal.timestamp,
+            reference=cutoff,
+        ).is_later
     )
     if is_withdrawn:
         # Never became owed (DOM-OBL-001 §V.8). Deliberately NOT satisfied: a
@@ -524,18 +545,14 @@ def is_obligation_past_due(
         canonical_execution_context=SimpleNamespace(class_id=state.class_id),
         primitive="later_than",
         reference_time_utc=reference_time_utc,
-        candidate=_current_reference(state.class_id, reference_time_utc),
+        candidate=canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=state.class_id),
+            primitive="current_time",
+            reference_time_utc=reference_time_utc,
+        ).canonical_now_utc,
         reference=state.due_at,
     ).is_later
-
-
-def _current_reference(class_id: str, reference_time_utc: datetime | None) -> datetime:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=SimpleNamespace(class_id=class_id),
-        primitive="current_time",
-        reference_time_utc=reference_time_utc,
-    ).canonical_now_utc
 
 
 def get_assessment_events_for_seat_class(
@@ -674,26 +691,6 @@ def _class_ctx(class_id: str) -> SimpleNamespace:
     return SimpleNamespace(class_id=class_id)
 
 
-def _reference_now(class_id: str, reference_time_utc: datetime | None) -> datetime:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_class_ctx(class_id),
-        primitive="current_time",
-        reference_time_utc=reference_time_utc,
-    ).canonical_now_utc
-
-
-def _is_later(class_id: str, candidate: datetime, reference: datetime) -> bool:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_class_ctx(class_id),
-        primitive="later_than",
-        reference_time_utc=reference,
-        candidate=candidate,
-        reference=reference,
-    ).is_later
-
-
 def get_assessment_point(cycle: BillCycle) -> datetime | None:
     """When the successor of ``cycle`` is assessed (DOM-OBL-001 §V.7).
 
@@ -737,7 +734,7 @@ def _start_of_class_day_before(class_id: str, instant_utc: datetime, days: int) 
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="evaluation_day_boundaries",
-        reference_time_utc=ensure_utc(instant_utc),
+        reference_time_utc=instant_utc,
     ).boundary_start_utc
     midday = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
@@ -779,8 +776,19 @@ def get_succession_eligibility(
         return SuccessionEligibility.EMPTY, None
     if latest.next_assessment_at is None:
         return SuccessionEligibility.TERMINAL, latest
-    reference = _reference_now(class_id, reference_time_utc)
-    not_yet = _is_later(class_id, get_assessment_point(latest), reference)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
+    not_yet = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="later_than",
+        candidate=get_assessment_point(latest),
+        reference=reference,
+    ).is_later
     return (SuccessionEligibility.NOT_DUE if not_yet else SuccessionEligibility.DUE), latest
 
 
@@ -796,7 +804,7 @@ def last_class_day_before(class_id: str, exclusive_end_utc: datetime):
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="shift_timestamp",
-        timestamp=ensure_utc(exclusive_end_utc),
+        timestamp=exclusive_end_utc,
         elapsed_seconds=-1,
     ).shifted_timestamp_utc
     return canonical_temporal_resolver(
@@ -836,9 +844,20 @@ def get_current_bill_cycle(
     routinely an upcoming cycle whose period has not begun. A scheduled cycle
     that begins at or after the termination instant never becomes current.
     """
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
     instant = get_termination_instant(class_id, internal_ref)
-    if instant is not None and not _is_later(class_id, instant, reference):
+    if instant is not None and not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="later_than",
+        candidate=instant,
+        reference=reference,
+    ).is_later:
         return None
     cycles = (
         db.session.query(BillCycle)
@@ -879,7 +898,12 @@ def are_required_obligations_satisfied(
     WITHDRAWN assessments are not required. Product-blind; consumers MUST NOT
     reconstruct this from obligation tables.
     """
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
     cycle_ids = [
         row.id
         for row in db.session.query(BillCycle.id).filter_by(
@@ -891,7 +915,6 @@ def are_required_obligations_satisfied(
     assessments = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.bill_cycle_id.in_(cycle_ids),
             ObligationAssessment.event_type == "ASSESSMENT",
         )
@@ -901,7 +924,13 @@ def are_required_obligations_satisfied(
         state = get_obligation_state(assessment.correlation_id, as_of=reference)
         if state is None or state.is_withdrawn or state.due_at is None:
             continue
-        if _is_later(class_id, state.due_at, reference):
+        if canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(class_id),
+            primitive="later_than",
+            candidate=state.due_at,
+            reference=reference,
+        ).is_later:
             continue  # not due yet
         if not state.is_satisfied:
             return False
@@ -955,11 +984,15 @@ def seat_has_surviving_obligations(
     Disabling the creation of new obligations never makes such state
     unreachable (DOM-OBL-001 §IX.16).
     """
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
     assessments = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.seat_id == seat_id,
             ObligationAssessment.event_type == "ASSESSMENT",
             ObligationAssessment.obligation_type.in_(obligation_types),
@@ -973,9 +1006,13 @@ def seat_has_surviving_obligations(
         if state.is_outstanding:
             return True
         cycle = db.session.get(BillCycle, assessment.bill_cycle_id) if assessment.bill_cycle_id else None
-        if cycle is not None and cycle.next_assessment_at is not None and _is_later(
-            class_id, cycle.next_assessment_at, reference
-        ):
+        if cycle is not None and cycle.next_assessment_at is not None and canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(class_id),
+            primitive="later_than",
+            candidate=cycle.next_assessment_at,
+            reference=reference,
+        ).is_later:
             return True
     return False
 
@@ -998,7 +1035,7 @@ def get_default_payment_target(class_id: str, internal_ref: str) -> ObligationSt
     ]
     if not outstanding:
         return None
-    return min(outstanding, key=lambda st: (ensure_utc(st.due_at), st.correlation_id))
+    return min(outstanding, key=lambda st: (st.due_at, st.correlation_id))
 
 
 def get_obligation_command_reservation(
@@ -1105,7 +1142,6 @@ def get_paid_rent_assessments_for_cycle(
     query = (
         db.session.query(ObligationAssessment)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
             ObligationAssessment.event_type == 'ASSESSMENT',
             ObligationAssessment.bill_cycle_id.in_(matching_bill_cycle_ids),
@@ -1136,7 +1172,7 @@ def get_paid_rent_assessments_for_cycle(
 NON_OBLIGATION_ASSESSMENT_TYPES = frozenset({"NSF_FEE"})
 
 
-def is_obligation_related_transaction(transaction_id: int | None) -> bool:
+def is_obligation_related_transaction(transaction_id: int | None, *, class_id: str) -> bool:
     """Return True iff a ledger transaction has obligation provenance.
 
     Per SPEC-OPS-001 §VII (INV-OPS-008), obligation-relatedness is determined by
@@ -1151,17 +1187,21 @@ def is_obligation_related_transaction(transaction_id: int | None) -> bool:
 
     Args:
         transaction_id: Ledger transaction id to test (None → False).
+        class_id: Class the transaction belongs to; obligation events are read
+            only within it (INV-ARC-002).
 
     Returns:
         True if any obligation event references this transaction, else False.
     """
     if transaction_id is None:
         return False
-    return bool(obligation_related_transaction_ids([transaction_id]))
+    return bool(obligation_related_transaction_ids([transaction_id], class_id=class_id))
 
 
-def obligation_related_transaction_ids(transaction_ids) -> frozenset[int]:
+def obligation_related_transaction_ids(transaction_ids, *, class_id: str) -> frozenset[int]:
     """``is_obligation_related_transaction`` for many transactions in one query."""
+    if not class_id:
+        raise ValueError("class_id is required to read obligation provenance")
     ids = [tid for tid in transaction_ids if tid is not None]
     if not ids:
         return frozenset()
@@ -1169,6 +1209,7 @@ def obligation_related_transaction_ids(transaction_ids) -> frozenset[int]:
         row[0]
         for row in db.session.query(ObligationAssessment.ledger_transaction_id)
         .filter(
+            ObligationAssessment.class_id == class_id,
             ObligationAssessment.ledger_transaction_id.in_(ids),
             ObligationAssessment.obligation_type.notin_(NON_OBLIGATION_ASSESSMENT_TYPES),
         )
@@ -1195,7 +1236,6 @@ def get_payment_events_for_assessment(
         db.session.query(ObligationAssessment)
         .filter(
             ObligationAssessment.correlation_id == assessment.correlation_id,
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == 'PAYMENT',
         )
         .order_by(ObligationAssessment.timestamp.asc())
@@ -1241,7 +1281,6 @@ def get_rent_payment_history(
         db.session.query(ObligationAssessment)
         .filter(
             ObligationAssessment.seat_id == seat_id,
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
         )
         .order_by(ObligationAssessment.timestamp.desc())
@@ -1259,69 +1298,12 @@ def get_rent_waivers_for_seat(
         db.session.query(ObligationAssessment)
         .filter(
             ObligationAssessment.seat_id == seat_id,
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
             ObligationAssessment.event_type == 'WAIVED',
         )
         .order_by(ObligationAssessment.timestamp.desc())
         .all()
     )
-
-
-@dataclass(frozen=True)
-class RentWaiverView:
-    """Derived projection of a rent WAIVED event with its coverage window.
-
-    Per DOM-OBL-001 §VII, assessment events do not store coverage windows.
-    The window is derived from the linked bill_cycle
-    (cycle_boundary_at, next_assessment_at). This projection resolves the
-    derivation once so callers work with a stable shape.
-    """
-    id: int
-    seat_id: int
-    correlation_id: str
-    timestamp: datetime  # When the waiver was granted (event canonical timestamp)
-    coverage_start_time: Optional[datetime]  # Derived from bill_cycle.cycle_boundary_at
-    coverage_end_time: Optional[datetime]  # Derived from bill_cycle.next_assessment_at
-
-
-def get_active_rent_waivers_for_class(
-    class_id: str,
-    coverage_date: datetime | None = None,
-) -> list[RentWaiverView]:
-    """DEPRECATED — "active waiver" is not a lawful concept.
-
-    Per DOM-OBL-001 §V.6, a waiver is a one-time immutable satisfaction
-    of a specific already-assessed liability. It does not create an
-    ongoing state and does not affect later assessments. Any UI that
-    presents waivers as "currently active" or as a lifecycle object
-    encodes the wrong domain semantics.
-
-    This helper is retained temporarily so existing callers do not
-    crash; it returns the WAIVED-event history with the actual bill-cycle
-    coverage bounds. New callers should use `get_rent_waiver_history_for_class`
-    directly.
-
-    TODO: remove after all callers migrate.
-    """
-    waivers = get_rent_waiver_history_for_class(class_id)
-    if coverage_date is not None:
-        waivers = [
-            w for w in waivers
-            if w['coverage_start_time'] and w['coverage_end_time']
-            and w['coverage_start_time'] <= coverage_date < w['coverage_end_time']
-        ]
-    return [
-        RentWaiverView(
-            id=w['id'],
-            seat_id=w['seat_id'],
-            correlation_id=w['correlation_id'],
-            timestamp=w['waived_at'],
-            coverage_start_time=w['coverage_start_time'],
-            coverage_end_time=w['coverage_end_time'],
-        )
-        for w in waivers
-    ]
 
 
 def get_rent_waiver_history_for_class(
@@ -1360,7 +1342,6 @@ def get_rent_waiver_history_for_class(
         db.session.query(ObligationAssessment, BillCycle)
         .outerjoin(BillCycle, ObligationAssessment.bill_cycle_id == BillCycle.id)
         .filter(
-            ObligationAssessment.class_id == class_id,
             ObligationAssessment.obligation_type == 'RENT',
             ObligationAssessment.event_type == 'WAIVED',
         )

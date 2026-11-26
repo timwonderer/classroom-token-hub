@@ -71,7 +71,6 @@ def _approve_pass(app, client, classroom, student, request_id="req-1"):
         class_id=classroom.class_id,
         seat_id=student.seat.id,
         destination="Bathroom",
-        requested_at_utc=datetime(2026, 9, 21, 4, 0, tzinfo=timezone.utc),
     )
     ctx = CanonicalContext(
         user_id=student.user.id, class_id=classroom.class_id,
@@ -284,7 +283,20 @@ def test_history_reports_returned_and_ignores_an_unrelated_stray_active_row(app,
             db.session.add(stray)
             db.session.flush()
 
-    _return(client, student, log)
+    # The real return, inserted directly for the same reason: on this timeline
+    # the seat's latest event is the stray row, so the writer refuses a return.
+    with app.app_context():
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"return:{student.seat.id}"):
+            db.session.add(AttendanceSession(
+                target_seat_id=student.seat.id,
+                actor_seat_id=student.seat.id,
+                class_id=classroom.class_id,
+                status="active",
+                reason_code="start_work",
+                mechanism="self",
+                hall_pass_id=log.hall_pass_id,
+            ))
+            db.session.flush()
 
     login_teacher(client, classroom)
     # The history endpoint reads start/end dates as class-local days, so "today"

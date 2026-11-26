@@ -7,8 +7,9 @@ does not enumerate classes, issue Ledger SQL, or expose tenant detail.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.services.ledger_balance_query_service import (
     get_account_posting_boundary,
     get_transfer_posting_boundaries,
@@ -34,10 +35,6 @@ class LedgerVerificationAggregate:
     state: str
     checks: tuple[LedgerVerificationCheck, ...]
     checked_at: datetime
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _balance_check(name: str, result: LedgerProofResult, checked_at: datetime) -> LedgerVerificationCheck:
@@ -67,7 +64,7 @@ def verify_class_ledger(
     Individual proof failures are isolated so one malformed scope cannot hide
     the remaining evidence.
     """
-    checked_at = _now()
+    checked_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     checks: list[LedgerVerificationCheck] = []
     if not class_id or not balance_scopes:
         return LedgerVerificationAggregate("UNKNOWN", tuple(checks), checked_at)

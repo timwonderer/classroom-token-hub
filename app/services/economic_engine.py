@@ -32,7 +32,6 @@ be invented or overridden here; any change is a normative amendment to the spec.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
@@ -354,8 +353,8 @@ class InsuranceResolution:
     reimbursement_percentage: Optional[Decimal] = None
     payout_multiple: Optional[Decimal] = None
     maximum_policy_payout: Optional[Decimal] = None   # currency, period ceiling
-    claims_allowance_period: Optional[int] = None
-    claimable_days_period: Optional[int] = None
+    claims_allowance_weekly: Optional[int] = None
+    claimable_days_weekly: Optional[int] = None
     claim_window_days: Optional[int] = None
     waiting_period_days: Optional[int] = None
 
@@ -392,20 +391,32 @@ def resolve_insurance(
     class_id: Optional[str] = None,
     product: str,
     tier: str = SINGLE,
-    coverage_period: str = "weekly",
+    coverage_period: str,
     covered_calendar_days: Optional[int] = None,
     cwi: Optional[Decimal] = None,
     mode: Optional[str] = None,
 ) -> InsuranceResolution:
     """Resolve the canonical insurance economic reference (SPEC §4.5.3–§4.5.8).
 
+    The engine itself carries no implicit coverage-period assumption — exactly
+    like rent, which always takes its cadence from ``RentSettings.frequency_type``
+    with no engine-side fallback (``EconomyBalanceChecker.rent_band`` has no default
+    either). ``coverage_period`` therefore has NO DEFAULT: every caller must state
+    the policy's actual billing cadence (``InsurancePolicy.charge_frequency``,
+    lowercased) explicitly. This is deliberate, not an oversight — a silent
+    "weekly" default here is exactly what produced the always-weekly rebalance-
+    preview bug (issue #1762): a non-weekly-billed policy's premium was compared
+    against a weekly-scaled recommended band regardless of how it was actually
+    charged.
+
     Args:
         class_id: canonical class scope. When ``cwi`` / ``mode`` are not supplied,
             they are read via ``resolve_base(class_id)``.
         product: one of ``TRANSACTION`` / ``PRODUCTIVITY`` / ``NON_MONETARY``.
         tier: ``single`` / ``basic`` / ``mid`` / ``premium``.
-        coverage_period: ``"weekly"`` or ``"monthly"`` (or any non-weekly period,
-            in which case ``covered_calendar_days`` is required).
+        coverage_period: REQUIRED. ``"weekly"`` or ``"monthly"`` (or any
+            non-weekly period, in which case ``covered_calendar_days`` is also
+            required).
         covered_calendar_days: class-local calendar-day span of the coverage interval
             (half-open ``[start, next_renewal)``); required for non-weekly coverage.
         cwi: optional CWI override (else resolved from ``class_id``).
@@ -450,7 +461,7 @@ def resolve_insurance(
             reimbursement_percentage=Decimal(preset["reimbursement_pct"]),
             payout_multiple=payout_multiple,
             maximum_policy_payout=maximum_policy_payout,
-            claims_allowance_period=_scale_allowance(preset["claims_per_week"], week_equiv),
+            claims_allowance_weekly=int(preset["claims_per_week"]),
             claim_window_days=int(preset["claim_window_days"]),
             recommended_ranges={
                 "reimbursement_pct": RECOMMENDED_RANGES["reimbursement_pct"],
@@ -484,7 +495,7 @@ def resolve_insurance(
             reimbursement_percentage=Decimal(preset["reimbursement_pct"]),
             payout_multiple=payout_multiple,
             maximum_policy_payout=maximum_policy_payout,
-            claimable_days_period=_scale_allowance(preset["claimable_days_per_week"], week_equiv),
+            claimable_days_weekly=int(preset["claimable_days_per_week"]),
             recommended_ranges={
                 "reimbursement_pct": RECOMMENDED_RANGES["reimbursement_pct"],
                 "payout_multiple": RECOMMENDED_RANGES["payout_multiple"],
@@ -518,7 +529,7 @@ def resolve_insurance(
         reimbursement_percentage=None,
         payout_multiple=None,
         maximum_policy_payout=None,
-        claims_allowance_period=_scale_allowance(preset["claims_per_week"], week_equiv),
+        claims_allowance_weekly=int(preset["claims_per_week"]),
         waiting_period_days=int(preset["waiting_period_days"]),
         recommended_ranges={
             "claims_per_week": RECOMMENDED_RANGES["claims_per_week"],
@@ -537,15 +548,22 @@ def resolve_insurance(
     )
 
 
-def _scale_allowance(weekly_allowance: int, week_equiv: Decimal) -> int:
-    """Scale an integer per-week-equivalent allowance to the coverage interval.
+def premium_currency_band(resolution: "InsuranceResolution") -> tuple[Decimal, Decimal]:
+    """Currency premium band for ``resolution``'s own coverage period and CWI.
 
-    ``period_allowance = ceil(weekly_allowance × coverage_week_equivalent)`` (SPEC
-    §4.5.8). ``ceil`` governs how many separate claims may be filed, never how much
-    may be paid; total exposure stays bounded by the simultaneous weekly and period
-    payout ceilings.
+    ``recommended_ranges['premium_rate']`` is a fraction of CWI *per week-equivalent*
+    (SPEC §4.5.2); scaling it by ``cwi`` alone yields a WEEKLY-period band regardless
+    of the coverage period the caller actually resolved. A caller comparing a
+    policy's actual (possibly non-weekly) premium against the recommended band must
+    scale by ``coverage_week_equivalent`` too, the same way ``period_premium`` is
+    derived above. Raises ``ValueError`` if ``resolution.cwi`` is ``None``.
     """
-    return int(math.ceil(Decimal(weekly_allowance) * week_equiv))
+    if resolution.cwi is None:
+        raise ValueError("cwi is required to compute a currency premium band")
+    rate_min, rate_max = resolution.recommended_ranges['premium_rate']
+    minimum = _money(resolution.cwi * Decimal(str(rate_min)) * resolution.coverage_week_equivalent)
+    maximum = _money(resolution.cwi * Decimal(str(rate_max)) * resolution.coverage_week_equivalent)
+    return minimum, maximum
 
 
 # --------------------------------------------------------------------------- #
@@ -756,9 +774,14 @@ def accrue_daily_interest(
     - ``weekly`` / ``monthly``: interest accrued so far joins at each day marked
       ``capitalizes`` — a class-local week or month start inside the window.
 
-    Interest already credited is part of ``end_of_day_balance`` for every
-    calculation type, simple included. For simple interest that does not conform
-    to §4.1; it is a tracked known deviation (SPEC-ECON-001 Appendix A, KD-1).
+    For ``daily``/``weekly``/``monthly`` compounding, interest already credited to
+    the ledger is part of ``end_of_day_balance`` and so of every later day's
+    earning base — that is the intended compounding behavior. For simple
+    (``never``) interest, the caller MUST instead supply a principal-only
+    ``end_of_day_balance`` series that excludes every previously credited
+    interest dollar (SPEC-ECON-001 §4.1; formerly tracked known deviation KD-1,
+    resolved). This function trusts the balances it is given; it does not
+    itself distinguish principal from credited interest.
 
     A non-positive earning base earns nothing. Full ``Decimal`` precision is kept;
     the caller rounds once, when the window is credited (§5.3).
@@ -805,38 +828,62 @@ def project_savings_balances(
     checkpoints,
     calculation_type: str,
     compound_frequency: str,
+    opening_principal: Optional[Decimal] = None,
 ) -> list[Decimal]:
     """Posted-balance forecast built from the runtime accrual (SPEC-ECON-001 §10).
 
     ``windows`` is the class-local payout calendar from now forward, each window a
     sequence of ``ProjectedSavingsDay``. A day with a known balance (one already
-    ended in the open window) uses it; every other day assumes the balance is
-    left alone: today's posted balance plus interest credited since. Each window
-    is credited with ``credit_savings_interest(accrue_daily_interest(...))`` and
-    joins the balance for the next — exactly what the payout job will post.
+    ended in the open window) uses it; every other day assumes no further
+    activity. Each window is credited with
+    ``credit_savings_interest(accrue_daily_interest(...))``.
+
+    The returned series is always the full posted balance, interest included —
+    ``balance`` below. Simple interest's *earning base* for an unknown day must
+    not include interest credited by an earlier projected window (§4.1), so a
+    second, principal-only running value (``principal``) tracks it separately:
+    a known day's balance (already principal-only for simple, per caller)
+    replaces ``principal``; an unknown day falls back to ``principal`` rather
+    than ``balance``. For every other calculation type, principal and balance
+    are the same value and this has no effect. ``opening_principal`` seeds
+    ``principal`` for a forecast whose "now" point already carries previously
+    credited interest; it defaults to ``posted_balance`` when omitted.
 
     ``checkpoints[k]`` is how many windows have closed by forecast point ``k + 1``.
     Returns ``len(checkpoints) + 1`` points; index 0 is now.
     """
     opening = _money(posted_balance or Decimal("0.00"))
+    simple = (calculation_type or "simple").strip().lower() == "simple"
     balance = opening
+    principal = _money(opening_principal) if opening_principal is not None else opening
     after_window = [opening]
     for window in windows:
-        days = [
-            SavingsAccrualDay(
-                end_of_day_balance=(
-                    day.end_of_day_balance if day.end_of_day_balance is not None else balance
-                ),
+        days = []
+        for day in window:
+            if day.end_of_day_balance is not None:
+                # A known (already-ended) day's own balance feeds its own
+                # day's interest base below, but must never overwrite the
+                # running ``principal``: every known day is strictly earlier
+                # than the "now" point ``opening_principal`` already
+                # captures, so letting it leak forward would discard any
+                # deposit/withdrawal posted today, before today's own day
+                # (necessarily still unknown) is reached.
+                base = day.end_of_day_balance
+            else:
+                base = principal if simple else balance
+            days.append(SavingsAccrualDay(
+                end_of_day_balance=base,
                 annual_rate=day.annual_rate,
                 capitalizes=day.capitalizes,
-            )
-            for day in window
-        ]
-        balance = _money(balance + credit_savings_interest(accrue_daily_interest(
+            ))
+        window_interest = credit_savings_interest(accrue_daily_interest(
             days=days,
             calculation_type=calculation_type,
             compound_frequency=compound_frequency,
-        )))
+        ))
+        balance = _money(balance + window_interest)
+        if not simple:
+            principal = balance
         after_window.append(balance)
     return [opening] + [after_window[min(count, len(windows))] for count in checkpoints]
 

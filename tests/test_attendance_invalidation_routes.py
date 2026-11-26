@@ -174,7 +174,9 @@ def test_paid_mobile_confirmation_recovers_once_after_response_loss(app,client,w
             confirm=page.locator('#attendanceCorrectionConfirm');confirm.click()
             page.get_by_text('The response could not be confirmed. Retry with the same command key.').wait_for()
             page.wait_for_function("!document.getElementById('attendanceCorrectionConfirm').disabled")
-            confirm.click();page.wait_for_function("!document.getElementById('attendanceCorrectionModal').classList.contains('show')")
+            # Success reloads the page; wait for the new document, not the old modal.
+            with page.expect_navigation(wait_until='load'):confirm.click()
+            page.wait_for_function("!document.getElementById('attendanceCorrectionModal')?.classList.contains('show')")
             assert len(requests)==2 and requests[0]==requests[1]
             assert results[0]['status']=='accepted' and not results[0]['replayed'] and results[1]['replayed']
             assert results[0]['recovery_cents']==results[1]['recovery_cents']

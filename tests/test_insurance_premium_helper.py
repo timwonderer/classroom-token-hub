@@ -101,3 +101,11 @@ def test_policy_form_embeds_helper(app, client, monkeypatch):
     assert 'id="insurance-premium-helper-data"' in html
     # Deferred, so it reads the tier controls rendered later in the form.
     assert '<script defer src="/static/js/insurance-premium-helper.js">' in html
+
+
+@pytest.mark.parametrize("product, field", [("TRANSACTION", "claims_allowance_weekly"), ("PRODUCTIVITY", "claimable_days_weekly")])
+def test_recommended_filing_allowance_does_not_scale_with_monthly_billing(product, field):
+    weekly = ee.resolve_insurance(product=product, tier="mid", coverage_period="weekly", cwi=CWI, mode="default")
+    monthly = ee.resolve_insurance(product=product, tier="mid", coverage_period="monthly", covered_calendar_days=31, cwi=CWI, mode="default")
+    assert getattr(monthly, field) == getattr(weekly, field)
+    assert monthly.maximum_policy_payout > weekly.maximum_policy_payout

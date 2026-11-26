@@ -18,7 +18,9 @@ from app.extensions import db
 from app.models import EntitlementEvent, IdentityProfile, Seat
 from app.services.entitlement_read_service import get_entitlement_status
 from app.services.store_policy_resolver import StorePolicyResolver, PolicyNotFound
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
+
+from app.utils.temporal_display import format_timestamp
 
 from app.services.class_configuration_economic_service import EconomicView
 
@@ -339,6 +341,23 @@ class StoreManagementView:
     form_contract: StoreFormContract | None = None
 
 
+def _redemption_rows(requests: list[Any], temporal_context: Any) -> list[SimpleNamespace]:
+    """Redemption request views plus their presentation-ready times."""
+    def stamp(dt):
+        return format_timestamp(temporal_context, dt) if dt else None
+
+    return [
+        SimpleNamespace(
+            **vars(req),
+            is_pending=req.is_pending,
+            purchased_at_display=stamp(req.purchased_at),
+            submitted_at_display=stamp(req.submitted_at) or "Not recorded",
+            decided_at_display=stamp(req.decided_at) or "Not recorded",
+        )
+        for req in requests
+    ]
+
+
 def build_store_management_view(
     items: list[Any],
     total_items: int,
@@ -356,25 +375,38 @@ def build_store_management_view(
     selected_scope: dict[str, Any] | None = None,
     feature_options: list[dict[str, Any]] | None = None,
     form_contract: StoreFormContract | None = None,
+    temporal_context: Any = None,
 ) -> StoreManagementView:
     """
     Build the canonical store management view for admin dashboard.
 
     Consolidates all store management data into a single frozen dataclass
-    for Phase 6-7 template consumption.
+    for Phase 6-7 template consumption. Times are formatted here, through the
+    resolver under ``temporal_context`` (CLE for the page's class), so the
+    template prints text and never formats.
     """
+    # item.purchases holds these same objects, so both tables get the field.
+    for purchase in recent_purchases:
+        purchase.purchased_at_display = (
+            format_timestamp(temporal_context, purchase.purchased_at) if purchase.purchased_at else "N/A"
+        )
+    for item in items:
+        last_day = getattr(item, "collective_goal_last_day", None)
+        # A class-local date already resolved by the caller: no timezone left to apply.
+        item.collective_goal_last_day_display = last_day.strftime("%b %d, %Y") if last_day else None
+
     return StoreManagementView(
         items=items,
         total_items=total_items,
         active_items=active_items,
         rent_managed_item_ids=rent_managed_item_ids,
         total_purchases=total_purchases,
-        pending_redemptions=pending_redemptions,
+        pending_redemptions=_redemption_rows(pending_redemptions, temporal_context),
         recent_purchases=recent_purchases,
         collective_progress_by_item=collective_progress_by_item,
         class_labels_by_block=class_labels_by_block,
-        resolved_redemptions=resolved_redemptions,
-        pending_acknowledgements=pending_acknowledgements or [],
+        resolved_redemptions=_redemption_rows(resolved_redemptions, temporal_context),
+        pending_acknowledgements=_redemption_rows(pending_acknowledgements or [], temporal_context),
         selected_scope=selected_scope or {},
         feature_options=feature_options or [],
         economic=economic or EconomicView(

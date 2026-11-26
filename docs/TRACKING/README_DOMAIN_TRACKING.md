@@ -1,6 +1,6 @@
 # Tracking Documents
 
-**Effective:** 2026-09-03 (amended 2026-09-28, after launch)
+**Effective:** 2026-09-03 (amended 2026-09-28, after launch; 2026-10-22, backlog moved to GitHub)
 **Replaces:** the `DOMAIN_PROGRESS_MATRIX_2026.md` system (archived 2026-09-03)
 
 ---
@@ -12,15 +12,17 @@ audits, and superseded plans live in [`docs/archive/v2-tracking-2026/`](https://
 
 | File | Purpose |
 |---|---|
-| [`POST_LAUNCH_TRACKER_2026.md`](POST_LAUNCH_TRACKER_2026.md) | **Canonical tracker.** Operator follow-ups, surfaces not yet exercised in production, code hygiene, dependencies, and deferred features after v2.0.1. |
 | [`BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md`](BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md) | Approved Operations verifier policy decisions, cited by SOP-DOC-001. |
 | [`FEAT_REGISTRY_RECONCILIATION_2026-09-19.md`](FEAT_REGISTRY_RECONCILIATION_2026-09-19.md) | FEAT registry against implementation, cited from `app/feats/`. |
+| [`HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md`](HTTP_ERROR_PAGE_CONTRACT_DECISION_PACKAGE_20261124.md) | Unratified draft contracts for the HTTP error pages (proposed SPEC-DES-002 presentation, SPEC-OPS-007 communication, SPEC-OPS-003 logging amendment), classified findings, historical-exposure findings, remaining conflicts with governing documentation, and the ratification and implementation plan. |
 | [`DOCS_PLATFORM_ROADMAP.md`](DOCS_PLATFORM_ROADMAP.md) | Documentation platform plan. |
 | [`DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md`](DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md) | Reusable SOP-DEV-002 plan template for a single domain. |
 
 The pre-launch ship tracker, `PRODUCTION_READINESS_2026-09.md`, was archived on 2026-09-28 after
 v2.0.0 and v2.0.1 shipped. Its open items were re-verified and carried into the post-launch
-tracker. Release and audit records are not tracking documents; they live in `docs/ops/audits/`.
+tracker. That tracker was archived in turn on 2026-10-22: **the backlog is GitHub Issues and the
+[CTH Backlog](https://github.com/users/timwonderer/projects/6) project**, not a file here. Release and audit records are not tracking
+documents; they live in `docs/ops/audits/`.
 
 ---
 
@@ -36,8 +38,9 @@ and the gap is a finding against the code.
 ### 2. Amend, do not accumulate
 
 The previous system failed because each sprint minted a new dated document while the nominally
-canonical one silently went stale — by 2026-09-03 the matrix was wrong about four domains. Update
-the canonical tracker (`POST_LAUNCH_TRACKER_2026.md`) in place. Record closures with a commit SHA.
+canonical one silently went stale — by 2026-09-03 the matrix was wrong about four domains, and the
+post-launch tracker stopped at v2.1.1. Open work is an issue on the CTH Backlog project; close it with
+the PR or commit that resolves it.
 
 ### 3. Archive on completion, never delete
 
@@ -54,7 +57,7 @@ it become a second source of truth.
 ## Working a domain
 
 1. Read the domain's normative spec (`docs/DOMAIN/DOM-*.md`) and the invariants it cites.
-2. Read the domain's open items in `POST_LAUNCH_TRACKER_2026.md`.
+2. Read the domain's open issues on the CTH Backlog project.
 3. If the work spans multiple phases, copy `DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md`.
 4. Land the fix with a regression test that fails against the pre-fix commit.
-5. Update the tracker with the closing commit SHA.
+5. Close the issue with the PR that fixes it.

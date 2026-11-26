@@ -107,12 +107,28 @@ def test_replaced_or_destroyed_attempt_cannot_be_restored(attempt):
 ])
 def test_unsafe_persistence_configuration_is_refused(attempt, monkeypatch, unsafe):
     conn = store.client()
-    config = conn.config_get('save', 'appendonly', 'slowlog-log-slower-than')
+    config = {}
+    for name in ('save', 'appendonly', 'slowlog-log-slower-than'):
+        config.update(conn.config_get(name))
     config.update(unsafe)
     with monkeypatch.context() as patch:
         patch.setattr(conn, 'config_get', lambda *args: config)
         with pytest.raises(store.SetupUnavailable):
             store.read(attempt[0], attempt[1])
+
+
+def test_store_check_works_on_redis_6_config_get(attempt, monkeypatch):
+    """Redis 6.0 (Ubuntu 22.04's package) refuses CONFIG GET with several names."""
+    from redis import Redis, ResponseError
+    real = Redis.config_get
+
+    def redis_6(self, pattern='*', *args, **kwargs):
+        if args:
+            raise ResponseError("Unknown subcommand or wrong number of arguments for 'GET'. Try CONFIG HELP.")
+        return real(self, pattern, **kwargs)
+
+    monkeypatch.setattr(Redis, 'config_get', redis_6)
+    assert store.read(attempt[0], attempt[1])['generation'] is not None
 
 
 def test_replication_and_store_outage_are_refused_without_sensitive_errors(attempt, monkeypatch):

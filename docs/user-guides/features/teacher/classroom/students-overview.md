@@ -128,6 +128,23 @@ Deleting several at once is deliberately harder. **Bulk Actions > Delete Student
 > [!TIP]
 > Paste your whole class in one go on day one, then hand out the join code and let students claim at their own pace. The unclaimed-seat badge tells you who is still outstanding without your having to chase anyone.
 
+## Why it works this way
+
+**What you might expect:** avatars, XP, levels, streaks, or a leaderboard of the top savers.
+
+**What Classroom Token Hub does instead:** balances are private between each student and you. There are no rankings, XP, levels, streaks, attendance bonuses or behaviour scores.
+
+**Why:** the app treats money as a set of constraints to learn from, not a reward to compete for. Instead of rankings, each student sees their own balance and their own decisions. Instead of streaks and attendance bonuses, the app offers insurance, partial pay and ways to recover. It records what happened and leaves interpreting it to you.
+
+### If this doesn't fit your class
+
+- [ClassDojo](https://www.classdojo.com/points) gives behaviour points for feedback and reports. It is free for teachers.
+- [LiveSchool](https://www.whyliveschool.com/pricing) and [PBIS Rewards](https://www.pbisrewards.com/) are schoolwide points systems with a rewards store, priced per school or district.
+
+These are behaviour-points tools rather than banking simulations.
+
+*Checked against each product's own website on 29 October 2026. Classroom Token Hub is not affiliated with any of them. Check their current features and pricing yourself. [More on this](../design-choices.md).*
+
 ## Related guides
 
 - [Class Setup and Join Codes](class-setup.md)

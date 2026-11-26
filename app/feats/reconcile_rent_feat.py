@@ -41,6 +41,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.models import RentSettings, Seat
+from app.services.tlcp import class_log_ref
 from app.services import obligations_service
 from app.services import rent_schedule_service
 from app.services import entitlement_service
@@ -48,6 +49,7 @@ from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.class_configuration_query_service import (
     get_class_feature_history, get_rent_settings, is_feature_enabled,
 )
+from app.services.ledger_recovery_service import lock_ledger_seats
 from app.feats.base import requires_feat_context, FEATContext
 # Obligations DOMAIN commands (plain functions), invoked within THIS FEAT's single
 # context — never the execute_* FEAT wrappers (INV-ARC-000 / -021 / -006).
@@ -57,7 +59,7 @@ from app.feats.schedule_next_bill_cycle_feat import (
 )
 from app.services.obligations_service import SuccessionEligibility
 from app.utils.canonical_temporal_resolver import (
-    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc, utc_now,
+    CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver,
 )
 
 logger = logging.getLogger(__name__)
@@ -151,9 +153,11 @@ def _late_fee_periods_elapsed(settings: RentSettings, grace_boundary_at, now) ->
     """How many late-fee periods a delinquent obligation has accrued by ``now``.
 
     - ``once``: exactly one flat penalty the moment grace lapses.
-    - ``recurring``: one penalty per elapsed ``late_penalty_frequency_days``
-      window since the grace boundary (the first the moment grace lapses, then
-      one per full window thereafter), capped by ``_MAX_LATE_FEE_PERIODS``.
+    - ``recurring``: the first penalty the moment grace lapses, then one more at
+      each class-local midnight ``late_penalty_frequency_days`` calendar days
+      apart, counted from the grace boundary's class-local date (INV-ARC-015
+      §VIII.1: a day is [00:00, 24:00) in class time, never 24 hours), capped by
+      ``_MAX_LATE_FEE_PERIODS``.
 
     The count is DERIVED from elapsed time, never by counting prior late-fee
     events — so it cannot race and is stable across reconciliation replays.
@@ -165,11 +169,29 @@ def _late_fee_periods_elapsed(settings: RentSettings, grace_boundary_at, now) ->
     if not freq_days or freq_days <= 0:
         # Recurring configured without a valid cadence → degrade to a single fee.
         return 1
-    elapsed_days = (ensure_utc(now) - ensure_utc(grace_boundary_at)).days
-    if elapsed_days < 0:
+    if canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+        candidate=now, reference=grace_boundary_at,
+    ).is_earlier:
         return 0
-    periods = (elapsed_days // int(freq_days)) + 1
-    return min(periods, _MAX_LATE_FEE_PERIODS)
+    class_ctx = SimpleNamespace(class_id=settings.class_id)
+    grace_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=class_ctx,
+        primitive="localize_timestamp", timestamp=grace_boundary_at,
+    ).evaluation_date
+    periods = 1
+    while periods < _MAX_LATE_FEE_PERIODS:
+        period_start = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=class_ctx,
+            primitive="shift_calendar_days", date=grace_date, days=int(freq_days) * periods,
+        ).boundary_start_utc
+        if canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+            candidate=now, reference=period_start,
+        ).is_earlier:
+            break
+        periods += 1
+    return periods
 
 
 def _assess_late_fees(settings: RentSettings, class_id: str, cycle, now) -> int:
@@ -191,7 +213,7 @@ def _assess_late_fees(settings: RentSettings, class_id: str, cycle, now) -> int:
     if penalty_amount is None or Decimal(str(penalty_amount)) <= Decimal('0.00'):
         return 0
     grace_boundary_at = getattr(cycle, 'grace_boundary_at', None)
-    if grace_boundary_at is None or ensure_utc(now) <= ensure_utc(grace_boundary_at):
+    if grace_boundary_at is None or not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=now, reference=grace_boundary_at).is_later:
         return 0
 
     periods = _late_fee_periods_elapsed(settings, grace_boundary_at, now)
@@ -234,18 +256,6 @@ def _assess_late_fees(settings: RentSettings, class_id: str, cycle, now) -> int:
     return created
 
 
-def _is_later(class_id: str, candidate, reference) -> bool:
-    """``candidate`` strictly after ``reference``, via the canonical resolver (INV-ARC-015)."""
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=SimpleNamespace(class_id=class_id),
-        primitive="later_than",
-        reference_time_utc=reference,
-        candidate=candidate,
-        reference=reference,
-    ).is_later
-
-
 def _rent_disabled_for_period(class_id: str, boundary, now) -> bool:
     """Whether a recorded disablement prevents the period beginning at ``boundary``.
 
@@ -255,10 +265,10 @@ def _rent_disabled_for_period(class_id: str, boundary, now) -> bool:
     that has not yet arrived. A boundary already passed is catch-up after
     re-enablement, which the current state governs.
     """
-    if _is_later(class_id, now, boundary):
+    if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=now, reference=boundary).is_later:
         return False
     for row in get_class_feature_history(class_id, "rent"):  # newest first
-        if not _is_later(class_id, row.effective_at, boundary):
+        if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=row.effective_at, reference=boundary).is_later:
             return row.economic_version_id is None
     return False
 
@@ -274,7 +284,7 @@ def _expire_ended_period_perks(class_id: str, now, actor_seat_id_fn) -> int:
     for cycle in obligations_service.get_bill_cycles_for_internal_ref(f"rent:{class_id}"):
         if cycle.class_id != class_id or cycle.next_assessment_at is None:
             continue
-        if _is_later(class_id, cycle.next_assessment_at, now):
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=cycle.next_assessment_at, reference=now).is_later:
             continue
         expired += _expire_prior_cycle_perks(class_id, cycle, actor_seat_id_fn())
     return expired
@@ -330,7 +340,7 @@ def _cycle_terms(class_id: str, cycle, current_settings: RentSettings, result) -
             logger.error(
                 "reconcile_rent: bill cycle %s (class %s, cycle %s) names rent policy %s, "
                 "which does not resolve; no new rent work is created against it",
-                cycle.id, class_id, cycle.cycle_number, cycle.policy_uuid,
+                cycle.id, class_log_ref(class_id), cycle.cycle_number, cycle.policy_uuid,
             )
     return frozen
 
@@ -352,7 +362,51 @@ def reconcile_rent(
     if not class_id:
         raise ValueError("reconcile_rent requires class_id")
 
-    now = ensure_utc(request.reference_time_utc) if request.reference_time_utc else utc_now()
+    # Multi-seat balance-dependent command (DOM-LED-001 §VII, the ascending-lock
+    # paragraph following INV-LED-017): acquire every affected seat anchor, in
+    # ascending seat-ID order, before any class-scoped work. Every assessment,
+    # late-fee, and perk-grant insert below (assess_obligation's
+    # ObligationAssessment row, in particular) carries a foreign key to both a
+    # seat and this class, so Postgres takes an implicit FOR KEY SHARE lock on
+    # each referenced row the instant it is inserted. Without locking the whole
+    # roster up front, the FIRST such insert pins a KEY SHARE on this class
+    # well before every seat in the roster has been touched — the inverse of
+    # ledger settlement's seat-then-class order (INV-LED-015), and the
+    # production deadlock FEAT-LED-003 (the ledger settlement sweep) exists to
+    # close against (#1640).
+    #
+    # The lock set is every seat in the class, not just the current rent
+    # roster (CodeRabbit review on this PR, confirmed real by reading the
+    # code): _expire_ended_period_perks -> expire_rent_perks locks each prior
+    # cycle's HALL_PASS perk holder by seat id (app/services/
+    # entitlement_service.py), and _grant_period_start_perks reads/touches the
+    # seat on each current-cycle assessment — both working from historical
+    # RENT assessments (get_assessments_for_bill_cycle), which can include a
+    # seat no longer in _rent_roster (unclaimed since, or since exempted).
+    # Such a seat can carry a lower id than a seat still on the active roster,
+    # so locking only the roster can still let the later, unlocked touch pin
+    # this class's implicit lock before that seat is held — the same
+    # circular wait this fix otherwise closes. Every seat this function can
+    # touch is guaranteed to belong to this class (multi-tenancy scoping), so
+    # locking the whole class roster, not just the rent-liable subset, is the
+    # simplest set provably wide enough.
+    #
+    # Residual, accepted risk: this lock is a snapshot at entry. A seat
+    # claimed into the class after this point, within this same run, is not
+    # in the locked set; if later re-queried (_rent_roster is re-read inside
+    # _assess_cycle/_assess_late_fees) and then inserted into class-scoped
+    # work, it is touched without the ascending-lock protection. The failure
+    # mode is a Postgres-detected deadlock aborting one of the two
+    # transactions, not data corruption or a stuck lock, and the next
+    # scheduled reconciliation run catches the seat up normally.
+    lock_ledger_seats(class_id, [seat.id for seat in Seat.query.filter_by(class_id=class_id).all()])
+
+    # A supplied reference_time_utc is validated (aware) and normalized to UTC;
+    # without one, the resolver's clock supplies "now".
+    now = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        reference_time_utc=request.reference_time_utc,
+    ).canonical_now_utc
     enabled = is_feature_enabled(class_id, "rent")
 
     # New cycles and new assessments are NEW work, so they take the policy
@@ -444,7 +498,7 @@ def reconcile_rent(
         if latest is not None
         and latest.next_assessment_at is not None
         and (current is None or latest.id != current.id)
-        and _is_later(class_id, latest.cycle_boundary_at, now)
+        and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=latest.cycle_boundary_at, reference=now).is_later
         else None
     )
 

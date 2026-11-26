@@ -10,7 +10,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from decimal import Decimal
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytz
@@ -23,10 +22,10 @@ from app.models import PayrollEvent
 from app.services.payroll.schedule import SCHEDULED_OCCURRENCE_KEY
 from app.services.payroll.settings import append_payroll_setting
 from app.utils.canonical_temporal_resolver import utc_now
-from app.scheduled_tasks import _advance_local_calendar_days
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
 from tests.helpers.ledger import create_ledger_idempotent_transaction
+from tests.helpers.temporal import calendar_days_later
 
 
 def _utc(*args):
@@ -99,9 +98,7 @@ def test_INV_ARC_015__payroll_page_shows_the_schedulers_next_run(client, app):
     classroom = initialize_as_teacher("tz_pacific_p1", client, app)
     with app.app_context():
         enable_class_feature(class_id=classroom.class_id, feature="payroll")
-        next_run = _advance_local_calendar_days(
-            FIRST_PAY, 14, SimpleNamespace(class_id=classroom.class_id)
-        )
+        next_run = calendar_days_later(FIRST_PAY, 14, class_id=classroom.class_id)
         assert next_run == _utc(2026, 3, 16, 7, 0)  # 00:00 PDT, Mar 16
         # A biweekly schedule anchored on Mar 2, and the first payday's SYSTEM
         # run as the job records it.
@@ -154,15 +151,3 @@ def test_INV_ARC_015__economy_analysis_windows_are_class_calendar_periods(client
     assert (week_start.weekday(), week_start.hour, week_start.minute) == (0, 0, 0)
     assert (next_week.date() - week_start.date()).days == 7 and next_week.hour == 0
     assert (month_start.day, month_start.hour) == (1, 0)
-
-
-def test_class_day_bounds_are_the_class_days_own_midnights(app):
-    """The helper the banking filter uses, pinned directly."""
-    from app.routes.admin import _class_day_bounds_utc
-    from tests.helpers.classroom_initializer import initialize
-
-    classroom = initialize("tz_tokyo_p1", app)
-    with app.app_context():
-        assert _class_day_bounds_utc("2026-09-26", classroom.class_id) == (
-            _utc(2026, 9, 25, 15, 0), _utc(2026, 9, 26, 15, 0),
-        )

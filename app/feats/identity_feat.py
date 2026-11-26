@@ -30,7 +30,7 @@ from app.services.class_configuration_query_service import get_class_economy
 from app.services.classroom_setup import create_student_seat_with_profile, delete_seat_with_profile
 from app.services.context_resolver import CanonicalContext
 from app.feats.base import requires_feat_context
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -256,12 +256,15 @@ def _recovery_nonce_hash(nonce: str) -> str:
 
 
 def recovery_setup_is_valid(user: Optional[User], authorization: Optional[str]) -> bool:
-    from app.utils.canonical_temporal_resolver import ensure_utc
-
     if (not user or user.user_role != "student"
             or not isinstance(authorization, str) or len(authorization) != 43
             or not user.recovery_setup_nonce_hash or not user.recovery_setup_expires_at
-            or ensure_utc(user.recovery_setup_expires_at) <= utc_now()):
+            or not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                candidate=user.recovery_setup_expires_at,
+                reference=canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+            ).is_later):
         return False
     return hmac.compare_digest(user.recovery_setup_nonce_hash, _recovery_nonce_hash(authorization))
 
@@ -365,8 +368,15 @@ def activate_student_credentials(
     else:
         seat = db.session.get(Seat, seat_id) if seat_id is not None else None
         if seat:
-            ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
+            # Seat-then-class (INV-LED-015, DOM-LED-001 §VII): a concurrent
+            # FEAT-LED-003 settlement context (or, since #1640, a whole-roster
+            # reconciliation sweep that now locks every seat in the class,
+            # claimed or not) takes this same seat FOR UPDATE before the class
+            # row. Locking the class first here would complete the opposite
+            # cycle (#1640-adjacent).
             seat = Seat.query.filter_by(id=seat_id).populate_existing().with_for_update().one_or_none()
+            if seat:
+                ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
         if (not seat or seat.user_id is not None or seat.claimed_at is not None
                 or type(claim_generation) is not int or seat.claim_generation != claim_generation):
             return CredentialSetupResult(
@@ -470,8 +480,8 @@ def generate_teacher_reset_code(
 
     # Never log the code itself (FEAT-IDEN-003 §III.B Step 3).
     logger.info(
-        "Reset code generated for seat %s in class %s by teacher seat %s",
-        seat.id, ctx.class_id, teacher_seat.id,
+        "Reset code generated for seat %s by teacher seat %s",
+        seat.public_id, teacher_seat.public_id,
     )
 
     display_name = seat.identity_profile.full_name if seat.identity_profile else None
@@ -491,13 +501,16 @@ def validate_recovery_code(
     idempotency_key: str,
 ) -> RecoveryLookupResult:
     """Consume the code once and bind reset authority to the accepting session."""
-    from app.utils.canonical_temporal_resolver import ensure_utc
-
     matches = (User.query.filter_by(reset_code=reset_code, user_role="student")
                .populate_existing().limit(2).with_for_update().all())
     user = matches[0] if len(matches) == 1 else None
     if (not reset_code or not user or not user.reset_code_expires_at
-            or ensure_utc(user.reset_code_expires_at) <= utc_now()):
+            or not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                candidate=user.reset_code_expires_at,
+                reference=canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+            ).is_later):
         return RecoveryLookupResult(
             success=False, error_code="INVALID_OR_EXPIRED",
             error_message="Invalid or expired recovery code.",
@@ -549,6 +562,23 @@ def bind_authenticated_student_to_class(
         )
 
     class_id = class_row.class_id
+    # Step 2: Find unclaimed seats (both user_id and claimed_at must be NULL).
+    # Locked ascending, before the class row: seat-then-class (INV-LED-015,
+    # DOM-LED-001 §VII). Since #1640 widened rent reconciliation's lock set to
+    # every seat in the class — claimed or not — this path's seats can overlap
+    # a concurrent reconciliation sweep's lock set; locking the class first
+    # here (as this did before) completes the same circular wait #1640 closed,
+    # with this claim as the other side instead of ledger settlement.
+    unclaimed_seats = (
+        Seat.query
+        .filter(
+            Seat.class_id == class_id,
+            Seat.claimed_at.is_(None),
+            Seat.user_id.is_(None),
+        )
+        .order_by(Seat.id.asc())
+        .populate_existing().with_for_update().all()
+    )
     ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
     principal = User.query.filter_by(id=user_id, user_role="student").populate_existing().with_for_update().one_or_none()
     if principal is None:
@@ -559,16 +589,6 @@ def bind_authenticated_student_to_class(
     if Seat.query.filter_by(class_id=class_id, user_id=user_id).first() is not None:
         return ClassBindingResult(False, error_code="ALREADY_IN_CLASS", error_message="You're already in this class.")
 
-    # Step 2: Find unclaimed seats (both user_id and claimed_at must be NULL)
-    unclaimed_seats = (
-        Seat.query
-        .filter(
-            Seat.class_id == class_id,
-            Seat.claimed_at.is_(None),
-            Seat.user_id.is_(None),
-        )
-        .populate_existing().with_for_update().all()
-    )
     if not unclaimed_seats:
         return ClassBindingResult(
             success=False,
@@ -622,7 +642,9 @@ def bind_authenticated_student_to_class(
 
     # Step 6: Bind seat to authenticated user
     matched_seat.user_id = user_id
-    matched_seat.claimed_at = utc_now()
+    matched_seat.claimed_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc
     matched_seat.claim_first_name_hash = None
     matched_seat.claim_last_name_hash = None
     matched_seat.roster_fingerprint = None
@@ -744,6 +766,42 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
             "last_hash": hash_claim_name(last, class_id=ctx.class_id, field="last"),
         })
 
+    # Seat(s)-then-class (INV-LED-015, DOM-LED-001 §VII): lock every
+    # pre-existing unclaimed seat this import's claim-name groups will touch
+    # (via _ensure_distinct_claim_codes below) before locking the class, not
+    # after. Locking the class first, as this used to, holds it while waiting
+    # on a seat a settlement sweep or reconciliation already holds -- the same
+    # inversion #1640/PR #1832 closed for unclaim_student_seat and the other
+    # identity-domain writers (#1835). Newly-inserted seats need no pre-lock:
+    # a row this same transaction just created cannot be held by anyone else.
+    # The discovery query above and the lock below are two statements, not
+    # one: a seat matching one of these claim-name hashes that is inserted
+    # and committed by another transaction strictly between them would be
+    # locked only later, by _ensure_distinct_claim_codes, after the class is
+    # already locked -- recreating the inversion for that one seat. Re-query
+    # after locking and lock any newly-discovered match too, until a pass
+    # finds nothing new, so no unlocked matching seat survives to the class
+    # lock below.
+    distinct_hashes = {(entry["first_hash"], entry["last_hash"]) for entry in prepared}
+    locked_seat_ids = set()
+    while True:
+        found_seat_ids = set()
+        for first_hash, last_hash in distinct_hashes:
+            found_seat_ids.update(
+                row[0] for row in db.session.query(Seat.id).filter(
+                    Seat.class_id == ctx.class_id, Seat.role == "student", Seat.user_id.is_(None),
+                    Seat.claim_first_name_hash == first_hash, Seat.claim_last_name_hash == last_hash,
+                ).all()
+            )
+        newly_found = found_seat_ids - locked_seat_ids
+        if not newly_found:
+            break
+        (
+            Seat.query.filter(Seat.id.in_(newly_found), Seat.class_id == ctx.class_id)
+            .order_by(Seat.id.asc()).with_for_update().all()
+        )
+        locked_seat_ids |= newly_found
+
     # Serialize with claims, unclaims, and concurrent imports touching the same names.
     ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     for entry in prepared:
@@ -780,19 +838,26 @@ def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
         raise ValueError("Enter a first and last name, each at most 100 characters.")
     first, last = first_name.strip(), last_name.strip()
     User.query.filter_by(id=ctx.user_id).with_for_update().one()
-    class_row = ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one_or_none()
-    teacher = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id,
-                                  user_id=ctx.user_id, role="teacher").first()
-    if not class_row or class_row.teacher_user_id != ctx.user_id or not teacher:
-        raise ValueError("The teacher does not own this class.")
-    seat = Seat.query.filter_by(id=seat_id, class_id=ctx.class_id, role="student").first()
+    # Seat lock before the class lock (DOM-LED-001 §VII's multi-seat rule).
+    # Rent reconciliation (FEAT-OBL-002, #1640) now locks its whole roster —
+    # seat(s), then class — before any class-scoped insert. Locking the
+    # class here first, as this route previously did, would hold the class
+    # row while waiting on a seat reconciliation already holds, the same
+    # circular wait #1640 closed from the other direction.
+    seat = Seat.query.filter_by(
+        id=seat_id, class_id=ctx.class_id, role="student",
+    ).with_for_update().first()
     if seat is None:
         raise LookupError("Student seat not found in this class.")
     old_user_id = seat.user_id
     if old_user_id is None:
         raise ValueError("This seat is already unclaimed. Refresh the roster.")
+    class_row = ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one_or_none()
+    teacher = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id,
+                                  user_id=ctx.user_id, role="teacher").first()
+    if not class_row or class_row.teacher_user_id != ctx.user_id or not teacher:
+        raise ValueError("The teacher does not own this class.")
     user = User.query.filter_by(id=old_user_id).populate_existing().with_for_update().one()
-    seat = Seat.query.filter_by(id=seat_id).populate_existing().with_for_update().one()
     if (seat.user_id != old_user_id or type(expected_generation) is not int
             or seat.claim_generation != expected_generation):
         raise ValueError("The seat's claim has changed. Refresh the roster before unclaiming it.")

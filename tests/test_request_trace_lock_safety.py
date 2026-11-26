@@ -214,6 +214,19 @@ def test_trace_is_written_for_an_ordinary_signed_in_request(
     assert _traces(student.seat.public_id) == before + 1
 
 
+def test_DOM_SUP_001__static_asset_requests_write_no_trace(client, app, tlcp_trace_enabled):
+    """Static assets crowded real routes out of the ticket correlation pack."""
+    classroom = initialize('chemistry_p1', app)
+    student = classroom.students[0]
+    login_student(client, student)
+    before = _traces(student.seat.public_id)
+
+    response = client.get('/static/manifest.json')
+
+    assert response.status_code == 200
+    assert _traces(student.seat.public_id) == before
+
+
 def test_trace_is_skipped_not_waited_when_the_class_row_is_locked(
         client, app, side_engine, tlcp_trace_enabled):
     """Class destruction, an unclaim, or a claim elsewhere holds the class row."""

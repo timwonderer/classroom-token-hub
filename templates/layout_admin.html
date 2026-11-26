@@ -93,7 +93,7 @@
             {% set economy_open = current_page in ['economic_engine', 'payroll', 'store', 'banking', 'interpretation'] %}
             {% set bills_open = current_page in ['rent', 'insurance'] %}
             {% set settings_open = current_page in ['settings', 'passkey_settings', 'account_delete'] %}
-            {% set class_tools_open = current_page in ['customizations', 'feature_settings', 'class_delete'] %}
+            {% set class_tools_open = current_page in ['customizations', 'feature_settings', 'class_delete', 'configuration_transfer'] %}
 
             <!-- Dropdown Navigation -->
             <div class="d-flex flex-column gap-2 mt-2">
@@ -183,6 +183,9 @@
                         <a href="{{ url_for('admin.customizations') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'customizations' %}active{% endif %}" {% if current_page == 'customizations' %}aria-current="page"{% endif %}>
                             <span class="material-symbols-outlined" aria-hidden="true">style</span> Customizations
                         </a>
+                        <a href="{{ url_for('configuration.settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'configuration_transfer' %}active{% endif %}" {% if current_page == 'configuration_transfer' %}aria-current="page"{% endif %}>
+                            <span class="material-symbols-outlined" aria-hidden="true">content_copy</span> Copy Configuration
+                        </a>
                         <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}" {% if current_page == 'feature_settings' %}aria-current="page"{% endif %}>
                             <span class="material-symbols-outlined" aria-hidden="true">tune</span> Economy Features
                         </a>
@@ -240,11 +243,13 @@
                 </div>
             </div>
 
-            <div class="pt-3">
-                <a href="{{ url_for('admin.logout') }}" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
+            {#- Sign-out is a POST with a CSRF token: a GET cannot end the session. -#}
+            <form method="post" action="{{ url_for('admin.logout') }}" class="pt-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
                     <span class="material-symbols-outlined" aria-hidden="true">logout</span> Sign Out
-                </a>
-            </div>
+                </button>
+            </form>
         </div>
     </aside>
 
@@ -279,6 +284,7 @@
                 'add_class': 'user-guides/features/teacher/classroom/class-setup',
                 'settings': 'user-guides/features/teacher/settings',
                 'customizations': 'user-guides/features/teacher/settings/customizations',
+                'configuration_transfer': 'user-guides/features/teacher/settings/copy-configuration',
                 'feature_settings': 'user-guides/features/teacher/settings/economy-features',
                 'feature_disabled': 'user-guides/features/teacher/settings/economy-features',
                 'passkey_settings': 'user-guides/features/teacher/settings/passkey',
@@ -321,10 +327,15 @@
                 'admin.resume_credentials': 'user-guides/features/teacher/settings/account-recovery',
                 'analytics.dashboard': 'user-guides/features/teacher/economy/interpretation'
                 } %}
+                {# Endpoint-keyed entries are the specific ones (e.g. a single
+                   action page within a broader nav section like "insurance"),
+                   so they must win over a current_page-keyed entry when both
+                   exist. current_page is only a fallback for pages that set
+                   it purely for sidebar nav highlighting. #}
                 {% set help_doc_key = current_page or request.endpoint %}
+                {% set help_doc_path = request.endpoint and help_doc_map.get(request.endpoint) %}
+                {% if not help_doc_path %}
                 {% set help_doc_path = help_doc_map.get(help_doc_key) %}
-                {% if not help_doc_path and request.endpoint %}
-                {% set help_doc_path = help_doc_map.get(request.endpoint) %}
                 {% endif %}
                 {% set help_diagnostic_map = {
                 'dashboard': 'user-guides/diagnostics/teacher/analytics',

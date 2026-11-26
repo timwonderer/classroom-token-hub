@@ -1,0 +1,22 @@
+[Unit]
+Description=CTH local rate-limit Redis
+After=local-fs.target
+
+[Service]
+Type=simple
+User=cthrate
+Group=cth-rate-limit
+RuntimeDirectory=cth-rate-limit
+RuntimeDirectoryMode=0750
+ExecStart=/usr/bin/redis-server /etc/cth-rate-limit/redis.conf
+Restart=on-failure
+LimitCORE=0
+MemoryMax=128M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

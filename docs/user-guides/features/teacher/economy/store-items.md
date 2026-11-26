@@ -78,7 +78,7 @@ Bulk discounts are available on **Delayed Use** and **Hall Pass** items only. Th
 #### Advanced Settings
 
 - **Auto-Delist Date** — the item is automatically hidden on this date.
-- **Item Expiry in Days** — for delayed-use items, how long the student has before their purchase expires.
+- **Item Expiry in Days** — for delayed-use, privilege and hall-pass items, how many days from purchase the student has to use it. At that moment the item can no longer be used and leaves the student's My Items. A redemption request the student sent before then still waits for your answer. Editing the item later does not change the expiry of items already bought. Leave it blank for an item that never expires.
 - **Redemption Prompt** — optional text shown to students when they redeem a delayed-use item, so you collect what you need up front. Example: *Please describe when and where you'd like to use this item.*
 
 Finish with **Save Item**.
@@ -96,17 +96,15 @@ Finish with **Save Item**.
 
 Before you have created anything: *No store items yet. Use the Add New Item tab to get started.*
 
-### Editing, deactivating, and deleting
+### Editing and deactivating
 
-Each card has three controls in its footer: **Edit**, **Deactivate**, and **Delete Permanently**.
+Each card has two controls in its footer: **Edit** and **Deactivate**.
 
-**Deactivate** asks for confirmation and then *removes it from the student store but preserves purchase history. You can reactivate it later.*
-
-**Delete Permanently** is a different operation. It warns *This action cannot be undone* and *completely removes the item from the database and deletes related purchase records.* Ledger transaction history survives — the money movement stays on record — but the purchase records tying students to that item do not.
+**Deactivate** asks for confirmation and then *removes it from the student store but preserves purchase history.* It retires every version of the item for good — there is no way to bring that exact item back, so create a new item if you want to offer it again. It is the control to use for anything you want gone from the store; per-item hard deletion is not offered here. Delete the class join code instead for a full scoped cleanup.
 
 ### Rent-linked items
 
-An item carrying a **Rent Perk** badge is one you built here with the rent-link toggle on. It is an ordinary store item in every other respect — edit, deactivate, and delete all work normally, and this page is the only place it is defined.
+An item carrying a **Rent Perk** badge is one you built here with the rent-link toggle on. It is an ordinary store item in every other respect — edit and deactivate work normally on it, and this page is the only place it is defined.
 
 What the toggle changes is what paying rent does: students who pay receive the item as a perk. That set is read at the start of each cycle, so adding or removing a rent-linked item takes effect on the **next** cycle and never disturbs one already open.
 
@@ -122,9 +120,6 @@ Two checkboxes opt an item out of that scrutiny, and they are not the same thing
 - **Bypass CWI Warnings** — a blunter override. It silences warnings *and* hides the item from Economy Health, so the item stops contributing to your economy's health picture entirely.
 
 ## Important notes
-
-> [!WARNING]
-> **Deactivate and Delete are not two strengths of the same action.** Deactivating hides an item and keeps its history. Deleting destroys the purchase records that connect students to it. If you only want the item gone from the store, deactivate.
 
 > [!IMPORTANT]
 > **Rent-linked items are ordinary store items carrying a toggle.** They are built here, not in Rent Settings. You build one like any other item and tick the rent-link option; a change to the rent-linked set takes effect on the *next* rent cycle, so adding or removing one never disturbs a cycle already open.

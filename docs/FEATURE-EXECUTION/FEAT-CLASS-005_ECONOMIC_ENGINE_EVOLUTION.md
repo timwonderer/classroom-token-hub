@@ -2,12 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-CLASS-005 | 1.3 | 2026-10-14 | 1.2 | Normative |
-
-> [!IMPORTANT]
-> **v1.3 (2026-10-14), review correction.** v1.2's §XI bullet overstated the rebalance preview's reach by including the overdraft-protection setting and the progressive fee as if the rebalance selected them. It does not: `_build_rebalance_preview`/`_apply_change_list` (`app/routes/admin.py`, `app/utils/economy_rebalance.py`) support only the flat overdraft fee as a rebalance change type. §XI corrected to name only that field; the protection setting and progressive fee are changed through the Economic Engine evolution command directly, outside this rebalance surface.
->
-> **v1.2 (2026-10-14), documentation modernization.** §XI's "Overdraft/NSF fees" line could be read as describing an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). The flat overdraft fee remains a real, rebalance-able `economic_engine` field — no live FEAT currently applies it to a charge. Overdraft *protection* (the savings-covers-shortfall transfer) is a separate, unaffected mechanism and remains fully live.
+| FEAT-CLASS-005 | 1.5 | 2026-11-25 | 1.4 | Normative |
 
 ---
 
@@ -232,3 +227,37 @@ Helper MUST NOT present a bare ratio as the primary explanation or predict
 optional purchases, claims, fines, or savings behavior.
 
 ---
+## Configuration portability (owner ruling 2026-10-25)
+
+Class Configuration owns the class-scoped `configuration_import_receipts` execution
+records: `(class_id, operation_id)` primary key, actor Seat, request fingerprint,
+expiry, accepted timestamp and minimal result. Class deletion cascades receipts.
+Receipts contain no uploaded file, product definitions or principal references.
+They expire with the export and may be deleted by an explicit, logged cleanup command;
+this does not delete audit evidence. Expired confirmation authority is always rejected,
+including after cleanup. Receipts are not audit records or permanent import history.
+
+FEAT-CLASS-009 issues exports, FEAT-CLASS-010 previews/confirms imports, and
+FEAT-CLASS-011 cleans expired receipts for one class. Each owns one execution boundary
+and composes domain guards/queries/commands, never another FEAT. The referenced
+SPEC-CLASS-001 is incorporated in full. Import neither enables features nor rebalances
+prices. It cannot modify class identity, labels, timezone, membership or past activity.
+
+---
+
+## XIII. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v1.5 (2026-11-25), documentation modernization.** Added this Amendment section (`SOP-DOC-000`
+> §VIII required one; none existed) and moved the notes below from the top of the document into it,
+> per `SOP-DOC-000` §VIII's rule that a revision note belongs under Amendment, not between the header
+> table and §I Purpose. No content change.
+>
+> **v1.3 (2026-10-14), review correction.** v1.2's §XI bullet overstated the rebalance preview's reach by including the overdraft-protection setting and the progressive fee as if the rebalance selected them. It does not: `_build_rebalance_preview`/`_apply_change_list` (`app/routes/admin.py`, `app/utils/economy_rebalance.py`) support only the flat overdraft fee as a rebalance change type. §XI corrected to name only that field; the protection setting and progressive fee are changed through the Economic Engine evolution command directly, outside this rebalance surface.
+>
+> **v1.2 (2026-10-14), documentation modernization.** §XI's "Overdraft/NSF fees" line could be read as describing an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). The flat overdraft fee remains a real, rebalance-able `economic_engine` field — no live FEAT currently applies it to a charge. Overdraft *protection* (the savings-covers-shortfall transfer) is a separate, unaffected mechanism and remains fully live.
+
+Revisions to this document must increment the version number, update the Effective Date, and
+remain consistent with `DOM-CLASS-001` and `SPEC-ECON-003`.

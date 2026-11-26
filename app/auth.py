@@ -6,7 +6,7 @@ Contains session management helpers, authentication decorators, and timeout logi
 
 import urllib.parse
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, SYSTEM_LEVEL_EVALUATION
 from functools import wraps
 
@@ -20,6 +20,8 @@ from app.utils.auth_username import normalize_auth_username
 # -------------------- SESSION CONFIGURATION --------------------
 
 SESSION_TIMEOUT_MINUTES = 10
+# DOM-IDEN-003 §Session Establishment: fixed window from sign-in, never extended by activity.
+TEACHER_SESSION_MINUTES = 60
 SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES = 60
 
 
@@ -88,12 +90,19 @@ def _expire_system_admin_session():
     session.pop("force_sysadmin_username_migration", None)
 
 
-def _sle_now():
-    return canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+def _session_idle_expired(last_activity, now, timeout_minutes) -> bool:
+    """True once more than ``timeout_minutes`` have elapsed since ``last_activity`` (SLE)."""
+    deadline = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=last_activity, elapsed_seconds=timeout_minutes * 60,
+    ).shifted_timestamp_utc
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=now, reference=deadline,
+    ).is_later
 
 
 def _system_admin_timeout_expired(last_activity) -> bool:
-    return (_sle_now() - last_activity) > timedelta(minutes=SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES)
+    return _session_idle_expired(last_activity, canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES)
 
 
 # -------------------- AUTHENTICATION DECORATORS --------------------
@@ -136,15 +145,19 @@ def login_required(f):
         # Enforce DB-stored session expiry (User.current_session_expires_at)
         from app.models import User
         user = db.session.get(User, ctx.user_id) if ctx.user_id else None
+        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
         if user and user.current_session_expires_at:
-            if _sle_now() >= user.current_session_expires_at:
+            if not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                candidate=now, reference=user.current_session_expires_at,
+            ).is_earlier:
                 session.clear()
                 if request.path.startswith('/api/'):
                     return jsonify({"status": "error", "error": "Session expired"}), 401
                 flash("Your session has expired. Please log in again.", "info")
                 return redirect(url_for('student.login'))
 
-        session['last_activity'] = _sle_now().isoformat()
+        session['last_activity'] = now.isoformat()
         return f(*args, **kwargs)
     return decorated_function
 
@@ -193,7 +206,7 @@ def admin_required(f):
     """
     Decorator to require admin authentication for a route.
 
-    Enforces session timeout based on last activity.
+    The fixed session window is enforced by the session hook in create_app().
     Redirects to admin.login if not authenticated or session expired.
     """
     @wraps(f)
@@ -207,6 +220,10 @@ def admin_required(f):
             BoundaryContext
         )
 
+        # The fixed window itself is enforced for every request by the
+        # session hook in create_app(); it only marks why the session ended.
+        if g.get("teacher_session_expired"):
+            return _teacher_session_ended("Your session expired. Please log in again.")
         try:
             ctx = resolve_canonical_context(require_class=False)
         except (ContextNotEstablished, ContextMismatch, ContextForbidden, ContextInvariantViolation):
@@ -220,17 +237,6 @@ def admin_required(f):
                 return redirect(url_for('admin.onboarding'))
 
         g.canonical_context = ctx
-
-        now = _sle_now()
-        last_activity = session.get('last_activity')
-
-        if last_activity:
-            last_activity = datetime.fromisoformat(last_activity)
-            if (now - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                session.clear()
-                return _teacher_session_ended("Your session expired. Please log in again.")
-
-        session['last_activity'] = now.isoformat()
         return f(*args, **kwargs)
     return decorated_function
 
@@ -264,11 +270,11 @@ def system_admin_required(f):
             return redirect(url_for('sysadmin.login', next=request.path))
 
         last_activity = session.get('last_activity')
-        now = _sle_now()
+        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
         if last_activity:
+            # Every writer stores an offset-bearing UTC ISO string, so this parses aware.
             last_activity = datetime.fromisoformat(last_activity)
-            last_activity = last_activity if last_activity.tzinfo else last_activity.replace(tzinfo=_sle_now().tzinfo)
-            if _system_admin_timeout_expired(last_activity):
+            if _session_idle_expired(last_activity, now, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES):
                 _expire_system_admin_session()
                 if _is_grafana_proxy_subrequest():
                     return jsonify({"error": "Session expired. Please log in again."}), 401
@@ -388,24 +394,95 @@ def set_canonical_user_session(*, username_lookup_hash: str, expected_role: str)
 
 
 def establish_teacher_session(user):
-    """Establish canonical teacher session keys."""
+    """Establish canonical teacher session keys and the fixed 60-minute window (DOM-IDEN-003).
+
+    Caller must hold FEAT-IDEN-009 (identity_service.establish_teacher_session_fields
+    owns the row write); this only sets the non-DB Flask session keys and reads
+    back what that command wrote onto ``user``.
+    """
+    from app.session_lifetime import SESSION_EXPIRES_AT_KEY
+    from app.services.identity_service import establish_teacher_session_fields
+
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    expires_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=TEACHER_SESSION_MINUTES * 60,
+    ).shifted_timestamp_utc
+    nonce = establish_teacher_session_fields(user, started_at=now, expires_at=expires_at)
+
     session["user_id"] = user.id
     session["role"] = "admin"
+    session["current_session_nonce"] = nonce
+    # The cookie dies with the server-side window.
+    session[SESSION_EXPIRES_AT_KEY] = expires_at.isoformat()
     session.permanent = True
+
+
+def end_signed_in_session():
+    """Sign the browser out and void its sign-in on the ``users`` row.
+
+    Clearing only the cookie would leave ``current_session_nonce`` valid, so a
+    copy of the cookie would keep working (DOM-IDEN-002/003 §Session
+    Establishment). The row is cleared only for the sign-in this cookie holds:
+    a stale cookie must not end a newer sign-in elsewhere.
+    """
+    from app.feats.base import FEATContext
+    from app.services.identity_service import revoke_signed_in_session
+    from app.utils.user_ids import session_user_id
+
+    user_id = session_user_id(session)
+    nonce = session.get("current_session_nonce")
+    if user_id is not None and nonce:
+        with FEATContext("FEAT-IDEN-009", idempotency_key=f"identity:sign-out:{user_id}:{nonce}"):
+            revoke_signed_in_session(user_id, nonce)
+    session.clear()
 
 
 def establish_sysadmin_session(user):
-    """Establish canonical system-admin session keys."""
+    """Establish canonical system-admin session keys.
+
+    Caller must hold FEAT-IDEN-009 (identity_service.establish_sysadmin_session_fields
+    owns the row write).
+    """
+    from app.services.identity_service import establish_sysadmin_session_fields
+
+    nonce = establish_sysadmin_session_fields(user)
     session["user_id"] = user.id
     session["role"] = "sysadmin"
+    session["current_session_nonce"] = nonce
     session.permanent = True
 
 
-def establish_student_session(user, *, class_id: str):
-    """Establish canonical student session keys."""
+def establish_student_session(user, *, class_id: str | None = None, seat_id: int | None = None):
+    """Establish canonical student session keys and the fixed session window.
+
+    ``class_id``/``seat_id`` are omitted when login has no valid persisted
+    class selection yet; the session is then established class-less, pending
+    ``student.select_class_context``.
+
+    Caller must hold FEAT-IDEN-009 (identity_service.establish_student_session_fields
+    owns the row write, including the canonical active-class pointers).
+    """
+    from app.session_lifetime import SESSION_EXPIRES_AT_KEY
+    from app.services.identity_service import establish_student_session_fields
+
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    expires_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=SESSION_TIMEOUT_MINUTES * 60,
+    ).shifted_timestamp_utc
+    nonce = establish_student_session_fields(
+        user, started_at=now, expires_at=expires_at, class_id=class_id, seat_id=seat_id,
+    )
+
     session["user_id"] = user.id
-    session["class_id"] = class_id
     session["role"] = "student"
+    session["current_session_nonce"] = nonce
+    session["login_time"] = now.isoformat()
+    session["last_activity"] = now.isoformat()
+    session[SESSION_EXPIRES_AT_KEY] = expires_at.isoformat()
+    if class_id is not None:
+        session["class_id"] = class_id
     session.permanent = True
 
 
@@ -461,14 +538,15 @@ def switch_student_session_context(student, *, class_id: str, seat_id: int):
     if seat and seat.user_id:
         linked_user = db.session.get(User, seat.user_id)
         if linked_user and (linked_user.last_active_class_id != class_id or linked_user.last_active_seat_id != seat_id):
-            linked_user.last_active_class_id = class_id
-            linked_user.last_active_seat_id = seat_id
+            from app.services.identity_service import select_student_class_fields
+            select_student_class_fields(linked_user, class_id=class_id, seat_id=seat_id)
             db.session.flush()
     
     # Log the transition for audit clarity
+    from app.services.tlcp import class_log_ref
     current_app.logger.info(
-        f"SESSION-CONTEXT-SWITCH: Student {student.id} moved from class {old_class} "
-        f"to {class_id} (Seat {seat_id})."
+        "SESSION-CONTEXT-SWITCH: seat %s moved from class %s to %s.",
+        seat.public_id if seat else "-", class_log_ref(old_class), class_log_ref(class_id),
     )
     return seat
 

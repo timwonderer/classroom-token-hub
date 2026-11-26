@@ -3,7 +3,7 @@ Smoke tests for Phase 4 route wiring.
 
 Tests verify:
 1. `/api/purchase-item` POST correctly calls FEAT-STOR-001
-2. `/admin/student/<seat_id>/adjust-hall-pass-entitlements` POST correctly calls FEAT-STOR-004
+2. `/admin/student/<seat_public_id>/adjust-hall-pass-entitlements` POST correctly calls FEAT-STOR-004
 3. EntitlementEvent rows are created with correct structure
 """
 

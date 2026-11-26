@@ -7,8 +7,14 @@ student claim/recovery setup and lifecycle operations that must erase its data
 fail closed with a generic 503.
 
 The existing Python Redis dependency is used. Redis must support ACL subcommands
-and `SET KEEPTTL` (Redis 7 or newer). Do not point this at the rate-limit store,
-a managed persistent instance, a replica, or a backed-up volume.
+and `SET KEEPTTL` (Redis 6.0 or newer, which introduced both). `client()` in
+`app/services/student_setup.py` reads `save`, `appendonly` and
+`slowlog-log-slower-than` with one `CONFIG GET` per name, because Redis 6.0
+rejects several names in one call (multi-name `CONFIG GET` is 7.0+). An earlier
+version of this note said 6.0.16 accepted it; that check had actually reached
+the production store, which runs Redis 7.4.11, not the apt package (#1788).
+Do not point this at the rate-limit store, a managed persistent
+instance, a replica, or a backed-up volume.
 
 ## Provision before application deployment
 
@@ -25,8 +31,9 @@ a managed persistent instance, a replica, or a backed-up volume.
 4. Enable/start the unit. Set the application environment:
    `STUDENT_SETUP_REDIS_URL=unix:///run/cth-student-setup/redis.sock`.
    Restart application workers to acquire their group membership and environment.
-5. As the application service account, verify socket access, `CONFIG GET save
-   appendonly slowlog-log-slower-than`, and `INFO replication`. The required
+5. As the application service account, verify socket access, `CONFIG GET` for
+   `save`, `appendonly` and `slowlog-log-slower-than` (one name per call on
+   Redis 6), and `INFO replication`. The required
    values are empty save schedule, `appendonly=no`, slow log `-1`, primary role
    and zero replicas. Confirm the unit's coredump/swap settings. Verify that
    `CONFIG SET`, `SAVE`, `BGSAVE`, `REPLICAOF`, and `MONITOR` are denied by the ACL.

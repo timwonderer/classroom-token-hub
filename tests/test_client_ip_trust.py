@@ -104,3 +104,29 @@ def test_behind_the_proxy_each_forwarded_client_has_its_own_budget(client, limit
     """Control: the same rotation through the proxy is twelve different clients,
     which is the O1 behaviour the limiter is built around."""
     assert _statuses(client, "127.0.0.1", 12) == [200] * 12
+
+
+def test_cloudflare_ranges_are_cached_for_24_hours(app, monkeypatch):
+    """The fetched ranges are reused until exactly 24 elapsed hours, then refetched."""
+    import urllib.error
+    from datetime import datetime, timedelta, timezone
+
+    from app.utils import ip_handler
+
+    fetched_at = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
+    cached = (["192.0.2.0/24"], ["2001:db8::/32"])
+    monkeypatch.setattr(ip_handler, "_cloudflare_ips_cache", cached)
+    monkeypatch.setattr(ip_handler, "_cloudflare_ips_cache_time", fetched_at)
+
+    def _offline(*_args, **_kwargs):
+        raise urllib.error.URLError("offline")
+
+    monkeypatch.setattr(ip_handler.urllib.request, "urlopen", _offline)
+    pin = "app.utils.canonical_temporal_resolver.utc_now"
+    with app.app_context():
+        monkeypatch.setattr(pin, lambda: fetched_at + timedelta(hours=24) - timedelta(seconds=1))
+        assert ip_handler.get_cloudflare_ips() == cached
+        monkeypatch.setattr(pin, lambda: fetched_at + timedelta(hours=24))
+        assert ip_handler.get_cloudflare_ips() == (
+            ip_handler.CLOUDFLARE_IPV4_FALLBACK, ip_handler.CLOUDFLARE_IPV6_FALLBACK,
+        )

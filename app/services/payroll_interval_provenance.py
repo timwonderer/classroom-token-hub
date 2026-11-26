@@ -1,7 +1,9 @@
 """Pure PROD original membership proof (DOM-PROD-001, SPEC-PROD-001 §VI)."""
+from datetime import datetime
+
 from app.models import PayrollEvent
 from app.services.attendance_service import list_attendance_intervals
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, TemporalResolutionError, canonical_temporal_resolver
 
 
 def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
@@ -16,8 +18,14 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
         if type(summary.get("allocation_version")) is not int or summary.get("allocation_version") != 1:
             for key, interval in pairs.items():
                 closed_rule = summary.get('settlement_rule') == 'closed_sessions'
-                potentially_selected = (interval.closed_at <= ensure_utc(event.recorded_at) if closed_rule
-                    else interval.opened_at < ensure_utc(event.recorded_at))
+                if closed_rule:  # closed_at <= recorded_at
+                    potentially_selected = not canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                        candidate=interval.closed_at, reference=event.recorded_at).is_later
+                else:  # opened_at < recorded_at
+                    potentially_selected = canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                        candidate=interval.opened_at, reference=event.recorded_at).is_earlier
                 if potentially_selected:
                     historical_candidates.add(key)
                     result[key] = {"status": "historical_unavailable", "event": None, "pricing": None}
@@ -27,7 +35,10 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
         try:
             for share in shares:
                 sources = share["intervals"]
-                if sum(i["credited_seconds"] for i in sources) != share["seconds"]:
+                # SPEC-TIME-001 1.3: the share truncates once over exact durations.
+                if sum(i["credited_seconds"] for i in sources) != share["seconds"] and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=[
+                        (datetime.fromisoformat(i["opening_timestamp"]), datetime.fromisoformat(i["closing_timestamp"]))
+                        for i in sources]).elapsed_seconds != share["seconds"]:
                     valid = False
                 for source in sources:
                     key = (source["opening_event_id"], source["closing_event_id"])
@@ -35,7 +46,7 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
                     if interval is None or source != interval.as_evidence() or key in mentioned:
                         valid = False
                     mentioned.append(key)
-        except (KeyError, TypeError, ValueError, AttributeError):
+        except (KeyError, TypeError, ValueError, AttributeError, TemporalResolutionError):
             valid = False
         if not shares or not mentioned:
             valid = False
@@ -44,7 +55,9 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
             valid = False
         if not valid:
             for key, interval in pairs.items():
-                if key in mentioned or interval.opened_at <= ensure_utc(event.recorded_at):
+                if key in mentioned or not canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                        candidate=interval.opened_at, reference=event.recorded_at).is_later:
                     result[key] = {"status": "provenance_unavailable", "event": None, "pricing": None}
             continue
         for key in mentioned:

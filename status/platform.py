@@ -14,8 +14,8 @@ SCHEMA_KEYS = {
 }
 PLATFORM_KEYS = SCHEMA_KEYS[PLATFORM_SCHEMA]
 _OUTCOMES = {
-    "endpoint": {"HTTP_OK": "PASS", "HTTP_UNAVAILABLE": "FAIL", "ACCESS_DENIED": "UNKNOWN", "TRANSPORT_UNAVAILABLE": "UNKNOWN", "INVALID_RESPONSE": "UNKNOWN"},
-    "database": {"DATABASE_REACHABLE": "PASS", "DATABASE_UNAVAILABLE": "FAIL", "ACCESS_DENIED": "UNKNOWN", "TRANSPORT_UNAVAILABLE": "UNKNOWN", "INVALID_RESPONSE": "UNKNOWN", "STALE_SOURCE": "UNKNOWN"},
+    "endpoint": {"HTTP_OK": "PASS", "HTTP_UNAVAILABLE": "FAIL", "ACCESS_DENIED": "UNKNOWN", "TRANSPORT_UNAVAILABLE": "UNKNOWN", "HTTP_REFUSED": "UNKNOWN", "INVALID_RESPONSE": "UNKNOWN", "NOT_COLLECTED": "UNKNOWN"},
+    "database": {"DATABASE_REACHABLE": "PASS", "DATABASE_UNAVAILABLE": "FAIL", "ACCESS_DENIED": "UNKNOWN", "TRANSPORT_UNAVAILABLE": "UNKNOWN", "HTTP_REFUSED": "UNKNOWN", "INVALID_RESPONSE": "UNKNOWN", "STALE_SOURCE": "UNKNOWN", "NOT_COLLECTED": "UNKNOWN"},
     # The Application Availability Gate (DOM-OPS-001): FAIL means the gate is
     # closed to the public, an access restriction rather than an app failure.
     "gate": {"GATE_OPEN": "PASS", "GATE_CLOSED": "FAIL", "UNEXPECTED_DENIAL": "UNKNOWN", "TRANSPORT_UNAVAILABLE": "UNKNOWN"},
@@ -59,11 +59,13 @@ def platform_rows(record: dict | None, *, now: datetime) -> list[dict]:
     names = {"endpoint": "Application endpoint", "database": "Database access", "gate": "Public access"}
     details = {
         "HTTP_OK": "The monitored application endpoint responded with HTTP 200.",
-        "HTTP_UNAVAILABLE": "The monitored application endpoint returned an unsuccessful HTTP response.",
+        "HTTP_UNAVAILABLE": "The monitored application endpoint returned a server error.",
         "DATABASE_REACHABLE": "The application completed its database connection check (SELECT 1).",
         "DATABASE_UNAVAILABLE": "The application's database connection check failed.",
-        "ACCESS_DENIED": "Monitoring could not authenticate to the check endpoint.",
+        "ACCESS_DENIED": "The check request was redirected or denied, so it could not run.",
+        "NOT_COLLECTED": "Not checked while access is restricted for maintenance.",
         "TRANSPORT_UNAVAILABLE": "Monitoring could not retrieve this check.",
+        "HTTP_REFUSED": "The application declined the monitoring request, so this check could not run.",
         "INVALID_RESPONSE": "Monitoring could not validate this check's response.",
         "STALE_SOURCE": "The application returned an outdated database check.",
         "GATE_OPEN": "Public pages are open; no access restriction is in place.",

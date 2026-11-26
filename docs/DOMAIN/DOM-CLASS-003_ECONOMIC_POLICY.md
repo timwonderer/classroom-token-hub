@@ -2,14 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| DOM-CLASS-003 | 2.6 | 2026-10-14 | 2.5 | Constitutional |
-
-> [!IMPORTANT]
-> **v2.6 (2026-10-14), review correction.** v2.5's §IX example named the wrong field (`protection_enabled`, which exists only on the derived `BankingDirective` read projection) and overstated the rebalance's reach: only the flat `economic_engine.flat_overdraft_fee` is rebalance-selectable. `economic_engine.overdraft_protection_enabled` and `progressive_overdraft_fee` are changed only through the Economic Engine evolution command directly, not through the rebalance. §IX corrected accordingly.
->
-> **v2.5 (2026-10-14), documentation modernization.** §V's table and §IX's rebalance example referred to "overdraft fee" as if it were an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). The flat overdraft fee field on `economic_engine` remains real, rebalance-able configuration — no live FEAT currently applies it to a charge. Overdraft *protection* (the savings-covers-shortfall transfer) is unaffected by the 2026-10-07 ruling and remains fully live for every payment type.
->
-> **v2.4 (2026-09-30), operator ruling.** "policy versions is explicitly legacy, it was never authorized by me as a canonical table. any documentation that said otherwise were direct violation of my directive." The class-wide tables `policy_versions` and `policy_transitions` are **retired** and dropped (migration `dd52b19d48d8`). The owner removed them from the Policies domain on 2026-08-03 (`184910af8`, PR #1293); this document recreated them on 2026-08-08 (`abb49d75e`, PR #1321) without that authority, and v2.3 had marked them legacy. From v2.4, economic policy lineage **is** each owning domain's own append-only, effective-dated table (§V). There is no separate version table, no transition row, and no activation step.
+| DOM-CLASS-003 | 2.7 | 2026-10-25 | 2.6 | Constitutional |
 
 # I. Purpose
 
@@ -388,7 +381,25 @@ Class economics governance therefore behaves as constitutional system law rather
 
 ---
 
+## Imported schedules
+
+SPEC-CLASS-001 schedule choices are inputs to existing domain commands, not an
+activation override. In particular, a subsequent payroll setting is effective at the
+destination's next payroll boundary computed before incorporating the new schedule.
+First settings retain their existing immediate rule. Existing issued obligations,
+claims, entitlements and historical prices are unaffected.
+
+
 ## XVI. Amendment
+
+### Revision History
+
+> [!IMPORTANT]
+> **v2.6 (2026-10-14), review correction.** v2.5's §IX example named the wrong field (`protection_enabled`, which exists only on the derived `BankingDirective` read projection) and overstated the rebalance's reach: only the flat `economic_engine.flat_overdraft_fee` is rebalance-selectable. `economic_engine.overdraft_protection_enabled` and `progressive_overdraft_fee` are changed only through the Economic Engine evolution command directly, not through the rebalance. §IX corrected accordingly.
+>
+> **v2.5 (2026-10-14), documentation modernization.** §V's table and §IX's rebalance example referred to "overdraft fee" as if it were an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). The flat overdraft fee field on `economic_engine` remains real, rebalance-able configuration — no live FEAT currently applies it to a charge. Overdraft *protection* (the savings-covers-shortfall transfer) is unaffected by the 2026-10-07 ruling and remains fully live for every payment type.
+>
+> **v2.4 (2026-09-30), operator ruling.** "policy versions is explicitly legacy, it was never authorized by me as a canonical table. any documentation that said otherwise were direct violation of my directive." The class-wide tables `policy_versions` and `policy_transitions` are **retired** and dropped (migration `dd52b19d48d8`). The owner removed them from the Policies domain on 2026-08-03 (`184910af8`, PR #1293); this document recreated them on 2026-08-08 (`abb49d75e`, PR #1321) without that authority, and v2.3 had marked them legacy. From v2.4, economic policy lineage **is** each owning domain's own append-only, effective-dated table (§V). There is no separate version table, no transition row, and no activation step.
 
 Revisions to this document must increment the version number, update the effective date, and remain consistent with foundational documentation standards.
 

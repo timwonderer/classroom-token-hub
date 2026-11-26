@@ -33,7 +33,6 @@ from app.services.policy_reference_service import (
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 
@@ -70,7 +69,7 @@ def class_local_date(class_id: str, instant_utc: datetime) -> date:
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=_ctx(class_id),
         primitive="current_evaluation_day",
-        reference_time_utc=ensure_utc(instant_utc),
+        reference_time_utc=instant_utc,
     ).evaluation_date
 
 
@@ -154,8 +153,8 @@ def get_coverage_period(
     return CoveragePeriod(
         bill_cycle_id=cycle.id,
         cycle_number=cycle.cycle_number,
-        start_utc=ensure_utc(cycle.cycle_boundary_at),
-        end_utc=ensure_utc(cycle.next_assessment_at),
+        start_utc=cycle.cycle_boundary_at,
+        end_utc=cycle.next_assessment_at,
     )
 
 
@@ -186,26 +185,6 @@ def get_terminal_event(class_id: str, entitlement_id: str) -> EntitlementEvent |
     )
 
 
-def _at_or_before(class_id: str, candidate: datetime, reference: datetime) -> bool:
-    return not canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_ctx(class_id),
-        primitive="later_than",
-        reference_time_utc=reference,
-        candidate=candidate,
-        reference=reference,
-    ).is_later
-
-
-def _reference_now(class_id: str, reference_time_utc: datetime | None) -> datetime:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_ctx(class_id),
-        primitive="current_time",
-        reference_time_utc=reference_time_utc,
-    ).canonical_now_utc
-
-
 @dataclass(frozen=True)
 class InsuranceUsability:
     """Why an insurance entitlement is or is not usable at a reference time."""
@@ -230,13 +209,30 @@ def evaluate_insurance_usability(
     only, so a late payment restores usability prospectively and never for the
     gated interval before it).
     """
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
     grant = get_insurance_grant(class_id, entitlement_id)
-    if grant is None or not _at_or_before(class_id, grant.timestamp, reference):
+    if grant is None or canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_ctx(class_id),
+        primitive="later_than",
+        candidate=grant.timestamp,
+        reference=reference,
+    ).is_later:
         return InsuranceUsability(usable=False, reason="NOT_GRANTED")
 
     terminal = get_terminal_event(class_id, entitlement_id)
-    if terminal is not None and _at_or_before(class_id, terminal.timestamp, reference):
+    if terminal is not None and not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_ctx(class_id),
+        primitive="later_than",
+        candidate=terminal.timestamp,
+        reference=reference,
+    ).is_later:
         return InsuranceUsability(usable=False, reason="TERMINATED", terminal_event=terminal)
 
     period = get_coverage_period(class_id, entitlement_id, reference_time_utc=reference)

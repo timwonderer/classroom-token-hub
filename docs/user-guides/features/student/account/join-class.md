@@ -21,7 +21,8 @@ Each class is its own class economy in v2.0. If you already have an account and 
 1. Go to **Add Class** from the student sidebar.
 2. Enter the unique **Join Code** provided by your new teacher.
 3. Enter your roster name details exactly as your teacher entered them.
-4. Submit the form to link the new class to your existing account.
+4. Leave **Deduplication Code** blank unless your teacher gave you one — it is only needed when another student in that class shares your name.
+5. Submit the form to link the new class to your existing account.
 
 ### What Happens Next
 

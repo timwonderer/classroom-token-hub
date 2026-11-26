@@ -1,4 +1,4 @@
-"""Regression: payroll settles closed, unpaid sessions only (DOM-PROD-001 §VI.3).
+"""Regression: payroll settles closed, unpaid sessions only (DOM-PROD-001 §XV.11).
 
 Production incident, 2026-09-28: a teacher ran payroll while students were still
 clocked in, then ran it again later. The second run paid almost nobody. The
@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -47,6 +48,7 @@ from app.services.payroll.settlement import (
     NoPayableAttendanceError,
     settle_class_payroll_cycle,
 )
+from app.utils import canonical_temporal_resolver as resolver_module
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
@@ -245,6 +247,33 @@ def test_DOM_PROD_001__unproven_historical_partial_membership_blocks_new_settlem
     assert _paid(cid, seat_id) == _pay_for(cid, 30)
 
 
+def test_DOM_PROD_001__sub_second_sessions_do_not_block_the_next_run(app):
+    """Production incident, 2026-11-02 to 11-07: payroll refused three classes.
+
+    Since SPEC-TIME-001 1.3 a share's ``seconds`` sums the exact durations and
+    truncates once, while each interval's ``credited_seconds`` truncates alone.
+    Two 600.6-second sessions froze ``seconds=1201`` over members of 600 + 600,
+    and the next run read that frozen evidence as unprovable.
+    """
+    classroom = initialize("chemistry_p1", app)
+    cid = classroom.class_id
+    seat_id = classroom.students[0].seat.id
+    _attendance(
+        classroom, seat_id,
+        ("active", _at(0)), ("inactive", datetime(2026, 8, 26, 17, 10, 0, 600000, tzinfo=timezone.utc)),
+        ("active", _at(20)), ("inactive", datetime(2026, 8, 26, 17, 30, 0, 600000, tzinfo=timezone.utc)),
+    )
+    _run(cid, _at(40))
+    [share] = _payroll_events(cid, seat_id)[0].summary_json["pricing"]
+    assert (share["seconds"], [i["credited_seconds"] for i in share["intervals"]]) == (1201, [600, 600])
+
+    _attendance(classroom, seat_id, ("active", _at(50)), ("inactive", _at(60)))
+    second = _run(cid, _at(70))
+
+    assert second.settled_seat_ids == [seat_id]
+    assert len(_payroll_events(cid, seat_id)) == 2
+
+
 def test_DOM_PROD_001__run_payroll_route_explains_a_refused_run(client):
     app = client.application
     classroom = initialize_as_teacher("chemistry_p1", client, app)
@@ -264,7 +293,30 @@ def test_DOM_PROD_001__run_payroll_route_explains_a_refused_run(client):
     assert PayrollCycleCompletion.query.filter_by(class_id=cid).count() == 0
 
 
-def test_DOM_PROD_001__automatic_payroll_waits_for_a_closed_session(app):
+@pytest.fixture
+def class_local_noon(monkeypatch):
+    """Shift the resolver clock to noon of today's class-local day.
+
+    Every active session closes at the class-day boundary (FEAT-PROD-001), so a
+    session opened 20 minutes ago would start on the previous day for a run in
+    the first 20 minutes after midnight. Shifted, not frozen: two settings rows
+    stamped at one instant would collide on uq_payroll_settings_class_effective_created.
+    """
+    base = resolver_module.datetime
+    now = base.now(timezone.utc)
+    # The provisioned class's timezone (tests/helpers/canonical_identities.py).
+    noon = now.astimezone(ZoneInfo("America/Los_Angeles")).replace(hour=12, minute=0, second=0, microsecond=0)
+    offset = noon - now
+
+    class _Shifted(base):
+        @classmethod
+        def now(cls, tz=None):
+            return base.now(tz) + offset
+
+    monkeypatch.setattr(resolver_module, "datetime", _Shifted)
+
+
+def test_DOM_PROD_001__automatic_payroll_waits_for_a_closed_session(app, class_local_noon):
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     seat_id = classroom.students[0].seat.id

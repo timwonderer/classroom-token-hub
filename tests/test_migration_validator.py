@@ -93,7 +93,70 @@ def downgrade():
     "e6f7a8b9c0d1_canonicalize_ledger_persistence.py",
 ])
 def test_committed_guard_clause_migrations_are_accepted(name):
-    """Regression: these two used the early-return form and were falsely flagged."""
-    path = ROOT / "migrations" / "versions" / name
+    """Regression: these two used the early-return form and were falsely flagged.
+
+    Both are pre-launch revisions kept as provenance (SOP-DB-001 §V.C); the
+    validator reads them as text, which is all this regression needs.
+    """
+    path = ROOT / "migrations" / "archive" / "v2_prelaunch" / "versions" / name
     errors = [e for e in validator.check_idempotency(path) if e.startswith("❌")]
     assert errors == []
+
+
+def test_final_tree_rejects_duplicate_ids_under_different_filenames(tmp_path, monkeypatch, capsys):
+    source = "revision = 'same'\ndown_revision = None\ndef upgrade(): pass\ndef downgrade(): pass\n"
+    (tmp_path / "first.py").write_text(source)
+    (tmp_path / "second.py").write_text(source.replace("revision =", "revision: str ="))
+    monkeypatch.setattr(validator, "MIGRATIONS_DIR", tmp_path)
+    assert validator.validate_migrations() == 1
+    assert "Duplicate revision ID 'same': first.py and second.py" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("declaration", [
+    "revision = 'first'\nrevision = 'parent'",
+    "revision = 'first'\nrevision: str = 'parent'",
+    "revision = alias = 'child'",
+    "revision, alias = 'child', 1",
+    "if True:\n    revision = 'child'",
+    "revision = 'child'\nif True:\n    revision = 'parent'",
+    "revision = 'child'\nmatch 'parent':\n    case revision:\n        pass",
+    "revision = 'child'\ntry:\n    pass\nexcept Exception as revision:\n    pass",
+    "revision = 'child'\nrevision += '_changed'",
+    "revision = 'child'\ndel revision",
+    "revision = str(123)",
+])
+def test_ambiguous_revision_fails_ci(tmp_path, monkeypatch, capsys, declaration):
+    functions = "\ndef upgrade(): pass\ndef downgrade(): pass\n"
+    (tmp_path / "base.py").write_text("revision = 'parent'\ndown_revision = None" + functions)
+    (tmp_path / "child.py").write_text(declaration + "\ndown_revision = 'parent'" + functions)
+    monkeypatch.setattr(validator, "MIGRATIONS_DIR", tmp_path)
+    assert validator.validate_migrations() == 1
+    assert "Error parsing child.py" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("declaration", [
+    "down_revision = 'parent'\ndown_revision = None",
+    "down_revision: str = ''",
+    "down_revision = ['parent']",
+    "down_revision = ()",
+    "down_revision = ('parent', None)",
+    "down_revision = 1",
+])
+def test_invalid_parent_rejected_before_graph_traversal(tmp_path, declaration):
+    path = tmp_path / "child.py"
+    path.write_text("revision = 'child'\n" + declaration)
+    with pytest.raises(ValueError, match="down_revision"):
+        validator.extract_migration_info(path)
+
+
+@pytest.mark.parametrize("declaration, parents", [
+    ("down_revision = None", None),
+    ("down_revision: str = 'parent'", "parent"),
+    ("down_revision = (\n    'left',\n    'right',\n)", ("left", "right")),
+])
+def test_unambiguous_literal_declarations(tmp_path, declaration, parents):
+    path = tmp_path / "example.py"
+    path.write_text("revision: str = 'child'\n" + declaration
+                    + "\ndef upgrade():\n    revision = 'local'\n")
+    info = validator.extract_migration_info(path)
+    assert (info["revision"], info["down_revision"]) == ("child", parents)

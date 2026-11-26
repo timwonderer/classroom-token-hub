@@ -7,7 +7,7 @@ description: What each error number means, whether it is your problem or ours, a
 keywords: [error, 400, 401, 403, 404, 500, 503, error id, bad request, forbidden, not found, server error]
 related:
   - user-guides/features/public/access-gate
-  - user-guides/features/public/offline-and-install
+  - user-guides/features/public/install-the-app
 ---
 
 # Error Pages
@@ -64,4 +64,4 @@ A Cloudflare Access email-code screen indicates an access restriction before the
 ## Related guides
 
 - [Temporary Access Restrictions](../features/public/access-gate.md)
-- [Installing the App and Working Offline](../features/public/offline-and-install.md)
+- [Installing the App (Internet Required)](../features/public/install-the-app.md)

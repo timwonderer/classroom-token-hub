@@ -66,7 +66,7 @@ Use the help icon in the **Report** column of the row that looks wrong. It opens
 > **Report it before payday.** Once payroll runs, unpaid time becomes a posted paycheck and correcting it means a separate adjustment. Flagging the record while it is still unpaid is far simpler.
 
 > [!NOTE]
-> **Projected is not promised.** Projected pay is unpaid time multiplied by your current rate. If the rate changes or your teacher corrects a session, the number changes with it.
+> **Projected is not promised.** Work you have already clocked out of is projected at the pay rate that was in force when that session ended. A session still running is projected as if you clocked out right now, at today's rate, so that part is only an estimate. If your teacher corrects a session, the number changes with it.
 
 > [!NOTE]
 > **The log stops at 20 events.** The page says so. Older events still count toward your totals — they are just not listed.

@@ -35,15 +35,20 @@ function showTimedDeleteGate(options) {
         const phraseHint = document.getElementById('timed-delete-phrase-hint');
         const holdBtn = document.getElementById('timed-delete-hold-btn');
         const holdStatus = document.getElementById('timed-delete-hold-status');
+        const holdTimerEl = document.getElementById('timed-delete-hold-timer');
         const cancelBtn = modalEl.querySelector('[data-bs-dismiss="modal"]');
 
         const expectedPhrase = String(options.expectedPhrase || '').toUpperCase();
         const title = options.title || 'Confirm Deletion';
         const warning = options.warning || 'You are about to permanently delete this record.';
-        const holdPrompt = options.holdPrompt || 'To proceed, hold this button for 10 seconds — press and hold with the pointer, or hold Space or Enter. Any interruption will reset the timer.';
         const countdownSeconds = 30;
         const holdMs = 10000;
         const holdSeconds = 10;
+        // Owner wording, 2026-10-20. Spoken once on unlock; then silence until
+        // COMPLETE, which is held on screen briefly so a screen reader can say
+        // it before the dialog closes and the page moves on.
+        const HOLD_INSTRUCTION = 'Hold the Space or Enter key for 10 seconds. You will hear "complete" when the timer is done.';
+        const COMPLETE_ANNOUNCE_MS = 1000;
 
         let remaining = countdownSeconds;
         let countdownComplete = false;
@@ -54,6 +59,7 @@ function showTimedDeleteGate(options) {
         let holdStartAt = null;
         let isHolding = false;
         let phraseUnlocked = false;
+        let holdAvailable = false;
 
         titleEl.textContent = title;
         warningEl.textContent = warning;
@@ -66,8 +72,14 @@ function showTimedDeleteGate(options) {
         phraseInput.value = '';
         phraseInput.disabled = true;
         phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
+        // The button's name never changes: it holds focus during the hold, and
+        // renaming it every 100ms made VoiceOver restart it each time
+        // ("hhhhho", 2026-10-20). The ticking countdown is a separate,
+        // aria-hidden element; the live status speaks only on events.
         holdBtn.textContent = 'Hold to Confirm — click and hold, or hold Space or Enter';
         holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
+        holdTimerEl.textContent = '';
+        setHoldAvailable(false);
 
         const cleanup = () => {
             if (countdownTimer) clearInterval(countdownTimer);
@@ -89,9 +101,21 @@ function showTimedDeleteGate(options) {
             modalEl.removeEventListener('hidden.bs.modal', onHidden);
         };
 
+        // The status line is a polite live region; it changes only when
+        // availability flips, so a screen reader hears the unlock once.
+        function setHoldAvailable(available) {
+            holdBtn.setAttribute('aria-disabled', String(!available));
+            holdBtn.classList.toggle('disabled', !available);
+            if (available === holdAvailable) return;
+            holdAvailable = available;
+            holdStatus.textContent = available
+                ? HOLD_INSTRUCTION
+                : 'Hold button unlocks after countdown + exact phrase match.';
+        }
+
         const updateHoldAvailability = () => {
             const phraseOk = phraseInput.value.trim().toUpperCase() === expectedPhrase;
-            holdBtn.disabled = !(countdownComplete && phraseOk);
+            setHoldAvailable(countdownComplete && phraseOk);
         };
 
         const updateCountdownUi = () => {
@@ -116,7 +140,7 @@ function showTimedDeleteGate(options) {
             if (holdTimer) clearTimeout(holdTimer);
             if (holdTicker) clearInterval(holdTicker);
             isHolding = false;
-            holdBtn.textContent = holdPrompt;
+            holdTimerEl.textContent = '';
             holdStatus.textContent = 'Hold must be continuous for 10 seconds.';
         };
 
@@ -140,28 +164,32 @@ function showTimedDeleteGate(options) {
         const onPhraseInput = () => updateHoldAvailability();
 
         const startHold = (event) => {
-            if (holdBtn.disabled || isHolding) return;
+            if (!holdAvailable || isHolding) return;
             event.preventDefault();
             isHolding = true;
             holdStartAt = Date.now();
-            holdStatus.textContent = 'Keep holding...';
 
             holdTicker = setInterval(() => {
                 const elapsed = Date.now() - holdStartAt;
                 const remainingMs = Math.max(0, holdMs - elapsed);
-                holdBtn.textContent = `Keep Holding... ${(remainingMs / 1000).toFixed(1)}s`;
+                holdTimerEl.textContent = `Keep holding… ${(remainingMs / 1000).toFixed(1)}s`;
             }, 100);
 
             holdTimer = setTimeout(() => {
                 if (resolved) return;
-                resolved = true;
-                cleanup();
-                modal.hide();
-                resolve({
-                    gate_phrase: expectedPhrase,
-                    gate_countdown_seconds: countdownSeconds,
-                    gate_hold_seconds: holdSeconds,
-                });
+                resolved = true;  // a late release or Cancel can no longer undo it
+                if (holdTicker) clearInterval(holdTicker);
+                holdTimerEl.textContent = '';
+                holdStatus.textContent = 'Complete';
+                setTimeout(() => {
+                    cleanup();
+                    modal.hide();
+                    resolve({
+                        gate_phrase: expectedPhrase,
+                        gate_countdown_seconds: countdownSeconds,
+                        gate_hold_seconds: holdSeconds,
+                    });
+                }, COMPLETE_ANNOUNCE_MS);
             }, holdMs);
         };
 
@@ -189,7 +217,8 @@ function showTimedDeleteGate(options) {
         };
 
         const cancelHold = () => {
-            if (!isHolding) return;
+            // Once complete, a late release (pointer or key) changes nothing.
+            if (!isHolding || resolved) return;
             resetHoldState();
             updateHoldAvailability();
         };

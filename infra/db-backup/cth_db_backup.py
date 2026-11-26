@@ -3,7 +3,7 @@
 
 PROPOSAL, NOT APPLIED. See ``infra/db-backup/README.md`` and
 ``docs/ops/DATABASE_BACKUP_PLAN.md``. The baseline model this implements is the
-owner's 2026-09-30 direction (POST_LAUNCH_TRACKER_2026.md §IV-B), which is still
+owner's 2026-09-30 direction (archived POST_LAUNCH_TRACKER_2026.md §IV-B; issue #1639), which is still
 under failure-mode review; nothing here is normative.
 
 Commands

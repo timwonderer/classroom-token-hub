@@ -5,7 +5,6 @@ from typing import NamedTuple
 
 from app.extensions import db
 from app.models import LedgerMechanism, Transaction, TransactionStatus, _quantize_currency
-from app.utils.canonical_temporal_resolver import ensure_utc
 
 
 def exact_reversal_query(*, class_id, seat_id, account_type,
@@ -103,8 +102,8 @@ def get_seat_ids_with_student_originated_activity(
         .with_entities(Transaction.seat_id)
         .filter(
             Transaction.class_id == class_id,
-            Transaction.timestamp >= ensure_utc(window_start),
-            Transaction.timestamp < ensure_utc(window_end),
+            Transaction.timestamp >= window_start,
+            Transaction.timestamp < window_end,
             _student_originated_filter(),
         )
         .distinct()
@@ -171,8 +170,8 @@ def get_student_originated_rows(
         .with_entities(Transaction.seat_id, Transaction.amount_cents)
         .filter(
             Transaction.class_id == class_id,
-            Transaction.timestamp >= ensure_utc(window_start),
-            Transaction.timestamp < ensure_utc(window_end),
+            Transaction.timestamp >= window_start,
+            Transaction.timestamp < window_end,
             _student_originated_filter(),
         )
         .all()
@@ -211,8 +210,8 @@ def get_inbound_ledger_rows(
         )
         .filter(
             Transaction.class_id == class_id,
-            Transaction.timestamp >= ensure_utc(window_start),
-            Transaction.timestamp < ensure_utc(window_end),
+            Transaction.timestamp >= window_start,
+            Transaction.timestamp < window_end,
             Transaction.amount_cents > 0,
             Transaction.posting_state == TransactionStatus.POSTED,
         )
@@ -292,7 +291,7 @@ def get_posted_balances_as_of(
         .filter(
             Transaction.class_id == class_id,
             Transaction.account_type == account_type,
-            Transaction.timestamp < ensure_utc(as_of),
+            Transaction.timestamp < as_of,
             Transaction.posting_state == TransactionStatus.POSTED,
         )
         .group_by(Transaction.seat_id)
@@ -328,8 +327,8 @@ def get_student_savings_contribution_rows(
             Transaction.class_id == class_id,
             Transaction.account_type == "savings",
             Transaction.amount_cents > 0,
-            Transaction.timestamp >= ensure_utc(window_start),
-            Transaction.timestamp < ensure_utc(window_end),
+            Transaction.timestamp >= window_start,
+            Transaction.timestamp < window_end,
             _student_originated_filter(),
         )
         .all()

@@ -33,10 +33,13 @@ Passes are not free and they do not refill on their own. You get them by buying 
 ### Requesting a pass
 
 1. Press **Break**. The **Choose Break Type** dialog opens: *Choose a hall-pass destination or mark yourself done for the day.*
-2. Pick a destination from the list of buttons. Your teacher decides what is on that list.
-3. The dialog closes and you see *Hall pass request sent.*
+2. Type your PIN in the **Your PIN** box at the top of the dialog.
+3. Pick a destination from the list of buttons. Your teacher decides what is on that list.
+4. The dialog closes and you see *Hall pass request sent.*
 
-No PIN is required to request a pass.
+If you pick a destination with the PIN box empty, the dialog stays open and asks you to *Enter your PIN first.* A wrong PIN is refused with *Incorrect PIN.*
+
+Requesting a pass asks for your PIN, the same as every other clock action — it stops anyone else sending a request in your name.
 
 ### Waiting
 
@@ -59,7 +62,7 @@ Checking out greets you with *Checked out for {destination}. Have a safe trip!* 
 
 ### Done for the day is not a hall pass
 
-The same **Choose Break Type** dialog has a separate **Done for the day** button below a divider. It ends your day rather than requesting a pass, it costs no passes, and it asks for your PIN. See [Start and End Work](start-end-work.md).
+The same **Choose Break Type** dialog has a separate **Done for the day** button below a divider. It ends your day rather than requesting a pass, it costs no passes, and it uses the PIN you type in the same **Your PIN** box. See [Start and End Work](start-end-work.md).
 
 ## Important notes
 
@@ -71,6 +74,15 @@ The same **Choose Break Type** dialog has a separate **Done for the day** button
 
 > [!NOTE]
 > **Your clock stops while you are out.** Pressing **Leave** marks you inactive and pressing **Return** marks you active again, so the time between them is not paid. Forgetting to press **Return** keeps you off the clock and quietly costs you money.
+
+> [!NOTE]
+> **If you are still out when the school day ends, you are marked returned and done for the day.** The time you were out is not paid. Next time, press **Start Work** as usual.
+
+> [!NOTE]
+> **An approved pass you have not left on by the end of the school day is revoked.** You can no longer leave on it, and it stays used. Ask for a new pass if you need one.
+
+> [!NOTE]
+> **A request still waiting at the end of the school day is closed, the same as if your teacher declined it.** You keep your pass.
 
 > [!NOTE]
 > **You can only have one request waiting at a time.** Asking again while a request is pending replaces the first one rather than queuing a second.

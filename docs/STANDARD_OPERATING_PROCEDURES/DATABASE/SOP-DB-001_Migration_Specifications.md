@@ -2,25 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.7     | 2026-10-06     | 1.6 | Normative |
-
-> [!NOTE]
-> v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
-> merged migrations are still never edited. §V.A defines the one circumstance in which following
-> Rule 3 literally would preserve an execution path that destroys state protected by a superior
-> `INV` or `DOM` document, and it prohibits every other use.
->
-> v1.3 (2026-09-17) adds §V.B, a second named exception, narrower than the first. It exists because
-> `0001_bootstrap` builds the baseline from *today's* ORM metadata rather than from a frozen
-> snapshot, so a schema element removed from the ORM after a historical migration was written is
-> absent when that migration replays — and the migration fails on a schema it was never written
-> for. §V.B permits only the guard that declines the operation in that case. It may not change what
-> the migration does when the element is present, and it may not alter the migration's intended end
-> state. Golden Rule 3 now names two exceptions and no others.
-
-> v1.7 (2026-10-06): Phase 1 of the Schema Contraction Policy no longer says the application supports
-> both forms. Physical schema coexistence is permitted; dual-write, fallback and heuristic
-> interpretation are not (`SOP-DB-004` §VII, owner ruling 2026-10-06). No other rule changes.
+| SOP-DB-001       | 1.9     | 2026-11-24     | 1.8 | Normative |
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
@@ -46,9 +28,11 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 1.  **NEVER modify `app/models.py` without creating a migration.**
 2.  **ALWAYS test migrations before committing** (upgrade AND downgrade).
-3.  **NEVER edit old migrations after they're merged to main.** The only exceptions are a
-    Replay-Safety Correction under §V.A and a Bootstrap-Replay Correction under §V.B. There are no
-    others, and neither may be used to change what a merged migration intends to do.
+3.  **NEVER edit a migration in the supported lineage after it is merged to main.** The only
+    exception is a Replay-Safety Correction under §V.A, which may not be used to change what a merged
+    migration intends to do. There are no others. Removing revisions from the supported lineage is
+    not an edit; it is a baseline replacement, permitted only under §V.C. (§V.B is retired and kept
+    as provenance only.)
 4.  **ALWAYS review auto-generated migrations** before committing.
 5.  **NEVER skip migrations** - each schema change needs its own migration.
 6.  **ALWAYS include idempotency helpers** in every migration (`table_exists`, `column_exists`, etc.).
@@ -112,7 +96,17 @@ this section is not evidence that a candidate qualifies, and a prior correction 
 for another.
 
 
-### V.B Bootstrap-Replay Correction (Second Exception to Rule 3)
+### V.B Bootstrap-Replay Correction (retired in v1.9; provenance)
+
+> [!NOTE]
+> **Retired as an operational exception (v1.9).** §V.B answered a defect of a baseline built from
+> live ORM metadata, the architecture §V.C.2 now prohibits. Its two corrections (`3a69db4907b4`,
+> `8f1a2c3d4b5e`) are pre-launch revisions, held unchanged in `migrations/archive/v2_prelaunch/` and
+> outside the supported lineage (§V.C), so they are no longer load-bearing and no new correction can
+> arise. Golden Rule 3 names no exception under this section. The text, register and rationale below
+> are kept unchanged as the record of the decisions made under it. Issue #1649 and PR #1834, which
+> pursued the deferred reconstruction, are superseded by the baseline replacement; their findings are
+> kept in `docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`.
 
 A merged migration MUST NOT otherwise be modified. This exception is narrower than §V.A: it permits
 one shape of change only — a guard that makes a historical operation a no-op when the schema element
@@ -222,9 +216,12 @@ Proven by execution, not by argument, and reported with its exact command and sc
 The full remedy is a baseline that reconstructs the schema as it stood when the historical
 migrations were written, so each one executes against the schema it was written against. The
 freeze above stopped new drift; the reconstruction is still open, tracked as post-launch
-architectural debt in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md` §VI (carried from the pre-launch
-ship tracker, archived 2026-09-28). The bootstrap is itself a
+architectural debt in issue #1649 (carried from the post-launch tracker, archived 2026-10-22, and
+before it the pre-launch ship tracker, archived 2026-09-28). The bootstrap is itself a
 merged migration, so the remedy is a baseline replacement, not an edit under this section.
+
+*Superseded (v1.9):* the reconstruction was not performed. §V.C replaced the baseline instead, so the
+supported lineage no longer replays the revisions this remedy concerned.
 
 #### Register of corrections
 
@@ -270,6 +267,103 @@ Each candidate is evaluated on its own evidence. The register is a record of pas
 precedent: resemblance to a listed correction is not evidence that a candidate qualifies.
 
 ---
+
+### V.C Schema Eras and Baseline Replacement
+
+#### V.C.1 Definitions
+
+1. **Schema era.** A period of supported persistence continuity. It begins at an *era baseline*
+   and includes every revision descended from it. Eras are independent of software version
+   numbering; a change is classified and numbered by `SOP-DB-004` whether or not it touches an era
+   boundary.
+2. **Era baseline.** A validated, frozen, hashed schema artifact under `migrations/baseline/`, and
+   the single Alembic revision (`down_revision = None`) that executes it after checking its
+   SHA-256. It is the only root of the supported lineage.
+3. **Supported lineage.** The era baseline and every revision in `migrations/versions/`. These are
+   the only revisions an installation may be at.
+4. **Release schema bundle.** `migrations/fresh/<revision>/`: the installation artifact that creates
+   a new database directly at a release revision (`docs/self-hosting/fresh-database.md`). It is
+   derived from the supported lineage at that revision and never maintained as an independent schema
+   definition.
+5. **Provenance.** Superseded migration files, baselines, registers and records, kept under
+   `migrations/archive/` and `docs/ops/audits/` for engineering history. **Historical preservation
+   is not operational support.** Nothing in provenance is executed, imported, linked into the
+   lineage, tested for executable compatibility, or upgradable from.
+
+#### V.C.2 Rules
+
+1. **The era baseline executes only on a database with no application-owned object.** Before it
+   runs, the database may hold exactly these infrastructure objects and nothing else:
+   - the `public` schema and PostgreSQL's system schemas (`pg_catalog`, `information_schema`,
+     `pg_toast` and other `pg_*` schemas);
+   - the `plpgsql` extension;
+   - Alembic's `public.alembic_version` table with no rows, its primary key `alembic_version_pkc`,
+     and the row and array types PostgreSQL creates for that table.
+
+   Any other schema, extension, event trigger, or any relation, type, function, operator, operator
+   class, operator family, collation, conversion, extended-statistics object or text-search object
+   (configuration, dictionary, template or parser) in `public` is application-owned or unknown,
+   and the baseline refuses, naming what it found. It never skips. A database without a supported
+   revision and with objects in it is unknown, not baselined.
+2. The era baseline's `downgrade()` raises and it is listed in `migrations/forward_only_register.txt`.
+3. The era baseline is a frozen artifact, never a materialization of live ORM metadata. (Live
+   metadata at step 0 is the defect §V.B existed to patch.)
+4. Upgrade obligations hold within the era. Downgrade and re-upgrade obligations hold where a
+   revision supports them (Golden Rule 2; `SOP-DB-004` §V.5–§V.6).
+5. Cross-era migration compatibility is neither presumed nor guaranteed. A database recorded at a
+   revision outside the supported lineage is refused, not repaired.
+6. Every release schema bundle reproduces, digest for digest, the schema and reference state of the
+   supported lineage replayed to its revision, and CI enforces it.
+
+#### V.C.3 Establishing a new era
+
+A new era requires an explicit owner decision recorded in this section. It is announced in
+`CHANGELOG.md` and to operators far enough in advance for them to conclude their existing classroom
+economies; the decision sets the notice period. The announcement precedes the first release that
+refuses the previous era.
+
+#### V.C.4 Baseline replacement within an era
+
+Replacing an era's baseline without starting a new era requires all of:
+
+1. explicit owner authorization;
+2. a baseline revision identifier that already exists in the supported lineage, so no supported
+   installation is re-stamped;
+3. every later revision byte-identical, shown by hash;
+4. demonstrated equivalence, by execution (`INV-ARC-017` §V): the new baseline reproduces the schema
+   the replaced chain produced at that revision; production's catalog matches the supported lineage
+   at production's revision; the replay path and the release bundle agree; populated synthetic
+   databases upgrade equivalently through both lineages; unsupported revisions and unknown
+   databases fail closed;
+5. an audit record under `docs/ops/audits/` that states separately what production historically
+   executed, what the supported lineage contains, and what fresh installations execute;
+6. preservation of the superseded artifacts as provenance (§V.C.1(5)).
+
+A release announcement naming the retired revisions is sufficient notice for a replacement within an
+era when no known supported installation is at a retired revision. That does not relax §V.C.3.
+
+#### V.C.5 The v2 era
+
+| | |
+|---|---|
+| Era began | 2026-09-26, the public v2.0.0 launch (`26d1792b5`), the start of supported persistence continuity |
+| Era baseline | `d7a3e9b1c5f2` — `migrations/baseline/d7a3e9b1c5f2_v2_launch_schema.sql` (SHA-256 `3ee2db4a…813528f`) |
+| Baseline replaced | 2026-11-24, under §V.C.4 (`docs/ops/audits/BASELINE_REPLACEMENT_2026-11-24.md`) |
+| Provenance | `migrations/archive/v2_prelaunch/` (171 revisions, the 2026-09-28 frozen SQL, the prior registers); `migrations/archive/v1_196_migrations/` (v1) |
+
+Historical facts, which this section does not rewrite:
+
+- **2026-04-29**: the v1 migrations were squashed into a v2 development baseline, revision `0001`
+  (`672ee361c`), which materialized the live ORM. This was a developmental milestone of the v1 → v2
+  clean break, not the start of supported persistence continuity: no v1 data was migrated and no
+  supported installation existed.
+- **2026-09-26**: production was recreated empty and built by `flask db upgrade` at `26d1792b5`:
+  revision `0001` materialized the live ORM, then 170 revisions ran to `d7a3e9b1c5f2`
+  (`docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md`).
+- **2026-09-27**: revision `0001` began executing the frozen 2026-09-28 SQL instead
+  (`docs/ops/audits/BASELINE_FREEZE_2026-09-28.md`). Production never executed it.
+- **2026-11-24**: the supported lineage begins at the launch baseline; fresh installations still
+  initialize from their release schema bundle.
 
 ## VI. Migration Best Practices
 
@@ -513,4 +607,33 @@ for fk in inspector.get_foreign_keys('students'):
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [SQLAlchemy Inspector API](https://docs.sqlalchemy.org/en/20/core/reflection.html)
 ## XII. Amendment
+
+### Revision History
+
+> [!NOTE]
+> v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
+> merged migrations are still never edited. §V.A defines the one circumstance in which following
+> Rule 3 literally would preserve an execution path that destroys state protected by a superior
+> `INV` or `DOM` document, and it prohibits every other use.
+>
+> v1.3 (2026-09-17) adds §V.B, a second named exception, narrower than the first. It exists because
+> `0001_bootstrap` builds the baseline from *today's* ORM metadata rather than from a frozen
+> snapshot, so a schema element removed from the ORM after a historical migration was written is
+> absent when that migration replays — and the migration fails on a schema it was never written
+> for. §V.B permits only the guard that declines the operation in that case. It may not change what
+> the migration does when the element is present, and it may not alter the migration's intended end
+> state. Golden Rule 3 now names two exceptions and no others.
+
+> v1.7 (2026-10-06): Phase 1 of the Schema Contraction Policy no longer says the application supports
+> both forms. Physical schema coexistence is permitted; dual-write, fallback and heuristic
+> interpretation are not (`SOP-DB-004` §VII, owner ruling 2026-10-06). No other rule changes.
+>
+> v1.8 (2026-10-22): the baseline reconstruction is tracked in issue #1649; the post-launch tracker
+> it named is archived. No rule changes.
+>
+> v1.9 (2026-11-24): adds §V.C, Schema Eras and Baseline Replacement (owner rulings 2026-11-24). The
+> supported v2 lineage begins at the v2.0.0 launch baseline `d7a3e9b1c5f2`; the 171 pre-launch
+> revisions and the 2026-09-28 frozen SQL become provenance. §V.B is retired as an exception and kept
+> as provenance; Golden Rule 3 now names §V.A only.
+
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

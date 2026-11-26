@@ -64,6 +64,15 @@ That tab controls the destinations and per-destination limits students see. [Hal
 > [!NOTE]
 > **Approving is not the same as sending.** An approved pass sits in **Issued** until you mark **Left Class**. That is what starts the duration clock, and the History tab's Duration column measures from there — not from approval.
 
+> [!NOTE]
+> **A student still out at the end of the school day is marked returned and done for the day.** The time they were out is not paid, and they press **Start Work** as usual next time. **Left Class** is refused for a student who is no longer working.
+
+> [!NOTE]
+> **A pending request you have not answered by the end of the school day is closed, the same as a rejection.** The student keeps the pass.
+
+> [!NOTE]
+> **An issued pass nobody left on by the end of the school day is revoked.** It shows as **Revoked** in History, can no longer be used to leave, and stays used.
+
 > [!TIP]
 > Mark **Returned** as students come back rather than at the end of the period. The Out tab is the only place that shows who is currently unaccounted for, and it is only trustworthy if it is current.
 

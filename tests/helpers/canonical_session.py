@@ -17,7 +17,6 @@ would make resolve_canonical_context() fail — so we must write the nonce too.
 """
 
 import secrets
-from datetime import datetime, timezone
 
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -39,11 +38,14 @@ def set_canonical_context(
       - session["user_id"] + session["current_session_nonce"] (nonce validated before_request)
       - session["login_time"] + session["last_activity"] (read by dashboard and timeout checks)
       - user.current_session_nonce / last_active_class_id / last_active_seat_id in DB
+      - for a teacher, the fixed session window (current_session_started_at/expires_at)
 
     Returns the nonce that was written, so callers can use it consistently.
     """
     resolved_nonce = nonce or secrets.token_urlsafe(32)
-    now_iso = datetime.now(timezone.utc).isoformat()
+    # Production time (SPEC-TEST-001 §X), so a pinned clock and the session agree.
+    from tests.helpers import temporal
+    now_iso = temporal.now().isoformat()
     sess["user_id"] = user_id
     sess["current_session_nonce"] = resolved_nonce
     sess["login_time"] = now_iso
@@ -52,6 +54,16 @@ def set_canonical_context(
     with FEATContext("FEAT-IDEN-001", idempotency_key=f"canonical-session:{user_id}:{class_id}:{seat_id}"):
         user = db.session.get(User, user_id)
         if user is not None:
+            if getattr(user.user_role, "value", user.user_role) == "teacher":
+                # Teacher sign-in opens a fixed window (DOM-IDEN-003); admin_required
+                # ends a session that has none.
+                from app.auth import TEACHER_SESSION_MINUTES
+                from app.session_lifetime import SESSION_EXPIRES_AT_KEY
+                user.current_session_started_at = temporal.now()
+                user.current_session_expires_at = temporal.shifted(
+                    user.current_session_started_at, minutes=TEACHER_SESSION_MINUTES,
+                )
+                sess[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
             user.current_session_nonce = resolved_nonce
             user.last_active_class_id = class_id
             seat = db.session.get(Seat, seat_id)

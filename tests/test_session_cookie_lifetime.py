@@ -2,7 +2,9 @@
 
 Three authoritative session lifetimes already existed in app/auth.py before this
 suite: a student's hard cap from login (`User.current_session_expires_at`), a
-teacher's 10-minute idle limit, and a sysadmin's 60-minute idle limit. All three
+teacher's fixed 60-minute window from sign-in (also on that column, and stamped
+on the cookie; the role table below is only the fallback for an unstamped
+cookie), and a sysadmin's 60-minute idle limit. All three
 are enforced server-side, which means they only fire when a request arrives.
 
 Nothing bounded the *cookie*. `PERMANENT_SESSION_LIFETIME` is unset, so it was
@@ -23,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.auth import SESSION_TIMEOUT_MINUTES, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES
+from app.auth import SESSION_TIMEOUT_MINUTES, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES, TEACHER_SESSION_MINUTES
 from app.session_lifetime import (
     SESSION_EXPIRES_AT_KEY,
     RoleScopedSessionInterface,
@@ -83,12 +85,12 @@ def test_student_cookie_expiry_does_not_slide(app):
 @pytest.mark.parametrize(
     "role,minutes",
     [
-        ("admin", SESSION_TIMEOUT_MINUTES),
+        ("admin", TEACHER_SESSION_MINUTES),
         ("sysadmin", SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES),
     ],
 )
 def test_idle_roles_track_their_own_authoritative_limit(app, role, minutes):
-    """Teacher and sysadmin cookies match the idle limits in app/auth.py.
+    """Unstamped teacher and sysadmin cookies match the limits in app/auth.py.
 
     Parametrized against the constants rather than literals: if someone changes
     SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES, the cookie must follow rather than
@@ -131,12 +133,14 @@ def test_malformed_stamp_falls_back_instead_of_raising(app):
     assert abs((got - expected).total_seconds()) < 5
 
 
-def test_naive_stamp_is_treated_as_utc(app):
-    """Postgres can hand back a naive datetime; comparing it naively would raise."""
+def test_naive_stamp_is_treated_as_unusable(app):
+    """The login writer always stamps an aware UTC instant; a naive stamp is not
+    one of its values, so it falls through to the role table like a malformed one."""
     naive = (datetime.now(timezone.utc) + timedelta(minutes=7)).replace(tzinfo=None)
     got = _expiry(app, role="student", **{SESSION_EXPIRES_AT_KEY: naive.isoformat()})
+    expected = datetime.now(timezone.utc) + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
     assert got.tzinfo is not None
-    assert got == naive.replace(tzinfo=timezone.utc)
+    assert abs((got - expected).total_seconds()) < 5
 
 
 def _set_cookie_expiry(response):

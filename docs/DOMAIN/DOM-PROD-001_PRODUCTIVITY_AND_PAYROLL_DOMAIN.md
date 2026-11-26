@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.14 | 2026-10-03 | 1.13 | Constitutional |
+| DOM-PROD-001 | 1.16 | 2026-11-10 | 1.15 | Constitutional |
 
 ---
 
@@ -483,7 +483,8 @@ Fields: `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`,
 - **Ledger coordination**: The coordinating FEAT composes Ledger domain commands governed by `FEAT-LED-000` and `FEAT-LED-001` inside its own transaction; it never executes another FEAT. PROD neither calls Ledger nor reconstructs balances or compensation totals.
 - **Policies coordination (payroll)**: Wage rate, frequency, and other payroll policy inputs are stored in the Policies repository (`DOM-POL-001`) as immutable, effective-dated `payroll_settings` rows (`DOM-POL-001` §VI.2). Class Configuration decides whether the `payroll` capability is enabled in the class (`class_features`); Policies stores the class-customized definition; `DOM-PROD-001` reads `payroll_settings` — and nothing else — through one resolver, which answers "which setting was in force at instant *t*", and records the `policy_uuid` that priced each `payroll_event`.
 - **Policies coordination (hall pass)**: `hall_pass_settings` is stored in the Policies repository (`DOM-POL-001`) as immutable version rows. Class Configuration decides whether the `hall_pass` capability is enabled; Policies stores the definition (allowed destinations, limits); `FEAT-PROD-002` reads the current hall-pass `policy_uuid` before granting a pass because those settings constrain whether a PROD hall-pass event may be written.
-- **Obligations coordination**: Hall-pass entitlement quotas remain owned by Obligations, and fine/debit manual deductions belong there rather than in `DOM-PROD`.
+- **Obligations coordination**: Hall-pass entitlement quotas remain owned by Obligations.
+- **Teacher fines**: a teacher-applied fine is a Ledger penalty (`DOM-LED-001` INV-LED-017, `FEAT-LED-006`), not a PROD event and not an obligation. `DOM-PROD` records manual credits only; it holds no reward or fine catalog.
 - **Store coordination**: Store-owned entitlements and redemption state remain separate from productivity and payroll history.
 - **Reversal coordination**: Reversal of a payroll-originated monetary fact must consult this domain's authoritative business record before the reversal may proceed.
 
@@ -684,7 +685,21 @@ PROD incorporates SPEC-PROD-001 §VI.2 and SPEC-PROD-002 §VI.2 for the complete
 
 PROD-PAY-001 uses explicit original corrected-event IDs and per-window worked/replay-paid subsegments. Manual top-ups are non-boundary original positive credits; unrelated manual credits are not attributed work. Same-domain source identities and opaque Ledger locators remain non-FK references. Missing/ambiguous graph edges, duplicate or overlapping selected contributions, source-budget exhaustion or changed evidence deny the entire paid action. No raw scan or original summary changes. Ledger alone owns exact historical money, allocation and complete prior recovery. FEAT obtains Policies/Operations/Ledger conclusions through their interfaces; no DOM-to-DOM dependencies or calls are introduced. Existing target/class destruction removes the business facts; no derived graph archive survives.
 
+### 11. Closed-session settlement
+
+*Ratifies the rule already implemented and cited in code as "DOM-PROD-001 §VI.3" (issue #1439); §VI is the Schema Authority Declaration and has no subsections, so that citation named nothing.*
+
+A session is payable once it has closed after the seat's last `payroll` event, and it is paid in full by the first payroll run that executes while it is closed and unpaid (§XV.3 prices it by the setting in force when it closed). Eligibility follows recorded pair membership at the instant a run executes, never a timestamp-defined window: a session not yet closed when a run executes is simply absent from that run, whatever timestamp its close later carries, and the next run — not a correction of the one that already ran — picks it up once it closes (§XV.7). A still-open session is never payable: it contributes no amount to any run while it remains open, and becomes payable only once it closes. Every *payable* session is therefore paid exactly once, by exactly one run, and never split across runs. This exactly-once guarantee governs version-1 settlement of eligible, not-yet-paid sessions only: it does not override terminal interval invalidation (§VIII.5, `attendance_interval_invalidation`), which can make a closed session never payable at all rather than payable-once; it does not make the unprovable category below payable; and it does not qualify, narrow or re-litigate the separately authorized historical reconstruction of pre-rule fragment, remainder and multi-payment participation in §XV.9–10.
+
+A class-level run (`FEAT-PROD-004`) that finds no seat with a closed, unpaid session has nothing to settle and MUST be refused rather than recorded as an empty cycle (`NoPayableAttendanceError`, not a zero-event `payroll_cycle_id`). A student still working when the run executes is paid by the first run after they clock out, not by the run in progress when they were working, and a session that closes with a backdated timestamp after an earlier run has already executed is paid by the next run, not retroactively attributed to the one that already ran (§XV.7).
+
+The single authoritative reading of what a seat's attendance owes under this rule separates each session into exactly one of: payable (closed, unpaid), in-progress (still open, never payable yet), or unprovable (excluded from estimate and settlement alike, §XV.9–10). The payroll run and every unpaid-time preview shown to a teacher or student read this same reading, so what is shown and what is paid cannot diverge.
+
 ## XVI. Amendment
+
+**Version 1.16 (2026-11-10)** ratifies the closed-session settlement rule (§XV.11) that code already implemented and had cited as "DOM-PROD-001 §VI.3", a section with no subsections (issue #1439/#1644). §XV.11 states eligibility in terms of recorded pair membership at the instant a run executes (consistent with §XV.7) rather than a close timestamp's calendar window, and scopes its exactly-once guarantee to eligible, not-yet-paid sessions so it does not override terminal interval invalidation (§VIII.5) or narrow the separately authorized historical fragment/remainder reconstruction in §XV.9–10. No runtime behavior changes; this corrects an unratified citation.
+
+**Version 1.15 (2026-11-04)** supersedes the statement that fine/debit manual deductions belong to Obligations (owner ruling 2026-11-04, issue #1701): a teacher-applied fine is a Ledger penalty under `FEAT-LED-006`. No PROD persistence, event type or writer changes.
 
 **Version 1.14 (2026-10-03)** supersedes v1.11–1.13 diagnostic-only/historical snapshot-visibility and blanket old-lineage denials for the explicit immutable-source reconstruction in §XIII.9 and §XV.9–10. Authorizes its owning-domain contribution to current correction FEATs; preserves actual integrity denial, modern strict proof, original history and new-write lineage.
 

@@ -32,7 +32,7 @@ The card sits on your **Dashboard** and shows:
 ### Starting work
 
 1. Select **Start Work**, the green button.
-2. Enter your PIN when prompted.
+2. A **Start Work** window opens. Type your PIN in **Your PIN** and select **Start Work**.
 3. The badge flips to **Active** and **Time Today** starts counting.
 
 **Break** stays greyed out until you are active. You cannot take a break from a clock that is not running.
@@ -40,8 +40,9 @@ The card sits on your **Dashboard** and shows:
 ### Taking a break or leaving the room
 
 1. Select **Break**, the yellow button.
-2. **Choose Break Type** opens, listing hall-pass destinations above a divider and **Done for the day** below it.
-3. Pick a destination. That *requests* a pass — it does not stop your clock yet.
+2. **Choose Break Type** opens, with a **Your PIN** box at the top, hall-pass destinations below it, and **Done for the day** below a divider.
+3. Type your PIN in **Your PIN**.
+4. Pick a destination. That *requests* a pass — it does not stop your clock yet.
 
 Requesting is only the first step. Your teacher has to approve it, and your paid time keeps running until you press **Leave** and actually go. The full sequence is in [Hall Passes](hall-passes.md).
 
@@ -52,8 +53,10 @@ If the destination list shows *No hall-pass destinations are currently available
 There is no separate "Done" button. Finishing the day lives inside the same modal:
 
 1. Select **Break**.
-2. Choose **Done for the day** at the bottom of **Choose Break Type**.
-3. Enter your PIN.
+2. Type your PIN in **Your PIN** at the top of **Choose Break Type**.
+3. Choose **Done for the day** at the bottom.
+
+If the PIN box is empty, the dialog stays open and asks you to *Enter your PIN first.*
 
 Your clock stops and stays stopped for the rest of the class period.
 

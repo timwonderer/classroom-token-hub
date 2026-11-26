@@ -107,7 +107,6 @@ def resolve_premium_funding(
     )
     return resolve_intended_ledger_plan(
         plan=intended, banking_directive=get_banking_directive(class_id),
-        fee_authority="NONE",
     )
 
 

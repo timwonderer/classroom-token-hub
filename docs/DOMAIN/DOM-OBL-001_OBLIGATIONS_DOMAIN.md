@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OBL-001 | 3.3 | 2026-10-07 | 3.2 | Constitutional |
+| DOM-OBL-001 | 3.4 | 2026-11-04 | 3.3 | Constitutional |
 
 ---
 
@@ -54,6 +54,8 @@ A non-sufficient-funds (NSF) or overdraft fee is not an obligation. It is a side
 ### D. Exclusions
 
 Obligations does not own store purchases. Store purchases are immediate exchanges, not assessed liabilities.
+
+Obligations does not own teacher-applied penalties (fines). A fine is an immediate, teacher-authorized Ledger debit (`FEAT-LED-006`, `SPEC-ECON-003` §4.5.1.1): it is never assessed, never outstanding, never paid or waived, and writes no `assessment_events` row (owner ruling 2026-11-04).
 
 ---
 

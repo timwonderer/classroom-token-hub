@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting Hall Passes
-description: Why a pass request is denied or vanishes, and which destinations deduct from your pass balance.
+description: Why a pass request is denied or vanishes, and when a pass deducts from your pass balance.
 category: diagnostics
 roles: [student]
 related:

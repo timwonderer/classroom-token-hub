@@ -1,0 +1,15 @@
+{
+  "zensical": {
+    "pages": 163,
+    "search_entries": 3052,
+    "failures": []
+  },
+  "hugo": {
+    "pages": 188,
+    "search_entries": 3216,
+    "failures": []
+  },
+  "hugo_missing_zensical_heading_fragments": {},
+  "corpus_documents": 146,
+  "canonical_heading_fragments_compared": 3019
+}

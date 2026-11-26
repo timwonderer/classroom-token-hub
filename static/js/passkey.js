@@ -187,7 +187,10 @@ function setupPasskeyRegistration(config) {
 
     button.addEventListener('click', async function() {
         const originalHTML = this.innerHTML;
-        const authenticatorName = config.authenticatorName || prompt('Name this passkey (e.g., "YubiKey", "Touch ID"):');
+        const authenticatorName = config.authenticatorName || await window.AppCore.prompt(
+            'Give this passkey a name you will recognise, such as "YubiKey" or "Touch ID".',
+            { title: 'Name this passkey', label: 'Passkey name', confirmLabel: 'Continue', requiredMessage: 'Enter a name.' }
+        );
 
         if (!authenticatorName) {
             window.AppCore?.toast('Name is required.', 'error');

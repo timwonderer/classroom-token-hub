@@ -1,14 +1,14 @@
 # Domain Implementation Plan Template
 
 **STATUS:** Ephemeral — use this template to create domain-specific implementation plans  
-**Scope:** Derived from the canonical tracker (`POST_LAUNCH_TRACKER_2026.md`); archived after domain completion  
+**Scope:** Derived from the domain's open issues on the CTH Backlog project; archived after domain completion  
 **Purpose:** Break down a domain's pending SOP-DEV-002 phases into concrete implementation steps
 
 ---
 
 ## Quick Start
 
-1. **Find your domain in the canonical tracker (`POST_LAUNCH_TRACKER_2026.md`)** → note current phase
+1. **Find your domain's open issues on the CTH Backlog project** → note current phase
 2. **Copy this template** → rename to `DOMAIN_[NAME]_IMPLEMENTATION_2026-0X-XX.md`
 3. **Fill in sections below** for your domain
 4. **Create PRs aligned with phase assignments** → each PR advances one or two phases
@@ -322,7 +322,7 @@ Title: [DOMAIN] Phase 10: SOP-DEV-002a certification audit
 Changes:
 - Run SOP-DEV-002a audit against all phases
 - Document any manual verification steps
-- Update the canonical tracker (`POST_LAUNCH_TRACKER_2026.md`) with the new status
+- Update the domain's backlog issues with the new status
 ```
 
 ---
@@ -342,7 +342,7 @@ Changes:
 ### Resources
 
 - **SOP-DEV-002a Audit:** `docs/archive/STANDARD_OPERATING_PROCEDURES/DEVOPS/SOP-DEV-002a_DOMAIN_RECONSTRUCTION_QA_AUDIT.md` (archived; historical procedure, not authority)
-- **Tracker:** `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`
+- **Backlog:** https://github.com/users/timwonderer/projects/6
 - **Domain Spec:** `docs/DOMAIN/DOM-???-*.md`
 - **Previous Domain Example:** See Obligations domain in matrix for similar work
 
@@ -374,7 +374,7 @@ Changes:
 
 **When domain reaches Phase 10:**
 1. Move this file to `docs/archive/v2-tracking-2026/` (archived material) with final status, and add a line to that directory's README
-2. Update `POST_LAUNCH_TRACKER_2026.md` with the Phase 10 audit result
+2. Record the Phase 10 audit result on the domain's backlog issues
 3. Celebrate! 🎉
 
 ---

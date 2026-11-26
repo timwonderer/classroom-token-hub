@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 from datetime import datetime
 from typing import Any
-
 from app.extensions import db
 from app.models import Transaction, Seat, ClassEconomy
 from app.services.ledger_balance_query_service import project_posting_states
+from app.utils.temporal_display import format_timestamp
 
 
 @dataclass(frozen=True)
@@ -227,10 +227,9 @@ def build_transaction_summary_view(
             total_outflow += abs(amount)
 
         if txn.timestamp:
-            if earliest is None or txn.timestamp < earliest:
-                earliest = txn.timestamp
-            if latest is None or txn.timestamp > latest:
-                latest = txn.timestamp
+            # Ordering, not a decision (SPEC-TIME-001): min/max keep the first on ties.
+            earliest = txn.timestamp if earliest is None else min(earliest, txn.timestamp)
+            latest = txn.timestamp if latest is None else max(latest, txn.timestamp)
 
     net_activity = total_inflow - total_outflow
 
@@ -250,3 +249,13 @@ def build_transaction_summary_view(
         "total_outflow": f"${total_outflow:.2f}",
         "net_activity": net_activity_display,
     }
+
+
+def build_transaction_time_displays(ctx, transactions) -> dict[int, str]:
+    """Transaction id -> its timestamp as text, localized through the resolver (INV-ARC-022 §V.8)."""
+    return {tx.id: format_timestamp(ctx, tx.timestamp) for tx in transactions}
+
+
+def build_transaction_timestamp_displays(ctx, transactions) -> dict[int, str]:
+    """Each transaction's timestamp as class-time display text, keyed by transaction id."""
+    return {tx.id: format_timestamp(ctx, tx.timestamp) for tx in transactions}

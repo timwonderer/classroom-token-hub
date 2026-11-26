@@ -1,0 +1,155 @@
+name: Owner-attended CTH staging
+on:
+  workflow_dispatch:
+    inputs:
+      app_sha:
+        description: Full application commit reviewed by the owner
+        required: true
+        type: string
+      profile:
+        description: Approved staging profile
+        required: true
+        type: choice
+        options:
+          - sfo3-premium-amd
+      python:
+        description: Application interpreter (3.14 is the #1774 trial)
+        required: true
+        type: choice
+        default: '3.10'
+        options:
+          - '3.10'
+          - '3.14'
+      previous_resources_gone:
+        description: I checked DO and confirmed the previous staging resources are gone
+        required: true
+        type: boolean
+      approve_run:
+        description: I approve this SHA, the staging compute cost, and will manually destroy the Droplet
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+concurrency:
+  group: cth-ephemeral-staging
+  cancel-in-progress: false
+
+jobs:
+  allocate:
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      github.run_attempt == '1' && github.actor == vars.CTH_STAGING_OWNER &&
+      inputs.previous_resources_gone && inputs.approve_run && inputs.profile == 'sfo3-premium-amd'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: cth-staging-cloud
+    outputs:
+      droplet_id: ${{ steps.create.outputs.droplet_id }}
+      marker: ${{ steps.create.outputs.marker }}
+      public_ipv4: ${{ steps.create.outputs.public_ipv4 }}
+    steps:
+      - name: Check SHA and record run label before creating anything
+        env:
+          APP_SHA: ${{ inputs.app_sha }}
+        run: |
+          [[ $APP_SHA =~ ^[0-9a-f]{40}$ ]]
+          printf 'Attended staging run %s for SHA %s. Owner must verify final absence in DigitalOcean.\n' \
+            "$GITHUB_RUN_ID" "$APP_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Create exactly one staging Droplet
+        id: create
+        env:
+          DO_STAGING_TOKEN: ${{ secrets.DO_STAGING_TOKEN }}
+          DO_STAGING_POLICY: ${{ vars.DO_STAGING_POLICY }}
+        run: python3 infra/staging/digitalocean.py create
+
+  install:
+    needs: allocate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 115
+    environment: cth-staging-install
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out the approved application commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.app_sha }}
+          path: application
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Invoke canonical B2 stages on the pinned guest
+        env:
+          APP_SHA: ${{ inputs.app_sha }}
+          ID: ${{ needs.allocate.outputs.droplet_id }}
+          IP: ${{ needs.allocate.outputs.public_ipv4 }}
+          INSTALL_ID: ${{ needs.allocate.outputs.marker }}
+          STAGING_HOST_PIN: ${{ secrets.STAGING_HOST_PIN }}
+          STAGING_SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          STAGING_HOSTNAME: ${{ vars.STAGING_HOSTNAME }}
+          STAGING_ADMISSION_HOSTNAME: ${{ vars.STAGING_ADMISSION_HOSTNAME }}
+          STAGING_MARKETING_URL: ${{ vars.STAGING_MARKETING_URL }}
+          STAGING_PASSWORDLESS_URL: ${{ vars.STAGING_PASSWORDLESS_URL }}
+          STAGING_TURNSTILE_SITE_KEY: ${{ secrets.STAGING_TURNSTILE_SITE_KEY }}
+          STAGING_TURNSTILE_SECRET_KEY: ${{ secrets.STAGING_TURNSTILE_SECRET_KEY }}
+          STAGING_PASSWORDLESS_API_PUBLIC: ${{ secrets.STAGING_PASSWORDLESS_API_PUBLIC }}
+          STAGING_PASSWORDLESS_API_KEY: ${{ secrets.STAGING_PASSWORDLESS_API_KEY }}
+          STAGING_ORIGIN_CERT: ${{ secrets.STAGING_ORIGIN_CERT }}
+          STAGING_ORIGIN_KEY: ${{ secrets.STAGING_ORIGIN_KEY }}
+          APP_PYTHON: ${{ inputs.python }}
+          ACCEPTANCE_PATH: ${{ vars.STAGING_ACCEPTANCE_PATH }}
+          ACCEPTANCE_SHA256: ${{ vars.STAGING_ACCEPTANCE_SHA256 }}
+          STAGING_ACCESS_CLIENT_ID: ${{ secrets.STAGING_ACCESS_CLIENT_ID }}
+          STAGING_ACCESS_CLIENT_SECRET: ${{ secrets.STAGING_ACCESS_CLIENT_SECRET }}
+        shell: bash
+        run: |
+          set -eu
+          umask 077
+          test "$(git -C application rev-parse HEAD)" = "$APP_SHA"
+          args=()
+          if [[ -n $ACCEPTANCE_PATH || -n $ACCEPTANCE_SHA256 ]]; then
+            args+=(--acceptance-script "$ACCEPTANCE_PATH" --acceptance-sha256 "$ACCEPTANCE_SHA256")
+          else
+            echo "Automated acceptance hook skipped. Complete the attended first-use checks after installation." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python3 controller/infra/staging/bootstrap.py --release application --sha "$APP_SHA" \
+            --droplet-id "$ID" --address "$IP" --installation-id "$INSTALL_ID" \
+            --work-dir "$RUNNER_TEMP/b3-bootstrap" --python "$APP_PYTHON" \
+            "${args[@]}"
+
+  first_use:
+    name: Record attended first-use results
+    needs: install
+    environment: cth-staging-first-use
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - run: echo "Owner approved first-use closeout." >> "$GITHUB_STEP_SUMMARY"
+
+  closeout:
+    needs: [allocate, install, first_use]
+    if: always() && needs.allocate.result != 'skipped' && github.run_attempt == '1'
+    permissions: {}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Hand off to the operator
+        env:
+          ID: ${{ needs.allocate.outputs.droplet_id }}
+          INSTALL: ${{ needs.install.result }}
+          FIRST_USE: ${{ needs.first_use.result }}
+        run: |
+          printf 'Installation %s. First use %s.\n' "$INSTALL" "$FIRST_USE" >> "$GITHUB_STEP_SUMMARY"
+          if [[ $ID =~ ^[1-9][0-9]{0,18}$ ]]; then
+            echo "Owner: match Droplet ID $ID to this run in DigitalOcean, destroy it manually, then verify absence." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Missing creation receipt. Reconcile provider activity before selecting any resource or starting another run." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

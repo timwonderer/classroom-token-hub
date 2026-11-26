@@ -64,7 +64,7 @@
                                 <li><strong>Description:</strong> {{ transaction.description }}</li>
                                 <li><strong>Date:</strong>
                                 {% if transaction.timestamp %}
-                                    {{ transaction.timestamp|fmt_timestamp }}
+                                    {{ transaction_timestamp_display }}
                                 {% else %}
                                     N/A
                                 {% endif %}

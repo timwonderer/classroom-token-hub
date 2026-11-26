@@ -6,7 +6,8 @@ which are introduced here:
 
   * student  -- a hard cap from login, stored on ``User.current_session_expires_at``
                 and enforced by ``login_required``.
-  * teacher  -- ``SESSION_TIMEOUT_MINUTES`` idle, enforced by ``admin_required``.
+  * teacher  -- a fixed 60-minute window from sign-in, also stored on
+                ``User.current_session_expires_at`` and enforced by ``admin_required``.
   * sysadmin -- ``SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES`` idle, enforced by
                 ``system_admin_required``.
 
@@ -35,29 +36,33 @@ owned by FEAT-IDEN-002 (SPEC-IDEN-001); cookie lifetime is not that store's TTL.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from flask.sessions import SecureCookieSessionInterface
 
-from app.auth import SESSION_TIMEOUT_MINUTES, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES
+from app.auth import SESSION_TIMEOUT_MINUTES, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES, TEACHER_SESSION_MINUTES
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Absolute expiry stamped into the session by a login flow that already owns an
-# authoritative expiry instant. Students have one (`User.current_session_expires_at`);
-# teachers and sysadmins do not, because their rules are idle-based rather than
-# a fixed cap, and so they fall to the role table below.
+# authoritative expiry instant. Students and teachers have one
+# (`User.current_session_expires_at`); sysadmins do not, because their rule is
+# idle-based rather than a fixed cap, and so they fall to the role table below.
 SESSION_EXPIRES_AT_KEY = "session_expires_at"
 
 # Keyed by the value written to `session["role"]` by the `establish_*_session`
 # helpers in app/auth.py -- note the teacher role is spelled "admin" there.
 _ROLE_LIFETIME_MINUTES = {
     "student": SESSION_TIMEOUT_MINUTES,
-    "admin": SESSION_TIMEOUT_MINUTES,
+    "admin": TEACHER_SESSION_MINUTES,
     "sysadmin": SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES,
 }
 
 
 def _stamped_expiry(session) -> datetime | None:
     """Return the session's absolute expiry, or None if absent/unusable.
+
+    The writers (student and teacher sign-in) store an aware UTC ``isoformat()``, so a
+    stamp without an offset was not written by it and counts as unusable.
 
     A malformed stamp is treated as absent rather than fatal: the session cookie
     is an external boundary that outlives deploys, and refusing to serve a
@@ -73,7 +78,7 @@ def _stamped_expiry(session) -> datetime | None:
         parsed = datetime.fromisoformat(raw)
     except (TypeError, ValueError):
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else None
 
 
 class RoleScopedSessionInterface(SecureCookieSessionInterface):
@@ -97,4 +102,10 @@ class RoleScopedSessionInterface(SecureCookieSessionInterface):
 
         # Idle-based roles slide forward on each request, which is what
         # SESSION_REFRESH_EACH_REQUEST already does for the server-side check.
-        return datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+        return canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION,
+            primitive="shift_timestamp",
+            timestamp=now,
+            elapsed_seconds=minutes * 60,
+        ).shifted_timestamp_utc

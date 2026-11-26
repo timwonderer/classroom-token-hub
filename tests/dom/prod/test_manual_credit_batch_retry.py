@@ -84,11 +84,13 @@ def test_a_batch_retry_beyond_the_replay_window_pays_again(client, app, monkeypa
     from app.utils.canonical_temporal_resolver import utc_now
 
     base = utc_now()
-    monkeypatch.setattr(admin_module, "utc_now", lambda: base)
+    monkeypatch.setattr("app.utils.canonical_temporal_resolver.utc_now", lambda: base)
     assert manual_payroll(client, **args).status_code == 302
 
     from datetime import timedelta
-    monkeypatch.setattr(admin_module, "utc_now", lambda: base + timedelta(days=7))
+    monkeypatch.setattr("app.utils.canonical_temporal_resolver.utc_now", lambda: base + timedelta(days=7))
+    # A week later the teacher's session has expired, as it would in use: sign in again.
+    login_teacher(client, classroom)
     assert manual_payroll(client, **args).status_code == 302
 
     with app.app_context():
@@ -134,7 +136,7 @@ def test_a_boundary_crossing_retry_does_not_double_pay(client, app, monkeypatch)
             raise RuntimeError("simulated mid-batch failure (audit F5)")
         return real_record_payroll_event(*a, **kw)
 
-    monkeypatch.setattr(admin_module, "utc_now", lambda: just_before_boundary)
+    monkeypatch.setattr("app.utils.canonical_temporal_resolver.utc_now", lambda: just_before_boundary)
     monkeypatch.setattr(admin_module, "record_payroll_event", _flaky_record_payroll_event)
     first = manual_payroll(client, **args)
     assert first.status_code == 302  # the route's except-block still redirects
@@ -142,7 +144,7 @@ def test_a_boundary_crossing_retry_does_not_double_pay(client, app, monkeypatch)
     # The retry: the identical full batch, submitted a few seconds later —
     # now past the bucket boundary — with the failure no longer reproducing.
     monkeypatch.setattr(admin_module, "record_payroll_event", real_record_payroll_event)
-    monkeypatch.setattr(admin_module, "utc_now", lambda: just_after_boundary)
+    monkeypatch.setattr("app.utils.canonical_temporal_resolver.utc_now", lambda: just_after_boundary)
     second = manual_payroll(client, **args)
     assert second.status_code == 302
 

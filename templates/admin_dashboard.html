@@ -141,14 +141,14 @@
                    Rendering a date anyway — which this card used to do, invented
                    from "the next Friday" — states a run that will never happen. #}
                 <div class="fw-bold h5 mb-1 text-dark">
-                    {% if next_payroll_date %}{{ next_payroll_date|fmt_compact_date }}{% else %}Not scheduled{% endif %}
+                    {% if next_payroll_date %}{{ next_payroll_compact_display }}{% else %}Not scheduled{% endif %}
                 </div>
                 <div class="small text-muted">
                     Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}
                     {% if payroll_updated_at %}
                     <br>
                     <span class="text-muted type-sm">
-                        Updated {{ payroll_updated_at|fmt_timestamp }}
+                        Updated {{ payroll_updated_at_display }}
                     </span>
                     {% endif %}
                 </div>
@@ -264,7 +264,7 @@
                             class="list-group-item list-group-item-action px-0 d-flex justify-content-between align-items-center gap-3 border-0 py-3">
                             <div class="overflow-hidden">
                                 <strong>{{ req.student_name }}</strong>
-                                <div class="small text-muted">Bought {{ req.item_name }} · {{ req.submitted_at|fmt_timestamp }}</div>
+                                <div class="small text-muted">Bought {{ req.item_name }} · {{ redemption_time_displays[req.request_id] }}</div>
                                 <div class="small text-body-secondary">Immediate use: deliver it, then mark it complete.</div>
                             </div>
                             <span class="btn btn-sm btn-outline-secondary flex-shrink-0">To deliver</span>
@@ -274,7 +274,7 @@
                             class="list-group-item list-group-item-action px-0 d-flex justify-content-between align-items-center gap-3 border-0 py-3">
                             <div class="overflow-hidden">
                                 <strong>{{ req.student_name }}</strong>
-                                <div class="small text-muted">{{ req.item_name }} · Requested {{ req.submitted_at|fmt_timestamp }}</div>
+                                <div class="small text-muted">{{ req.item_name }} · Requested {{ redemption_time_displays[req.request_id] }}</div>
                                 {% if req.student_note %}
                                 <div class="small text-body-secondary text-truncate">“{{ req.student_note|truncate(90) }}”</div>
                                 {% endif %}
@@ -309,7 +309,7 @@
                                     pass.reason }}</small>
                                 <br>
                                 <small class="text-muted">
-                                    {{ pass.request_time|fmt_timestamp }}
+                                    {{ pass.request_time_display }}
                                 </small>
                             </div>
                             <div>
@@ -348,7 +348,7 @@
                                 {% endif %}
                                 <br>
                                 <small class="text-muted">
-                                    {{ claim.filed_date|fmt_timestamp }}
+                                    {{ insurance_claim_time_displays[claim.claim_id] }}
                                 </small>
                             </div>
                             <div>
@@ -405,7 +405,7 @@
                                             <div class="fw-medium text-dark">
                                                 {{ profile.first_name ~ ' ' ~ profile.last_name if profile else 'Unknown' }}
                                             </div>
-                                            <div class="small text-secondary">{{ tx.timestamp|fmt_timestamp }}</div>
+                                            <div class="small text-secondary">{{ transaction_time_displays[tx.id] }}</div>
                                         </div>
                                     </div>
                                 </td>
@@ -455,7 +455,7 @@
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between">
                                 <span class="fw-medium text-dark">{{ log.student_name }}</span>
-                                <span class="small text-secondary">{{ log.timestamp|fmt_timestamp }}</span>
+                                <span class="small text-secondary">{{ attendance_time_displays[log.id] }}</span>
                             </div>
                             <div class="small text-secondary">
                                 {{ log.status|title }} • Period {{ log.period }}

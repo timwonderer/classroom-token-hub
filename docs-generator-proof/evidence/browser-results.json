@@ -1,0 +1,191 @@
+{
+  "hugo": {
+    "states": {
+      "desktop:home": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        },
+        "fonts": {
+          "body": "Inter, sans-serif",
+          "h1": "\"Atkinson Hyperlegible Next\", sans-serif",
+          "fontsLoaded": true
+        }
+      },
+      "desktop:catalog": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        }
+      },
+      "desktop:identity": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        }
+      },
+      "desktop:core": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        }
+      },
+      "desktop:search_found": true,
+      "desktop:search": {
+        "violations": [],
+        "overflow": false,
+        "first_result": "/docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS/",
+        "escape_restores_focus": true
+      },
+      "mobile:home": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        },
+        "fonts": {
+          "body": "Inter, sans-serif",
+          "h1": "\"Atkinson Hyperlegible Next\", sans-serif",
+          "fontsLoaded": true
+        }
+      },
+      "mobile:catalog": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        }
+      },
+      "mobile:identity": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        }
+      },
+      "mobile:core": {
+        "violations": [],
+        "overflow": false,
+        "brand_tokens": {
+          "background": true,
+          "headingWeight": true,
+          "hero": true,
+          "footer": true
+        }
+      },
+      "mobile:search_found": true,
+      "mobile:search": {
+        "violations": [],
+        "overflow": false,
+        "first_result": "/docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS/",
+        "escape_restores_focus": true
+      },
+      "mobile:menu_opened": true,
+      "mobile:menu": {
+        "violations": [],
+        "overflow": false
+      },
+      "mobile:menu_closed": true,
+      "mobile:menu_focus_restored": true
+    },
+    "external_requests": [],
+    "javascript_errors": []
+  },
+  "zensical": {
+    "states": {
+      "desktop:home": {
+        "violations": [],
+        "overflow": false,
+        "fonts": {
+          "body": "Inter, sans-serif, -apple-system, \"system-ui\", Helvetica, Arial, sans-serif",
+          "h1": "\"Atkinson Hyperlegible Next\", sans-serif",
+          "fontsLoaded": true
+        }
+      },
+      "desktop:catalog": {
+        "violations": [],
+        "overflow": false
+      },
+      "desktop:identity": {
+        "violations": [],
+        "overflow": false
+      },
+      "desktop:core": {
+        "violations": [],
+        "overflow": false
+      },
+      "desktop:search_found": true,
+      "desktop:search": {
+        "violations": [],
+        "overflow": false,
+        "first_result": "http://127.0.0.1:52836/docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS/",
+        "escape_restores_focus": true
+      },
+      "mobile:home": {
+        "violations": [],
+        "overflow": false,
+        "fonts": {
+          "body": "Inter, sans-serif, -apple-system, \"system-ui\", Helvetica, Arial, sans-serif",
+          "h1": "\"Atkinson Hyperlegible Next\", sans-serif",
+          "fontsLoaded": true
+        }
+      },
+      "mobile:catalog": {
+        "violations": [],
+        "overflow": false
+      },
+      "mobile:identity": {
+        "violations": [],
+        "overflow": false
+      },
+      "mobile:core": {
+        "violations": [],
+        "overflow": false
+      },
+      "mobile:search_found": true,
+      "mobile:search": {
+        "violations": [],
+        "overflow": false,
+        "first_result": "http://127.0.0.1:52836/docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS/",
+        "escape_restores_focus": true
+      },
+      "mobile:menu_opened": true,
+      "mobile:menu": {
+        "violations": [],
+        "overflow": false
+      },
+      "mobile:menu_closed": true,
+      "mobile:menu_focus_restored": true
+    },
+    "external_requests": [
+      "https://api.github.com/repos/timwonderer/classroom-token-hub",
+      "https://api.github.com/repos/timwonderer/classroom-token-hub/releases/latest"
+    ],
+    "javascript_errors": []
+  }
+}

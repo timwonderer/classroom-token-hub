@@ -8,8 +8,8 @@ Application business code and private Grafana access remain independent. Install
 
 1. Inspect current nginx origin/Cloudflare Access restrictions and private Loki
    listener. The sampler uses only `http://127.0.0.1:3100`, no credentials or
-   arbitrary query parameters from users. Confirm `/health/telemetry` receives the
-   collector's existing Cloudflare service-token policy; do not broaden app access.
+   arbitrary query parameters from users. `/health/telemetry` is public, like the
+   application health endpoints (`SPEC-OPS-006` 1.6); do not broaden app access.
 2. Create dedicated system user `cth-status`, group `www-data`, no interactive
    login. Install this commit's `status/__init__.py`, `status/measurements.py`,
    `status_service/__init__.py`, `status_service/log_sampler.py`, and
@@ -35,9 +35,9 @@ Application business code and private Grafana access remain independent. Install
 ## Collector and Firestore
 
 Deploy the status image normally; existing Cloud Run job and Scheduler identities
-and CF secret references remain. Collector reads `/health/telemetry` for request measurements and independently
+remain. The collector carries no Cloudflare credential. Collector reads `/health/telemetry` for request measurements and independently
 reads `/health/status` for endpoint/database connectivity.
-Keep the one-minute schedule. Service-token deny, malformed JSON, stale source
+Keep the one-minute schedule. An Access redirect, malformed JSON, stale source
 snapshot and transport failure produce distinct closed unavailable attempts.
 Source-minute retries are idempotent; original sample time never becomes receipt
 time. Current cards read persisted state only.
@@ -76,8 +76,8 @@ installation and preserve later operator edits.
 
 ## Independent measured platform checks
 
-The collector also performs the existing bounded GET `/health/status` using its
-same Cloudflare service-token identity. The app executes its existing `SELECT 1`;
+The collector also performs the existing bounded GET `/health/status`, with no
+credential. The app executes its existing `SELECT 1`;
 no new application endpoint or business query is introduced. Only endpoint
 response and the structured database signal are persisted in the separate
 platform record (`platform-check-v2`; earlier `platform-check-v1` records carry
@@ -89,14 +89,17 @@ monitoring could not verify it. Original database `checked_at` governs freshness
 
 The same record carries a `gate` check (SPEC-OPS-006 §Independent platform
 checks). The collector requests `https://app.classroomtokenhub.com/static/manifest.json`
-**without** the service token and follows no redirect. A redirect to a
+with no credential and follows no redirect, before anything else. A redirect to a
 `*.cloudflareaccess.com` host means the Access gate is up, and the public page
 shows *Under maintenance*. When you next put the gate up, confirm from the
 collector host that this request returns that redirect rather than a bare 403;
 a 401/403 is recorded as `UNEXPECTED_DENIAL` and does not show maintenance.
+While the gate is closed the collector reads nothing from the application: no
+health read and no request telemetry, and the platform record carries the
+endpoint and database as `NOT_COLLECTED`.
 
-Request snapshots and platform checks are collected independently. Test the
-service token against both fixed URLs. A platform failure must not discard an
+Request snapshots and platform checks are collected independently. With the gate
+open, check that both fixed URLs answer without a credential. A platform failure must not discard an
 otherwise valid request snapshot. Platform rows become stale after300seconds and
 must not claim business correctness. Provision `platform_observations` with seven-day `expires_at` TTL and the
 replaceable `platform_current/current` projection. These records never update

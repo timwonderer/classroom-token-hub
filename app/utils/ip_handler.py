@@ -16,8 +16,7 @@ import ipaddress
 import os
 import urllib.request
 import urllib.error
-from datetime import datetime, timedelta, timezone
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 # Cloudflare IP ranges (updated periodically)
@@ -37,7 +36,7 @@ CLOUDFLARE_IPV6_FALLBACK = [
 # Cache for Cloudflare IP ranges
 _cloudflare_ips_cache = None
 _cloudflare_ips_cache_time = None
-CACHE_DURATION = timedelta(hours=24)
+CACHE_DURATION_SECONDS = 24 * 60 * 60
 
 
 def get_cloudflare_ips():
@@ -55,7 +54,10 @@ def get_cloudflare_ips():
 
     # Check cache
     if _cloudflare_ips_cache and _cloudflare_ips_cache_time:
-        if utc_now() - _cloudflare_ips_cache_time < CACHE_DURATION:
+        age = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="time_since", start=_cloudflare_ips_cache_time,
+        ).elapsed_seconds
+        if age < CACHE_DURATION_SECONDS:
             return _cloudflare_ips_cache
 
     try:
@@ -71,7 +73,9 @@ def get_cloudflare_ips():
 
         # Update cache
         _cloudflare_ips_cache = (ipv4_ranges, ipv6_ranges)
-        _cloudflare_ips_cache_time = utc_now()
+        _cloudflare_ips_cache_time = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc
 
         return _cloudflare_ips_cache
     except (urllib.error.URLError, TimeoutError) as e:
@@ -150,6 +154,19 @@ def _trusted_proxy_networks():
         except ValueError:
             continue  # Skip invalid CIDR
     return networks
+
+
+def is_host_local_request():
+    """Whether this request came from the host itself rather than through nginx.
+
+    nginx proxies to gunicorn over loopback, so ``remote_addr`` is loopback for
+    every public request too. Only the proxy headers nginx always sets tell them
+    apart: a host-local caller (the Prometheus scrape, an operator's curl) has none.
+    """
+    return request.remote_addr in ('127.0.0.1', '::1') and not any(
+        request.headers.get(h)
+        for h in ('X-CF-Edge-IP', 'X-Real-IP', 'X-Forwarded-For', 'CF-Connecting-IP')
+    )
 
 
 def peer_is_trusted_proxy():

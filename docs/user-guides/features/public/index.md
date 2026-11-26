@@ -12,5 +12,5 @@ keywords: [public, no login, verification, install, offline, maintenance]
 Parts of Classroom Token Hub work without an account.
 
 - [Office Hall Pass Verification](hall-pass-verification.md) — let front-office staff confirm a pass without giving them your class
-- [Installing the App and Working Offline](offline-and-install.md) — put it on a home screen, and what happens when the connection drops
+- [Installing the App (Internet Required)](install-the-app.md) — put it on a home screen as an app; it does not work offline
 - [Temporary Access Restrictions](access-gate.md) — what the Cloudflare Access screen means

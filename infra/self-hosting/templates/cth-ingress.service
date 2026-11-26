@@ -1,0 +1,19 @@
+[Unit]
+Description=Classroom Token Hub restricted loopback TLS origin (@INSTALL_ID@)
+Requires=cth-web.service
+After=cth-web.service
+
+[Service]
+Type=simple
+RuntimeDirectory=cth-ingress
+ExecStartPre=/usr/sbin/nginx -t -c /etc/cth/ingress.conf
+ExecStart=/usr/sbin/nginx -g "daemon off;" -c /etc/cth/ingress.conf
+KillSignal=SIGQUIT
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

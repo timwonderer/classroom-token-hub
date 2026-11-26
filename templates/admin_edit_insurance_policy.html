@@ -217,10 +217,10 @@
             <div id="tier_group_section" class="row g-3">
               <div class="col-md-4">
                 <label class="form-label fw-bold" for="tier_group">Group</label>
-                <select class="form-select" id="tier_group" name="tier_group">
+                <select class="form-select" id="tier_group" name="tier_group_id">
                   <option value="">— select a group —</option>
                   {% for g in tier_groups %}
-                  <option value="{{ g.name }}" {% if cur('tier_group') == g.name %}selected{% endif %}>{{ g.name }}</option>
+                  <option value="{{ g.id }}" {% if cur('tier_group_id') == g.id %}selected{% endif %}>{{ g.name }}</option>
                   {% endfor %}
                   <option value="__new__">＋ New group…</option>
                 </select>
@@ -314,7 +314,7 @@
     var takenByGroup = {};
     try {
       var raw = JSON.parse(document.getElementById('tier-taken-data').textContent || '[]');
-      raw.forEach(function (g) { takenByGroup[g.name] = g.taken || []; });
+      raw.forEach(function (g) { takenByGroup[g.id] = g.taken || []; });
     } catch (e) { takenByGroup = {}; }
 
     // A policy is "tiered" if it already carries a group (edit / sticky resubmit).

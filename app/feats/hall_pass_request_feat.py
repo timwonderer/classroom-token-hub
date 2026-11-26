@@ -16,11 +16,13 @@ row. These are the only paths that write or delete one.
   §VII.B: "A successful resolution SHALL atomically write the canonical durable
   record(s) the action produces ... and delete the pending action." If the write
   fails, the FEAT rolls back and the row is intact.
-* **Reject** and **student cancel** — ``FEAT-PROD-002``. Each resolves the
-  action with no durable record, by deleting the row.
+* **Reject**, **student cancel** and **day-boundary close** — ``FEAT-PROD-002``.
+  Each resolves the action with no durable record, by deleting the row. A request
+  still open when its class-local day ends is handled like a denial: no pass was
+  used, so the pass is available again (owner ruling 2026-11-01).
 
-None of these is a TTL: nothing deletes a row except a resolution here, or the
-cascade when its seat or class is lawfully removed.
+None of these is a generic TTL: nothing deletes a row except a resolution here,
+or the cascade when its seat or class is lawfully removed.
 """
 
 from __future__ import annotations
@@ -30,10 +32,12 @@ from datetime import datetime
 from app.extensions import db
 from app.feats.base import requires_feat_context
 from app.models import Seat
+from app.services.hall_pass_status_service import before_current_class_day
 from app.services.hall_pass_request_queue import (
     HallPassRequestNotFound,
     PendingHallPassRequest,
     clear_pending_hall_pass_requests_for_seat,
+    list_pending_hall_pass_requests_for_class,
     enqueue_hall_pass_request,
     get_pending_hall_pass_request,
     new_request_id,
@@ -113,13 +117,25 @@ def approve_hall_pass_request(
     # too — before the pending-request row — keeps submission and approval
     # taking these two locks in the same order, so a resubmission racing an
     # approval of the same seat's request can no longer deadlock.
+    #
+    # The HallPassLog this approval goes on to write (_record_hall_pass_log_impl
+    # below) carries a foreign key to the approver's seat (ctx.seat_id) as well
+    # as the student's, so lock both here, ascending, rather than locking only
+    # the student first and the approver later — the half-open window that
+    # order leaves is the same actor-seat-FK gap Codex found elsewhere in this
+    # PR (#1640), now against reconciliation's widened, class-wide lock set.
+    from app.services.entitlement_service import lock_hall_pass_holder
+
     peek = get_pending_hall_pass_request(request_id, class_id=ctx.class_id)
     if peek is None:
         raise HallPassRequestNotFound(request_id)
+    if before_current_class_day(ctx, peek.requested_at_utc):
+        raise ValueError("This hall pass request closed when its day ended.")
+    for sid in sorted({peek.requested_by_seat_id, ctx.seat_id}):
+        lock_hall_pass_holder(sid, ctx.class_id)
     seat = (
         db.session.query(Seat)
         .filter(Seat.id == peek.requested_by_seat_id, Seat.class_id == ctx.class_id)
-        .with_for_update()
         .one_or_none()
     )
     if seat is None:
@@ -167,3 +183,26 @@ def cancel_hall_pass_request(
     if request is None:
         raise HallPassRequestNotFound(request_id)
     return request
+
+
+@requires_feat_context("FEAT-PROD-002")
+def close_prior_day_hall_pass_requests(
+    *,
+    ctx,
+    correlation_id: str | None = None,
+    idempotency_key: str | None = None,
+) -> int:
+    """Resolve this class's requests whose day has ended, as a denial would: delete the row."""
+    stale = [
+        request for request in list_pending_hall_pass_requests_for_class(ctx.class_id)
+        if before_current_class_day(ctx, request.requested_at_utc)
+    ]
+    closed = 0
+    # Seat before request row, as submission and approval do; seats in stable order.
+    for request in sorted(stale, key=lambda r: r.requested_by_seat_id):
+        db.session.query(Seat).filter(
+            Seat.id == request.requested_by_seat_id, Seat.class_id == ctx.class_id,
+        ).with_for_update().one_or_none()
+        if pop_pending_hall_pass_request(request.request_id, class_id=ctx.class_id) is not None:
+            closed += 1
+    return closed

@@ -44,7 +44,7 @@ from app.models import (
     EntitlementEvent,
 )
 from app.services.store_policy_resolver import StorePolicyResolver
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # The resolver owns the teacher-facing → domain vocabulary map, and every read
 # path projects a row through it. An item_type outside that map therefore
@@ -329,7 +329,9 @@ def set_availability(product: StoreProduct, state: str) -> StoreProduct:
     if state not in AVAILABILITY_STATES:
         raise InvalidAvailabilityState(state)
     product.availability_state = state
-    product.retired_at = utc_now() if state == RETIRED else None
+    product.retired_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc if state == RETIRED else None
     db.session.flush()
     return product
 

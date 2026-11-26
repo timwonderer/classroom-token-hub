@@ -59,6 +59,24 @@ os.environ.setdefault("ENCRYPTION_KEY", "jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sD
 os.environ.setdefault("PEPPER_KEY", "tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk=")
 os.environ.setdefault("AUDIT_HMAC_KEY", "test-audit-hmac-key-for-tests-only-not-for-production")
 
+# A developer's own .env (needed to run the dev server locally) can carry a
+# real PASSWORDLESS_API_KEY. Left ambient, it makes passkey_service_configured()
+# return True for the whole suite, so forget_principal_remotely() (called at
+# the start of every teacher account destruction, FEAT-IDEN-007) attempts a
+# real outbound call instead of safely no-opping. A non-functional key then
+# raises PasskeyServiceUnavailable before any local deletion happens, failing
+# every test that exercises teacher/account destruction. Tests that need the
+# passkey path opt in explicitly via monkeypatch (tests/helpers/passkey.py's
+# fake_passwordless fixture), so the ambient value is never needed here.
+#
+# Set to "" rather than popped: app/__init__.py's own load_dotenv(override=False)
+# runs again at `from app import app as flask_app` below, and override=False only
+# protects a key already present in os.environ — an absent one would be
+# repopulated straight from .env. An empty string stays put and is still
+# falsy to passkey_service_configured()'s bool() check.
+os.environ["PASSWORDLESS_API_KEY"] = ""
+os.environ["PASSWORDLESS_API_PUBLIC"] = ""
+
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

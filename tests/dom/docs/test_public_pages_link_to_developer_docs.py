@@ -1,7 +1,7 @@
 """Every published public page offers a way into the developer documentation.
 
 The two sites ship in one GitHub Pages artifact — `github-pages/` at the root,
-`docs-site/build/` at `/docs/` — and the footer link is the only route a reader
+the Hugo developer docs build at `/docs/` — and the footer link is the only route a reader
 has from one to the other. A page that ships without it is not visibly broken;
 it simply becomes a dead end, which is the kind of regression nobody reports.
 

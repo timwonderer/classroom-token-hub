@@ -8,7 +8,7 @@ from datetime import datetime
 from app.extensions import db
 from app.models import PayrollEvent
 from app.services.attendance_service import list_attendance_interval_evidence, elapsed_attendance_seconds
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, TemporalResolutionError, canonical_temporal_resolver
 
 
 class HistoricalAssessmentDenied(ValueError):
@@ -84,15 +84,22 @@ def _scope(ctx, class_id, target_seat_id):
 
 
 def _setting_for(settings, instant):
-    available = [s for s in settings if ensure_utc(s.effective_at) <= instant]
+    available = [s for s in settings if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+        candidate=s.effective_at, reference=instant).is_later]
     if not available:
         if not settings:
             return None
-        rank = (ensure_utc(settings[0].effective_at), ensure_utc(settings[0].created_at))
-        first = [s for s in settings if (ensure_utc(s.effective_at),ensure_utc(s.created_at)) == rank]
+        rank = (settings[0].effective_at, settings[0].created_at)
+        first = [s for s in settings if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.effective_at, reference=rank[0]).is_same
+            and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.created_at, reference=rank[1]).is_same]
         return first[0] if len(first)==1 else None
-    rank = max((ensure_utc(s.effective_at), ensure_utc(s.created_at)) for s in available)
-    winners = [s for s in available if (ensure_utc(s.effective_at), ensure_utc(s.created_at)) == rank]
+    rank = max((s.effective_at, s.created_at) for s in available)
+    winners = [s for s in available if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.effective_at, reference=rank[0]).is_same
+        and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.created_at, reference=rank[1]).is_same]
     return winners[0] if len(winners) == 1 else None
 
 
@@ -132,40 +139,49 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
     if requested is not None and not set(requested) <= known:
         raise HistoricalAssessmentDenied('UNAUTHORIZED_SCOPE')
     selected = [e for e in events if requested is None or e.id in requested]
-    settings = tuple(sorted(setting_inputs, key=lambda s: (ensure_utc(s.effective_at), ensure_utc(s.created_at))))
+    settings = tuple(sorted(setting_inputs, key=lambda s: (s.effective_at, s.created_at)))
     results = []
     for event in selected[:limit]:
         summary = event.summary_json if isinstance(event.summary_json, dict) else {}
         frozen = type(summary.get('allocation_version')) is int and summary.get('allocation_version') == 1
         rule = CURRENT_RULE if frozen else CLOSED_RULE if summary.get('settlement_rule') == 'closed_sessions' else LEGACY_RULE
-        at = ensure_utc(event.recorded_at)
-        prior = [e for e in events if e.payroll_event_type == 'payroll' and ensure_utc(e.recorded_at) < at]
-        tied = [e for e in events if e.payroll_event_type == 'payroll' and ensure_utc(e.recorded_at) == at]
-        cutoff = max((ensure_utc(e.recorded_at) for e in prior), default=None)
-        legacy = [ensure_utc(e.recorded_at) for e in prior if not isinstance(e.summary_json,dict) or e.summary_json.get('settlement_rule') != 'closed_sessions']
+        at = event.recorded_at
+        prior = [e for e in events if e.payroll_event_type == 'payroll' and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+            candidate=e.recorded_at, reference=at).is_earlier]
+        tied = [e for e in events if e.payroll_event_type == 'payroll' and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=e.recorded_at, reference=at).is_same]
+        cutoff = max((e.recorded_at for e in prior), default=None)
+        legacy = [e.recorded_at for e in prior if not isinstance(e.summary_json,dict) or e.summary_json.get('settlement_rule') != 'closed_sessions']
         candidates = []
-        groups = {}
+        groups, segments = {}, {}
         reasons = ['SOURCE_CREATION_VISIBILITY_UNAVAILABLE', 'ORIGINAL_WRITER_ATTRIBUTION_UNAVAILABLE']
         for interval in intervals:
-            if interval.closing_event_id is None or interval.closed_at > at or (cutoff and interval.closed_at <= cutoff):
+            if (interval.closing_event_id is None
+                    or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=interval.closed_at, reference=at).is_later
+                    or (cutoff and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                        candidate=interval.closed_at, reference=cutoff).is_later)):
                 continue
             start = interval.opened_at
-            clips = [t for t in legacy if start < t < interval.closed_at]
+            clips = [t for t in legacy
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=start, reference=t).is_earlier
+                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=t, reference=interval.closed_at).is_earlier]
             if clips:
                 start = max(clips)
                 reasons.append('LEGACY_FRAGMENT_REQUIRES_ATTRIBUTION')
             # Preserve canonical IDs but explicitly label any candidate clipped duration.
             seconds = elapsed_attendance_seconds(ctx, [(start, interval.closed_at)])
             candidates.append((interval.opening_event_id, interval.closing_event_id, seconds,
-                ensure_utc(start).isoformat(), ensure_utc(interval.closed_at).isoformat()))
-            setting = _setting_for(settings, ensure_utc(interval.closed_at))
+                canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=start).local_timestamp.isoformat(),
+                canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=interval.closed_at).local_timestamp.isoformat()))
+            setting = _setting_for(settings, interval.closed_at)
             if setting is None:
                 reasons.append('MISSING_OR_AMBIGUOUS_SETTING')
             else:
-                if ensure_utc(setting.created_at) > at:
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=setting.created_at, reference=at).is_later:
                     reasons.append('SETTING_NOT_VISIBLE_AT_PAYMENT')
                 key = (setting.policy_locator, setting.rate_per_minute)
                 groups[key] = groups.get(key, 0) + seconds
+                segments.setdefault(key, []).append((start, interval.closed_at))
         shares = summary.get('pricing')
         pricing, consistency = [], 'UNAVAILABLE'
         pricing_status = 'UNAVAILABLE'
@@ -179,7 +195,10 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                     pricing.append(HistoricalShare(share['policy_uuid'], share['seconds'], share['pay_rate_per_minute']))
                 # Decimal equality is monetary territory: strings are retained unchanged,
                 # policy+seconds match is a PROD business consistency conclusion only.
-                consistency = 'MATCH' if sorted((p.policy_locator,p.credited_seconds) for p in pricing) == sorted((p,s) for (p,_),s in groups.items()) else 'MISMATCH'
+                # A share sums its members (before SPEC-TIME-001 1.3) or truncates once over them (since).
+                recorded = sorted((p.policy_locator,p.credited_seconds) for p in pricing)
+                consistency = 'MATCH' if recorded in (sorted((p,s) for (p,_),s in groups.items()),
+                    sorted((p,elapsed_attendance_seconds(ctx, segments[(p,r)])) for (p,r) in groups)) else 'MISMATCH'
                 if 'MISSING_OR_AMBIGUOUS_SETTING' in reasons or 'SETTING_NOT_VISIBLE_AT_PAYMENT' in reasons:
                     consistency = 'UNAVAILABLE'
                 pricing_status = 'RECORDED_INPUTS_ONLY'
@@ -194,10 +213,16 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                         raise ValueError('Malformed source identity or duration')
                     for share in shares:
                         members = share.get('intervals', ())
-                        if sum(source['credited_seconds'] for source in members) != share['seconds']:
+                        # SPEC-TIME-001 1.3: the share truncates once over exact durations.
+                        if (sum(source['credited_seconds'] for source in members) != share['seconds']
+                                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=[
+                                (datetime.fromisoformat(i["opening_timestamp"]), datetime.fromisoformat(i["closing_timestamp"]))
+                                for i in members]).elapsed_seconds != share['seconds']):
                             consistency = 'MISMATCH'; reasons.append('RECORDED_SHARE_MEMBERSHIP_MISMATCH')
                         for source in members:
-                            closed = ensure_utc(datetime.fromisoformat(source['closing_timestamp']))
+                            closed = datetime.fromisoformat(source['closing_timestamp'])
+                            if closed.tzinfo is None:  # as_evidence() always writes an offset
+                                raise ValueError('Naive closing_timestamp')
                             governed = _setting_for(settings, closed)
                             if governed is None or governed.policy_locator != share['policy_uuid']:
                                 consistency = 'MISMATCH'; reasons.append('RECORDED_SHARE_MEMBERSHIP_MISMATCH')
@@ -206,7 +231,7 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                             or any(canonical.get((s['opening_event_id'],s['closing_event_id'])) != s for s in sources)
                             or {(s['opening_event_id'],s['closing_event_id']) for s in sources} != {(c[0],c[1]) for c in candidates}):
                         consistency = 'MISMATCH'; reasons.append('RECORDED_MEMBERSHIP_MISMATCH')
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, TemporalResolutionError):
                 pricing = []; consistency = 'UNAVAILABLE'; reasons.append('MALFORMED_PRICING')
         elif rule is CLOSED_RULE and groups and not any(r in {'MISSING_OR_AMBIGUOUS_SETTING','SETTING_NOT_VISIBLE_AT_PAYMENT'} for r in reasons):
             pricing = [HistoricalShare(p,s,r) for (p,r),s in groups.items()]

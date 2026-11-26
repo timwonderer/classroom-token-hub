@@ -436,7 +436,7 @@ class TestPayrollAdvancesByLocalCalendarDays:
 
     def _advance(self, app, occurrence_local, days=14):
         import pytz
-        from app.scheduled_tasks import _advance_local_calendar_days
+        from tests.helpers.temporal import calendar_days_later
 
         with app.app_context():
             classroom = provision_classroom("chemistry_p1")
@@ -448,7 +448,7 @@ class TestPayrollAdvancesByLocalCalendarDays:
             )
             tz = pytz.timezone(self.TZ)
             occurrence_utc = tz.localize(occurrence_local).astimezone(timezone.utc)
-            result = _advance_local_calendar_days(occurrence_utc, days, ctx)
+            result = calendar_days_later(occurrence_utc, days, class_id=ctx.class_id)
             return result.astimezone(tz)
 
     def test_a_normal_interval_keeps_the_local_clock_time(self, app):
@@ -527,7 +527,7 @@ class TestDstSelectionHoldsInZonesWithInvertedDstFlags:
     def _advance(self, app, monkeypatch, tz_name, occurrence_local, days=14):
         import pytz
         from tests.helpers import canonical_identities
-        from app.scheduled_tasks import _advance_local_calendar_days
+        from tests.helpers.temporal import calendar_days_later
 
         patched = dict(canonical_identities.CLASSROOMS["chemistry_p1"])
         patched["class_timezone"] = tz_name
@@ -546,7 +546,7 @@ class TestDstSelectionHoldsInZonesWithInvertedDstFlags:
             )
             tz = pytz.timezone(tz_name)
             source = tz.localize(occurrence_local, is_dst=False).astimezone(timezone.utc)
-            return _advance_local_calendar_days(source, days, ctx).astimezone(tz)
+            return calendar_days_later(source, days, class_id=ctx.class_id).astimezone(tz)
 
     def test_dublin_ambiguous_target_takes_the_earlier_instant(self, app, monkeypatch):
         """2026-10-25 01:30 occurs twice in Dublin: IST (+01:00) then GMT (+00:00).

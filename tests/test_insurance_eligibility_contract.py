@@ -101,7 +101,7 @@ class TestStructuralGates:
 
     def test_obligation_not_insurable(self, app):
         with app.app_context():
-            for ttype in ("rent", "property_tax"):
+            for ttype in ("rent_payment", "RENT_PAYMENT"):
                 txn = _txn(class_id="c1", seat_id=1, amount="-5.00", ttype=ttype)
                 verdict = eligibility.evaluate_transaction_claim_basis(
                     txn, class_id="c1", covered_seat_id=1

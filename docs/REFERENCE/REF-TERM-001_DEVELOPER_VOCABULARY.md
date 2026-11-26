@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| REF-TERM-001     | 1.2     | 2026-10-14     | 1.1        | Normative       |
+| REF-TERM-001     | 1.3     | 2026-10-24     | 1.2        | Normative       |
 
 > [!IMPORTANT]
+> **v1.3 (2026-10-24).** *Canonical Class Time* names the resolver that produces it rather than a "planned" temporal context; adds *Canonical Temporal Resolver*; *Class Day* states that N class days are never N × 24 hours (`SPEC-TIME-001` 1.3).
+
 > **v1.2 (2026-10-14), documentation modernization.** Labelled two citations of the retired v1 `ARC-OPS-007_Database_Schema.md` as archived (the `ARC-*` namespace is retired per `DOCS_PLATFORM_ROADMAP.md` Phase 1; current schema authority is `DOM-CORE-002`). No vocabulary changes.
 
 ## I. Purpose
@@ -56,7 +58,10 @@ Named solvency check asking whether students can still preserve a minimum weekly
 ### C
 
 **Canonical Class Time**
-The class-local current time derived from UTC plus the class IANA timezone. In the planned v2 temporal model, this is the `class_time` field inside a per-request temporal context object. All behavioral evaluation (attendance boundaries, due dates, accrual windows) must use canonical class time rather than raw UTC or server-local time.
+The class-local current time derived from UTC plus the class IANA timezone, obtained from the Canonical Temporal Resolver under Class-Level Evaluation (`canonical_now`). All behavioral evaluation (attendance boundaries, due dates, accrual windows) must use canonical class time rather than raw UTC or server-local time.
+
+**Canonical Temporal Resolver** (`canonical_temporal_resolver`)
+The single place that reads the clock, converts timezones, derives days and periods, and does date and duration arithmetic (`INV-ARC-015` §VII, `SPEC-TIME-001`). Every other module, and every test through `tests/helpers/temporal.py`, obtains temporal values from its primitives. A System-Level Evaluation (SLE) answers in UTC; a Class-Level Evaluation (CLE) answers in the Class Timezone.
 
 **Catastrophe Stability Rule**
 Economy solvency rule testing whether a student can recover within roughly one cycle from a pair of shocks such as fines or loss. Distinguished from Budget Survival Test by its focus on shock recovery rather than steady-state viability.
@@ -68,7 +73,7 @@ Seat-owned verification credentials used to prove entitlement to a rostered part
 Identity flow that binds a global `user` to a class-local `seat` after verifying class-specific claim artifacts. Transitions a seat from unclaimed to bound.
 
 **Class Day**
-The canonical classroom day boundary defined as midnight-to-midnight in class timezone, then converted to UTC query bounds. All daily limits, attendance windows, and day-scoped features use this definition.
+The canonical classroom day boundary defined as midnight-to-midnight in class timezone, then converted to UTC query bounds. All daily limits, attendance windows, and day-scoped features use this definition. A class day is 23, 24 or 25 elapsed hours, so "N days" in class terms is N class days (`shift_calendar_days`), never N × 24 hours.
 
 **Class Timezone**
 Immutable IANA timezone owned by the class and used to evaluate class days, period boundaries, due dates, accrual windows, and attendance boundaries. Set at class creation; cannot be changed after the class has active seats.

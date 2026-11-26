@@ -27,11 +27,10 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def _fetch_json(url: str, client_id: str, client_secret: str) -> bytes:
-    if not client_id or not client_secret:
-        raise ValueError("Both Cloudflare Access credentials are required")
-    request = Request(url, headers={"CF-Access-Client-Id": client_id,
-                      "CF-Access-Client-Secret": client_secret, "Accept": "application/json"})
+def _fetch_json(url: str) -> bytes:
+    # No credential: the health endpoints are public, and while the gate is
+    # closed the collector reads nothing from the application (SPEC-OPS-006 1.6).
+    request = Request(url, headers={"Accept": "application/json"})
     with build_opener(_NoRedirect()).open(request, timeout=10) as response:
         if response.status != 200 or "application/json" not in response.headers.get("Content-Type", ""):
             raise ValueError("Snapshot response was not JSON 200")
@@ -41,12 +40,12 @@ def _fetch_json(url: str, client_id: str, client_secret: str) -> bytes:
     return body
 
 
-def fetch_telemetry(client_id: str, client_secret: str) -> bytes:
-    return _fetch_json(TELEMETRY_URL, client_id, client_secret)
+def fetch_telemetry() -> bytes:
+    return _fetch_json(TELEMETRY_URL)
 
 
-def fetch_platform(client_id: str, client_secret: str) -> bytes:
-    return _fetch_json(PLATFORM_URL, client_id, client_secret)
+def fetch_platform() -> bytes:
+    return _fetch_json(PLATFORM_URL)
 
 
 def fetch_gate() -> tuple[int, str | None]:
@@ -84,12 +83,12 @@ def _unique_object(pairs):
     return result
 
 
-def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, now: datetime | None = None, fetch=fetch_telemetry) -> dict | None:
+def collect(store: FirestoreNoticeStore, *, now: datetime | None = None, fetch=fetch_telemetry) -> dict | None:
     snapshot = None
     diagnostic = None
     body = None
     try:
-        body = fetch(client_id, client_secret)
+        body = fetch()
     except HTTPError as exc:
         diagnostic = "ACCESS_DENIED" if exc.code in (301, 302, 303, 307, 308, 401, 403) else "TRANSPORT_UNAVAILABLE"
     # http.client.HTTPException (e.g. BadStatusLine from a broken proxy) is not
@@ -116,19 +115,34 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
     return snapshot
 
 
-def collect_platform(store, *, client_id: str, client_secret: str,
-                     now: datetime | None = None, fetch=fetch_platform, fetch_gate=fetch_gate) -> dict:
-    """Keep the real SELECT1 result; discard every feature placeholder."""
+def collect_platform(store, *, now: datetime | None = None, fetch=fetch_platform, fetch_gate=fetch_gate) -> dict:
+    """Keep the real SELECT1 result; discard every feature placeholder.
+
+    The gate is probed first. While it is closed the collector reads nothing
+    from the application: the endpoint and database are NOT_COLLECTED (owner
+    ruling 2026-10-23, SPEC-OPS-006 1.6)."""
+    gate = gate_check((now or datetime.now(timezone.utc)).isoformat(), fetch_gate)
+    if gate["diagnostic"] == "GATE_CLOSED":
+        skipped = [{"key": key, "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "NOT_COLLECTED"}
+                   for key in ("endpoint", "database")]
+        record = validate_platform({"schema_version": PLATFORM_SCHEMA,
+                                    "received_at": (now or datetime.now(timezone.utc)).isoformat(),
+                                    "checks": [*skipped, gate]})
+        store.append_platform(record)
+        return record
     body = None
     transport = None
     http_failure = False
     try:
-        body = fetch(client_id, client_secret)
+        body = fetch()
     except HTTPError as exc:
         if exc.code in (301, 302, 303, 307, 308, 401, 403):
             transport = "ACCESS_DENIED"
-        else:
+        elif 500 <= exc.code <= 599:
             transport, http_failure = "TRANSPORT_UNAVAILABLE", True
+        else:
+            # SPEC-OPS-006 1.5: a refusal (429, 404, ...) observed no health; UNKNOWN, never FAIL.
+            transport = "HTTP_REFUSED"
     # http.client.HTTPException (e.g. BadStatusLine from a broken proxy) is not
     # an OSError; it is still a transport failure, never a lost record.
     except (OSError, TimeoutError, HTTPException):
@@ -173,25 +187,24 @@ def collect_platform(store, *, client_id: str, client_secret: str,
                 database.update(outcome=signal["outcome"], checked_at=signal["checked_at"], diagnostic=diagnostic)
         except (ValueError, TypeError, KeyError, OverflowError):
             database["diagnostic"] = "INVALID_RESPONSE"
-    # The gate is probed without the service token, so a lapsed token (which
-    # makes the endpoint ACCESS_DENIED) can never read as a closed gate.
-    gate = gate_check(stamp, fetch_gate)
     record = validate_platform({"schema_version": PLATFORM_SCHEMA, "received_at": stamp,
                                 "checks": [endpoint, database, gate]})
     store.append_platform(record)
     return record
 
 
+def run(store) -> str:
+    """One collection: platform checks first, request telemetry only if the gate is not closed."""
+    platform = collect_platform(store)
+    if any(check["diagnostic"] == "GATE_CLOSED" for check in platform["checks"]):
+        return "Gate closed for maintenance: stored the gate check only"
+    snapshot = collect(store)
+    return "Stored request telemetry and platform checks" if snapshot is not None else "Stored unavailable request telemetry and platform checks"
+
+
 def main() -> None:
     from google.cloud import firestore
-    client_id = os.environ.get("CF_ACCESS_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("CF_ACCESS_CLIENT_SECRET", "").strip()
-    if not client_id or not client_secret:
-        raise RuntimeError("Cloudflare Access credentials are required")
-    store = FirestoreNoticeStore(firestore.Client(database=os.environ.get("FIRESTORE_DATABASE", "cth-status-prod")))
-    snapshot = collect(store, client_id=client_id, client_secret=client_secret)
-    collect_platform(store, client_id=client_id, client_secret=client_secret)
-    print("Stored request telemetry and platform checks" if snapshot is not None else "Stored unavailable request telemetry and platform checks")
+    print(run(FirestoreNoticeStore(firestore.Client(database=os.environ.get("FIRESTORE_DATABASE", "cth-status-prod")))))
 
 
 if __name__ == "__main__":

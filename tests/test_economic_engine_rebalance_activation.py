@@ -39,7 +39,7 @@ def test_the_form_says_when_each_change_lands(client, app):
     body = _rebalance_page(client, app)
 
     assert "first rent bill that has not been sent yet" in body
-    assert "Store prices and the overdraft fee have no cycle to wait for" in body
+    assert "Store prices have no cycle to wait for" in body
 
 
 def test_submitting_a_rent_change_appends_a_dated_rent_row(client, app):

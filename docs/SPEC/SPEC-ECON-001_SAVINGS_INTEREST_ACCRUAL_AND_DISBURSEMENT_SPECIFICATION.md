@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-001    | 1.3     | 2026-09-30     | 1.2        | Normative       |
+| SPEC-ECON-001    | 1.5     | 2026-11-24     | 1.4        | Normative       |
 
 ---
 
@@ -490,6 +490,13 @@ Revisions to this document SHALL:
 
 ### Revision history
 
+- **1.5 (2026-11-24)** — Resolves Appendix A, KD-1 (issue #1646), pending owner sign-off on
+  this amendment. §4.1's rule that previously credited interest SHALL NOT participate in
+  future accrual is now enforced for simple interest: the earning base is a principal-only
+  reconstruction of the ledger history that excludes every row already identifiable as a
+  savings-interest credit (§8.2's idempotency-key convention). No rule in §4.1, §6.2 or §9.2
+  changes text; this entry records that the runtime now conforms to the rule as written.
+- **1.4 (2026-10-22)** — Appendix A, KD-1: tracked in issue #1646; the post-launch tracker it named is archived. No rule changes.
 - **1.3 (2026-09-30)** — Operator ruling 2026-09-30: `policy_versions` / `policy_transitions` are retired. §14.1 item 4 reads banking terms from the `economic_engine` version in force; §14.2's transition-activation protocol is withdrawn; §9.2's rate for a day is the version in force by `effective_at`, so a rate dated for later never accrues early.
 - **1.2 (2026-09-30)** — Operator ruling 2026-09-30. §5.2 states the day-count convention
   explicitly: annual rate ÷ 365 in every year, leap years included, for runtime and forecast
@@ -513,13 +520,14 @@ This appendix is descriptive. It records where the runtime does not yet conform 
 specification, so that no surface presents the affected behavior as correct. It adds, removes
 and relaxes no rule; the sections it cites govern. An entry is removed when the runtime conforms.
 
-### KD-1. Simple interest: credited interest earns interest
+### KD-1. Simple interest: credited interest earns interest — RESOLVED
 
 | Field | Value |
 | --- | --- |
 | Rule | §4.1: under simple interest, previously accrued **or previously paid** interest SHALL NOT participate in future accrual. |
-| Runtime | Accrued interest stays out of the earning base within a payout window, as §6.2 requires. Once a window is credited, the credit is part of the posted savings balance, and every later day's earning base is that posted balance (§9.2), for every calculation type. Under simple interest, credited interest therefore earns interest in later windows. |
-| Effect | A class set to simple interest earns slightly more than simple interest from the second payout window on. Over months the growth is close to compounding at the payout frequency. |
-| Status | Known, deferred (operator ruling 2026-09-30). The simple option stays available. Tracked in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`. |
-| Disclosure | While KD-1 stands, the teacher banking settings and the user guides say that paid interest also earns under simple interest, and none describes simple interest as fully supported (operator ruling 2026-09-30). |
+| Former runtime | Accrued interest stayed out of the earning base within a payout window, as §6.2 requires. Once a window was credited, the credit became part of the posted savings balance, and every later day's earning base was that posted balance (§9.2), for every calculation type. Under simple interest, credited interest therefore earned interest in later windows. |
+| Effect (while open) | A class set to simple interest earned slightly more than simple interest from the second payout window on. Over months the growth was close to compounding at the payout frequency. |
+| Resolution | Simple interest's daily earning base is now derived from a principal-only reconstruction of the seat's savings ledger history, which excludes every row already identifiable as a savings-interest credit (`Transaction.type == "Interest"` with the `savings-interest:{class_id}:{seat_id}:` idempotency-key prefix §8.2 defines). No new persisted state was introduced; the existing tagged-transaction convention was sufficient. Compound (`daily`/`weekly`/`monthly`) interest is unaffected — it still folds credited interest into the earning base as §6.2 requires. The projection (§10) uses the same principal-only base for simple interest, so it continues to agree with runtime execution. |
+| Status | Resolved. Tracked in issue #1646. **Pending:** this entry's resolution is written up here as a proposed amendment awaiting owner sign-off; it does not itself constitute that approval. |
+| Former disclosure | While KD-1 was open, the teacher banking settings and the user guides said that paid interest also earns under simple interest, and none described simple interest as fully supported (operator ruling 2026-09-30). That disclosure no longer applies once this resolution is approved and in force. |
 

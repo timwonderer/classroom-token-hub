@@ -130,7 +130,7 @@ def test_correct_and_incorrect_code_receipts_are_identical(recovery,client):
 def test_class_confirmation_persists_after_30_minutes(recovery,monkeypatch):
     now=utc_now()
     assert submit(recovery,generate(recovery))
-    monkeypatch.setattr('app.feats.teacher_recovery_feat.utc_now',lambda:now+timedelta(days=1))
+    monkeypatch.setattr('app.utils.canonical_temporal_resolver.utc_now',lambda:now+timedelta(days=1))
     assert submit(recovery,generate(recovery,1),1)
     assert authorize(recovery)
 

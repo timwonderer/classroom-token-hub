@@ -12,6 +12,12 @@
 <p class="mb-0">The Attendance card shows whether you are working and how long you have worked today. Choose <strong>Start Work</strong> to begin. <strong>Break</strong> becomes available only after you start work.</p>
 {% endcall %}
 
+{% call help.topic('dash-hallpass', 'badge', 'Hall passes') %}
+<p>Pressing <strong>Break</strong> opens a dialog asking you to choose a destination — that request is a hall pass, not a break. Picking a destination asks for your PIN, then sends the request to your teacher once you enter it; <strong>Done for the day</strong> in the same dialog ends your day instead and does not spend a pass.</p>
+<p>The badge next to Attendance shows how many passes you have left. Once your teacher approves, the same button becomes <strong>Leave</strong>, then <strong>Return</strong> — press Leave when you actually go and Return the moment you are back, since your clock stops while you are out.</p>
+<p class="mb-0">{{ help.help_link('user-guides/diagnostics/student/hall-pass', text='Troubleshooting hall passes') }}</p>
+{% endcall %}
+
 {% call help.topic('dash-balances', 'account_balance_wallet', 'Checking and savings') %}
 <p class="mb-0"><strong>Checking Account</strong> shows money available for spending. <strong>Savings Account</strong> shows saved money and projected interest. Use <strong>Transfer</strong> or <strong>Add to Savings</strong> to move money between accounts.</p>
 {% endcall %}
@@ -87,7 +93,7 @@
     <p class="mb-2">CTH randomly selected you to help with teacher account recovery. Give a code in person only if your teacher is currently with your class.</p>
     <p class="mb-3 small text-muted">
         <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
-        Expires on {{ pending_recovery_code.recovery_request.expires_at | fmt_timestamp }}
+        Expires on {{ pending_recovery_expires_display }}
     </p>
     <div class="d-flex gap-2">
         <a href="{{ url_for('student.verify_recovery', code_id=pending_recovery_code.id) }}"
@@ -113,7 +119,7 @@
     {% if announcement.expires_at %}
     <small class="text-muted d-block mt-2">
         <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
-        Expires {{ announcement.expires_on.strftime('%b %d, %Y') }}
+        Expires {{ announcement_expiry_displays[announcement.id] }}
     </small>
     {% endif %}
 {% endcall %}
@@ -244,6 +250,14 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                {# In-page PIN, not the browser's own prompt dialog: in-app browsers (e.g. the
+                   Google app on iOS) returned no PIN from one opened inside this modal (2026-10-20). #}
+                <div class="mb-3">
+                    <label for="breakPinInput" class="form-label">Your PIN</label>
+                    <input type="password" class="form-control" id="breakPinInput" inputmode="numeric"
+                           autocomplete="off">
+                    <div class="invalid-feedback" id="breakPinError">Enter your PIN first.</div>
+                </div>
                 {# Shown only when the teacher has saved hall-pass destinations; otherwise the
                    student sees "Done for the day" alone (attendance.js showBreakDestinations). #}
                 <div id="hallPassDestinationSection" hidden>
@@ -355,7 +369,7 @@
                         </div>
                         <div>
                             <div class="fw-semibold text-dark">{{ t.description }}</div>
-                            <div class="small text-muted">{{ t.timestamp|fmt_timestamp }}</div>
+                            <div class="small text-muted">{{ timestamp_displays[t.id] }}</div>
                         </div>
                     </div>
                     <div class="d-flex align-items-center gap-2">

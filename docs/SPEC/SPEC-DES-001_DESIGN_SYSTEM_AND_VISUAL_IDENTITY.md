@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-DES-001 | 2.3 | 2026-09-30 | `FEAT-DES-001` v1.1 (archived) | Normative |
+| SPEC-DES-001 | 2.6 | 2026-10-26 | `FEAT-DES-001` v1.1 (archived) | Normative |
 
 > Supersedes `docs/archive/v1-docs/FEATURES/DESIGN/FEAT-DES-001_Design_System.md` (archived, non-normative). That document described the v1 token set and carries values that no longer match the implementation; it governs nothing and is retained as history only.
 
@@ -31,7 +31,7 @@ Does not govern:
 
 - page rendering structure, view models, or builder organization — governed by `SPEC-UI-001`
 - accessibility requirements — governed by `INV-ARC-020`, which this document is subordinate to and must not weaken
-- `github-pages/` and `docs-site/` — separately published artifacts. See §XIII.
+- `github-pages/` and `docs-generator-proof/` — separately published artifacts. See §XIII.
 - domain, mutation, or persistence authority
 
 ---
@@ -350,6 +350,21 @@ Inside `.auth-body` the surface is `var(--surface)`, so **no text may use `--sec
 <span class="material-symbols-outlined icon-md">settings</span>
 ```
 
+**Browser-native dialog**
+```js
+// Prohibited: drawn by the browser, off-system, and not reliably shown by in-app browsers
+if (!confirm('Delete this fine?')) return;
+const pin = prompt('Enter your PIN:');
+// Required: the in-app modal (static/js/app-core.js)
+if (!(await window.AppCore.confirm('Delete this fine?', { title: 'Delete fine', confirmLabel: 'Delete', danger: true }))) return;
+const pin = await window.AppCore.prompt('Enter your PIN.', { title: 'Start Work', label: 'Your PIN', type: 'password' });
+```
+```html
+<!-- Required for a plain form post -->
+<button type="submit" data-confirm="Pay this bill?" data-confirm-title="Pay bill" data-confirm-label="Pay">Pay</button>
+```
+`alert()`, `confirm()` and `prompt()` are prohibited in first-party pages. On 2026-10-20 the Google app's iOS in-app browser returned an empty PIN from a `prompt()` without showing it. A student's hall-pass request never left the page, and nothing told the student why.
+
 **Token whose value restates another token**
 ```css
 /* Prohibited: will not follow --primary when it changes */
@@ -369,6 +384,7 @@ Inside `.auth-body` the surface is `var(--surface)`, so **no text may use `--sec
 3. **Focus is not optional.** Focus-visible styling is part of the system, not a per-component decision.
 4. **Reduced motion.** Every token in the motion scale is subject to the global `prefers-reduced-motion: reduce` override.
 5. **Forced colors.** `forced-colors: active` support MUST be preserved when component styling changes.
+6. **Modal dialogs.** While a modal is open, everything outside it MUST be `inert`, so screen readers cannot browse to it and Tab cannot reach it. `aria-modal` alone does not do this in Chromium. The dialog MUST have an accessible name, plus a description when it asks a question. Focus moves into the dialog on open: to its field, or to Cancel when the action is destructive. On close, focus MUST return to the control that opened the dialog. A field error MUST be linked through `aria-describedby` and `aria-invalid` only once the error applies. `static/js/app-core.js` meets these obligations for every Bootstrap modal and for `AppCore.confirm` / `AppCore.prompt`.
 
 ---
 
@@ -396,7 +412,9 @@ The token layer conforms when:
 
 ## XIII. Separately Published Artifacts
 
-`github-pages/` and `docs-site/` maintain their own stylesheets and are outside the runtime token layer. They are nonetheless **brand surfaces** and MUST NOT contradict §VI.4.
+`github-pages/` and `docs-generator-proof/` maintain their own stylesheets and are outside the runtime token layer. They are nonetheless **brand surfaces** and MUST NOT contradict §VI.4.
+
+The developer documentation site published at `/docs/` is built from `docs-generator-proof/` with Hugo + Hextra (it replaced the Docusaurus build in `docs-site/` on 2026-10-24, and `docs-site/` was removed on 2026-10-26). It loads `github-pages/style.css` byte-for-byte as its public stylesheet and `docs-generator-proof/brand/css/tokens.css` as its token layer, and its own stylesheet, `docs-generator-proof/assets/css/custom.css`, is **subordinate to this specification** on the same terms as `status.css`: every design value in it MUST resolve through a token defined in those two layers, and it MUST NOT introduce a colour. Hextra's own custom properties (`--hx-*`, `--hextra-*`) are framework-owned and are mapped onto project tokens there, never the reverse.
 
 `github-pages/style.css` carried `--secondary: #d3af37` and `--primary-color: #236960` through v2.1; both were reconciled on 2026-09-19. `status_service/` is served from the same stylesheet: `status_service/static/cth-public.css` is a byte-identical copy of `github-pages/style.css`, and a divergence between them is therefore a diff, not a silent fork. It held one for roughly a day — a copy frozen immediately before the 2026-09-19 fix, which left `.toc a:hover` accessible on one host and at 3.16:1 on the other — and that is the failure mode the byte-identity requirement exists to prevent.
 
@@ -408,7 +426,7 @@ The status service also carries the runtime token layer: `status_service/static/
 
 Design-system conformance is mechanically checkable and SHOULD be gated rather than reviewed by eye. `scripts/lint_design_tokens.py` gates rules 1 and 5–10, and `tests/test_design_token_contract.py` runs it with one test per rule; run the script directly on the files being edited. The test also carries a mutation proof for every rule — a synthetic near-miss violation it asserts is reported — so the gate cannot go green because the scanner stopped seeing.
 
-Rules 1, 5, 6 and 7 scan `templates/`. Rules 8, 9 and 10 scan the token layer and stylesheets of **all four brand surfaces** named in §XIII, not the application alone. The application was the only gated surface through v2.1, and it was also the only one that had not drifted; that is not a coincidence, and it is why the scope is now the surface list rather than `templates/`. The checkable rules:
+Rules 1, 5, 6 and 7 scan `templates/`. Rules 8, 9 and 10 scan the token layer and stylesheets of **every brand surface** named in §XIII, not the application alone. The application was the only gated surface through v2.1, and it was also the only one that had not drifted; that is not a coincidence, and it is why the scope is now the surface list rather than `templates/`. The checkable rules:
 
 1. No hex/`rgb()`/`hsl()` literal under `templates/`.
 2. No raw color in `style.css` outside a token definition block.
@@ -422,6 +440,8 @@ Rules 1, 5, 6 and 7 scan `templates/`. Rules 8, 9 and 10 scan the token layer an
 10. A stylesheet declared a copy of another is byte-identical to it. `status_service/static/cth-public.css` MUST equal `github-pages/style.css`, and `status_service/static/tokens.css` MUST equal `static/css/tokens.css`. A copy that is allowed to drift is a fork nobody declared; this one drifted for a day and left the same selector accessible on one host and at 3.16:1 on the other.
 
 Rule 7 catches a failure mode the others miss. A page copy that loses the cascade renders nothing, so it can drift arbitrarily far from the shared rule without any visible symptom — it is edited, reviewed, and merged as if it were live. The fourteen auth templates each carried a `.btn-primary` block that had not rendered since `style.css` claimed the selector with `!important`, and three of them had independently drifted the hover fill to a colour that would have failed contrast had it ever applied.
+
+`tests/test_no_native_browser_dialogs.py` gates the browser-native dialog anti-pattern (§X) across `templates/`, `static/` (except `static/vendor/`) and `app/`, with a mutation proof for each spelling. `tests/test_app_dialog_accessibility_browser.py` checks §XI.6 in Chromium. It reads the accessibility tree over CDP and runs an axe-core WCAG 2.1 A/AA audit of the open dialog. The same file measures the text contrast of every button variant under keyboard focus and hover, in each role theme. axe audits resting states only, and three outline variants failed AA under `:focus-visible` while axe passed them.
 
 Per `INV-ARC-020` §VIII.4, any change to `static/css/` affecting rendered color, spacing, display state, or focus styling is a high-risk change class and carries the accessibility validation obligation in `INV-ARC-020` §X.
 

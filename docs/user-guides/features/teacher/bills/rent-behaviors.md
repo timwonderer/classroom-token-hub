@@ -33,6 +33,8 @@ Expand **Grace Period & Late Penalties** on the **Settings** tab.
 | **Penalty Application** | **Apply Once Per Rent Period** or **Apply Recurring** |
 | **Recurring Every (Days)** | *Days between recurring penalty charges* — appears only when the penalty is recurring |
 
+These are your class's calendar days. The grace period ends at midnight in your class's time zone, and a recurring penalty is charged then and again at midnight every *Recurring Every (Days)* days after, including on the night the clocks change.
+
 The choice between once-per-period and recurring is the difference between a fine and a meter. A once-per-period penalty is a fixed consequence a student can absorb and move past. A recurring penalty compounds until they pay, and a student who has genuinely run out of money cannot stop it by trying harder.
 
 ### Student payment options
