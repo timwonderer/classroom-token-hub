@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-102 | 1.2 | 2026-11-26 | 1.1 | Normative |
+| FEAT-IDEN-102 | 1.3 | 2026-11-27 | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -10,7 +10,7 @@ Enroll a required passkey or replace one explicitly selected passkey, preserving
 
 ## II. Scope
 
-Teacher or sysadmin principal initial/additional enrollment and selected replacement; the signup-capability path is teacher-only. Principal credential-maintenance scope; no classroom/Seat prerequisite.
+Teacher or sysadmin principal initial/additional enrollment and selected replacement. Principal credential-maintenance scope; no classroom/Seat prerequisite.
 
 ## III. Authority Level
 
@@ -29,10 +29,9 @@ and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 ## V. Authorization and registration
 
 Resolve the authenticated teacher or sysadmin principal at the request boundary. TOTP must already
-be activated. Existing principals prove fresh TOTP bound to the requested operation;
-initial enrollment by a teacher may instead consume the explicit five-minute signup capability
-from FEAT-IDEN-101 (a sysadmin has no such capability and always proves fresh TOTP). A login session alone is insufficient. Replacement always requires
-fresh TOTP and exact selection of an owned activated credential.
+be activated. Every principal proves fresh TOTP bound to the requested operation for
+initial or additional enrollment, replacement and revocation. A login session alone is
+insufficient. Replacement additionally requires exact selection of an owned activated credential.
 
 In a short transaction, validate current generation/session/expiry and reserve one
 operation with database-enforced uniqueness. Persist pending registration before
@@ -97,5 +96,5 @@ CSRF/rate limits, accessible manual/error flows and GHSA credential-ownership gu
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. The 2026-11-26 revision makes the enrolled passkey required (DOM-IDEN-003 §VII.A) and widens scope to sysadmin principals. The 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment capability: fresh TOTP authorizes every enrollment, and enrollment is no longer authorized by the signup ceremony; cancellation, expiry and stale-operation protections are unchanged. The 2026-11-26 revision makes the enrolled passkey required (DOM-IDEN-003 §VII.A) and widens scope to sysadmin principals. The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-IDEN-002 | 1.1 | 2026-11-26 | 1.0 | Technical Specification |
+| SPEC-IDEN-002 | 1.2 | 2026-11-27 | 1.1 | Technical Specification |
 
 ## I. Purpose
 
@@ -12,8 +12,7 @@ with external-provider consistency.
 
 ## II. Scope
 
-Principal-scoped maintenance, shared teacher/sysadmin assertion validation, signup
-authorization, SATAR supersession, account destruction and both reconciliation modes.
+Principal-scoped maintenance, shared teacher/sysadmin assertion validation, SATAR supersession, account destruction and both reconciliation modes.
 No classroom authority or additional recovery mechanism is created.
 
 ## III. Authority Level
@@ -70,7 +69,7 @@ Each operation has an immutable purpose and target plus a constrained stage:
 
 Stage names are logical states, not a requirement for a particular ORM representation.
 Do not accept browser-supplied stage, principal, generation or pending secret as authority.
-Interactive lifetime is fixed: ten minutes maximum, or five for signup, capped by session
+Interactive lifetime is fixed: ten minutes maximum, capped by session
 validity. Every new request and every uncommitted completion rechecks it; a retirement committed
 before the deadline and its local completion are exempt from the deadline and session expiry,
 and still check the recorded target, generation and supersession state. New provider tokens must not outlive
@@ -118,7 +117,7 @@ irrelevant to an operation. No generic JSON provider-response archive is authori
 | Purpose and stage | Limit transitions; nonsecret operational state | Closed enums | Until work ends / bounded receipt expires |
 | Authorized generation | Prevent stale activation; nonsecret security state | Integer snapshot | Until operation/receipt erased |
 | Session binding verifier | Bind interactive authorization; sensitive verifier | Purpose-separated nonreversible verifier | Erase on interactive expiry, consumption into retirement intent or supersession |
-| Capability/challenge verifier | Purpose-bound, single-use proof; sensitive verifier | Purpose-separated nonreversible verifier | Erase when consumed, expired or superseded; never retain raw token |
+| Challenge verifier | Purpose-bound, single-use proof; sensitive verifier | Purpose-separated nonreversible verifier | Erase when consumed, expired or superseded; never retain raw token |
 | Authorization deadline | Fixed interactive lifetime; nonsecret metadata | Canonical UTC timestamp | Operation lifetime; never extend |
 | Pending TOTP seed (generated per SPEC-SEC-001 §V seed-length requirement) | Validate candidate authenticator; authentication secret | Approved encryption only | Erase upon activation, cancellation, expiry or supersession; no old-secret copy |
 | Old/new credential IDs | Exact provider work; credential metadata | Exact identifiers inside Identity only | While fixed retirement/activation work needs them; delete with principal |
@@ -229,8 +228,7 @@ completion must not be reported as successful just because external retirement s
   before and after remote-retirement intent. Stale work cannot activate after recovery.
 - Fixed reconciliation continues after session expiry without renewing/creating a session.
 - Maintenance succeeds without active class selection but grants no classroom authority.
-- Signup authorization requires explicit prior election and cannot be replayed, duplicated,
-  renewed, regenerated from login or repurposed; skip preserves the signup session and leaves the principal noncompliant.
+- Signup issues no enrollment authorization; deferring enrollment preserves the signup session and leaves the principal noncompliant.
 - Principal destruction during provider work cannot restore local authority. Outage,
   transient/permanent failure and the 15-second/three-attempt cap preserve lawful local
   destruction, while local auth/database/audit failures prevent false completion.
@@ -253,4 +251,4 @@ production readiness. No destructive production experiment is implied by this co
 
 Increment version/date, reconcile the owning INV/DOM and affected FEAT contracts, update
 SOP-DOC-001, and preserve the distinction between approved requirements and implementation
-proposals. The 2026-11-26 revision applies the owner rulings on mandatory dual enrollment and the seed-length floor. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.
+proposals. The 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment authorization and its five-minute lifetime; reservation, cancellation, expiry and stale-operation rules are unchanged. The 2026-11-26 revision applies the owner rulings on mandatory dual enrollment and the seed-length floor. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.

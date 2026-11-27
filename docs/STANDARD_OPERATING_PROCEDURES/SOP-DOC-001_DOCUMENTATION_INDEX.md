@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.73 | 2026-11-26 | 3.72 | Normative |
+| SOP-DOC-001 | 3.74 | 2026-11-27 | 3.73 | Normative |
 
 ---
 
@@ -288,6 +288,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.74 (2026-11-27):**
+
+- Register owner authorization 2026-11-27 (removal of the signup-derived passkey enrollment capability; fresh TOTP authorizes every enrollment): DOM-IDEN-003 v2.14, FEAT-IDEN-101 v1.6, FEAT-IDEN-102 v1.3 and SPEC-IDEN-002 v1.2. Explicit cancellation and stale-operation protections are unchanged.
 
 **Version 3.73 (2026-11-26):**
 

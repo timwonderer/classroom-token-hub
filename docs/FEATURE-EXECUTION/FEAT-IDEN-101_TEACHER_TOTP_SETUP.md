@@ -2,11 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-101 | 1.5 | 2026-11-26 | 1.4 | Normative |
+| FEAT-IDEN-101 | 1.6 | 2026-11-27 | 1.5 | Normative |
 
 ## I. Purpose
 
-Provision a teacher and activate verified initial TOTP atomically, optionally issuing one explicit signup-derived authorization for the required initial passkey enrollment.
+Provision a teacher and activate verified initial TOTP atomically. The required initial passkey is enrolled afterwards through FEAT-IDEN-102 with fresh TOTP.
 
 ## II. Scope
 
@@ -42,21 +42,16 @@ logs, URLs, telemetry or audit. This flow issues no backup codes or recovery req
 
 ## VI. Atomic provisioning and deferrable enrollment
 
-Before submitting signup TOTP verification, the teacher may explicitly elect to
-enroll the required passkey now. Verify the submitted code against server-held pending material.
+Verify the submitted signup TOTP code against server-held pending material.
 Lock/revalidate the signup attempt; atomically create User, initial ClassEconomy,
 administrative Seat and IdentityProfile, activate verified TOTP, initialize credential
 generation, consume staging and emit the required non-identifying outcome. Failure
 rolls back provisioning and consumption; a retry cannot provision another account.
 
-If explicitly elected, the same successful verification also establishes one five-minute
-initial-passkey capability bound to the new principal, generation and signup session/browser.
-It starts no general management session and cannot replace a credential. FEAT-IDEN-102
-consumes it into one enrollment operation, never renews it, and never reconstructs it
-from an authenticated session. A later request executes that FEAT; no nested FEAT call.
-
-Establish the post-provisioning session through the normal session command. Offer
-passkey enrollment, which may be deferred. Skipping retains that session but leaves the
+Signup issues no enrollment authorization. Establish the post-provisioning session
+through the normal session command. Offer passkey enrollment, which FEAT-IDEN-102
+executes on a later request with fresh TOTP (no nested FEAT call) and which may be
+deferred. Deferring retains that session but leaves the
 principal noncompliant (DOM-IDEN-003 §VII.A Credential compliance gate). Enrollment
 failure does not undo signup. Successful passkey activation invalidates the signup session and
 requires fresh sign-in under the same rule as other credential mutations.
@@ -72,15 +67,15 @@ Audit uses ACT-IDEN-101 and DOM-OPS-002 §2.5, without identifiers or secret mat
 ## VIII. Required validation
 
 Cover atomic provisioning/rollback, staging expiry/restart, wrong/new username,
-invalid TOTP, duplicate completion, secret non-retention, explicit enrollment election,
-skip/session preservation, failed enrollment, noncompliance after skip, capability expiry/consumption,
-replay/renewal/repurposing denial and fresh sign-in after initial passkey activation.
+invalid TOTP, duplicate completion, secret non-retention,
+skip/session preservation, failed enrollment, noncompliance after skip
+and fresh sign-in after initial passkey activation.
 Preserve the existing signup security and accessibility tests.
 
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. The 2026-11-26 revision makes passkey enrollment required but deferrable (DOM-IDEN-003 §VII.A). The 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived initial-passkey capability and the signup enrollment election; enrollment uses fresh TOTP through FEAT-IDEN-102. The 2026-11-26 revision makes passkey enrollment required but deferrable (DOM-IDEN-003 §VII.A). The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.
 
 ### Revision History
