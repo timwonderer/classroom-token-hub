@@ -256,3 +256,18 @@ def test_a_browser_origin_passes_when_configured_in_a_non_canonical_spelling(mon
     from types import SimpleNamespace
     with app.app_context():
         passkey_service.check_ceremony_binding(SimpleNamespace(origin="https://cth.test", rp_id="cth.test"))
+
+
+def test_a_missing_public_key_refuses_registration_start_before_any_operation_exists(
+    client, app, fake_passwordless, monkeypatch,
+):
+    user_id = _teacher(client, app, fake_passwordless)
+    monkeypatch.delenv("PASSWORDLESS_API_PUBLIC", raising=False)
+
+    response = start_registration(client)
+
+    assert response.status_code == 503 and response.get_json()["code"] == "not_configured"
+    assert _open_operations(user_id) == []
+    from app.models import CredentialOperation
+    db.session.expire_all()
+    assert CredentialOperation.query.filter_by(user_id=user_id).count() == 0

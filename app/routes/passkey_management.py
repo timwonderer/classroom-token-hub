@@ -103,11 +103,13 @@ def register_start(*, user_id: str, alias: str, display_name: str):
         replace = data.get("replace_passkey_id")
         if replace is not None and (isinstance(replace, bool) or not isinstance(replace, int)):
             raise lifecycle.CredentialOperationRefused("credential_not_found")
+        # Read before any operation row exists: a missing public key must leave nothing pending.
+        api_key = get_public_api_key()
         token, binding = feat.start_registration(
             user_id=user_id, session_nonce=session.get("current_session_nonce"), proof=proof,
             alias=alias, display_name=display_name, replace_passkey_id=replace,
         )
-        return jsonify({"token": token, "binding": binding, "apiKey": get_public_api_key()}), 200
+        return jsonify({"token": token, "binding": binding, "apiKey": api_key}), 200
     return _guarded(action)
 
 
