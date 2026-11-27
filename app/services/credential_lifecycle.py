@@ -994,6 +994,17 @@ def open_passkey_operation_presentation(user_id: str) -> tuple[str | None, str |
     return None, None
 
 
+def open_totp_replacement_in_progress(user_id: str) -> bool:
+    """Whether the principal has a live TOTP replacement awaiting its new code. Pure read."""
+    operation = get_open_operation(user_id)
+    return (
+        operation is not None
+        and operation.purpose is CredentialOperationPurpose.TOTP_REPLACE
+        and operation.stage is CredentialOperationStage.AUTHORIZED
+        and _deadline_open(operation)
+    )
+
+
 def _lock_passkey_operation(operation: CredentialOperation, *purposes: CredentialOperationPurpose):
     principal = _lock_user(operation.user_id)
     locked = _lock_operation(operation.id)

@@ -12,6 +12,14 @@ and this project follows semantic versioning principles.
 
 - <!-- notes: new -->
 
+  **Teachers and system admins can replace their authenticator app from Passkey Settings** (FEAT-IDEN-106; SPEC-IDEN-002 §V; DOM-IDEN-003 §VII.A). Select **Replace authenticator app** and approve with one of your passkeys. A QR code and key for the new authenticator are then shown once; enter a code from it to finish. Your current authenticator keeps working until that code is accepted, and cancelling, a wrong code or waiting out the ten-minute window changes nothing. After a replacement you sign in again with the new authenticator. No backup codes are issued.
+
+- <!-- notes: internal -->
+
+  **TOTP replacement routes, one implementation for both roles** (FEAT-IDEN-106). `app/routes/totp_replacement.py` backs `POST /admin/totp/replace/{challenge,start,confirm,cancel}` and the same under `/sysadmin`. `challenge` issues the purpose-bound step-up challenge (stores nothing); `start` verifies the fresh passkey assertion through `passkey_service` (ceremony origin and RP ID checked) and stages the encrypted pending seed; `confirm` activates it through the existing atomic `activate_totp` and ends the sign-in; `cancel` erases the pending seed. The browser never supplies the operation, stage, generation or seed; the server resolves the principal's one open operation. `credential_operations_feat` gains `issue_totp_replacement_challenge`, `begin_totp_replacement`, `confirm_totp_replacement` and `abandon_totp_replacement`; `credential_lifecycle.open_totp_replacement_in_progress` is a pure read for the settings page. `static/js/passkey.js` gains `setupTotpReplacement`. No schema change, no new policy beyond the existing 10 per minute limits; the compliance gate is separate work.
+
+- <!-- notes: new -->
+
   **Passkeys are added, replaced and removed only after a fresh authenticator code, for teachers and system admins alike** (FEAT-IDEN-102, FEAT-IDEN-107; SPEC-IDEN-002 §V; DOM-IDEN-003 §VII.A). Passkey Settings asks for the current 6-digit authenticator code before you register, replace or delete a passkey; a sign-in alone is no longer enough. Replacing a passkey registers the new one, removes only the one you chose and leaves your other passkeys alone. Your only passkey cannot be deleted, only replaced. After any change you sign in again. If the passkey service cannot confirm a replacement or removal, the change is saved as pending, your authenticator app still signs you in, and Passkey Settings offers Try again.
 
 - <!-- notes: internal -->

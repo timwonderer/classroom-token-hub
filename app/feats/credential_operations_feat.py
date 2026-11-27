@@ -100,6 +100,66 @@ def cancel_totp_replacement(*, user_id, operation_id, session_nonce,
     return lifecycle.cancel_operation(operation, purpose=CredentialOperationPurpose.TOTP_REPLACE)
 
 
+def issue_totp_replacement_challenge(*, user_id, session_nonce) -> str:
+    """The purpose-bound challenge the principal's passkey ceremony answers. Pure; stores nothing."""
+    user = db.session.get(User, user_id)
+    if user is None:
+        raise lifecycle.CredentialOperationRefused("ineligible_principal")
+    return lifecycle.issue_step_up_challenge(
+        user, purpose=CredentialOperationPurpose.TOTP_REPLACE, session_nonce=session_nonce,
+    )
+
+
+def begin_totp_replacement(*, user_id, session_nonce, proof, account_name, correlation_id=None):
+    """Authorize a replacement with a fresh passkey assertion, then stage the pending seed.
+
+    Returns ``(secret, provisioning_uri)``. The principal's current secret is untouched. If
+    staging fails after the operation opened, the operation is cancelled so nothing is left
+    holding the principal's single operation slot.
+    """
+    operation_id = open_credential_operation(
+        user_id=user_id, purpose=CredentialOperationPurpose.TOTP_REPLACE, proof=proof,
+        session_nonce=session_nonce, correlation_id=correlation_id,
+    )
+    try:
+        return hold_totp_candidate(
+            user_id=user_id, operation_id=operation_id, session_nonce=session_nonce,
+            account_name=account_name, correlation_id=correlation_id,
+        )
+    except Exception:
+        db.session.rollback()
+        try:
+            cancel_totp_replacement(user_id=user_id, operation_id=operation_id, session_nonce=session_nonce)
+        except Exception:
+            pass  # the original failure is the one to report; the operation still expires on its own
+        raise
+
+
+def _open_replacement_id(user_id) -> str:
+    operation = lifecycle.get_open_operation(user_id)
+    if operation is None:
+        raise lifecycle.CredentialOperationRefused("operation_not_found")
+    if operation.purpose is not CredentialOperationPurpose.TOTP_REPLACE:
+        raise lifecycle.CredentialOperationRefused("wrong_purpose")
+    operation_id = operation.id
+    release_read_transaction()
+    return operation_id
+
+
+def confirm_totp_replacement(*, user_id, session_nonce, code) -> bool:
+    """Activate the principal's own open replacement with ``code``; ``False`` for a wrong code."""
+    return activate_totp_replacement(
+        user_id=user_id, operation_id=_open_replacement_id(user_id), code=code, session_nonce=session_nonce,
+    )
+
+
+def abandon_totp_replacement(*, user_id, session_nonce) -> bool:
+    """Cancel the principal's own open replacement, keeping the existing TOTP."""
+    return cancel_totp_replacement(
+        user_id=user_id, operation_id=_open_replacement_id(user_id), session_nonce=session_nonce,
+    )
+
+
 @requires_feat_context("FEAT-IDEN-108", key_per_call=True)
 def expire_credential_operations(*, correlation_id=None, idempotency_key=None) -> dict:
     """Scheduled sweep: cancel operations past their deadline, drop spent receipts."""

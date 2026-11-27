@@ -263,7 +263,7 @@ from app.services.admin_identity_service import (
     admin_has_passkeys,
     list_admin_credentials,
 )
-from app.routes import passkey_management
+from app.routes import passkey_management, totp_replacement
 from app.services import credential_lifecycle, passkey_service
 from app.services.recovery_service import (
     delete_recovery_rows_for_user,
@@ -10357,6 +10357,52 @@ def passkey_cancel():
     return passkey_management.cancel(user_id=g.canonical_context.user_id)
 
 
+def _totp_replacement_alias(user):
+    """The name the principal's passkeys were registered under, also used as the authenticator account label."""
+    return session.get("admin_auth_username") or f"user_{user.id}"
+
+
+def _teacher_for_totp_replacement():
+    user = db.session.get(User, g.canonical_context.user_id)
+    if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
+        abort(404)
+    return user
+
+
+@admin_bp.route('/totp/replace/challenge', methods=['POST'])
+@admin_required
+@limiter.limit("10 per minute")
+def totp_replace_challenge():
+    """FEAT-IDEN-106: issue the challenge a fresh passkey assertion must answer."""
+    user = _teacher_for_totp_replacement()
+    return totp_replacement.challenge(user_id=user.id, alias=_totp_replacement_alias(user))
+
+
+@admin_bp.route('/totp/replace/start', methods=['POST'])
+@admin_required
+@limiter.limit("10 per minute")
+def totp_replace_start():
+    """FEAT-IDEN-106: verify the passkey assertion and stage the replacement authenticator."""
+    user = _teacher_for_totp_replacement()
+    return totp_replacement.start(user_id=user.id, account_name=_totp_replacement_alias(user))
+
+
+@admin_bp.route('/totp/replace/confirm', methods=['POST'])
+@admin_required
+@limiter.limit("10 per minute")
+def totp_replace_confirm():
+    """FEAT-IDEN-106: activate the replacement authenticator with its first code."""
+    return totp_replacement.confirm(user_id=g.canonical_context.user_id, login_endpoint="admin.login")
+
+
+@admin_bp.route('/totp/replace/cancel', methods=['POST'])
+@admin_required
+@limiter.limit("10 per minute")
+def totp_replace_cancel():
+    """FEAT-IDEN-106: cancel an unfinished replacement."""
+    return totp_replacement.cancel(user_id=g.canonical_context.user_id)
+
+
 @admin_bp.route('/passkey/settings')
 @admin_required
 def passkey_settings():
@@ -10372,7 +10418,18 @@ def passkey_settings():
                          credentials=credentials,
                          operation_state=operation_state,
                          operation_binding=operation_binding,
-                         passkey_urls=_passkey_urls())
+                         totp_replacement_in_progress=credential_lifecycle.open_totp_replacement_in_progress(user_id),
+                         passkey_urls=_passkey_urls(),
+                         totp_urls=_totp_urls())
+
+
+def _totp_urls():
+    return {
+        "challenge": url_for("admin.totp_replace_challenge"),
+        "start": url_for("admin.totp_replace_start"),
+        "confirm": url_for("admin.totp_replace_confirm"),
+        "cancel": url_for("admin.totp_replace_cancel"),
+    }
 
 
 def _passkey_urls():
