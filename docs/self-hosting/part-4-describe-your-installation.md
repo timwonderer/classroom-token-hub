@@ -39,7 +39,7 @@ commands can use it.
 **Steps.** Replace the value with the one in your note:
 
 ```bash
-export CTH_HOSTNAME=classroom.example.org
+CTH_HOSTNAME=classroom.example.org
 ```
 
 **What you should see.** Nothing. `echo "$CTH_HOSTNAME"` prints your hostname.
@@ -135,7 +135,6 @@ hex() { python3 -c 'import secrets; print(secrets.token_hex(32))'; }
 fernet() { python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'; }
 {
   printf '%s\n' "FLASK_ENV=production"
-  printf '%s\n' "PASSKEY_EXPECTED_ORIGIN=https://${CTH_HOSTNAME:?run section 4.1 in this session and export CTH_HOSTNAME}"
   printf '%s\n' "DATABASE_URL=postgresql:///cth_reference?host=/var/run/postgresql&port=5432"
   printf '%s\n' "STUDENT_SETUP_REDIS_URL=unix:///run/cth-student-setup/redis.sock"
   printf '%s\n' "RATELIMIT_STORAGE_URI=redis+unix:///run/cth-rate-limit/redis.sock"
@@ -176,9 +175,9 @@ print those settings on your screen because the block redirects them into
 The database name in `DATABASE_URL` must match `"database"` in the manifest.
 Both use `cth_reference`.
 
-**What you should see.** `600 root root`, then the fifteen setting names
+**What you should see.** `600 root root`, then the fourteen setting names
 (names only, no values):
-`FLASK_ENV`, `PASSKEY_EXPECTED_ORIGIN`, `DATABASE_URL`, `STUDENT_SETUP_REDIS_URL`,
+`FLASK_ENV`, `DATABASE_URL`, `STUDENT_SETUP_REDIS_URL`,
 `RATELIMIT_STORAGE_URI`, `LOG_FILE`, `SECRET_KEY`, `PEPPER_KEY`,
 `AUDIT_HMAC_KEY`, `CONFIGURATION_EXPORT_KEY`, `ENCRYPTION_KEY`,
 `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, `PASSWORDLESS_API_PUBLIC`,

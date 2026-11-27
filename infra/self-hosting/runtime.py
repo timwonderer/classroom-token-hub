@@ -21,9 +21,12 @@ KEYS = {"SECRET_KEY", "AUDIT_HMAC_KEY", "ENCRYPTION_KEY", "PEPPER_KEY", "CONFIGU
 PROVIDERS = {"TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "PASSWORDLESS_API_PUBLIC", "PASSWORDLESS_API_KEY"}
 URLS = {"MARKETING_SITE_URL", "EXTERNAL_DOCS_BASE_URL", "PASSWORDLESS_API_URL"}
 INFORMATION_URLS = {"EXTERNAL_DOCS_BASE_URL", "MARKETING_SITE_URL"}
-OPTIONAL = URLS
+# The deployment origin is derived from the manifest hostname and set by the installer-managed
+# web unit; a runtime file may carry it, but only with that exact derived value.
+DERIVED_ORIGIN = "PASSKEY_EXPECTED_ORIGIN"
+OPTIONAL = URLS | {DERIVED_ORIGIN}
 REQUIRED = KEYS | PROVIDERS | (URLS - OPTIONAL) | {"FLASK_ENV", "DATABASE_URL", "STUDENT_SETUP_REDIS_URL",
-                                      "RATELIMIT_STORAGE_URI", "LOG_FILE", "PASSKEY_EXPECTED_ORIGIN"}
+                                      "RATELIMIT_STORAGE_URI", "LOG_FILE"}
 
 
 def require(ok, message):
@@ -93,12 +96,11 @@ def parse_env(raw, cfg):
     require(not missing, "missing runtime fields: " + ", ".join(sorted(missing)))
     expected = {"FLASK_ENV": "production", "DATABASE_URL": f"postgresql:///{cfg['database']}?host=/var/run/postgresql&port=5432",
                 "STUDENT_SETUP_REDIS_URL": "unix://" + SETUP_SOCKET, "RATELIMIT_STORAGE_URI": "redis+unix://" + RATE_SOCKET,
-                "LOG_FILE": "/var/log/cth-web/app.log",
-                # The manifest hostname is the authoritative deployment origin at install time;
-                # the application itself reads only this variable.
-                "PASSKEY_EXPECTED_ORIGIN": f"https://{cfg['hostname']}"}
+                "LOG_FILE": "/var/log/cth-web/app.log"}
     for key, wanted in expected.items():
         require(values[key] == wanted, "incorrect reference binding for " + key)
+    require(values.get(DERIVED_ORIGIN, f"https://{cfg['hostname']}") == f"https://{cfg['hostname']}",
+            "incorrect reference binding for " + DERIVED_ORIGIN)
     for key in KEYS - {"ENCRYPTION_KEY"}:
         require(re.fullmatch(r"[0-9a-f]{64}", values[key]), "generate a fresh 32-byte hexadecimal value for " + key)
     enc = values["ENCRYPTION_KEY"]

@@ -8,7 +8,7 @@ User=cthapp
 Group=cthapp
 WorkingDirectory=/opt/cth/releases/@SHA@
 EnvironmentFile=@ENVFILE@
-Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONDONTWRITEBYTECODE=1 PASSKEY_EXPECTED_ORIGIN=https://@HOST@
 ExecStart=/opt/cth/venvs/@SHA@/bin/gunicorn --config /opt/cth/releases/@SHA@/gunicorn.conf.py --workers 2 --bind 127.0.0.1:8000 wsgi:app
 LogsDirectory=cth-web
 LogsDirectoryMode=0750

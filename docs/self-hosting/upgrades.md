@@ -112,6 +112,12 @@ tables or sequences. A **sequence** supplies record numbers in PostgreSQL;
 a new one needs its own permission alongside the table it serves. A table
 existing is not enough to prove the application can use it.
 
+Releases from the passkey origin verification change onward add
+`PASSKEY_EXPECTED_ORIGIN=https://<your hostname>` to the service template's
+`Environment=` line. The installer derives it from your manifest hostname; it is
+not a `runtime.env` setting, and the upgrade path carries it in the candidate
+unit in step 7. Until it is set, passkey sign-in and enrollment are refused.
+
 If the service template changed, compare each change with your installed
 unit. Apply its reviewed requirements to the candidate service in step 7;
 don't discard existing security settings to make the new version start.
@@ -302,12 +308,6 @@ must stay deleted.
 Your **runtime file**, `/etc/cth/runtime.env`, holds the settings read when
 CTH starts. If the release needs a new setting, add it before invoking its
 Flask commands: those commands also load the application configuration.
-
-Releases from the passkey origin verification change onward require the line
-`PASSKEY_EXPECTED_ORIGIN=https://<your hostname>` in `/etc/cth/runtime.env`
-before any Flask command runs; the new parser rejects a runtime file without
-it, and the application refuses to start without it when passkeys are
-configured. The hostname is the one in your installation manifest.
 
 Use the setting names and formats you identified in step 2. If none changed,
 leave the file alone and still run the validation below. Otherwise open the
