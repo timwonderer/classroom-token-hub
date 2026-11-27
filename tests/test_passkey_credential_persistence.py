@@ -1,30 +1,17 @@
-"""A registered passkey must actually survive past the request that saved it.
+"""A passkey change must actually survive past the request that made it.
 
-``passkey_register_finish`` and ``passkey_delete`` called
-``admin_identity_service.create_admin_credential`` / ``delete_admin_credential``
-directly -- raw Core statements against ``db.session`` -- with no
-``@requires_feat_context`` wrapping the route and no explicit
-``db.session.commit()``. Nothing in this codebase auto-commits at request
-teardown (commits happen only inside a ``FEATContext``'s own transaction),
-so the write was staged and then silently discarded when the request's
-session tore down. The route still flashed "Passkey registered
-successfully!" and returned ``{"success": true}`` -- observed live: the UI
-reports success, but Passkey Settings shows "You don't have any passkeys
-registered yet," and a subsequent sign-in attempt then correctly (but
-confusingly) fails with "Invalid credentials," since no credential ever
-really existed.
-
-Fixed by wrapping both routes in ``@requires_feat_context("FEAT-OPS-001")``,
-matching the already-correct sibling route ``passkey_auth_finish``, whose
-FEATContext owns the transaction and commits on clean exit. (``passkey_auth_finish``
-itself later moved to FEAT-IDEN-009 -- #1777, identity session lifecycle -- since
-it establishes a session rather than performing a maintenance operation; the
-transaction-ownership shape this comment describes is unchanged.)
+Nothing in this codebase auto-commits at request teardown (commits happen only inside
+a ``FEATContext``'s own transaction), so a write staged outside a FEAT is silently
+discarded when the request's session tears down. The route still answered success while
+Passkey Settings showed no passkey. Enrollment and removal now run under FEAT-IDEN-102
+and FEAT-IDEN-107; these tests read back through a fresh session to prove each commit.
 """
 from __future__ import annotations
 
 from tests.helpers.classroom_initializer import initialize_as_teacher
-from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
+from tests.helpers.passkey import (  # noqa: F401  (fake_passwordless is a fixture)
+    fake_passwordless, finish_registration, give_totp_seed, record_passkey, start_registration, totp_code,
+)
 
 
 def _persisted_passkeys(app, user_id):
@@ -40,17 +27,14 @@ def _persisted_passkeys(app, user_id):
         return list_admin_credentials(user_id)
 
 
-def _register(client, fake, user_id, name="Test Passkey"):
-    return client.post(
-        "/admin/passkey/register/finish",
-        json={"token": fake.complete_registration(user_id), "authenticatorName": name},
-    )
-
-
 def test_a_registered_passkey_survives_past_the_request_that_saved_it(app, client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
 
-    resp = _register(client, fake_passwordless, classroom.teacher_user.id, "YubiKey 5")
+    give_totp_seed(classroom.teacher_user.id)
+    assert start_registration(client).status_code == 200
+    resp = finish_registration(
+        client, fake_passwordless.complete_registration(classroom.teacher_user.id), name="YubiKey 5",
+    )
     assert resp.status_code == 200
     assert resp.get_json()["success"] is True
 
@@ -68,14 +52,16 @@ def test_a_registered_passkey_survives_past_the_request_that_saved_it(app, clien
 
 def test_a_deleted_passkey_stays_deleted_past_the_request(app, client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
-    _register(client, fake_passwordless, classroom.teacher_user.id, "Old Phone")
+    give_totp_seed(classroom.teacher_user.id)
+    record_passkey(classroom.teacher_user.id, "cred-old", fake_passwordless, "Old Phone")
+    record_passkey(classroom.teacher_user.id, "cred-keep", fake_passwordless, "Keeper")
 
     passkey_id = next(
         p.id for p in _persisted_passkeys(app, classroom.teacher_user.id)
         if p.authenticator_name == "Old Phone"
     )
 
-    delete_resp = client.delete(f"/admin/passkey/{passkey_id}/delete")
+    delete_resp = client.delete(f"/admin/passkey/{passkey_id}/delete", json={"totp_code": totp_code()})
     assert delete_resp.status_code == 200
     assert delete_resp.get_json()["success"] is True
 
@@ -95,7 +81,7 @@ def test_registered_and_last_used_times_show_class_timezone_not_utc(app, client,
     date there is Pacific Daylight Time.
     """
     classroom = initialize_as_teacher("chemistry_p1", client, app)
-    _register(client, fake_passwordless, classroom.teacher_user.id, "livetest1")
+    record_passkey(classroom.teacher_user.id, "cred-live", fake_passwordless, "livetest1")
 
     page = client.get("/admin/passkey/settings").data.decode()
 

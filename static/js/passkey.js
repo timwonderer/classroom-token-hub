@@ -5,59 +5,87 @@
  */
 
 /**
- * Register a new passkey
- * Official SDK Pattern: Get token from backend → call p.register(token)
+ * POST a JSON body with the CSRF token. Resolves with the parsed body; rejects with an
+ * Error carrying the server's coarse `code` so callers can tell a pending retirement
+ * (`provider_unavailable`) from a refusal.
  */
-async function registerPasskey(startUrl, finishUrl, authenticatorName) {
+async function postPasskeyJson(url, body) {
+    let response;
     try {
-        // Step 1: Get registration token from backend
-        const startResponse = await fetch(startUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            }
-        });
-
-        if (!startResponse.ok) {
-            const error = await startResponse.json();
-            throw new Error(error.error || 'Failed to start registration');
-        }
-
-        const { token, apiKey } = await startResponse.json();
-
-        // Step 2: Initialize Passwordless.dev client (Official SDK)
-        const p = new Passwordless.Client({ apiKey });
-
-        // Step 3: Perform WebAuthn registration (Official SDK)
-        const result = await p.register(token);
-
-        if (!result || result.error) {
-            throw new Error(result?.error || 'Registration failed');
-        }
-
-        // Step 4: Send registration result to backend
-        const finishResponse = await fetch(finishUrl, {
+        response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCsrfToken()
             },
-            body: JSON.stringify({
-                token: result.token,
-                authenticatorName: authenticatorName
-            })
+            body: JSON.stringify(body || {})
         });
+    } catch (e) {
+        const error = new Error('The connection was lost. Reload the page to see where the change stands.');
+        error.code = 'transport';
+        throw error;
+    }
+    return readPasskeyResponse(response);
+}
 
-        if (!finishResponse.ok) {
-            const error = await finishResponse.json();
-            throw new Error(error.error || 'Failed to save passkey');
+async function readPasskeyResponse(response) {
+    let data = null;
+    // A redirected or non-JSON answer (an expired sign-in lands on an HTML login page) is not
+    // a result this page can act on: report it as unreadable, never as success.
+    if (!response.redirected) {
+        try { data = await response.json(); } catch (e) { data = null; }
+    }
+    if (data === null || typeof data !== 'object') {
+        const error = new Error('The response could not be read. Reload the page to see where the change stands.');
+        error.code = 'unreadable';
+        throw error;
+    }
+    if (!response.ok) {
+        // Prefer the human message (a session-ended answer carries a code in `error`).
+        const error = new Error(data.message || data.error || 'The request failed.');
+        error.status = response.status;
+        error.code = data.code || (response.status === 401 ? 'authentication_required' : undefined);
+        throw error;
+    }
+    return data;
+}
+
+/**
+ * Register a passkey, as a new enrollment or (with replacePasskeyId) a selected replacement.
+ * Backend steps: start (fresh TOTP code in, registration token out) -> p.register(token) ->
+ * finish. A failure is shown as an error and the page then reloads, so it renders the pending
+ * operation with its Cancel control; the operation stays until it is finished, cancelled, or expires.
+ */
+// Failures after which the server's state is unknown or pending: reload to see it.
+const KEEP_PENDING_CODES = new Set(['provider_unavailable', 'unreadable', 'transport']);
+
+async function registerPasskey(config, authenticatorName, totpCode, replacePasskeyId) {
+    const startBody = { totp_code: totpCode };
+    if (replacePasskeyId) { startBody.replace_passkey_id = Number(replacePasskeyId); }
+    const { token, apiKey, binding } = await postPasskeyJson(config.startUrl, startBody);
+
+    let result;
+    try {
+        const p = new Passwordless.Client({ apiKey });
+        // The binding is stored as the credential's nickname, so the server can tell which
+        // operation this registration was made for.
+        result = await p.register(token, binding);
+        if (!result || result.error) {
+            throw new Error((result && result.error) || 'Registration failed');
         }
-
-        return { success: true };
-
     } catch (error) {
-        console.error('Passkey registration error:', error);
+        error.code = 'ceremony';
+        throw error;
+    }
+
+    try {
+        return await postPasskeyJson(config.finishUrl, {
+            token: result.token,
+            binding: binding,
+            authenticatorName: authenticatorName
+        });
+    } catch (error) {
+        error.pendingOperation = true;  // the operation is still pending: reload to show its Cancel control
         throw error;
     }
 }
@@ -179,38 +207,136 @@ function getCsrfToken() {
 }
 
 /**
- * Setup passkey registration button
+ * Passkey settings page: register, replace, delete, retry and cancel.
+ * Every action but retry and cancel needs a fresh authenticator code from the input
+ * named by config.codeInputId. A completed change ends the sign-in; the server answers
+ * with the sign-in page to go to.
  */
-function setupPasskeyRegistration(config) {
-    const button = document.getElementById(config.buttonId);
-    if (!button) return;
+function setupPasskeyManager(config) {
+    const feedback = document.getElementById(config.feedbackId);
+    const codeInput = document.getElementById(config.codeInputId);
 
-    button.addEventListener('click', async function() {
-        const originalHTML = this.innerHTML;
-        const authenticatorName = config.authenticatorName || await window.AppCore.prompt(
+    function show(level, title, message) {
+        if (!feedback || !window.AppCore) { return; }
+        feedback.replaceChildren(window.AppCore.buildAlertCard({
+            level: level, title: title, icon: level === 'danger' ? 'error' : 'info', body: message,
+        }));
+        feedback.className = 'mb-4';
+        feedback.focus();
+    }
+
+    function readCode() {
+        const code = (codeInput && codeInput.value || '').trim();
+        if (!/^[0-9]{6}$/.test(code)) {
+            show('danger', 'Authenticator code needed', 'Enter the current 6-digit code from your authenticator app, then try again.');
+            if (codeInput) { codeInput.focus(); }
+            return null;
+        }
+        return code;
+    }
+
+    function finished(data) {
+        // Only a server answer that names the sign-in page is a completed change.
+        if (data && data.redirect) { window.location.href = data.redirect; return; }
+        window.location.reload();
+    }
+
+    function failed(title, error, button, restoreHTML) {
+        if (error instanceof TypeError && !error.code) { error.code = 'transport'; error.message = 'The connection was lost. Reload the page to see where the change stands.'; }
+        const pending = KEEP_PENDING_CODES.has(error.code) || error.code === 'ceremony' || error.pendingOperation === true;
+        if (error.status === 401 || error.code === 'authentication_required') {
+            show('danger', 'Sign in again', error.message);
+            if (config.loginUrl) { window.setTimeout(() => { window.location.href = config.loginUrl; }, 4000); }
+            return;
+        }
+        show('danger', error.code === 'provider_unavailable' ? 'Change saved, not yet confirmed' : title, error.message);
+        if (pending) {
+            window.setTimeout(() => window.location.reload(), 4000);
+            return;
+        }
+        if (button) { button.disabled = false; button.innerHTML = restoreHTML; }
+    }
+
+    async function enroll(button, replacePasskeyId) {
+        const code = readCode();
+        if (!code) { return; }
+        const authenticatorName = await window.AppCore.prompt(
             'Give this passkey a name you will recognise, such as "YubiKey" or "Touch ID".',
             { title: 'Name this passkey', label: 'Passkey name', confirmLabel: 'Continue', requiredMessage: 'Enter a name.' }
         );
-
-        if (!authenticatorName) {
-            window.AppCore?.toast('Name is required.', 'error');
-            return;
-        }
-
+        if (!authenticatorName) { return; }
+        const originalHTML = button.innerHTML;
         try {
-            this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Registering...';
-
-            await registerPasskey(config.startUrl, config.finishUrl, authenticatorName);
-
-            // Success - reload page
-            window.location.reload();
-
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Registering...';
+            finished(await registerPasskey(config, authenticatorName, code, replacePasskeyId));
         } catch (error) {
-            window.AppCore?.toast('Error: ' + error.message, 'error');
-            this.disabled = false;
-            this.innerHTML = originalHTML;
+            failed('Could not register passkey', error, button, originalHTML);
         }
+    }
+
+    const registerButton = document.getElementById(config.registerButtonId);
+    if (registerButton) {
+        registerButton.addEventListener('click', () => enroll(registerButton, null));
+    }
+
+    document.querySelectorAll('.replace-passkey-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+            const name = button.dataset.credentialName;
+            if (!(await window.AppCore.confirm(
+                `Replace "${name}"? You will register a new passkey, then "${name}" is removed and you sign in again.`,
+                { title: 'Replace passkey', confirmLabel: 'Replace' }
+            ))) { return; }
+            await enroll(button, button.dataset.credentialId);
+        });
+    });
+
+    document.querySelectorAll('.delete-passkey-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+            const code = readCode();
+            if (!code) { return; }
+            const name = button.dataset.credentialName;
+            if (!(await window.AppCore.confirm(`Delete "${name}"?`, { title: 'Delete passkey', confirmLabel: 'Delete', danger: true }))) {
+                return;
+            }
+            const originalHTML = button.innerHTML;
+            try {
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                const response = await fetch(config.deleteUrl.replace('/0/', `/${button.dataset.credentialId}/`), {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({ totp_code: code })
+                });
+                finished(await readPasskeyResponse(response));
+            } catch (error) {
+                failed('Could not delete passkey', error, button, originalHTML);
+            }
+        });
+    });
+
+    [[config.resumeButtonId, config.resumeUrl, 'Could not finish the change'],
+     [config.cancelButtonId, config.cancelUrl, 'Could not cancel the change']].forEach(([id, url, title]) => {
+        const button = id && document.getElementById(id);
+        if (!button) { return; }
+        button.addEventListener('click', async () => {
+            const originalHTML = button.innerHTML;
+            try {
+                button.disabled = true;
+                const body = {};
+                const nameInput = url === config.resumeUrl && config.resumeNameInputId
+                    ? document.getElementById(config.resumeNameInputId) : null;
+                if (nameInput && nameInput.value.trim()) { body.authenticatorName = nameInput.value.trim(); }
+                if (button.dataset.binding) { body.binding = button.dataset.binding; }
+                const data = await postPasskeyJson(url, body);
+                if (data.redirect) { finished(data); } else { window.location.reload(); }
+            } catch (error) {
+                failed(title, error, button, originalHTML);
+            }
+        });
     });
 }
 

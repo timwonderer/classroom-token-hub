@@ -118,10 +118,6 @@ def admin_set_current_class(client: FlaskClient, class_id: str):
     return client.post("/admin/current-class", json={"class_id": class_id})
 
 
-def admin_passkey_register_start(client: FlaskClient):
-    return client.post("/admin/passkey/register/start", json={})
-
-
 def admin_passkey_auth_finish(client: FlaskClient, *, token: str):
     return client.post("/admin/passkey/auth/finish", json={"token": token})
 

@@ -48,7 +48,6 @@ from app.services.credential_lifecycle import (
     CredentialCompliance,
     CredentialOperationRefused,
     PasskeyAssertion,
-    SignupCapability,
     TotpCode,
     credential_compliance,
     decoded_secret_bits,
@@ -129,13 +128,14 @@ def _stored_seed(user_id):
     return _user(user_id).totp_secret_encrypted
 
 
-def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=HELD_SEED, credential="cred-1"):
-    """A signed-in teacher holding ``seed`` and one activated passkey."""
+def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=HELD_SEED, credential="cred-1", passkey=True):
+    """A signed-in teacher holding ``seed`` and (unless ``passkey`` is false) one activated passkey."""
     classroom = initialize_as_teacher(key, client, app)
     user_id = classroom.teacher_user.id
     _set_seed(user_id, seed)
-    _add_passkey(user_id, credential)
-    fake.credentials[credential] = passkey_external_id(user_id)
+    if passkey:
+        _add_passkey(user_id, credential)
+        fake.credentials[credential] = passkey_external_id(user_id)
     return classroom, user_id
 
 
@@ -426,19 +426,6 @@ def test_open_operation_refuses_an_assertion_for_passkey_work(client, app, fake_
         )
 
     assert refused.value.category == "proof_kind_mismatch"
-
-
-def test_the_signup_capability_is_not_accepted_without_an_issuer(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-
-    with pytest.raises(CredentialOperationRefused) as refused:
-        open_credential_operation(
-            user_id=user_id, purpose="passkey_enroll",
-            proof=SignupCapability("x" * 43), session_nonce=_nonce(user_id),
-        )
-
-    assert refused.value.category == "proof_rejected"
-    assert CredentialOperation.query.count() == 0
 
 
 def test_totp_code_opens_passkey_enrollment_and_a_wrong_code_does_not(client, app, fake_passwordless):
@@ -1005,43 +992,15 @@ def test_deleting_the_principal_removes_its_operation(app):
 # review findings
 # ---------------------------------------------------------------------------
 
-def test_removing_the_authorizing_passkey_stops_the_pending_replacement(client, app, fake_passwordless):
-    from app.services import passkey_service
-
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    operation_id = _open_replacement(user_id, fake_passwordless)
-    secret, _ = _hold(user_id, operation_id)
-    before = _stored_seed(user_id)
-    row_id = PasskeyCredential.query.filter_by(user_id=user_id).one().id
-
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:remove-passkey"):
-        assert passkey_service.remove_passkey(user_id, row_id)
-    assert _user(user_id).credential_generation == 2
-
-    with pytest.raises(CredentialOperationRefused) as refused:
-        _activate(user_id, operation_id, _code(secret))
-    assert refused.value.category == "stale_generation"
-    assert _stored_seed(user_id) == before
-
-
-def test_removing_nothing_does_not_advance_the_generation(client, app, fake_passwordless):
-    from app.services.admin_identity_service import delete_admin_credential
-
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:remove-nothing"):
-        assert not delete_admin_credential(10**9, user_id)
-    assert _user(user_id).credential_generation == 1
-
-
 def test_the_provider_is_called_with_no_transaction_open(client, app, fake_passwordless):
     seen = []
-    original = fake_passwordless.sign_in
+    original = fake_passwordless.send  # the provider's /signin/verify round trip
 
-    def sign_in(verify):
+    def send(request, **kwargs):
         seen.append(db.session().in_transaction())
-        return original(verify)
+        return original(request, **kwargs)
 
-    fake_passwordless.sign_in = sign_in
+    fake_passwordless.send = send
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     _nonce(user_id)  # an incidental read leaves a transaction open, as a request would
     assert db.session().in_transaction()
@@ -1157,8 +1116,8 @@ def _open_with(user_id, fake, challenge, credential="cred-1"):
 def test_a_sign_in_token_without_a_valid_challenge_is_refused_and_the_provider_is_not_called(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     calls = []
-    original = fake_passwordless.sign_in
-    fake_passwordless.sign_in = lambda verify: calls.append(verify) or original(verify)
+    original = fake_passwordless.send
+    fake_passwordless.send = lambda request, **kw: calls.append(request) or original(request, **kw)
 
     for bad in ("", "x" * 64, None):
         with pytest.raises(CredentialOperationRefused) as refused:

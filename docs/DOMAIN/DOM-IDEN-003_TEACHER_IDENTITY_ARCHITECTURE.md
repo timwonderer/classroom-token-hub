@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.13 | 2026-11-26 | 2.12 | Constitutional |
+| DOM-IDEN-003 | 2.14 | 2026-11-27 | 2.13 | Constitutional |
 
 ---
 
@@ -184,8 +184,7 @@ TOTP verification precedes durable initial provisioning and is required before
 `has_completed_setup = true`. Passkey enrollment follows successful atomic
 provisioning and may be deferred; skipping or failing that step does not undo signup,
 but leaves the principal noncompliant until a passkey is enrolled (§VII.A Credential
-compliance gate). The explicit dual-purpose signup ceremony in §VII.A may authorize
-that one enrollment.
+compliance gate). That enrollment proves fresh TOTP like any other (§VII.A).
 
 Per DOM-IDEN-005 §VI, the initial Class and administrative Seat MUST be provisioned atomically with the User. Failure to provision the initial Class SHALL invalidate the entire teacher provisioning transaction.
 
@@ -210,8 +209,7 @@ Teachers administering financial actions (adjustments, payroll, approvals) are a
 ### Step-Up Authentication
 
 Certain privileged identity mutations SHALL require step-up authentication beyond the existing session. Step-up authentication is fresh, explicit, purpose-bound proof for the privileged
-action, not authority inferred from an existing session. The sole signup-specific
-reuse is the explicit dual-purpose ceremony in §VII.A; it is not a reusable login proof.
+action, not authority inferred from an existing session.
 
 The following actions SHALL require step-up authentication:
 
@@ -254,8 +252,8 @@ passkey. Ordinary sign-in may use either. Maintenance of each requires its own f
 purpose-bound proof: fresh TOTP for passkey enrollment, replacement and revocation;
 a fresh assertion from an activated passkey for TOTP replacement. Enrollment may be
 deferred past signup; a principal without an activated passkey is noncompliant until
-one is enrolled (see Credential compliance gate). The signup-derived five-minute
-capability remains the proof for the first enrollment. Multiple passkeys may coexist.
+one is enrolled (see Credential compliance gate). Fresh TOTP is the proof for the first
+enrollment, as for every other. Multiple passkeys may coexist.
 
 A sysadmin principal is subject to the same obligations, proofs and gate after initial
 authentication. Principal provisioning and credential enrollment are distinct: sysadmin
@@ -290,23 +288,19 @@ All consuming commands recheck generation and applicable session binding against
 current state. Already-completed retries and cleanup do not advance it again or
 invalidate a later sign-in. An old provider response grants no authority.
 
-### Signup-derived enrollment
+### Signup and first enrollment
 
-Before submitting signup TOTP verification, the teacher may explicitly elect to enroll
-the required passkey now; enrollment may instead be deferred. Successful dual-purpose verification atomically provisions the
-account and creates one five-minute enrollment authorization bound to the principal,
-generation and signup browser/session. It authorizes one initial enrollment operation,
-not replacement or general maintenance. Starting consumes it into that operation;
-retries resume only that operation and never renew expiry. Skipping, expiry, session
-invalidation or SATAR supersession ends it. A session alone cannot regenerate it.
-Successful activation ends the signup session and requires fresh sign-in; skipping
-retains the session but leaves the principal noncompliant until a passkey is enrolled.
-Enrollment failure never rolls back completed signup.
+Successful signup TOTP verification atomically provisions the account and issues no
+enrollment authorization. The first passkey is enrolled through FEAT-IDEN-102 on a later
+request with fresh TOTP, and may be deferred. Successful activation ends the signup
+session and requires fresh sign-in; deferring retains the session but leaves the
+principal noncompliant until a passkey is enrolled. Enrollment failure never rolls back
+completed signup.
 
 ### Distinct lifetimes and concurrency
 
-Interactive authority expires at its fixed deadline (at most ten minutes, five for
-signup) or session invalidation. Pending secrets/credentials do not authenticate.
+Interactive authority expires at its fixed deadline (at most ten minutes)
+or session invalidation. Pending secrets/credentials do not authenticate.
 Expiry prevents further discretionary mutations, but does not cancel a durably
 committed exact remote-retirement intent. Reconciliation can complete only its
 recorded operation, or retire material superseded by recovery/destruction; it cannot
@@ -630,6 +624,8 @@ Revisions to this document SHALL:
 2. Update the effective date.
 3. Maintain consistency with DOM-IDEN-001 and DOM-IDEN-005.
 4. Maintain consistency with INV-CORE-000.
+
+**2026-11-27 amendment (owner authorization 2026-11-27):** Removes the signup-derived five-minute enrollment capability and the signup enrollment election; fresh TOTP is the proof for the first passkey enrollment. Explicit cancellation, expiry, reservation and stale-operation protections are unchanged.
 
 **2026-11-26 amendment (owner rulings 2026-11-26):** Passkeys are mandatory for teacher and sysadmin principals (dual enrollment); adds the credential compliance gate, the sysadmin credential-maintenance clause and the TOTP seed-length consequence. Signup passkey wording changes from optional to deferrable.
 

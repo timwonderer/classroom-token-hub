@@ -112,6 +112,12 @@ tables or sequences. A **sequence** supplies record numbers in PostgreSQL;
 a new one needs its own permission alongside the table it serves. A table
 existing is not enough to prove the application can use it.
 
+Releases from the passkey origin verification change onward add
+`PASSKEY_EXPECTED_ORIGIN=https://<your hostname>` to the service template's
+`Environment=` line. The installer derives it from your manifest hostname; it is
+not a `runtime.env` setting, and the upgrade path carries it in the candidate
+unit in step 7. Until it is set, passkey sign-in and enrollment are refused.
+
 If the service template changed, compare each change with your installed
 unit. Apply its reviewed requirements to the candidate service in step 7;
 don't discard existing security settings to make the new version start.

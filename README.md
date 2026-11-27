@@ -187,6 +187,7 @@ For production, both Turnstile keys are also mandatory.
 | `SECRET_KEY_FALLBACKS` | Previous secret keys, so a rotation doesn't sign everyone out |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile; both are required when `FLASK_ENV=production`. Local development can omit them |
 | `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`, `PASSWORDLESS_API_URL` | Passkey sign-in |
+| `PASSKEY_EXPECTED_ORIGIN` | This installation's public origin (`https://host[:port]`); the passkey RP ID is its hostname. While it is missing or invalid, passkey sign-in and enrollment are refused (the rest of the application is unaffected). Self-hosting installs derive it from the manifest hostname |
 | `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; rate limits are off in development unless `DEV_ENABLE_RATELIMIT=1` |
 | `STUDENT_SETUP_REDIS_URL` | Dedicated, non-persistent Redis for student account setup ([infra/student-setup/README.md](infra/student-setup/README.md)). Required: student claim and recovery setup refuse to run without it. Never point it at the rate-limit store |
 | `EXTERNAL_DOCS_BASE_URL`, `MARKETING_SITE_URL`, `STATUS_PAGE_URL`, `GRAFANA_URL`, `SUPPORT_EMAIL` | External links |

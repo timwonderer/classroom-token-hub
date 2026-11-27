@@ -17,10 +17,9 @@ from app.models import (
     UserRole,
 )
 from tests.helpers.classroom_initializer import initialize, initialize_as_student, initialize_as_teacher
-from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
+from tests.helpers.passkey import fake_passwordless, give_totp_seed, start_registration  # noqa: F401
 from tests.dom.identity.helpers import (
     admin_passkey_auth_finish,
-    admin_passkey_register_start,
     student_login,
     sysadmin_passkey_auth_finish,
 )
@@ -82,8 +81,9 @@ def test_DOM_IDEN_006__student_login_missing_last_active_class_shows_selector(cl
 def test_DOM_IDEN_006__admin_passkey_register_uses_canonical_user_external_id(client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     user = classroom.teacher_user
+    give_totp_seed(user.id)
 
-    response = admin_passkey_register_start(client)
+    response = start_registration(client)
 
     assert response.status_code == 200, f"Expected 200 but got {response.status_code}. Redirecting to: {response.location if response.status_code == 302 else 'N/A'}"
     assert response.get_json()["token"].startswith("register_")

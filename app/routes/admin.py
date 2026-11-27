@@ -263,7 +263,8 @@ from app.services.admin_identity_service import (
     admin_has_passkeys,
     list_admin_credentials,
 )
-from app.services import passkey_service
+from app.routes import passkey_management
+from app.services import credential_lifecycle, passkey_service
 from app.services.recovery_service import (
     delete_recovery_rows_for_user,
     find_recovery_request_by_resume_pin,
@@ -10209,71 +10210,28 @@ def api_economy_validate(feature):
 @admin_required
 @limiter.limit("10 per minute")
 def passkey_register_start():
+    """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token.
+
+    A ``replace_passkey_id`` in the body makes this a selected replacement.
     """
-    Start passkey registration - Generate registration token.
-
-    Official SDK Pattern: Create RegisterToken and get token from passwordless.dev
-    """
-    try:
-        user = get_current_user()
-        if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
-            abort(404)
-
-        username = session.get("admin_auth_username") or f"user_{user.id}"
-        token = passkey_service.create_registration_token(
-            user, alias=username, display_name=user.get_display_username(),
-        )
-
-        return jsonify({
-            "token": token,
-            "apiKey": get_public_api_key()
-        }), 200
-
-    except passkey_service.PasskeyAliasConflict as e:
-        current_app.logger.warning("Passkey registration refused: %s", e)
-        return jsonify({"error": e.public_message}), 409
-    except ValueError as e:
-        current_app.logger.error(f"Passwordless.dev configuration error: {e}")
-        return jsonify({"error": "Passkey service not configured"}), 503
-    except Exception as e:
-        current_app.logger.error(f"Error starting passkey registration: {e}")
-        return jsonify({"error": "Failed to start registration"}), 500
+    user = get_current_user()
+    if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
+        abort(404)
+    return passkey_management.register_start(
+        user_id=user.id,
+        alias=session.get("admin_auth_username") or f"user_{user.id}",
+        display_name=user.get_display_username(),
+    )
 
 
 @admin_bp.route('/passkey/register/finish', methods=['POST'])
 @admin_required
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_register_finish():
-    """
-    Finish passkey registration - Save credential metadata.
-
-    After frontend completes WebAuthn ceremony, store credential metadata.
-    """
-    try:
-        user = get_current_user()
-        if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
-            abort(404)
-        data = request.get_json(silent=True) or {}
-
-        # The token from p.register() is verified here, and the credential it
-        # names is recorded for this teacher only.
-        passkey_service.complete_registration(
-            user,
-            data.get('token'),
-            authenticator_name=data.get('authenticatorName', 'Unnamed Passkey'),
-        )
-        flash("Passkey registered successfully!", "success")
-        return jsonify({"success": True}), 200
-
-    except passkey_service.PasskeyError as e:
-        db.session.rollback()
-        current_app.logger.warning("Passkey registration refused: %s", e)
-        return jsonify({"error": e.public_message}), 400
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error finishing passkey registration: {e}")
-        return jsonify({"error": "Failed to register passkey"}), 500
+    """FEAT-IDEN-102: verify the registration and complete the enrollment or replacement."""
+    return passkey_management.register_finish(
+        user_id=g.canonical_context.user_id, login_endpoint="admin.login",
+    )
 
 
 @admin_bp.route('/passkey/auth/start', methods=['POST'])
@@ -10375,26 +10333,28 @@ def passkey_auth_finish():
 
 @admin_bp.route('/passkey/<int:passkey_id>/delete', methods=['DELETE'])
 @admin_required
-@requires_feat_context("FEAT-OPS-001", key_per_call=True)
 @limiter.limit("10 per minute")
 def passkey_delete(passkey_id):
-    """Delete a passkey."""
-    try:
-        user_id = g.canonical_context.user_id
-        # passwordless.dev first: a passkey removed only here would still work.
-        if not passkey_service.remove_passkey(user_id, passkey_id):
-            return jsonify({"error": "Passkey not found"}), 404
-        flash("Passkey deleted successfully", "success")
-        return jsonify({"success": True}), 200
+    """FEAT-IDEN-107: revoke one passkey after fresh TOTP, remote-first."""
+    return passkey_management.revoke(
+        user_id=g.canonical_context.user_id, passkey_id=passkey_id, login_endpoint="admin.login",
+    )
 
-    except passkey_service.PasskeyServiceUnavailable as e:
-        db.session.rollback()
-        current_app.logger.error("Passkey removal failed remotely: %s", e)
-        return jsonify({"error": e.public_message}), 503
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error deleting passkey: {e}")
-        return jsonify({"error": "Failed to delete passkey"}), 500
+
+@admin_bp.route('/passkey/resume', methods=['POST'])
+@admin_required
+@limiter.limit("10 per minute")
+def passkey_resume():
+    """FEAT-IDEN-102/107: finish a committed passkey replacement or removal that the provider did not confirm."""
+    return passkey_management.resume(user_id=g.canonical_context.user_id, login_endpoint="admin.login")
+
+
+@admin_bp.route('/passkey/cancel', methods=['POST'])
+@admin_required
+@limiter.limit("10 per minute")
+def passkey_cancel():
+    """FEAT-IDEN-102: cancel a passkey change that has not yet committed its retirement."""
+    return passkey_management.cancel(user_id=g.canonical_context.user_id)
 
 
 @admin_bp.route('/passkey/settings')
@@ -10405,10 +10365,24 @@ def passkey_settings():
     admin = db.get_or_404(User, user_id)
     from app.services.identity.builders import build_passkey_credential_views
     credentials = build_passkey_credential_views(g.canonical_context, list_admin_credentials(user_id))
+    operation_state, operation_binding = credential_lifecycle.open_passkey_operation_presentation(user_id)
 
     return render_template('admin_passkey_settings.html',
                          admin=admin,
-                         credentials=credentials)
+                         credentials=credentials,
+                         operation_state=operation_state,
+                         operation_binding=operation_binding,
+                         passkey_urls=_passkey_urls())
+
+
+def _passkey_urls():
+    return {
+        "start": url_for("admin.passkey_register_start"),
+        "finish": url_for("admin.passkey_register_finish"),
+        "cancel": url_for("admin.passkey_cancel"),
+        "resume": url_for("admin.passkey_resume"),
+        "delete": url_for("admin.passkey_delete", passkey_id=0),
+    }
 
 
     # ==================== ISSUE RESOLUTION SYSTEM ====================

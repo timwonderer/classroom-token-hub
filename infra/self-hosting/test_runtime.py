@@ -42,7 +42,9 @@ class RuntimeTests(unittest.TestCase):
                          ("PASSWORDLESS_API_URL", "https://app.classroomtokenhub.com"),
                          ("PASSWORDLESS_API_URL", "https://provider.example.org@elsewhere.example.org"),
                          ("LD_PRELOAD", "/somewhere/lib.so"), ("TURNSTILE_SECRET_KEY", "ab$HOME"),
-                         ("LOG_FILE", "/opt/cth/app.log")):
+                         ("LOG_FILE", "/opt/cth/app.log"),
+                         ("PASSKEY_EXPECTED_ORIGIN", "https://other.example.org"),
+                         ("PASSKEY_EXPECTED_ORIGIN", "https://hub.example.org/login")):
             with self.subTest(key=key), self.assertRaises(ValueError) as err:
                 self.parse(dict(self.env, **{key: bad}))
             self.assertNotIn(bad, str(err.exception))
@@ -112,6 +114,13 @@ class RuntimeTests(unittest.TestCase):
                 runtime.managed(target, "cth-web.service", self.cfg, True)
             self.assertEqual(target.read_bytes(), b"operator file")
 
+    def test_the_passkey_origin_is_derived_from_the_manifest_not_supplied(self):
+        self.assertNotIn("PASSKEY_EXPECTED_ORIGIN", runtime.REQUIRED)
+        self.assertNotIn("PASSKEY_EXPECTED_ORIGIN", self.parse(self.env))  # absent is accepted
+        self.parse(dict(self.env, PASSKEY_EXPECTED_ORIGIN="https://hub.example.org"))  # the derived value is accepted
+        with self.assertRaisesRegex(ValueError, "PASSKEY_EXPECTED_ORIGIN"):
+            self.parse(dict(self.env, PASSKEY_EXPECTED_ORIGIN="https://elsewhere.example.org"))
+
     def test_units_and_tls_template(self):
         templates = {n: runtime.template(n, self.cfg).decode() for n in
                      ("cth-web.service", "cth-ingress.service", "ingress.conf")}
@@ -124,7 +133,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(unit.get("Install", "WantedBy"), "multi-user.target")
         web = templates["cth-web.service"]
         for value in ("--bind 127.0.0.1:8000", "wsgi:app", "LimitCORE=0", "MemorySwapMax=0",
-                      "/gunicorn.conf.py", "EnvironmentFile=/etc/cth/runtime.env"):
+                      "/gunicorn.conf.py", "EnvironmentFile=/etc/cth/runtime.env",
+                      " PASSKEY_EXPECTED_ORIGIN=https://hub.example.org"):
             self.assertIn(value, web)
         self.assertIn("listen 0.0.0.0:443 ssl;", templates["ingress.conf"])
         self.assertIn("proxy_pass http://127.0.0.1:8000;", templates["ingress.conf"])

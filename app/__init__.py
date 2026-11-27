@@ -289,9 +289,29 @@ def create_app():
     # SECRET_KEY default and raises "CSRF is not configured."
     csrf_secret_key = os.getenv("CSRF_SECRET_KEY", "").strip() or None
 
+    # The deployment's public origin, the only expectation passkey ceremonies are checked
+    # against (passkey_service.check_ceremony_binding). passwordless.dev records whatever
+    # origin and RP ID the browser supplied, so the app must supply its own. A missing or
+    # invalid value never stops the application: it leaves both settings empty, so every
+    # passkey ceremony is refused (fail closed) while everything else keeps working.
+    from app.services.passkey_service import PasskeyOriginConfigError, parse_expected_origin
+    passkey_expected_origin = ""
+    passkey_expected_rp_id = ""
+    raw_passkey_origin = os.getenv("PASSKEY_EXPECTED_ORIGIN", "").strip()
+    if raw_passkey_origin:
+        try:
+            passkey_expected_origin, passkey_expected_rp_id = parse_expected_origin(raw_passkey_origin)
+        except PasskeyOriginConfigError:
+            pass
+    passkey_origin_unusable = bool(
+        (os.getenv("PASSWORDLESS_API_KEY") or raw_passkey_origin) and not passkey_expected_origin
+    )
+
     app.config.from_mapping(
         DEBUG=False,
         ENV=flask_env,
+        PASSKEY_EXPECTED_ORIGIN=passkey_expected_origin,
+        PASSKEY_EXPECTED_RP_ID=passkey_expected_rp_id,
         SECRET_KEY=os.environ["SECRET_KEY"],
         SECRET_KEY_FALLBACKS=secret_key_fallbacks,
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
@@ -401,6 +421,11 @@ def create_app():
         file_handler.addFilter(RequestIdFilter())
         file_handler._cth_handler = True
         root_logger.addHandler(file_handler)
+
+    if passkey_origin_unusable:
+        app.logger.warning(
+            "PASSKEY_EXPECTED_ORIGIN is missing or invalid: passkey sign-in and enrollment are refused until it is set."
+        )
 
     # -------------------- DATABASE SAFETY GUARDS --------------------
     # Prevent accidental connection to the wrong database environment

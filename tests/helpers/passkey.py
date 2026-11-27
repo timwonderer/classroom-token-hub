@@ -12,6 +12,7 @@ is a 409 ``alias_conflict``.
 from __future__ import annotations
 
 import secrets
+import uuid
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
@@ -19,6 +20,7 @@ import pytest
 from passwordless import PasswordlessError
 from passwordless.errors import PasswordlessProblemDetails
 
+from app.services import passkey_service
 from app.utils.user_ids import passkey_external_id
 
 
@@ -31,6 +33,11 @@ def _problem(status: int, error_code: str) -> PasswordlessError:
     ))
 
 
+#: The deployment origin the suite configures (tests/conftest.py) and the fake's ceremonies report.
+EXPECTED_ORIGIN = "https://cth.test"
+EXPECTED_RP_ID = "cth.test"
+
+
 @dataclass
 class FakePasswordless:
     credentials: dict = field(default_factory=dict)  # credential_id -> external user id
@@ -38,15 +45,29 @@ class FakePasswordless:
     tokens: dict = field(default_factory=dict)       # token -> verified payload
     calls: list = field(default_factory=list)
     fail_deletes: bool = False
+    lose_next_delete_response: bool = False  # the provider deletes, then the reply is lost
+    strict_missing_deletes: bool = False  # deleting an absent credential is a 404, as the provider may answer
+    generic_404_deletes: bool = False  # deletes answer a bare proxy-style 404 (no problem code), whatever is held
+    fail_inventory: bool = False  # the credential listing is unavailable
+    origin: str | None = EXPECTED_ORIGIN  # what the browser reported for the ceremony (the real SDK's ``origin``)
+    rp_id: str | None = EXPECTED_RP_ID    # and ``rp_id``
+    pending_nickname: str | None = None  # what the browser would register the next credential under
 
     # ---- what tests use to simulate the browser ceremony ----
 
-    def complete_registration(self, user_id, *, external_id=None) -> str:
-        """A registration the browser finished: a new credential and its token."""
+    def complete_registration(self, user_id, *, external_id=None, nickname=None) -> str:
+        """A registration the browser finished: a new credential and its token.
+
+        The credential's nickname is what the browser passed to ``p.register``: the binding
+        of the latest start (``pending_nickname``) unless a test says otherwise.
+        """
         external_id = external_id or passkey_external_id(user_id)
         credential_id = f"cred-{secrets.token_hex(4)}"
         self.credentials[credential_id] = external_id
-        return self._token(external_id, credential_id, "passkey_register")
+        return self._token(
+            external_id, credential_id, "passkey_register",
+            nickname=self.pending_nickname if nickname is None else nickname,
+        )
 
     def sign_in_token(self, credential_id, *, type_="passkey_signin", success=True) -> str:
         return self._token(self.credentials[credential_id], credential_id, type_, success)
@@ -54,11 +75,16 @@ class FakePasswordless:
     def token_for(self, external_id, credential_id, *, type_="passkey_signin") -> str:
         return self._token(external_id, credential_id, type_)
 
-    def _token(self, external_id, credential_id, type_, success=True) -> str:
+    def _token(self, external_id, credential_id, type_, success=True, nickname=None) -> str:
         token = f"verify_{secrets.token_hex(8)}"
-        self.tokens[token] = SimpleNamespace(
-            success=success, user_id=external_id, credential_id=credential_id, type=type_,
-        )
+        # The JSON body /signin/verify returns, with its real key spellings (``rpId``, not ``rpid``).
+        body = {
+            "success": success, "userId": external_id, "credentialId": credential_id, "type": type_,
+            "nickname": nickname, "origin": self.origin, "rpId": self.rp_id,
+            "timestamp": "2026-11-27T12:00:00Z", "expiresAt": "2026-11-27T12:01:00Z",
+            "tokenId": f"tid-{secrets.token_hex(4)}", "device": "Chrome", "country": "US",
+        }
+        self.tokens[token] = {k: v for k, v in body.items() if v is not None or k == "nickname"}
         return token
 
     # ---- the PasswordlessClient surface ----
@@ -72,17 +98,54 @@ class FakePasswordless:
             self.aliases[alias] = register_token.user_id
         return SimpleNamespace(token=f"register_{secrets.token_hex(8)}")
 
-    def sign_in(self, verify_sign_in):
-        payload = self.tokens.pop(verify_sign_in.token, None)  # tokens are single use
+    # The SDK's HTTP layer: ``verify_signin_token`` POSTs through ``options`` and ``session``.
+    @property
+    def options(self):
+        from passwordless import PasswordlessOptions
+        return PasswordlessOptions("test-secret-not-real")
+
+    @property
+    def session(self):
+        return self
+
+    def prepare_request(self, request):
+        return request
+
+    def send(self, request, **kwargs):
+        import json
+        assert request.url.endswith("/signin/verify"), request.url
+        token = json.loads(request.data)["token"]
+        payload = self.tokens.pop(token, None)  # tokens are single use
         if payload is None:
-            raise _problem(400, "invalid_token")
-        return payload
+            problem = {"type": "https://docs.passwordless.dev/guide/errors.html#invalid_token",
+                       "title": "invalid_token", "status": 400, "errorCode": "invalid_token"}
+            return SimpleNamespace(status_code=400, text=json.dumps(problem), headers={}, json=lambda: problem)
+        return SimpleNamespace(status_code=200, text=json.dumps(payload), headers={})
 
     def delete_credential(self, delete_credential):
         self.calls.append(("delete_credential", delete_credential.credential_id))
         if self.fail_deletes:
             raise _problem(500, "unavailable")
+        if self.generic_404_deletes:
+            raise PasswordlessError(PasswordlessProblemDetails(
+                type="https://docs.passwordless.dev/guide/errors.html", title="Unexpected error",
+                status=404, detail="<html>Not Found</html>",
+            ))
+        if self.strict_missing_deletes and delete_credential.credential_id not in self.credentials:
+            raise _problem(404, "credential_not_found")
         self.credentials.pop(delete_credential.credential_id, None)
+        if self.lose_next_delete_response:
+            self.lose_next_delete_response = False
+            raise _problem(504, "timeout")
+
+    def get_credentials(self, user_id):
+        self.calls.append(("get_credentials", user_id))
+        if self.fail_inventory:
+            raise _problem(500, "unavailable")
+        return [
+            SimpleNamespace(descriptor=SimpleNamespace(type="public-key", id=credential_id), user_id=owner)
+            for credential_id, owner in self.credentials.items() if owner == user_id
+        ]
 
     def delete_user(self, delete_user):
         self.calls.append(("delete_user", delete_user.user_id))
@@ -105,3 +168,57 @@ def fake_passwordless(monkeypatch):
         lambda: pytest.fail("a test reached the real passwordless.dev client"),
     )
     return fake
+
+
+# ---- a teacher or sysadmin who can pass the fresh-TOTP gate ----------------
+
+#: A 160-bit seed (SPEC-SEC-001 §V.1 item 7); the TOTP the tests below prove with.
+HELD_SEED = "KRSXG5CTMVRXEZLUKN2XAZLSMRSXGZLT"
+
+
+def totp_code(seed=HELD_SEED):
+    """The current code for ``seed`` at the resolver's instant (never the wall clock)."""
+    import pyotp
+    from tests.helpers import temporal
+    return pyotp.TOTP(seed).at(temporal.now())
+
+
+def give_totp_seed(user_id, seed=HELD_SEED):
+    from app import db
+    from app.feats.base import FEATContext
+    from app.models import User
+    from app.utils.encryption import encrypt_totp
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:seed:{uuid.uuid4().hex}"):
+        db.session.get(User, user_id).totp_secret_encrypted = encrypt_totp(seed)
+
+
+def record_passkey(user_id, credential_id, fake=None, name="Key"):
+    """An activated binding for ``user_id`` (and, given ``fake``, the provider's copy of it)."""
+    from app import db
+    from app.feats.base import FEATContext
+    from app.models import PasskeyCredential
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:passkey:{uuid.uuid4().hex}"):
+        db.session.add(PasskeyCredential(user_id=user_id, credential_id=credential_id, authenticator_name=name))
+    if fake is not None:
+        fake.credentials[credential_id] = passkey_external_id(user_id)
+
+
+def start_registration(client, *, prefix="/admin", code=None, **body):
+    """POST the start step with a fresh TOTP code (the current one unless ``code`` is given)."""
+    payload = {"totp_code": totp_code() if code is None else code, **body}
+    response = client.post(f"{prefix}/passkey/register/start", json=payload)
+    if response.status_code == 200:
+        # What the browser would hold for the finish step.
+        client.last_registration_binding = response.get_json()["binding"]
+        passkey_service._client().pending_nickname = client.last_registration_binding
+    return response
+
+
+def finish_registration(client, token, *, binding=None, prefix="/admin", name="Key"):
+    """POST the finish step with the binding the last successful start returned, unless given."""
+    if binding is None:
+        binding = getattr(client, "last_registration_binding", None)
+    return client.post(
+        f"{prefix}/passkey/register/finish",
+        json={"token": token, "binding": binding, "authenticatorName": name},
+    )

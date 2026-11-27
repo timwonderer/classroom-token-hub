@@ -9,7 +9,7 @@
 
 {% call help.topic('pk-register', 'add_circle', 'Register a passkey') %}
 <ol class="ps-3 mb-0">
-    <li class="mb-2"><strong>Register New Passkey</strong>, then follow your device's prompt — Touch ID, Face ID, Windows Hello, or a hardware key.</li>
+    <li class="mb-2">Enter the current code from your authenticator app, select <strong>Register New Passkey</strong>, then follow your device's prompt — Touch ID, Face ID, Windows Hello, or a hardware key. You sign in again afterwards.</li>
     <li class="mb-2"><strong>Name it something you will recognize</strong> later, like "work laptop". Deciding which passkey to remove is impossible if they are all unnamed.</li>
     <li class="mb-0"><strong>Register a second one</strong> on a different device. One passkey on one device means a lost device is a lockout.</li>
 </ol>
@@ -52,6 +52,34 @@
                 </ul>
             {% endcall %}
 
+            {% if operation_state == 'retirement_pending' %}
+            {% call cards.alert_card('warning', 'A passkey change is waiting to finish', icon='pending', body_class='mb-4') %}
+                <p>The passkey service has not yet confirmed the change. Your authenticator app still signs you in. Select <strong>Try again</strong> to finish it; no passkey is added, replaced or removed until it finishes.</p>
+                <div class="mb-3">
+                    <label for="passkey-resume-name" class="form-label">Name for the new passkey <span class="text-muted">(optional, replacements only)</span></label>
+                    <input type="text" id="passkey-resume-name" class="form-control" maxlength="100" autocomplete="off">
+                </div>
+                <button type="button" class="btn btn-primary" id="resumePasskeyButton" data-binding="{{ operation_binding or '' }}">Try again</button>
+            {% endcall %}
+            {% elif operation_state == 'registering' %}
+            {% call cards.alert_card('info', 'A passkey change is in progress', icon='info', body_class='mb-4') %}
+                <p>Finish the registration your device is showing. If it was interrupted, cancel and start again. It expires on its own after a few minutes.</p>
+                <button type="button" class="btn btn-outline-secondary" id="cancelPasskeyButton" data-binding="{{ operation_binding or '' }}">Cancel the change</button>
+            {% endcall %}
+            {% endif %}
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <label for="passkey-totp-code" class="form-label">Authenticator code</label>
+                    <input type="text" id="passkey-totp-code" class="form-control" inputmode="numeric"
+                           autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-describedby="passkey-totp-help">
+                    <div id="passkey-totp-help" class="form-text">
+                        Enter the current 6-digit code from your authenticator app before you register, replace or delete a passkey.
+                        After a change you sign in again.
+                    </div>
+                </div>
+            </div>
+
             <!-- Registered Passkeys -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -59,7 +87,7 @@
                         <span class="material-symbols-outlined icon-middle" aria-hidden="true">security</span>
                         Your Passkeys
                     </h3>
-                    <button type="button" class="btn btn-primary" id="registerPasskeyButton">
+                    <button type="button" class="btn btn-primary" id="registerPasskeyButton"{% if operation_state %} disabled{% endif %}>
                         <span class="material-symbols-outlined icon-middle icon-sm" aria-hidden="true">add</span>
                         Register New Passkey
                     </button>
@@ -90,12 +118,24 @@
                                     </div>
                                     {% endif %}
                                 </div>
-                                <button type="button" class="btn btn-sm btn-outline-danger delete-passkey-btn"
-                                        data-credential-id="{{ cred.id }}"
-                                        data-credential-name="{{ cred.authenticator_name or 'Unnamed Passkey' }}">
-                                    <span class="material-symbols-outlined icon-xs" aria-hidden="true">delete</span>
-                                    Delete
-                                </button>
+                                <div class="d-flex flex-column align-items-end gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary replace-passkey-btn"
+                                            data-credential-id="{{ cred.id }}"
+                                            data-credential-name="{{ cred.authenticator_name or 'Unnamed Passkey' }}"{% if operation_state %} disabled{% endif %}>
+                                        <span class="material-symbols-outlined icon-xs" aria-hidden="true">swap_horiz</span>
+                                        Replace
+                                    </button>
+                                    {% if credentials|length > 1 %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger delete-passkey-btn"
+                                            data-credential-id="{{ cred.id }}"
+                                            data-credential-name="{{ cred.authenticator_name or 'Unnamed Passkey' }}"{% if operation_state %} disabled{% endif %}>
+                                        <span class="material-symbols-outlined icon-xs" aria-hidden="true">delete</span>
+                                        Delete
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted small">Your only passkey: replace it rather than delete it.</span>
+                                    {% endif %}
+                                </div>
                             </div>
                             {% endfor %}
                         </div>
@@ -119,58 +159,19 @@
 <script src="{{ static_url('js/passkey.js') }}"></script>
 
 <script>
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-    // Setup passkey registration
-    setupPasskeyRegistration({
-        buttonId: 'registerPasskeyButton',
-        startUrl: '{{ url_for("admin.passkey_register_start") }}',
-        finishUrl: '{{ url_for("admin.passkey_register_finish") }}'
-    });
-
-    // Setup passkey deletion
-    document.querySelectorAll('.delete-passkey-btn').forEach(button => {
-        button.addEventListener('click', async function() {
-            const credentialId = this.dataset.credentialId;
-            const credentialName = this.dataset.credentialName;
-
-            if (!(await window.AppCore.confirm(`Delete "${credentialName}"?`, { title: 'Delete passkey', confirmLabel: 'Delete', danger: true }))) {
-                return;
-            }
-
-            try {
-                this.disabled = true;
-                this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-                const response = await fetch(`{{ url_for("admin.passkey_delete", passkey_id=0) }}`.replace('/0/', `/${credentialId}/`), {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    }
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to delete passkey');
-                }
-
-                window.location.reload();
-
-            } catch (error) {
-                const feedback = document.getElementById('passkey-feedback');
-                feedback.replaceChildren(window.AppCore.buildAlertCard({
-                    level: 'danger',
-                    title: 'Could not delete passkey',
-                    icon: 'error',
-                    body: error.message,
-                }));
-                feedback.className = 'mb-4';
-                feedback.focus();
-                this.disabled = false;
-                this.innerHTML = '<span class="material-symbols-outlined icon-xs" aria-hidden="true">delete</span> Delete';
-            }
-        });
+    setupPasskeyManager({
+        feedbackId: 'passkey-feedback',
+        codeInputId: 'passkey-totp-code',
+        registerButtonId: 'registerPasskeyButton',
+        resumeButtonId: 'resumePasskeyButton',
+        resumeNameInputId: 'passkey-resume-name',
+        loginUrl: {{ url_for('admin.login')|tojson }},
+        cancelButtonId: 'cancelPasskeyButton',
+        startUrl: {{ passkey_urls.start|tojson }},
+        finishUrl: {{ passkey_urls.finish|tojson }},
+        cancelUrl: {{ passkey_urls.cancel|tojson }},
+        resumeUrl: {{ passkey_urls.resume|tojson }},
+        deleteUrl: {{ passkey_urls.delete|tojson }}
     });
 </script>
 

@@ -76,6 +76,9 @@ os.environ.setdefault("AUDIT_HMAC_KEY", "test-audit-hmac-key-for-tests-only-not-
 # falsy to passkey_service_configured()'s bool() check.
 os.environ["PASSWORDLESS_API_KEY"] = ""
 os.environ["PASSWORDLESS_API_PUBLIC"] = ""
+# The deployment origin passkey ceremonies are checked against; the fake provider
+# (tests/helpers/passkey.py) reports the same origin and RP ID by default.
+os.environ["PASSKEY_EXPECTED_ORIGIN"] = "https://cth.test"
 
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

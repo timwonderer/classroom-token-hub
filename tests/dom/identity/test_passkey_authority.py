@@ -14,16 +14,19 @@ from __future__ import annotations
 
 from app import db
 from app.feats.base import FEATContext
-from app.models import ClassEconomy, PasskeyCredential, User, UserRole
+from app.models import (
+    ClassEconomy, CredentialOperation, CredentialOperationStage, PasskeyCredential, User, UserRole,
+)
 from tests.dom.identity.helpers import (
     admin_delete_class,
     admin_passkey_auth_finish,
-    admin_passkey_register_start,
     sysadmin_passkey_auth_finish,
     valid_destruction_gate,
 )
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
-from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
+from tests.helpers.passkey import (  # noqa: F401  (fake_passwordless is a fixture)
+    fake_passwordless, finish_registration, give_totp_seed, record_passkey, start_registration, totp_code,
+)
 
 
 def _record_passkey(user_id, credential_id, key):
@@ -33,12 +36,22 @@ def _record_passkey(user_id, credential_id, key):
 
 
 def _register_finish(client, token):
-    return client.post("/admin/passkey/register/finish", json={"token": token, "authenticatorName": "Key"})
+    """Authorize with a fresh TOTP code, then finish with ``token``: what the browser does."""
+    with client.session_transaction() as sess:
+        user_id = sess["user_id"]
+    give_totp_seed(user_id)
+    assert start_registration(client).status_code == 200
+    # The browser registers after the start, under the start's binding.
+    return finish_registration(client, token() if callable(token) else token)
 
 
 def _signed_in_user_id(client):
     with client.session_transaction() as sess:
         return sess.get("user_id")
+
+
+def client_user_id(client):
+    return _signed_in_user_id(client)
 
 
 def _logged_out(client):
@@ -57,7 +70,7 @@ def test_registration_records_the_credential_the_token_names(client, fake_passwo
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     user_id = classroom.teacher_user.id
 
-    response = _register_finish(client, fake_passwordless.complete_registration(user_id))
+    response = _register_finish(client, lambda: fake_passwordless.complete_registration(user_id))
 
     assert response.status_code == 200
     rows = PasskeyCredential.query.filter_by(user_id=user_id).all()
@@ -70,7 +83,7 @@ def test_registration_refuses_a_token_for_another_principal(client, fake_passwor
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     assert other_user.id != classroom.teacher_user.id
 
-    response = _register_finish(client, fake_passwordless.complete_registration(other_user.id))
+    response = _register_finish(client, lambda: fake_passwordless.complete_registration(other_user.id))
 
     assert response.status_code == 400
     assert PasskeyCredential.query.count() == 0
@@ -100,10 +113,14 @@ def test_an_alias_held_by_an_old_registration_is_a_clear_409(client, fake_passwo
     # Bind every alias this teacher could use to a pre-launch external id.
     fake_passwordless.aliases = _AnyAliasOwnedBy("user_3")
 
-    response = admin_passkey_register_start(client)
+    give_totp_seed(client_user_id(client))
+    response = start_registration(client)
 
     assert response.status_code == 409
     assert "old passkey registration" in response.get_json()["error"]
+    # The token never reached the browser, so the operation is cancelled and a retry is possible.
+    assert CredentialOperation.query.filter(CredentialOperation.stage.notin_(
+        [CredentialOperationStage.COMPLETED, CredentialOperationStage.CANCELLED])).count() == 0
 
 
 class _AnyAliasOwnedBy(dict):
@@ -209,33 +226,37 @@ def test_a_teacher_passkey_cannot_sign_in_as_sysadmin(client, fake_passwordless)
 
 # ---- removal ---------------------------------------------------------------
 
-def test_removing_a_passkey_deletes_it_on_passwordless_first(client, fake_passwordless):
+def _two_passkeys(client, fake):
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
-    _register_finish(client, fake_passwordless.complete_registration(classroom.teacher_user.id))
-    row = PasskeyCredential.query.one()
-    row_id, credential_id = row.id, row.credential_id
+    user_id = classroom.teacher_user.id
+    give_totp_seed(user_id)
+    record_passkey(user_id, "cred-a", fake, "A")
+    record_passkey(user_id, "cred-b", fake, "B")
+    return user_id, PasskeyCredential.query.filter_by(credential_id="cred-b").one().id
 
-    response = client.delete(f"/admin/passkey/{row_id}/delete")
+
+def test_removing_a_passkey_deletes_it_on_passwordless_first(client, fake_passwordless):
+    user_id, row_id = _two_passkeys(client, fake_passwordless)
+
+    response = client.delete(f"/admin/passkey/{row_id}/delete", json={"totp_code": totp_code()})
 
     assert response.status_code == 200
-    assert ("delete_credential", credential_id) in fake_passwordless.calls
-    assert credential_id not in fake_passwordless.credentials
+    assert ("delete_credential", "cred-b") in fake_passwordless.calls
+    assert "cred-b" not in fake_passwordless.credentials
     db.session.expire_all()
-    assert PasskeyCredential.query.count() == 0
+    assert [r.credential_id for r in PasskeyCredential.query.all()] == ["cred-a"]
 
 
 def test_a_failed_remote_removal_keeps_the_local_record(client, fake_passwordless):
     """Nothing local changes when passwordless.dev did not delete the credential."""
-    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
-    _register_finish(client, fake_passwordless.complete_registration(classroom.teacher_user.id))
-    row = PasskeyCredential.query.one()
+    _, row_id = _two_passkeys(client, fake_passwordless)
     fake_passwordless.fail_deletes = True
 
-    response = client.delete(f"/admin/passkey/{row.id}/delete")
+    response = client.delete(f"/admin/passkey/{row_id}/delete", json={"totp_code": totp_code()})
 
     assert response.status_code == 503
     db.session.expire_all()
-    assert PasskeyCredential.query.count() == 1
+    assert PasskeyCredential.query.count() == 2
 
 
 # ---- account destruction ---------------------------------------------------
@@ -243,7 +264,7 @@ def test_a_failed_remote_removal_keeps_the_local_record(client, fake_passwordles
 def test_destroying_an_account_deletes_its_passwordless_user(client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     user_id = classroom.teacher_user.id
-    _register_finish(client, fake_passwordless.complete_registration(user_id))
+    record_passkey(user_id, "cred-destroy", fake_passwordless)
     fake_passwordless.aliases["teacher.alice"] = f"user_{user_id}"
 
     response = admin_delete_class(client, **valid_destruction_gate(_class_delete_phrase(classroom.class_id)))
