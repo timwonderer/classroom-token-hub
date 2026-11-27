@@ -53,29 +53,11 @@ async function readPasskeyResponse(response) {
 /**
  * Register a passkey, as a new enrollment or (with replacePasskeyId) a selected replacement.
  * Backend steps: start (fresh TOTP code in, registration token out) -> p.register(token) ->
- * finish. If the browser ceremony or the finish step fails before the change is committed,
- * the pending operation is cancelled so the user can try again immediately.
+ * finish. A failure is shown as an error; the pending operation stays until it is finished,
+ * cancelled with the page's Cancel control, or expires.
  */
-// Failures after which the server's state is unknown or pending: never cancel, reload to see it.
+// Failures after which the server's state is unknown or pending: reload to see it.
 const KEEP_PENDING_CODES = new Set(['provider_unavailable', 'unreadable', 'transport']);
-
-/**
- * Cancel the pending operation after a failed registration. A clean answer, or an ordinary
- * refusal (nothing left to cancel), changes nothing. An ambiguous answer (the request may
- * not have reached the server) marks the original error as a transport failure, so the page
- * reloads to render the operation's real state with its cancel/resume control.
- */
-async function cancelAfterFailure(config, error, binding) {
-    try {
-        // The failed attempt's binding keeps a late cancel from ending a newer attempt.
-        await postPasskeyJson(config.cancelUrl, binding ? { binding: binding } : {});
-    } catch (cancelError) {
-        if (KEEP_PENDING_CODES.has(cancelError.code)) {
-            error.code = 'transport';
-            error.message = 'The connection was lost. Reload the page to see where the change stands.';
-        }
-    }
-}
 
 async function registerPasskey(config, authenticatorName, totpCode, replacePasskeyId) {
     const startBody = { totp_code: totpCode };
@@ -93,22 +75,14 @@ async function registerPasskey(config, authenticatorName, totpCode, replacePassk
         }
     } catch (error) {
         error.code = 'ceremony';
-        await cancelAfterFailure(config, error, binding);
         throw error;
     }
 
-    try {
-        return await postPasskeyJson(config.finishUrl, {
-            token: result.token,
-            binding: binding,
-            authenticatorName: authenticatorName
-        });
-    } catch (error) {
-        if (!KEEP_PENDING_CODES.has(error.code)) {
-            await cancelAfterFailure(config, error, binding);
-        }
-        throw error;
-    }
+    return postPasskeyJson(config.finishUrl, {
+        token: result.token,
+        binding: binding,
+        authenticatorName: authenticatorName
+    });
 }
 
 /**

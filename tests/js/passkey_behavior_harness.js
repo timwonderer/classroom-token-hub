@@ -70,21 +70,15 @@ const settle = () => new Promise((r) => setImmediate(r));
     await settle();
     report.unauthorized = { hrefs: s.state.hrefs, reloads: s.state.reloads, body: s.state.shown.map((a) => a.body) };
 
-    // Ceremony fails and the automatic cancel's answer is unreadable: the page reloads.
-    s = await scenario('ambiguous', async (url) => (url === '/start'
-        ? jsonResponse(200, { token: 't', apiKey: 'k', binding: 'b'.repeat(64) }) : unreadable));
-    await s.handlers.register();
-    await settle();
-    report.ambiguousCancel = {
-        reloads: s.state.reloads, cancelBodies: s.state.fetches.filter((f) => f.url === '/cancel').map((f) => f.body),
-    };
-
-    // Ceremony fails and the cancel is a clean success: no reload (an ordinary failure message).
-    s = await scenario('clean', async (url) => (url === '/start'
+    // The ceremony fails: the error is shown, nothing is cancelled and the page does not reload.
+    s = await scenario('ceremony', async (url) => (url === '/start'
         ? jsonResponse(200, { token: 't', apiKey: 'k', binding: 'b'.repeat(64) }) : jsonResponse(200, { success: true })));
     await s.handlers.register();
     await settle();
-    report.cleanCancel = { reloads: s.state.reloads, hrefs: s.state.hrefs };
+    report.ceremonyFailure = {
+        reloads: s.state.reloads, hrefs: s.state.hrefs, urls: s.state.fetches.map((f) => f.url),
+        body: s.state.shown.map((a) => a.body),
+    };
 
     console.log(JSON.stringify(report));
 })().catch((e) => { console.error(e); process.exit(1); });

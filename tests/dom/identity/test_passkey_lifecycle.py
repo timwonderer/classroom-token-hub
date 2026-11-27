@@ -455,7 +455,7 @@ def test_a_pending_or_candidate_credential_cannot_sign_in(client, app, fake_pass
 def test_a_late_cancel_bearing_an_earlier_attempts_binding_leaves_the_newer_operation_open(
     client, app, fake_passwordless,
 ):
-    """Two tabs: A is cancelled and B started; A's late auto-cancel must not end B."""
+    """Two tabs: A is cancelled and B started; A's stale Cancel button must not end B."""
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
     assert start_registration(client).status_code == 200
     binding_a = client.last_registration_binding
@@ -1750,7 +1750,7 @@ def test_the_expired_session_answer_is_json_with_a_message_the_client_shows(clie
             assert isinstance(body["message"], str) and body["message"]
 
 
-def test_the_client_sends_an_expired_session_to_sign_in_and_reloads_on_an_ambiguous_cancel():
+def test_the_client_sends_an_expired_session_to_sign_in_and_leaves_a_failed_ceremony_pending():
     """Behavior of static/js/passkey.js under stubbed window/document/fetch (a Node harness)."""
     node = shutil.which("node")
     if node is None:
@@ -1767,11 +1767,10 @@ def test_the_client_sends_an_expired_session_to_sign_in_and_reloads_on_an_ambigu
     assert report["unauthorized"]["hrefs"] == ["/admin/login"]
     assert report["unauthorized"]["body"] == ["Your session ended. Sign in again."]
     assert report["unauthorized"]["reloads"] == 0
-    # An unreadable answer to the automatic cancel reloads the page; the cancel carried the attempt's binding.
-    assert report["ambiguousCancel"]["reloads"] == 1
-    assert report["ambiguousCancel"]["cancelBodies"] == [{"binding": "b" * 64}]
-    # A clean cancel is an ordinary failure: no reload.
-    assert report["cleanCancel"]["reloads"] == 0
+    # A failed ceremony is only shown: no automatic cancel request, no reload.
+    assert report["ceremonyFailure"]["urls"] == ["/start"]
+    assert report["ceremonyFailure"]["reloads"] == 0
+    assert report["ceremonyFailure"]["body"] == ["ceremony failed"]
 
 
 def test_a_completed_receipt_past_its_deadline_is_no_longer_replayed(client, app, fake_passwordless):
