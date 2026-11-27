@@ -10210,10 +10210,7 @@ def api_economy_validate(feature):
 @admin_required
 @limiter.limit("10 per minute")
 def passkey_register_start():
-    """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token.
-
-    A ``replace_passkey_id`` in the body makes this a selected replacement.
-    """
+    """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token."""
     user = get_current_user()
     if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
         abort(404)
@@ -10228,7 +10225,7 @@ def passkey_register_start():
 @admin_required
 @limiter.limit("10 per minute")
 def passkey_register_finish():
-    """FEAT-IDEN-102: verify the registration and complete the enrollment or replacement."""
+    """FEAT-IDEN-102: verify the registration and complete the enrollment."""
     return passkey_management.register_finish(
         user_id=g.canonical_context.user_id, login_endpoint="admin.login",
     )
@@ -10345,7 +10342,7 @@ def passkey_delete(passkey_id):
 @admin_required
 @limiter.limit("10 per minute")
 def passkey_resume():
-    """FEAT-IDEN-102/107: finish a committed passkey replacement or removal that the provider did not confirm."""
+    """FEAT-IDEN-102/107: finish a committed passkey removal that the provider did not confirm."""
     return passkey_management.resume(user_id=g.canonical_context.user_id, login_endpoint="admin.login")
 
 

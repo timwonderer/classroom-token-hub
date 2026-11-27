@@ -51,7 +51,7 @@ async function readPasskeyResponse(response) {
 }
 
 /**
- * Register a passkey, as a new enrollment or (with replacePasskeyId) a selected replacement.
+ * Register a new passkey.
  * Backend steps: start (fresh TOTP code in, registration token out) -> p.register(token) ->
  * finish. A failure is shown as an error and the page then reloads, so it renders the pending
  * operation with its Cancel control; the operation stays until it is finished, cancelled, or expires.
@@ -59,9 +59,8 @@ async function readPasskeyResponse(response) {
 // Failures after which the server's state is unknown or pending: reload to see it.
 const KEEP_PENDING_CODES = new Set(['provider_unavailable', 'unreadable', 'transport']);
 
-async function registerPasskey(config, authenticatorName, totpCode, replacePasskeyId) {
+async function registerPasskey(config, authenticatorName, totpCode) {
     const startBody = { totp_code: totpCode };
-    if (replacePasskeyId) { startBody.replace_passkey_id = Number(replacePasskeyId); }
     const { token, apiKey, binding } = await postPasskeyJson(config.startUrl, startBody);
 
     let result;
@@ -207,7 +206,7 @@ function getCsrfToken() {
 }
 
 /**
- * Passkey settings page: register, replace, delete, retry and cancel.
+ * Passkey settings page: register, delete, retry and cancel.
  * Every action but retry and cancel needs a fresh authenticator code from the input
  * named by config.codeInputId. A completed change ends the sign-in; the server answers
  * with the sign-in page to go to.
@@ -257,7 +256,7 @@ function setupPasskeyManager(config) {
         if (button) { button.disabled = false; button.innerHTML = restoreHTML; }
     }
 
-    async function enroll(button, replacePasskeyId) {
+    async function enroll(button) {
         const code = readCode();
         if (!code) { return; }
         const authenticatorName = await window.AppCore.prompt(
@@ -269,7 +268,7 @@ function setupPasskeyManager(config) {
         try {
             button.disabled = true;
             button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Registering...';
-            finished(await registerPasskey(config, authenticatorName, code, replacePasskeyId));
+            finished(await registerPasskey(config, authenticatorName, code));
         } catch (error) {
             failed('Could not register passkey', error, button, originalHTML);
         }
@@ -277,19 +276,8 @@ function setupPasskeyManager(config) {
 
     const registerButton = document.getElementById(config.registerButtonId);
     if (registerButton) {
-        registerButton.addEventListener('click', () => enroll(registerButton, null));
+        registerButton.addEventListener('click', () => enroll(registerButton));
     }
-
-    document.querySelectorAll('.replace-passkey-btn').forEach(button => {
-        button.addEventListener('click', async () => {
-            const name = button.dataset.credentialName;
-            if (!(await window.AppCore.confirm(
-                `Replace "${name}"? You will register a new passkey, then "${name}" is removed and you sign in again.`,
-                { title: 'Replace passkey', confirmLabel: 'Replace' }
-            ))) { return; }
-            await enroll(button, button.dataset.credentialId);
-        });
-    });
 
     document.querySelectorAll('.delete-passkey-btn').forEach(button => {
         button.addEventListener('click', async () => {
@@ -327,9 +315,6 @@ function setupPasskeyManager(config) {
             try {
                 button.disabled = true;
                 const body = {};
-                const nameInput = url === config.resumeUrl && config.resumeNameInputId
-                    ? document.getElementById(config.resumeNameInputId) : null;
-                if (nameInput && nameInput.value.trim()) { body.authenticatorName = nameInput.value.trim(); }
                 if (button.dataset.binding) { body.binding = button.dataset.binding; }
                 const data = await postPasskeyJson(url, body);
                 if (data.redirect) { finished(data); } else { window.location.reload(); }

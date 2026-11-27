@@ -222,10 +222,7 @@ def logout():
 @system_admin_required
 @limiter.limit("10 per minute")
 def passkey_register_start():
-    """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token.
-
-    A ``replace_passkey_id`` in the body makes this a selected replacement.
-    """
+    """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token."""
     ctx = g.canonical_context
     user = get_current_user()
     if not user or ctx.actor_role != 'sysadmin':
@@ -240,7 +237,7 @@ def passkey_register_start():
 @system_admin_required
 @limiter.limit("10 per minute")
 def passkey_register_finish():
-    """FEAT-IDEN-102: verify the registration and complete the enrollment or replacement."""
+    """FEAT-IDEN-102: verify the registration and complete the enrollment."""
     return passkey_management.register_finish(
         user_id=g.canonical_context.user_id, login_endpoint="sysadmin.login",
     )
@@ -355,7 +352,7 @@ def passkey_delete(credential_id):
 @system_admin_required
 @limiter.limit("10 per minute")
 def passkey_resume():
-    """FEAT-IDEN-102/107: finish a committed passkey replacement or removal that the provider did not confirm."""
+    """FEAT-IDEN-102/107: finish a committed passkey removal that the provider did not confirm."""
     return passkey_management.resume(user_id=g.canonical_context.user_id, login_endpoint="sysadmin.login")
 
 

@@ -6,7 +6,7 @@ principal's own operation, then composes the Identity commands in
 never touch ``credential_operations`` or ``users.credential_generation`` directly.
 
 The TOTP-replacement commands (FEAT-IDEN-106) and the expiry sweep (FEAT-IDEN-108)
-live here. Passkey enrollment, replacement and revocation (FEAT-IDEN-102/107) are in
+live here. Passkey enrollment and revocation (FEAT-IDEN-102/107) are in
 ``app/feats/passkey_lifecycle_feat.py``.
 """
 from __future__ import annotations
@@ -46,6 +46,8 @@ def open_credential_operation(*, user_id, purpose, proof, session_nonce,
         purpose = CredentialOperationPurpose(purpose)
     except ValueError:
         raise lifecycle.CredentialOperationRefused("unknown_purpose") from None
+    if purpose not in lifecycle.FEAT_FOR_PURPOSE:  # the retired ``passkey_replace`` opens nothing
+        raise lifecycle.CredentialOperationRefused("unknown_purpose")
     feat_name = lifecycle.FEAT_FOR_PURPOSE[purpose]
     key = idempotency_key or f"{feat_name.lower()}:open:{uuid.uuid4().hex}"
     with db.session.no_autoflush:  # pending intentional work is never flushed by a read here

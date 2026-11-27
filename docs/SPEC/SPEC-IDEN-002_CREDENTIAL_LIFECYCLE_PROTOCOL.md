@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-IDEN-002 | 1.2 | 2026-11-27 | 1.1 | Technical Specification |
+| SPEC-IDEN-002 | 1.3 | 2026-11-27 | 1.2 | Technical Specification |
 
 ## I. Purpose
 
@@ -91,7 +91,7 @@ delays. Revalidate current principal existence, generation, session when applica
 stage and supersession in a new local transaction before recording/activating results.
 No local rollback promise extends to provider effects.
 
-Serialization must coordinate registration, replacement, removal, recovery, destruction
+Serialization must coordinate registration, TOTP replacement, removal, recovery, destruction
 and both reconciliation modes. A durable reservation prevents a target from acquiring
 new local authority while its remote deletion is in flight. Recovery/destruction can
 supersede the reservation but cannot revive it. Process-local locking alone is insufficient.
@@ -143,7 +143,7 @@ preserve the association. Secret and identity-derived digests are not audit subs
 ## VII. Reconciliation and provider boundaries
 
 Both modes use the same pure classification and explicit retirement commands. Principal
-mode runs at initial/additional enrollment, selected replacement, removal, SATAR and
+mode runs at initial/additional enrollment, removal, SATAR and
 destruction boundaries. Scheduled mode reads the configured provider tenant inventory
 and compares each exact provider principal/credential against current local authority.
 It grants no access to classroom data. Provider-only records never become local authority.
@@ -212,17 +212,17 @@ completion must not be reported as successful just because external retirement s
   reaches another principal or classroom.
 - Scheduled reconciliation removes provider-only residue, including late registrations
   after destruction without surviving principal records, ownership history or tombstones.
-- Live unknown-ID registrations are protected, and concurrent enrollment/replacement
+- Live unknown-ID registrations are protected, and concurrent enrollment/removal
   cannot cause a lawful credential to be deleted.
 - Failed/truncated inventory, pagination gaps, permission failures and local database
   unavailability produce no destructive false positives or false readiness claim.
 - Unexpected remote absence does not silently mutate the local registry.
 - Interrupted execution and lost responses are idempotent. Exact remote-before-local
-  retirement remains enforced for ordinary replacement/removal.
+  retirement remains enforced for ordinary removal.
 
 ### Lifecycle and authority
 
-- Both replacement types, enrollment and removal invalidate sessions/challenges once;
+- TOTP replacement, passkey enrollment and passkey removal invalidate sessions/challenges once;
   retries/reconciliation do not invalidate subsequently established sessions.
 - SATAR initiation does not revoke authority; aggregate success supersedes routine work
   before and after remote-retirement intent. Stale work cannot activate after recovery.
@@ -235,7 +235,7 @@ completion must not be reported as successful just because external retirement s
 - No database transaction/row lock is open during provider calls or retry delays.
 - TOTP cancellation/wrong code/expiry/commit failure preserves the old secret; successful
   activation overwrites it. No fallback/backup-code path is introduced.
-- Replacement B→D among A/B/C preserves A/C; remote retirement followed by local failure
+- Revoking B among A/B/C preserves A/C; remote retirement followed by local failure
   is accurately pending, not falsely rolled back.
 - Secrets lose authority immediately; erasure failures are observable and retried. Terminal
   operation/identity deletion removes recoverable associations from logs, correlation packs,
@@ -251,4 +251,4 @@ production readiness. No destructive production experiment is implied by this co
 
 Increment version/date, reconcile the owning INV/DOM and affected FEAT contracts, update
 SOP-DOC-001, and preserve the distinction between approved requirements and implementation
-proposals. The 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment authorization and its five-minute lifetime; reservation, cancellation, expiry and stale-operation rules are unchanged. The 2026-11-26 revision applies the owner rulings on mandatory dual enrollment and the seed-length floor. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.
+proposals. The 2026-11-27 revision (v1.3; Owner ruling 2026-11-27: passkey replacement removed; replacement is enrollment followed by revocation) removes the passkey replacement purpose and its stages; the `passkey_replace` purpose value is retired. The earlier 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment authorization and its five-minute lifetime; reservation, cancellation, expiry and stale-operation rules are unchanged. The 2026-11-26 revision applies the owner rulings on mandatory dual enrollment and the seed-length floor. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.

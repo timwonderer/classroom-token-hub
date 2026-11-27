@@ -202,7 +202,7 @@ FEAT_REGISTRY = {
     "FEAT-IDEN-103": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Initiation"},
     "FEAT-IDEN-104": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Confirmation for Teacher Recovery"},
     "FEAT-IDEN-105": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Code Validation"},
-    "FEAT-IDEN-102": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Passkey Enrollment and Selected Replacement"},
+    "FEAT-IDEN-102": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Passkey Enrollment"},
     "FEAT-IDEN-106": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher/Sysadmin TOTP Replacement and Recovery Credential Completion"},
     "FEAT-IDEN-107": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Revoke Passkey"},
     "FEAT-IDEN-108": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Credential Reconciliation and Operation Cleanup"},

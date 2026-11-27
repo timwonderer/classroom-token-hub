@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-107 | 1.4 | 2026-11-26 | 1.3 | Normative |
+| FEAT-IDEN-107 | 1.5 | 2026-11-27 | 1.4 | Normative |
 
 ## I. Purpose
 
@@ -34,8 +34,8 @@ principal and is activated, and TOTP remains available. Require no active class 
 Commit an immutable retirement intent bound to the operation and consume interactive
 authorization before calling the provider. A mere existence read is not an idempotency lock.
 
-Revocation of the only activated passkey is refused; selected-passkey replacement
-(FEAT-IDEN-102) is the lawful path.
+Revocation of the only activated passkey is refused; the lawful path is to enroll a new passkey
+(FEAT-IDEN-102) and then revoke the old one.
 
 ## VI. Remote retirement and local completion
 
