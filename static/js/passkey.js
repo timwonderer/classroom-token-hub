@@ -41,8 +41,10 @@ async function readPasskeyResponse(response) {
         throw error;
     }
     if (!response.ok) {
-        const error = new Error(data.error || 'The request failed.');
-        error.code = data.code;
+        // Prefer the human message (a session-ended answer carries a code in `error`).
+        const error = new Error(data.message || data.error || 'The request failed.');
+        error.status = response.status;
+        error.code = data.code || (response.status === 401 ? 'authentication_required' : undefined);
         throw error;
     }
     return data;
@@ -57,6 +59,23 @@ async function readPasskeyResponse(response) {
 // Failures after which the server's state is unknown or pending: never cancel, reload to see it.
 const KEEP_PENDING_CODES = new Set(['provider_unavailable', 'unreadable', 'transport']);
 
+/**
+ * Cancel the pending operation after a failed registration. A clean answer, or an ordinary
+ * refusal (nothing left to cancel), changes nothing. An ambiguous answer (the request may
+ * not have reached the server) marks the original error as a transport failure, so the page
+ * reloads to render the operation's real state with its cancel/resume control.
+ */
+async function cancelAfterFailure(config, error) {
+    try {
+        await postPasskeyJson(config.cancelUrl, {});
+    } catch (cancelError) {
+        if (KEEP_PENDING_CODES.has(cancelError.code)) {
+            error.code = 'transport';
+            error.message = 'The connection was lost. Reload the page to see where the change stands.';
+        }
+    }
+}
+
 async function registerPasskey(config, authenticatorName, totpCode, replacePasskeyId) {
     const startBody = { totp_code: totpCode };
     if (replacePasskeyId) { startBody.replace_passkey_id = Number(replacePasskeyId); }
@@ -65,13 +84,15 @@ async function registerPasskey(config, authenticatorName, totpCode, replacePassk
     let result;
     try {
         const p = new Passwordless.Client({ apiKey });
-        result = await p.register(token);
+        // The binding is stored as the credential's nickname, so the server can tell which
+        // operation this registration was made for.
+        result = await p.register(token, binding);
         if (!result || result.error) {
             throw new Error((result && result.error) || 'Registration failed');
         }
     } catch (error) {
-        await postPasskeyJson(config.cancelUrl, {}).catch(() => {});
         error.code = 'ceremony';
+        await cancelAfterFailure(config, error);
         throw error;
     }
 
@@ -83,7 +104,7 @@ async function registerPasskey(config, authenticatorName, totpCode, replacePassk
         });
     } catch (error) {
         if (!KEEP_PENDING_CODES.has(error.code)) {
-            await postPasskeyJson(config.cancelUrl, {}).catch(() => {});
+            await cancelAfterFailure(config, error);
         }
         throw error;
     }
@@ -243,6 +264,11 @@ function setupPasskeyManager(config) {
     function failed(title, error, button, restoreHTML) {
         if (error instanceof TypeError && !error.code) { error.code = 'transport'; error.message = 'The connection was lost. Reload the page to see where the change stands.'; }
         const pending = KEEP_PENDING_CODES.has(error.code);
+        if (error.status === 401 || error.code === 'authentication_required') {
+            show('danger', 'Sign in again', error.message);
+            if (config.loginUrl) { window.setTimeout(() => { window.location.href = config.loginUrl; }, 4000); }
+            return;
+        }
         show('danger', error.code === 'provider_unavailable' ? 'Change saved, not yet confirmed' : title, error.message);
         if (pending) {
             window.setTimeout(() => window.location.reload(), 4000);
@@ -324,6 +350,7 @@ function setupPasskeyManager(config) {
                 const nameInput = url === config.resumeUrl && config.resumeNameInputId
                     ? document.getElementById(config.resumeNameInputId) : null;
                 if (nameInput && nameInput.value.trim()) { body.authenticatorName = nameInput.value.trim(); }
+                if (button.dataset.binding) { body.binding = button.dataset.binding; }
                 const data = await postPasskeyJson(url, body);
                 if (data.redirect) { finished(data); } else { window.location.reload(); }
             } catch (error) {

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import pathlib
 import textwrap
 import uuid
 from types import SimpleNamespace
@@ -150,6 +151,21 @@ def _enroll(client, fake, user_id, *, prefix="/admin", name="Added"):
 def _revoke(client, row_id, *, prefix="/admin", code=None):
     return client.delete(
         f"{prefix}/passkey/{row_id}/delete", json={"totp_code": totp_code() if code is None else code},
+    )
+
+
+def _latest_binding(user_id):
+    """The binding of the principal's most recent operation, as its settings page (or start response) held it."""
+    db.session.expire_all()
+    operation = (
+        CredentialOperation.query.filter_by(user_id=user_id).order_by(CredentialOperation.created_at.desc()).first()
+    )
+    return None if operation is None else lifecycle.registration_binding(operation)
+
+
+def _resume(client, user_id, **body):
+    return client.post(
+        "/admin/passkey/resume", json={"binding": _latest_binding(user_id), **body},
     )
 
 
@@ -374,7 +390,9 @@ def test_a_token_naming_a_credential_already_recorded_is_refused(client, app, fa
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
     assert start_registration(client).status_code == 200
     fake_passwordless.credentials["cred-a"] = passkey_external_id(user_id)
-    token = fake_passwordless._token(passkey_external_id(user_id), "cred-a", "passkey_register")
+    token = fake_passwordless._token(
+        passkey_external_id(user_id), "cred-a", "passkey_register", nickname=client.last_registration_binding,
+    )
 
     response = finish_registration(client, token)
 
@@ -470,6 +488,7 @@ def test_the_signup_capability_authorizes_the_first_passkey_without_a_code(clien
     started = client.post("/admin/passkey/register/start", json={"signup_capability": capability})
     assert started.status_code == 200, started.get_json()
     client.last_registration_binding = started.get_json()["binding"]
+    fake_passwordless.pending_nickname = client.last_registration_binding
     token, credential_id = _new_credential(fake_passwordless, user_id)
     finished = finish_registration(client, token)
 
@@ -669,7 +688,7 @@ def test_the_pending_replacement_finishes_when_the_provider_recovers(client, app
     page = client.get("/admin/passkey/settings").get_data(as_text=True)
     assert "waiting to finish" in page and "resumePasskeyButton" in page
 
-    response = client.post("/admin/passkey/resume", json={})
+    response = _resume(client, user_id)
 
     assert response.status_code == 200 and response.get_json()["message"].startswith("Passkey replaced")
     assert _bound(user_id) == sorted(["cred-a", d])
@@ -688,7 +707,7 @@ def test_a_lost_delete_response_is_not_taken_for_success_or_rollback(client, app
     assert response.status_code == 503
     assert "cred-b" not in fake_passwordless.credentials  # the provider did delete it
     assert _bound(user_id) == ["cred-a", "cred-b"]  # but we never assumed so
-    assert client.post("/admin/passkey/resume", json={}).status_code == 200  # same exact deletion retried
+    assert _resume(client, user_id).status_code == 200  # same exact deletion retried
     assert _bound(user_id) == sorted(["cred-a", d])
 
 
@@ -707,7 +726,7 @@ def test_a_commit_failure_after_the_remote_delete_leaves_recoverable_state(clien
     assert outcomes == 0
     assert _user(user_id).credential_generation == generation
 
-    assert client.post("/admin/passkey/resume", json={}).status_code == 200
+    assert _resume(client, user_id).status_code == 200
     bound, stages, outcomes = _committed_state(user_id)
     assert bound == sorted(["cred-a", d]) and outcomes == 1
     assert stages == [CredentialOperationStage.COMPLETED.value]
@@ -723,7 +742,7 @@ def test_after_intent_the_fixed_operation_finishes_past_its_deadline_and_session
         # A sweep leaves committed retirement alone, then the fixed work finishes with no session.
         with FEATContext("FEAT-IDEN-108", idempotency_key=f"test:sweep:{uuid.uuid4().hex}"):
             lifecycle.expire_stale_operations()
-        assert feat.resume_retirement(user_id=user_id) == ("replaced", False)
+        assert feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id)) == ("replaced", False)
 
     assert _bound(user_id) == sorted(["cred-a", d])
     assert _operations(user_id)[0].id == operation_id
@@ -785,7 +804,7 @@ def test_recovery_supersedes_committed_retirement_which_then_cannot_activate_or_
     generation, nonce = _user(user_id).credential_generation, _nonce(user_id)
 
     with pytest.raises(CredentialOperationRefused):
-        feat.resume_retirement(user_id=user_id)
+        feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id))
 
     assert _bound(user_id) == ["cred-a", "cred-b"]
     user = _user(user_id)
@@ -938,7 +957,7 @@ def test_a_failed_remote_revocation_leaves_the_binding_and_is_reported_pending(c
     assert operation.stage is CredentialOperationStage.PROVIDER_UNCERTAIN
 
     fake_passwordless.fail_deletes = False
-    assert client.post("/admin/passkey/resume", json={}).get_json()["message"].startswith("Passkey removed")
+    assert _resume(client, user_id).get_json()["message"].startswith("Passkey removed")
     assert _bound(user_id) == ["cred-a"]
 
 
@@ -951,12 +970,12 @@ def test_a_lost_revocation_response_and_a_later_database_failure_converge(client
     assert "cred-b" not in fake_passwordless.credentials
 
     # The retry confirms the deletion, stages the local completion, and the commit fails.
-    assert client.post("/admin/passkey/resume", json={}).status_code == 500
+    assert _resume(client, user_id).status_code == 500
     bound, stages, outcomes = _committed_state(user_id)
     assert bound == ["cred-a", "cred-b"] and outcomes == 0
     assert stages == [CredentialOperationStage.PROVIDER_UNCERTAIN.value]
 
-    assert client.post("/admin/passkey/resume", json={}).status_code == 200
+    assert _resume(client, user_id).status_code == 200
     bound, stages, outcomes = _committed_state(user_id)
     assert bound == ["cred-a"] and outcomes == 1
     assert stages == [CredentialOperationStage.COMPLETED.value]
@@ -985,7 +1004,7 @@ def test_a_stale_generation_refuses_revocation_completion(client, app, fake_pass
     calls_before = list(fake_passwordless.calls)
 
     with pytest.raises(CredentialOperationRefused) as refused:
-        feat.resume_retirement(user_id=user_id)
+        feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id))
 
     assert refused.value.category == "stale_generation"
     assert fake_passwordless.calls == calls_before  # superseded work never reaches the provider
@@ -1001,7 +1020,7 @@ def test_a_current_intent_still_proceeds_after_the_interactive_deadline_and_gene
     deadline = _operations(user_id)[0].deadline_at
 
     with temporal.pinned_clock(temporal.shifted(deadline, seconds=3600)):
-        result = feat.resume_retirement(user_id=user_id)
+        result = feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id))
 
     assert result == ("replaced", False)
     assert _bound(user_id) == sorted(["cred-a", d])
@@ -1060,7 +1079,7 @@ def test_a_sysadmin_cannot_reach_the_teacher_surface(client, app, fake_passwordl
 
     assert start_registration(client, prefix="/admin").status_code in (302, 401, 403, 404)
     assert _revoke(client, _row_id("cred-s2"), prefix="/admin").status_code in (302, 401, 403, 404)
-    assert client.post("/admin/passkey/resume", json={}).status_code in (302, 401, 403, 404)
+    assert _resume(client, user_id).status_code in (302, 401, 403, 404)
     assert client.get("/admin/passkey/settings").status_code in (302, 401, 403, 404)
     assert _bound(user_id) == ["cred-s1", "cred-s2"]
     assert _operations(user_id) == []
@@ -1415,7 +1434,7 @@ def test_a_provider_not_found_for_the_recorded_credential_counts_as_deleted(clie
     operation_id, d = _retirement_committed(client, fake_passwordless, user_id)
     fake_passwordless.credentials.pop("cred-b")  # the provider did delete it; the reply was lost
 
-    response = client.post("/admin/passkey/resume", json={})
+    response = _resume(client, user_id)
 
     assert response.status_code == 200, response.get_json()
     assert ("delete_credential", "cred-b") in fake_passwordless.calls
@@ -1428,40 +1447,88 @@ def test_any_other_provider_error_keeps_the_retirement_pending(client, app, fake
     _retirement_committed(client, fake_passwordless, user_id)
     fake_passwordless.fail_deletes = True  # a 500, not a not-found
 
-    response = client.post("/admin/passkey/resume", json={})
+    response = _resume(client, user_id)
 
     assert response.status_code == 503 and response.get_json()["code"] == "provider_unavailable"
     assert _bound(user_id) == ["cred-a", "cred-b"]
 
 
-def test_a_not_found_is_only_taken_for_deletion_never_for_other_failures(app):
-    """Only a 404 problem is convergence: a 401, a 429 and a timeout are not."""
+def test_only_a_not_found_confirmed_by_the_inventory_counts_as_deleted(client, app, fake_passwordless):
+    """A 404 is convergence only when the provider's own listing no longer holds the credential."""
     from passwordless import PasswordlessError
     from passwordless.errors import PasswordlessProblemDetails
+
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    external = passkey_service.passkey_external_id(user_id)
 
     def failing(status):
         class Client:
             def delete_credential(self, _):
-                raise PasswordlessError(PasswordlessProblemDetails(
-                    type="t", title="t", status=status, error_code="e"))
+                raise PasswordlessError(PasswordlessProblemDetails(type="t", title="t", status=status, error_code="e"))
+
+            def get_credentials(self, _):
+                return []  # absent from the listing
         return Client()
 
-    with app.app_context():
-        for status in (400, 401, 403, 409, 429, 500, 503, 504):
-            with pytest.MonkeyPatch.context() as patch:
-                patch.setattr(passkey_service, "_client", lambda status=status: failing(status))
-                with pytest.raises(passkey_service.PasskeyServiceUnavailable):
-                    passkey_service.retire_remote_credential("cred-x")
+    for status in (400, 401, 403, 409, 429, 500, 503, 504):
         with pytest.MonkeyPatch.context() as patch:
-            patch.setattr(passkey_service, "_client", lambda: failing(404))
-            assert passkey_service.retire_remote_credential("cred-x") is None
+            patch.setattr(passkey_service, "_client", lambda status=status: failing(status))
+            with pytest.raises(passkey_service.PasskeyServiceUnavailable):
+                passkey_service.retire_remote_credential("cred-b", user_id)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(passkey_service, "_client", lambda: failing(404))
+        assert passkey_service.retire_remote_credential("cred-b", user_id) is None
+        # Without a principal there is no inventory to confirm against.
+        with pytest.raises(passkey_service.PasskeyServiceUnavailable):
+            passkey_service.retire_remote_credential("cred-b")
+    assert external
+
+
+def test_a_generic_404_with_the_credential_still_live_keeps_the_retirement_pending(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    fake_passwordless.generic_404_deletes = True  # a proxy or wrong path, not the provider
+    response, d = _replace(client, fake_passwordless, user_id, "cred-b")
+
+    assert response.status_code == 503 and response.get_json()["code"] == "provider_unavailable"
+    assert "cred-b" in fake_passwordless.credentials  # still live at the provider
+    assert _bound(user_id) == ["cred-a", "cred-b"]  # so the binding is kept
+    assert ("get_credentials", passkey_service.passkey_external_id(user_id)) in fake_passwordless.calls
+    assert _outcomes() == []
+
+    fake_passwordless.generic_404_deletes = False
+    assert _resume(client, user_id).status_code == 200
+    assert _bound(user_id) == sorted(["cred-a", d])
+
+
+def test_a_404_is_not_confirmed_when_the_inventory_cannot_be_read(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    fake_passwordless.generic_404_deletes = True
+    fake_passwordless.credentials.pop("cred-b")  # truly gone, but the listing is down
+    fake_passwordless.fail_inventory = True
+
+    response, _ = _replace(client, fake_passwordless, user_id, "cred-b")
+
+    assert response.status_code == 503
+    assert _bound(user_id) == ["cred-a", "cred-b"]
+
+
+def test_mutation_trusting_a_bare_404_would_drop_a_live_credentials_binding(
+    client, app, fake_passwordless, monkeypatch,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    fake_passwordless.generic_404_deletes = True
+    monkeypatch.setattr(passkey_service, "_credential_absent_from_inventory", lambda *a, **k: True)
+
+    response, _ = _replace(client, fake_passwordless, user_id, "cred-b")
+
+    assert response.status_code == 200 and "cred-b" in fake_passwordless.credentials  # the mutant's harm
 
 
 def test_the_resume_form_names_the_replacements_passkey(client, app, fake_passwordless):
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
     _, d = _retirement_committed(client, fake_passwordless, user_id)
 
-    response = client.post("/admin/passkey/resume", json={"authenticatorName": "  Office laptop  "})
+    response = _resume(client, user_id, authenticatorName="  Office laptop  ")
 
     assert response.status_code == 200
     db.session.expire_all()
@@ -1472,7 +1539,7 @@ def test_a_blank_resume_name_falls_back_to_the_default_label(client, app, fake_p
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
     _, d = _retirement_committed(client, fake_passwordless, user_id)
 
-    assert client.post("/admin/passkey/resume", json={}).status_code == 200
+    assert _resume(client, user_id).status_code == 200
 
     db.session.expire_all()
     assert PasskeyCredential.query.filter_by(credential_id=d).one().authenticator_name == "Unnamed Passkey"
@@ -1512,7 +1579,8 @@ def test_a_completed_finish_retried_is_answered_from_the_receipt_and_changes_not
     calls = list(fake_passwordless.calls)
 
     result = feat.finish_registration(
-        user_id=user_id, session_nonce=nonce, token="a-retried-token", binding="x", authenticator_name="y",
+        user_id=user_id, session_nonce=nonce, token="a-retried-token", binding=_latest_binding(user_id),
+        authenticator_name="y",
     )
 
     assert result == ("replaced", True)
@@ -1528,7 +1596,7 @@ def test_a_completed_resume_retried_is_answered_from_the_receipt_and_changes_not
     generation, nonce, outcomes = _user(user_id).credential_generation, _nonce(user_id), len(_outcomes())
     calls = list(fake_passwordless.calls)
 
-    assert feat.resume_retirement(user_id=user_id) == ("revoked", True)
+    assert feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id)) == ("revoked", True)
 
     assert fake_passwordless.calls == calls and _bound(user_id) == ["cred-a"]
     user = _user(user_id)
@@ -1540,7 +1608,7 @@ def test_with_no_operation_and_no_receipt_finish_and_resume_are_not_found(client
     for call in (
         lambda: feat.finish_registration(user_id=user_id, session_nonce=_nonce(user_id), token="t",
                                          binding="b", authenticator_name="n"),
-        lambda: feat.resume_retirement(user_id=user_id),
+        lambda: feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id)),
     ):
         with pytest.raises(CredentialOperationRefused) as refused:
             call()
@@ -1582,3 +1650,182 @@ def test_the_sysadmin_surface_answers_background_requests_with_json_401(client, 
         assert response.get_json()["error"] == "authentication_required"
     navigation = client.get("/sysadmin/passkey/settings")
     assert navigation.status_code == 302 and "/sysadmin/login" in navigation.headers["Location"]
+
+
+# ---------------------------------------------------------------------------
+# review round 3: operation identity in the registration, receipts per operation
+# ---------------------------------------------------------------------------
+
+def test_a_cancelled_operations_registration_cannot_be_activated_under_a_later_operation(
+    client, app, fake_passwordless,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    token_a, credential_a, _ = _cancelled_a_then_started_b(client, fake_passwordless, user_id)
+    binding_b = client.last_registration_binding
+
+    # A's provider result with B's own binding: the nickname A's registration carries is A's.
+    response = finish_registration(client, token_a, binding=binding_b)
+
+    assert response.status_code == 409 and response.get_json()["code"] == "binding_mismatch"
+    assert _bound(user_id) == ["cred-a"]
+    (operation,) = _open_operations(user_id)
+    assert operation.stage is CredentialOperationStage.REGISTRATION_PENDING
+    assert operation.new_credential_id is None
+    assert _signed_out(client) is False
+
+
+def test_a_cancelled_operations_registration_cannot_become_a_replacement_under_a_later_operation(
+    client, app, fake_passwordless,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    assert start_registration(client).status_code == 200
+    token_a, credential_a = _new_credential(fake_passwordless, user_id)
+    assert client.post("/admin/passkey/cancel", json={}).status_code == 200
+    assert start_registration(client, replace_passkey_id=_row_id("cred-b")).status_code == 200
+
+    response = finish_registration(client, token_a)  # B's binding, A's registration
+
+    assert response.status_code == 409 and response.get_json()["code"] == "binding_mismatch"
+    assert _bound(user_id) == ["cred-a", "cred-b"]
+    assert "cred-b" in fake_passwordless.credentials
+    assert ("delete_credential", "cred-b") not in fake_passwordless.calls
+
+
+def test_mutation_the_provider_returned_nickname_is_what_ties_a_registration_to_its_operation(
+    client, app, fake_passwordless, monkeypatch,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    token_a, credential_a, _ = _cancelled_a_then_started_b(client, fake_passwordless, user_id)
+    binding_b = client.last_registration_binding
+    real = lifecycle.check_registration_binding
+    # The independent echoed-binding check alone (the nickname check removed) accepts A's result.
+    monkeypatch.setattr(
+        lifecycle, "check_registration_binding",
+        lambda operation, binding: real(operation, binding_b) if binding == "x" else None,
+    )
+
+    response = finish_registration(client, token_a, binding=binding_b)
+
+    assert response.status_code == 200 and credential_a in _bound(user_id)  # the mutant activates A's credential
+
+
+def _two_completed(client, app, fake):
+    """A replacement completed (its receipt kept); returns the principal and that operation's binding."""
+    _, user_id = _teacher(client, app, fake, passkeys=("cred-a", "cred-b"))
+    response, _ = _replace(client, fake, user_id, "cred-b")
+    assert response.status_code == 200
+    return user_id, _latest_binding(user_id)
+
+
+def test_a_delayed_finish_for_a_cancelled_registration_is_not_answered_from_an_earlier_receipt(
+    client, app, fake_passwordless,
+):
+    user_id, completed_binding = _two_completed(client, app, fake_passwordless)
+    # A later registration that was started and then cancelled (a direct FEAT run; the page's sign-in ended).
+    nonce = _nonce(user_id)
+    started = feat.start_registration(
+        user_id=user_id, session_nonce=nonce, proof=lifecycle.TotpCode(totp_code()),
+        alias="later", display_name="Later",
+    )
+    cancelled_binding = started[1]
+    assert feat.cancel_registration(user_id=user_id, session_nonce=nonce) is True
+    outcomes = len(_outcomes())
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        feat.finish_registration(
+            user_id=user_id, session_nonce=nonce, token="t", binding=cancelled_binding, authenticator_name="n",
+        )
+
+    assert refused.value.category == "operation_not_found"
+    assert len(_outcomes()) == outcomes
+    # The completed operation's own retry is still answered from its receipt.
+    assert feat.finish_registration(
+        user_id=user_id, session_nonce=nonce, token="t", binding=completed_binding, authenticator_name="n",
+    ) == ("replaced", True)
+
+
+def test_a_delayed_resume_is_answered_only_from_its_own_operations_receipt(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b", "cred-c"))
+    assert _revoke(client, _row_id("cred-b")).status_code == 200
+    revoked_binding = _latest_binding(user_id)
+    nonce = _nonce(user_id)
+    feat.start_registration(
+        user_id=user_id, session_nonce=nonce, proof=lifecycle.TotpCode(totp_code()),
+        alias="later", display_name="Later",
+    )
+    other_binding = _latest_binding(user_id)
+    assert feat.cancel_registration(user_id=user_id, session_nonce=nonce) is True
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        feat.resume_retirement(user_id=user_id, binding=other_binding)
+    assert refused.value.category == "operation_not_found"
+    with pytest.raises(CredentialOperationRefused) as unknown:
+        feat.resume_retirement(user_id=user_id, binding="0" * 64)
+    assert unknown.value.category == "operation_not_found"
+    assert feat.resume_retirement(user_id=user_id, binding=revoked_binding) == ("revoked", True)
+
+
+def test_a_resume_naming_another_operation_is_refused_while_one_is_open(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    _retirement_committed(client, fake_passwordless, user_id)
+
+    response = client.post("/admin/passkey/resume", json={"binding": "0" * 64})
+
+    assert response.status_code == 409 and response.get_json()["code"] == "binding_mismatch"
+    assert _bound(user_id) == ["cred-a", "cred-b"]
+
+
+def test_the_settings_page_carries_the_open_operations_binding_for_its_retry_control(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    _retirement_committed(client, fake_passwordless, user_id)
+
+    page = client.get("/admin/passkey/settings").get_data(as_text=True)
+
+    assert f'data-binding="{_latest_binding(user_id)}"' in page
+    assert "loginUrl" in page
+
+
+def test_the_expired_session_answer_is_json_with_a_message_the_client_shows(client, app, fake_passwordless):
+    """The shape passkey.js relies on: ``error`` (a code), ``message`` (shown), HTTP 401, on finish and delete."""
+    for prefix in ("/admin", "/sysadmin"):
+        finish = client.post(f"{prefix}/passkey/register/finish", json={"token": "t", "binding": "b"})
+        delete = client.delete(f"{prefix}/passkey/1/delete", json={"totp_code": "000000"})
+        for response in (finish, delete):
+            body = response.get_json()
+            assert response.status_code == 401
+            assert body["error"] == "authentication_required"
+            assert isinstance(body["message"], str) and body["message"]
+    script = (pathlib.Path(__file__).resolve().parents[3] / "static" / "js" / "passkey.js").read_text(encoding="utf-8")
+    assert "data.message || data.error" in script
+    assert "config.loginUrl" in script
+    assert "cancelAfterFailure" in script  # an ambiguous auto-cancel reloads to show the operation's real state
+
+
+def test_a_completed_receipt_past_its_deadline_is_no_longer_replayed(client, app, fake_passwordless):
+    user_id, binding = _two_completed(client, app, fake_passwordless)
+    (receipt,) = [o for o in _operations(user_id) if o.stage is CredentialOperationStage.COMPLETED]
+    nonce = _nonce(user_id)
+
+    with temporal.pinned_clock(temporal.shifted(receipt.deadline_at, seconds=-1)):
+        assert feat.resume_retirement(user_id=user_id, binding=binding) == ("replaced", True)
+    with temporal.pinned_clock(temporal.shifted(receipt.deadline_at, seconds=1)):
+        with pytest.raises(CredentialOperationRefused) as finish:
+            feat.finish_registration(
+                user_id=user_id, session_nonce=nonce, token="t", binding=binding, authenticator_name="n",
+            )
+        with pytest.raises(CredentialOperationRefused) as resume:
+            feat.resume_retirement(user_id=user_id, binding=binding)
+    assert finish.value.category == resume.value.category == "operation_not_found"
+
+
+def test_a_committed_retirement_still_resumes_after_its_deadline_despite_the_receipt_cutoff(
+    client, app, fake_passwordless,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    _, d = _retirement_committed(client, fake_passwordless, user_id)
+    deadline = _operations(user_id)[0].deadline_at
+
+    with temporal.pinned_clock(temporal.shifted(deadline, seconds=60)):
+        result = feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id))
+
+    assert result == ("replaced", False) and d in _bound(user_id)

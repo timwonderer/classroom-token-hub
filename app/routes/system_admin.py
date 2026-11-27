@@ -384,6 +384,7 @@ def passkey_settings():
                          admin=user,
                          credentials=credentials,
                          operation_state=credential_lifecycle.open_passkey_operation_state(user.id),
+                         operation_binding=credential_lifecycle.open_passkey_operation_binding(user.id),
                          passkey_urls={
                              "start": url_for("sysadmin.passkey_register_start"),
                              "finish": url_for("sysadmin.passkey_register_finish"),

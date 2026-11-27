@@ -108,8 +108,9 @@ def finish_registration(*, user_id, session_nonce, token, binding, authenticator
     activates it in the next transaction. Replacement commits retirement intent, retires
     the selected old credential remotely, and only then swaps the local bindings.
     Returns ``(outcome, replayed)`` with outcome ``"activated"`` or ``"replaced"``. A
-    retry after completion (no open operation, receipt still retained) returns the stored
-    outcome with ``replayed`` true and changes nothing.
+    retry after completion (no open operation) returns the stored outcome of the operation
+    the ``binding`` names, if its receipt remains, with ``replayed`` true and changes
+    nothing; a binding naming no retained receipt is refused.
 
     Principal reconciliation with the pending credential protected (FEAT-IDEN-108,
     FEAT-IDEN-102 §VI) is not part of this command: it would run between recording the
@@ -120,7 +121,7 @@ def finish_registration(*, user_id, session_nonce, token, binding, authenticator
     purposes = (CredentialOperationPurpose.PASSKEY_ENROLL, CredentialOperationPurpose.PASSKEY_REPLACE)
     operation = lifecycle.get_open_operation(user_id)
     if operation is None:
-        outcome = lifecycle.latest_receipt_outcome(user_id, *purposes)
+        outcome = lifecycle.receipt_outcome_for_binding(user_id, binding, *purposes)
         if outcome is None:
             raise lifecycle.CredentialOperationRefused("operation_not_found")
         return outcome, True
@@ -174,7 +175,7 @@ def revoke_passkey(*, user_id, session_nonce, totp_code, passkey_id, correlation
     return "revoked", False
 
 
-def resume_retirement(*, user_id, authenticator_name=None, correlation_id=None) -> tuple[str, bool]:
+def resume_retirement(*, user_id, binding, authenticator_name=None, correlation_id=None) -> tuple[str, bool]:
     """Finish the principal's committed retirement: the exact recorded work, nothing new.
 
     Needs no fresh proof, session or deadline: the interactive authorization was
@@ -183,15 +184,18 @@ def resume_retirement(*, user_id, authenticator_name=None, correlation_id=None) 
     for a replacement's new passkey (the registration-time label is not retained). Returns
     ``(outcome, replayed)``: the operation's outcome, ``"replaced"`` or ``"revoked"``; a
     retry after completion replays the retained receipt's outcome with ``replayed`` true.
+    ``binding`` names the operation being finished (the settings page carries it); it must
+    be the open operation's, or, with none open, one whose receipt remains.
     """
     correlation_id = correlation_id or generate_correlation_id()
     purposes = (CredentialOperationPurpose.PASSKEY_REPLACE, CredentialOperationPurpose.PASSKEY_REVOKE)
     if lifecycle.get_open_operation(user_id) is None:
-        outcome = lifecycle.latest_receipt_outcome(user_id, *purposes)
+        outcome = lifecycle.receipt_outcome_for_binding(user_id, binding, *purposes)
         if outcome is None:
             raise lifecycle.CredentialOperationRefused("operation_not_found")
         return outcome, True
     operation = _open_operation_for(user_id, *purposes)
+    lifecycle.check_registration_binding(operation, binding)
     if operation.stage not in lifecycle.RETIREMENT_STAGES:
         raise lifecycle.CredentialOperationRefused("operation_not_open")
     outcome = "revoked" if operation.purpose is CredentialOperationPurpose.PASSKEY_REVOKE else "replaced"
@@ -254,7 +258,7 @@ def _retire_and_complete(user_id, operation_id, authenticator_name, correlation_
     lifecycle.require_current_generation(operation)
     release_read_transaction()
     try:
-        passkey_service.retire_remote_credential(old_credential_id)
+        passkey_service.retire_remote_credential(old_credential_id, user_id)
     except passkey_service.PasskeyError as exc:
         with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=_key(feat_name, "uncertain")):
             lifecycle.record_provider_uncertain(_own(user_id, operation_id))

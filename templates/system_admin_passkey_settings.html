@@ -38,7 +38,7 @@
                     <label for="passkey-resume-name" class="form-label">Name for the new passkey <span class="text-muted">(optional, replacements only)</span></label>
                     <input type="text" id="passkey-resume-name" class="form-control" maxlength="100" autocomplete="off">
                 </div>
-                <button type="button" class="btn btn-primary" id="resumePasskeyButton">Try again</button>
+                <button type="button" class="btn btn-primary" id="resumePasskeyButton" data-binding="{{ operation_binding or '' }}">Try again</button>
             {% endcall %}
             {% elif operation_state == 'registering' %}
             {% call cards.alert_card('info', 'A passkey change is in progress', icon='info', body_class='mb-4') %}
@@ -144,6 +144,7 @@
         registerButtonId: 'registerPasskeyButton',
         resumeButtonId: 'resumePasskeyButton',
         resumeNameInputId: 'passkey-resume-name',
+        loginUrl: {{ url_for('sysadmin.login')|tojson }},
         cancelButtonId: 'cancelPasskeyButton',
         startUrl: {{ passkey_urls.start|tojson }},
         finishUrl: {{ passkey_urls.finish|tojson }},

@@ -129,13 +129,14 @@ def _stored_seed(user_id):
     return _user(user_id).totp_secret_encrypted
 
 
-def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=HELD_SEED, credential="cred-1"):
-    """A signed-in teacher holding ``seed`` and one activated passkey."""
+def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=HELD_SEED, credential="cred-1", passkey=True):
+    """A signed-in teacher holding ``seed`` and (unless ``passkey`` is false) one activated passkey."""
     classroom = initialize_as_teacher(key, client, app)
     user_id = classroom.teacher_user.id
     _set_seed(user_id, seed)
-    _add_passkey(user_id, credential)
-    fake.credentials[credential] = passkey_external_id(user_id)
+    if passkey:
+        _add_passkey(user_id, credential)
+        fake.credentials[credential] = passkey_external_id(user_id)
     return classroom, user_id
 
 
@@ -429,9 +430,7 @@ def test_open_operation_refuses_an_assertion_for_passkey_work(client, app, fake_
 
 
 def test_an_unissued_signup_capability_is_refused(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    db.session.query(PasskeyCredential).filter_by(user_id=user_id).delete()  # a teacher still owed a first passkey
-    db.session.commit()
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless, passkey=False)  # still owed a first passkey
 
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(

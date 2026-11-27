@@ -20,6 +20,7 @@ import pytest
 from passwordless import PasswordlessError
 from passwordless.errors import PasswordlessProblemDetails
 
+from app.services import passkey_service
 from app.utils.user_ids import passkey_external_id
 
 
@@ -41,15 +42,25 @@ class FakePasswordless:
     fail_deletes: bool = False
     lose_next_delete_response: bool = False  # the provider deletes, then the reply is lost
     strict_missing_deletes: bool = False  # deleting an absent credential is a 404, as the provider may answer
+    generic_404_deletes: bool = False  # deletes answer a bare proxy-style 404 (no problem code), whatever is held
+    fail_inventory: bool = False  # the credential listing is unavailable
+    pending_nickname: str | None = None  # what the browser would register the next credential under
 
     # ---- what tests use to simulate the browser ceremony ----
 
-    def complete_registration(self, user_id, *, external_id=None) -> str:
-        """A registration the browser finished: a new credential and its token."""
+    def complete_registration(self, user_id, *, external_id=None, nickname=None) -> str:
+        """A registration the browser finished: a new credential and its token.
+
+        The credential's nickname is what the browser passed to ``p.register``: the binding
+        of the latest start (``pending_nickname``) unless a test says otherwise.
+        """
         external_id = external_id or passkey_external_id(user_id)
         credential_id = f"cred-{secrets.token_hex(4)}"
         self.credentials[credential_id] = external_id
-        return self._token(external_id, credential_id, "passkey_register")
+        return self._token(
+            external_id, credential_id, "passkey_register",
+            nickname=self.pending_nickname if nickname is None else nickname,
+        )
 
     def sign_in_token(self, credential_id, *, type_="passkey_signin", success=True) -> str:
         return self._token(self.credentials[credential_id], credential_id, type_, success)
@@ -57,10 +68,11 @@ class FakePasswordless:
     def token_for(self, external_id, credential_id, *, type_="passkey_signin") -> str:
         return self._token(external_id, credential_id, type_)
 
-    def _token(self, external_id, credential_id, type_, success=True) -> str:
+    def _token(self, external_id, credential_id, type_, success=True, nickname=None) -> str:
         token = f"verify_{secrets.token_hex(8)}"
         self.tokens[token] = SimpleNamespace(
             success=success, user_id=external_id, credential_id=credential_id, type=type_,
+            nickname=nickname,
         )
         return token
 
@@ -85,12 +97,26 @@ class FakePasswordless:
         self.calls.append(("delete_credential", delete_credential.credential_id))
         if self.fail_deletes:
             raise _problem(500, "unavailable")
+        if self.generic_404_deletes:
+            raise PasswordlessError(PasswordlessProblemDetails(
+                type="https://docs.passwordless.dev/guide/errors.html", title="Unexpected error",
+                status=404, detail="<html>Not Found</html>",
+            ))
         if self.strict_missing_deletes and delete_credential.credential_id not in self.credentials:
             raise _problem(404, "credential_not_found")
         self.credentials.pop(delete_credential.credential_id, None)
         if self.lose_next_delete_response:
             self.lose_next_delete_response = False
             raise _problem(504, "timeout")
+
+    def get_credentials(self, user_id):
+        self.calls.append(("get_credentials", user_id))
+        if self.fail_inventory:
+            raise _problem(500, "unavailable")
+        return [
+            SimpleNamespace(descriptor=SimpleNamespace(type="public-key", id=credential_id), user_id=owner)
+            for credential_id, owner in self.credentials.items() if owner == user_id
+        ]
 
     def delete_user(self, delete_user):
         self.calls.append(("delete_user", delete_user.user_id))
@@ -155,6 +181,7 @@ def start_registration(client, *, prefix="/admin", code=None, **body):
     if response.status_code == 200:
         # What the browser would hold for the finish step.
         client.last_registration_binding = response.get_json()["binding"]
+        passkey_service._client().pending_nickname = client.last_registration_binding
     return response
 
 

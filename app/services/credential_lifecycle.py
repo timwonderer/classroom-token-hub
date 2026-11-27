@@ -964,6 +964,41 @@ def check_registration_binding(operation: CredentialOperation, binding) -> None:
         raise CredentialOperationRefused("binding_mismatch")
 
 
+def receipt_outcome_for_binding(user_id: str, binding, *purposes: CredentialOperationPurpose) -> str | None:
+    """The outcome of the principal's completed operation that ``binding`` names, if its receipt remains.
+
+    The binding identifies one operation (it is derived from the operation id), so a retry
+    is answered only from the receipt of the operation it belongs to: never from another
+    completed operation of the same principal and purpose. Receipts are kept only until
+    the operation's original interactive deadline (SPEC-IDEN-002 §V). Pure read.
+    """
+    if not isinstance(binding, str):
+        return None
+    receipts = (
+        db.session.query(CredentialOperation)
+        .filter(
+            CredentialOperation.user_id == user_id,
+            CredentialOperation.purpose.in_(purposes),
+            CredentialOperation.stage == CredentialOperationStage.COMPLETED,
+        )
+        .all()
+    )
+    for receipt in receipts:
+        # A receipt past its operation's original deadline is no longer an answer (the
+        # comparison is the resolver's).
+        if _deadline_open(receipt) and _digests_equal(registration_binding(receipt), binding):
+            return _OUTCOME_FOR_PURPOSE[receipt.purpose]
+    return None
+
+
+def open_passkey_operation_binding(user_id: str) -> str | None:
+    """The binding of the principal's open passkey operation, for the settings page's retry control. Pure read."""
+    operation = get_open_operation(user_id)
+    if operation is None or operation.purpose not in PASSKEY_PURPOSES:
+        return None
+    return registration_binding(operation)
+
+
 def require_current_generation(operation: CredentialOperation) -> None:
     """Refuse (``stale_generation``) unless the principal's generation is the one recorded at authorization.
 
@@ -977,26 +1012,6 @@ def require_current_generation(operation: CredentialOperation) -> None:
     )
     if current is None or current != operation.authorized_generation:
         raise CredentialOperationRefused("stale_generation")
-
-
-def latest_receipt_outcome(user_id: str, *purposes: CredentialOperationPurpose) -> str | None:
-    """The outcome of the principal's most recent completed operation of ``purposes``, if its receipt remains.
-
-    Receipts are kept only until the operation's original interactive deadline
-    (SPEC-IDEN-002 §V), so this is the stored bounded outcome a duplicate request gets back.
-    Pure read.
-    """
-    receipt = (
-        db.session.query(CredentialOperation)
-        .filter(
-            CredentialOperation.user_id == user_id,
-            CredentialOperation.purpose.in_(purposes),
-            CredentialOperation.stage == CredentialOperationStage.COMPLETED,
-        )
-        .order_by(CredentialOperation.updated_at.desc())
-        .first()
-    )
-    return _OUTCOME_FOR_PURPOSE[receipt.purpose] if receipt is not None else None
 
 
 def open_passkey_operation_state(user_id: str) -> str | None:
@@ -1117,6 +1132,10 @@ def record_registered_credential(operation: CredentialOperation, verified, *, se
         raise CredentialOperationRefused("registration_rejected")
     if parse_passkey_external_id(getattr(verified, "user_id", None)) != str(principal.id):
         raise CredentialOperationRefused("registration_rejected")
+    # The registration carries the issuing operation's binding as the credential nickname the
+    # provider stores and returns on verification, so a registration made under another
+    # (cancelled or superseded) operation cannot be recorded under this one.
+    check_registration_binding(locked, getattr(verified, "nickname", None))
     credential_id = getattr(verified, "credential_id", None)
     if not credential_id or not isinstance(credential_id, str) or credential_id == locked.old_credential_id:
         raise CredentialOperationRefused("registration_rejected")

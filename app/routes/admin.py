@@ -10371,6 +10371,7 @@ def passkey_settings():
                          admin=admin,
                          credentials=credentials,
                          operation_state=credential_lifecycle.open_passkey_operation_state(user_id),
+                         operation_binding=credential_lifecycle.open_passkey_operation_binding(user_id),
                          passkey_urls=_passkey_urls())
 
 

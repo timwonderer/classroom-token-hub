@@ -135,12 +135,33 @@ def verify_sign_in(token: str, *, expected_role: str, expected_user_id: str | No
     return user
 
 
-def retire_remote_credential(credential_id: str) -> None:
+def _normalized_credential_id(value) -> str:
+    """A credential id compared without base64 alphabet or padding differences."""
+    return str(value).replace("+", "-").replace("/", "_").rstrip("=")
+
+
+def _credential_absent_from_inventory(credential_id: str, user_id: str | None) -> bool:
+    """True only when the provider lists the principal's credentials and this one is not among them.
+
+    Any failure to read the inventory, or a missing principal, is "not confirmed".
+    """
+    if not user_id:
+        return False
+    try:
+        listed = _client().get_credentials(passkey_external_id(user_id))
+        wanted = _normalized_credential_id(credential_id)
+        return all(_normalized_credential_id(item.descriptor.id) != wanted for item in listed)
+    except Exception:
+        return False
+
+
+def retire_remote_credential(credential_id: str, user_id: str | None = None) -> None:
     """Delete one exact credential on passwordless.dev. Provider I/O: no transaction may be open.
 
     Raises ``PasskeyServiceUnavailable`` when the provider did not confirm the
     deletion. A failure never licenses removing the local binding: the caller keeps
     the fixed operation pending and retries this same credential (FEAT-IDEN-102/107).
+    ``user_id`` (the principal) lets a provider 404 be confirmed against the credential inventory.
     """
     if not credential_id or not isinstance(credential_id, str):
         raise PasskeyError("no credential to retire")
@@ -148,9 +169,12 @@ def retire_remote_credential(credential_id: str) -> None:
     try:
         _client().delete_credential(DeleteCredential(credential_id=credential_id))
     except PasswordlessError as exc:
-        # The provider reports this exact credential as already absent: the deletion
-        # this call exists to achieve has happened, so a retry converges instead of looping.
-        if getattr(getattr(exc, "problem_details", None), "status", None) == 404:
+        # A 404 alone is not proof: a proxy or a wrong self-hosted path answers 404 too. It
+        # counts as deletion only when the provider's own credential inventory for the
+        # principal no longer lists this exact credential.
+        if getattr(getattr(exc, "problem_details", None), "status", None) == 404 and (
+            _credential_absent_from_inventory(credential_id, user_id)
+        ):
             return
         raise PasskeyServiceUnavailable("remote credential deletion failed") from exc
     except Exception as exc:

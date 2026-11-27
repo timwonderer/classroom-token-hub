@@ -41,7 +41,8 @@ def _register_finish(client, token):
         user_id = sess["user_id"]
     give_totp_seed(user_id)
     assert start_registration(client).status_code == 200
-    return finish_registration(client, token)
+    # The browser registers after the start, under the start's binding.
+    return finish_registration(client, token() if callable(token) else token)
 
 
 def _signed_in_user_id(client):
@@ -69,7 +70,7 @@ def test_registration_records_the_credential_the_token_names(client, fake_passwo
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     user_id = classroom.teacher_user.id
 
-    response = _register_finish(client, fake_passwordless.complete_registration(user_id))
+    response = _register_finish(client, lambda: fake_passwordless.complete_registration(user_id))
 
     assert response.status_code == 200
     rows = PasskeyCredential.query.filter_by(user_id=user_id).all()
@@ -82,7 +83,7 @@ def test_registration_refuses_a_token_for_another_principal(client, fake_passwor
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     assert other_user.id != classroom.teacher_user.id
 
-    response = _register_finish(client, fake_passwordless.complete_registration(other_user.id))
+    response = _register_finish(client, lambda: fake_passwordless.complete_registration(other_user.id))
 
     assert response.status_code == 400
     assert PasskeyCredential.query.count() == 0

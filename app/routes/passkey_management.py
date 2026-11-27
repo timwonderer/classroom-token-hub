@@ -148,7 +148,10 @@ def resume(*, user_id: str, login_endpoint: str):
     """Finish the principal's committed retirement; success ends the sign-in."""
     def action():
         name = _body().get("authenticatorName")
-        result = feat.resume_retirement(user_id=user_id, authenticator_name=name if isinstance(name, str) else None)
+        result = feat.resume_retirement(
+            user_id=user_id, binding=_body().get("binding"),
+            authenticator_name=name if isinstance(name, str) else None,
+        )
         return _signed_out_success(result, login_endpoint)
     return _guarded(action)
 
