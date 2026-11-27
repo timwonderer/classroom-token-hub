@@ -956,11 +956,6 @@ def receipt_outcome_for_binding(user_id: str, binding, *purposes: CredentialOper
     return None
 
 
-def open_passkey_operation_binding(user_id: str) -> str | None:
-    """The binding of the principal's open passkey operation, for the settings page's retry control. Pure read."""
-    return open_passkey_operation_presentation(user_id)[1]
-
-
 def require_current_generation(operation: CredentialOperation) -> None:
     """Refuse (``stale_generation``) unless the principal's generation is the one recorded at authorization.
 

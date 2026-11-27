@@ -25,7 +25,7 @@ from flask import current_app
 from app.extensions import db
 from app.models import User
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
-from app.utils.user_ids import parse_passkey_external_id, passkey_external_id
+from app.utils.user_ids import passkey_external_id
 
 logger = logging.getLogger(__name__)
 
