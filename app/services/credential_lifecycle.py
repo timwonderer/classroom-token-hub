@@ -1350,6 +1350,115 @@ def complete_retirement(operation: CredentialOperation, *, authenticator_name: s
     return COMPLETED
 
 
+# ---------------------------------------------------------------------------
+# Principal reconciliation: local scope, revalidation and outcome (FEAT-IDEN-108 §V-§VI)
+# ---------------------------------------------------------------------------
+
+#: The stages at which each passkey purpose may be reconciled: an enrollment between
+#: recording and activating its candidate, a replacement or revocation between confirmed
+#: remote retirement and local completion. ``registration_pending`` (a lawful registration
+#: whose credential id is not yet known) is scoped too, so that any caller reconciling then
+#: has every provider-only entry protected rather than refused or guessed at.
+_RECONCILIATION_STAGES = {
+    CredentialOperationPurpose.PASSKEY_ENROLL: (
+        CredentialOperationStage.REGISTRATION_PENDING, CredentialOperationStage.CANDIDATE_VERIFIED,
+    ),
+    CredentialOperationPurpose.PASSKEY_REPLACE: (
+        CredentialOperationStage.REGISTRATION_PENDING, CredentialOperationStage.CANDIDATE_VERIFIED,
+        *RETIREMENT_STAGES,
+    ),
+    CredentialOperationPurpose.PASSKEY_REVOKE: RETIREMENT_STAGES,
+}
+
+
+@dataclass(frozen=True)
+class ReconciliationScope:
+    """What the principal's local state lawfully holds at a reconciliation boundary.
+
+    Exact credential ids only, kept in memory for the one reconciliation and never persisted
+    or emitted. ``pending_registration_unknown`` is true when a lawful registration is in
+    flight whose credential id is not recorded.
+    """
+
+    actor_type: str
+    stage: str
+    active_ids: tuple[str, ...]
+    pending_id: str | None
+    retiring_id: str | None
+    pending_registration_unknown: bool
+
+
+def reconciliation_scope(operation: CredentialOperation) -> ReconciliationScope | None:
+    """The principal's local authority for reconciliation, read from current state. Pure read.
+
+    ``None`` when the operation already completed (a concurrent request finished it: there
+    is nothing left to reconcile and the caller's own completion is then a replay). Refuses
+    ``operation_not_found`` for another principal's or an absent operation, ``stale_generation``
+    when a recovery or destruction superseded it, and ``operation_not_open`` at any stage
+    other than the purpose's reconciliation boundary. Reads only principal eligibility,
+    activated credentials and the operation's own recorded ids.
+    """
+    principal = db.session.get(User, operation.user_id)
+    current = db.session.get(CredentialOperation, operation.id)
+    if (
+        principal is None or current is None or current.user_id != principal.id
+        or principal.user_role not in (UserRole.TEACHER, UserRole.SYSADMIN)
+        or current.purpose not in _RECONCILIATION_STAGES
+    ):
+        raise CredentialOperationRefused("operation_not_found")
+    if current.stage is CredentialOperationStage.COMPLETED:
+        return None
+    if current.stage not in _RECONCILIATION_STAGES[current.purpose]:
+        raise CredentialOperationRefused("operation_not_open")
+    if principal.credential_generation != current.authorized_generation:
+        raise CredentialOperationRefused("stale_generation")
+    active = tuple(
+        row[0] for row in db.session.query(PasskeyCredential.credential_id).filter_by(user_id=principal.id).all()
+    )
+    return ReconciliationScope(
+        actor_type=principal.user_role.value,
+        stage=current.stage.value,
+        active_ids=active,
+        pending_id=current.new_credential_id or None,
+        retiring_id=current.old_credential_id or None,
+        pending_registration_unknown=(
+            current.purpose is not CredentialOperationPurpose.PASSKEY_REVOKE and not current.new_credential_id
+        ),
+    )
+
+
+def reconciliation_target_is_still_provider_only(operation: CredentialOperation, credential_id: str) -> bool:
+    """Revalidate, from current local state, that ``credential_id`` may still be retired. Pure read.
+
+    Re-reads the scope (refusing on a superseded generation or a moved stage) and requires
+    that the id is bound by no principal, is neither the recorded candidate nor the retiring
+    credential, and that no registration of unknown id is in flight. ``False`` when the
+    operation completed meanwhile. The caller deletes remotely only on ``True``.
+    """
+    scope = reconciliation_scope(operation)
+    if scope is None or scope.pending_registration_unknown:
+        return False
+    keys = {passkey_service.credential_match_key(i) for i in (*scope.active_ids, scope.pending_id, scope.retiring_id) if i}
+    if passkey_service.credential_match_key(credential_id) in keys:
+        return False
+    return not db.session.query(
+        db.session.query(PasskeyCredential.id).filter_by(credential_id=credential_id).exists()
+    ).scalar()
+
+
+def emit_reconciliation_outcome(scope: ReconciliationScope, *, outcome: str) -> None:
+    """Emit one non-identifying principal-reconciliation outcome (DOM-OPS-002 §2.5, ACT-IDEN-108).
+
+    Fixed action, mode, stage and outcome category only: no principal, credential, operation
+    or provider value. Runs inside the lifecycle FEAT that invoked reconciliation.
+    """
+    _require_feat(*{FEAT_FOR_PURPOSE[p] for p in PASSKEY_PURPOSES})
+    _emit_outcome(
+        action="ACT-IDEN-108", actor_type=scope.actor_type,
+        stage_before=scope.stage, stage_after=scope.stage, outcome=outcome,
+    )
+
+
 def cancel_before_retirement(operation: CredentialOperation, *, session_nonce: str) -> bool:
     """Cancel a passkey operation that has not yet committed retirement intent.
 

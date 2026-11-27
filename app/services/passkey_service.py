@@ -140,6 +140,33 @@ def _normalized_credential_id(value) -> str:
     return str(value).replace("+", "-").replace("/", "_").rstrip("=")
 
 
+#: The comparison key reconciliation uses for credential ids (see ``credential_reconciliation``).
+credential_match_key = _normalized_credential_id
+
+
+class InventoryUnusable(PasskeyServiceUnavailable):
+    """The provider's credential inventory could not be read or was not well formed."""
+
+
+def list_credential_ids(user_id: str) -> list[str]:
+    """The exact credential ids the provider lists for the principal. Provider I/O: no transaction may be open.
+
+    Any failure, a reply that is not a list of entries each naming a non-empty id, or a
+    missing principal raises ``InventoryUnusable``: an unusable inventory is never an empty
+    one, and grants no deletion authority (FEAT-IDEN-108 §VI.1).
+    """
+    if not user_id:
+        raise InventoryUnusable("no principal to list")
+    try:
+        listed = list(_client().get_credentials(passkey_external_id(user_id)))
+        ids = [item.descriptor.id for item in listed]
+    except Exception as exc:
+        raise InventoryUnusable("credential inventory unavailable") from exc
+    if not all(isinstance(i, str) and i for i in ids):
+        raise InventoryUnusable("credential inventory malformed")
+    return ids
+
+
 def _credential_absent_from_inventory(credential_id: str, user_id: str | None) -> bool:
     """True only when the provider lists the principal's credentials and this one is not among them.
 

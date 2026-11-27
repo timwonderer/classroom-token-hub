@@ -2009,3 +2009,292 @@ def test_a_malformed_binding_is_an_ordinary_refusal_never_an_error(client, app, 
     assert lifecycle.receipt_outcome_for_binding(
         user_id, malformed, CredentialOperationPurpose.PASSKEY_REPLACE,
     ) is None
+
+
+# ---------------------------------------------------------------------------
+# principal reconciliation at the lifecycle boundaries (FEAT-IDEN-108 §VI)
+# ---------------------------------------------------------------------------
+
+def _reconciliation_outcomes(monkeypatch):
+    """The non-identifying reconciliation outcome categories emitted, in order (the audit row holds only a digest)."""
+    seen = []
+    real = lifecycle._emit_outcome
+
+    def spy(**kwargs):
+        if kwargs["action"] == "ACT-IDEN-108":
+            seen.append(kwargs)
+        return real(**kwargs)
+
+    monkeypatch.setattr(lifecycle, "_emit_outcome", spy)
+    return seen
+
+
+def _deletes(fake):
+    return [c[1] for c in fake.calls if c[0] == "delete_credential"]
+
+
+def _stray(fake, user_id, credential_id="stray-1"):
+    """A credential the provider holds for the principal that no local state accounts for."""
+    fake.credentials[credential_id] = passkey_external_id(user_id)
+    return credential_id
+
+
+def test_a_stray_provider_credential_is_retired_during_enrollment_and_the_new_one_activates(
+    client, app, fake_passwordless, monkeypatch,
+):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    stray = _stray(fake_passwordless, user_id)
+
+    response, new = _enroll(client, fake_passwordless, user_id)
+
+    assert response.status_code == 200
+    assert _deletes(fake_passwordless) == [stray]  # the candidate and the active binding are never deleted
+    assert set(fake_passwordless.credentials) == {"cred-a", new}
+    assert _bound(user_id) == sorted(["cred-a", new])
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_provider_only_retired"]
+    payload = json.dumps(outcomes, default=str)
+    for identifying in (user_id, stray, new, "cred-a", passkey_external_id(user_id)):
+        assert identifying not in payload
+
+
+def test_mutation_without_the_reconciliation_call_the_stray_survives(
+    client, app, fake_passwordless, monkeypatch,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    stray = _stray(fake_passwordless, user_id)
+    monkeypatch.setattr(feat, "_reconcile_principal", lambda *a, **k: None)
+
+    assert _enroll(client, fake_passwordless, user_id)[0].status_code == 200
+
+    assert stray in fake_passwordless.credentials and _deletes(fake_passwordless) == []
+
+
+def test_reconciliation_never_reaches_another_principals_credentials(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    other = initialize("biology_block_a", app).teacher_user.id
+    assert other != user_id
+    give_totp_seed(other)
+    record_passkey(other, "other-bound", fake_passwordless)
+    _stray(fake_passwordless, other, "other-stray")
+    stray = _stray(fake_passwordless, user_id)
+
+    assert _enroll(client, fake_passwordless, user_id)[0].status_code == 200
+
+    assert _deletes(fake_passwordless) == [stray]
+    assert {"other-bound", "other-stray"} <= set(fake_passwordless.credentials)
+    assert _bound(other) == ["other-bound"]
+    listed = {c[1] for c in fake_passwordless.calls if c[0] == "get_credentials"}
+    assert listed == {passkey_external_id(user_id)}
+
+
+def test_replacement_retires_a_stray_and_keeps_a_and_c_and_the_new_credential(
+    client, app, fake_passwordless, monkeypatch,
+):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b", "cred-c"))
+    stray = _stray(fake_passwordless, user_id)
+
+    response, d = _replace(client, fake_passwordless, user_id, "cred-b")
+
+    assert response.status_code == 200, response.get_json()
+    assert _deletes(fake_passwordless) == ["cred-b", stray]
+    assert set(fake_passwordless.credentials) == {"cred-a", "cred-c", d}
+    assert _bound(user_id) == sorted(["cred-a", "cred-c", d])
+    # The retiring credential's remote absence is the intended effect, not a discrepancy.
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_provider_only_retired"]
+
+
+def test_a_clean_replacement_emits_only_its_own_outcome(client, app, fake_passwordless, monkeypatch):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+
+    assert _replace(client, fake_passwordless, user_id, "cred-b")[0].status_code == 200
+
+    assert outcomes == [] and len(_outcomes()) == 1
+
+
+def test_an_unusable_inventory_withholds_deletion_but_the_replacement_completes(
+    client, app, fake_passwordless, monkeypatch,
+):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    stray = _stray(fake_passwordless, user_id)
+    fake_passwordless.fail_inventory = True
+
+    response, d = _replace(client, fake_passwordless, user_id, "cred-b")
+
+    assert response.status_code == 200, response.get_json()
+    assert _deletes(fake_passwordless) == ["cred-b"]  # only the recorded old credential
+    assert stray in fake_passwordless.credentials
+    assert _bound(user_id) == sorted(["cred-a", d])
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_inventory_unusable"]
+
+
+@pytest.mark.parametrize("reply", [None, [object()], [SimpleNamespace(descriptor=SimpleNamespace(id=""))],
+                                   [SimpleNamespace(descriptor=SimpleNamespace(id=7))]])
+def test_a_malformed_inventory_is_never_read_as_empty_and_enrollment_still_activates(
+    client, app, fake_passwordless, monkeypatch, reply,
+):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    stray = _stray(fake_passwordless, user_id)
+    monkeypatch.setattr(fake_passwordless, "get_credentials", lambda _id: reply)
+
+    response, new = _enroll(client, fake_passwordless, user_id)
+
+    assert response.status_code == 200
+    assert _deletes(fake_passwordless) == [] and stray in fake_passwordless.credentials
+    assert _bound(user_id) == sorted(["cred-a", new])
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_inventory_unusable"]
+
+
+def test_an_unconfirmed_stray_deletion_is_reported_and_does_not_block_enrollment(
+    client, app, fake_passwordless, monkeypatch,
+):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    stray = _stray(fake_passwordless, user_id)
+    fake_passwordless.fail_deletes = True
+
+    response, new = _enroll(client, fake_passwordless, user_id)
+
+    assert response.status_code == 200
+    assert _deletes(fake_passwordless) == [stray]  # attempted once, not assumed to have worked
+    assert stray in fake_passwordless.credentials
+    assert _bound(user_id) == sorted(["cred-a", new])
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_delete_unconfirmed"]
+
+
+def test_an_active_binding_missing_remotely_is_reported_and_never_deleted_or_recreated(
+    client, app, fake_passwordless, monkeypatch,
+):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    fake_passwordless.credentials.pop("cred-a")
+
+    response, new = _enroll(client, fake_passwordless, user_id)
+
+    assert response.status_code == 200
+    assert _bound(user_id) == sorted(["cred-a", "cred-b", new])  # the local row survives
+    assert "cred-a" not in fake_passwordless.credentials  # and nothing recreated it remotely
+    assert _deletes(fake_passwordless) == []
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_active_absent_remotely"]
+
+
+def test_an_empty_inventory_for_a_principal_with_bindings_deletes_nothing(
+    client, app, fake_passwordless, monkeypatch,
+):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    fake_passwordless.credentials.pop("cred-a")
+    fake_passwordless.credentials.pop("cred-b")
+
+    response, new = _replace(client, fake_passwordless, user_id, "cred-b")  # delete of cred-b: 200 on the fake
+
+    assert response.status_code == 200
+    assert _bound(user_id) == sorted(["cred-a", new])
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_active_absent_remotely"]
+
+
+def test_revocation_retires_a_stray_and_keeps_the_other_passkeys(client, app, fake_passwordless, monkeypatch):
+    outcomes = _reconciliation_outcomes(monkeypatch)
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b", "cred-c"))
+    stray = _stray(fake_passwordless, user_id)
+
+    response = _revoke(client, _row_id("cred-b"))
+
+    assert response.status_code == 200, response.get_json()
+    assert _deletes(fake_passwordless) == ["cred-b", stray]
+    assert set(fake_passwordless.credentials) == {"cred-a", "cred-c"}
+    assert _bound(user_id) == ["cred-a", "cred-c"]
+    assert [o["outcome"] for o in outcomes] == ["reconciliation_provider_only_retired"]
+
+
+def test_a_resumed_retirement_reconciles_before_it_completes(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    _retirement_committed(client, fake_passwordless, user_id)
+    stray = _stray(fake_passwordless, user_id)
+
+    assert _resume(client, user_id).status_code == 200
+
+    assert stray not in fake_passwordless.credentials
+    assert _deletes(fake_passwordless)[-1] == stray
+
+
+def test_the_inventory_is_read_and_strays_deleted_with_no_transaction_open(client, app, fake_passwordless):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    stray = _stray(fake_passwordless, user_id)
+    open_during = []
+    for name in ("get_credentials", "delete_credential"):
+        original = getattr(fake_passwordless, name)
+
+        def spy(arg, _original=original, _name=name):
+            open_during.append((_name, db.session().in_transaction()))
+            return _original(arg)
+
+        setattr(fake_passwordless, name, spy)
+
+    _enroll(client, fake_passwordless, user_id)
+
+    assert open_during == [("get_credentials", False), ("delete_credential", False)]
+    assert stray not in fake_passwordless.credentials
+
+
+def test_a_superseded_operation_deletes_nothing(client, app, fake_passwordless, monkeypatch):
+    """Generation is rechecked from local state before a destructive action, not only at activation."""
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    stray = _stray(fake_passwordless, user_id)
+    real = passkey_service.list_credential_ids
+
+    def list_then_supersede(uid):
+        ids = real(uid)
+        with db.engine.begin() as connection:  # a recovery lands while the provider is being read
+            connection.execute(sa.text(
+                "UPDATE users SET credential_generation = credential_generation + 1 WHERE id = :u"), {"u": uid})
+        return ids
+
+    monkeypatch.setattr(passkey_service, "list_credential_ids", list_then_supersede)
+
+    response, _ = _enroll(client, fake_passwordless, user_id)
+
+    assert response.status_code != 200
+    assert _deletes(fake_passwordless) == [] and stray in fake_passwordless.credentials
+    assert _bound(user_id) == ["cred-a"]
+
+
+def test_a_credential_bound_locally_while_the_inventory_was_read_is_not_deleted(
+    client, app, fake_passwordless, monkeypatch,
+):
+    """Revalidation sees local authority gained since the inventory: a stray that became bound is protected."""
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    stray = _stray(fake_passwordless, user_id)
+    real = passkey_service.list_credential_ids
+
+    def list_then_bind(uid):
+        ids = real(uid)
+        record_passkey(uid, stray, None)
+        return ids
+
+    monkeypatch.setattr(passkey_service, "list_credential_ids", list_then_bind)
+
+    _enroll(client, fake_passwordless, user_id)
+
+    assert _deletes(fake_passwordless) == [] and stray in fake_passwordless.credentials
+
+
+def test_an_enrollment_with_an_unknown_pending_credential_defers_every_provider_only_entry(
+    client, app, fake_passwordless,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    _stray(fake_passwordless, user_id)
+    assert start_registration(client).status_code == 200
+    (operation,) = _open_operations(user_id)
+    assert operation.stage is CredentialOperationStage.REGISTRATION_PENDING
+
+    scope = lifecycle.reconciliation_scope(operation)
+    db.session.rollback()
+
+    assert scope.pending_registration_unknown is True and scope.pending_id is None
+    assert lifecycle.reconciliation_target_is_still_provider_only(operation, "stray-1") is False
+    db.session.rollback()
