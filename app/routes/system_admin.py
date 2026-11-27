@@ -379,12 +379,13 @@ def passkey_settings():
         abort(404)
     # Operations surface: SLE (UTC); a sysadmin never holds class context.
     credentials = build_passkey_credential_rows(list_admin_credentials(user.id))
+    operation_state, operation_binding = credential_lifecycle.open_passkey_operation_presentation(user.id)
 
     return render_template("system_admin_passkey_settings.html",
                          admin=user,
                          credentials=credentials,
-                         operation_state=credential_lifecycle.open_passkey_operation_state(user.id),
-                         operation_binding=credential_lifecycle.open_passkey_operation_binding(user.id),
+                         operation_state=operation_state,
+                         operation_binding=operation_binding,
                          passkey_urls={
                              "start": url_for("sysadmin.passkey_register_start"),
                              "finish": url_for("sysadmin.passkey_register_finish"),

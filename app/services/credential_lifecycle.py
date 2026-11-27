@@ -34,6 +34,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hmac
+import re
 import secrets
 import unicodedata
 import uuid
@@ -958,10 +959,31 @@ def registration_binding(operation: CredentialOperation) -> str:
     return hmac.new(key, message.encode("utf-8"), sha256).hexdigest()
 
 
+_BINDING_SHAPE = re.compile(r"[0-9a-f]{64}")
+
+
+def _is_binding_shaped(value) -> bool:
+    """True for exactly 64 lowercase ASCII hex characters, the only shape ``registration_binding`` yields.
+
+    Checked before any comparison so a malformed value (for example one holding an unpaired
+    surrogate, which cannot be encoded) is an ordinary refusal and never an error.
+    """
+    return isinstance(value, str) and _BINDING_SHAPE.fullmatch(value) is not None
+
+
 def check_registration_binding(operation: CredentialOperation, binding) -> None:
     """Refuse (``binding_mismatch``) unless ``binding`` is this operation's registration binding. Pure."""
-    if not isinstance(binding, str) or not _digests_equal(registration_binding(operation), binding):
+    if not _is_binding_shaped(binding) or not _digests_equal(registration_binding(operation), binding):
         raise CredentialOperationRefused("binding_mismatch")
+
+
+def check_registered_nickname(operation: CredentialOperation, nickname) -> None:
+    """Refuse (``binding_mismatch``) unless the provider-returned credential nickname is this operation's binding.
+
+    The nickname is what the browser registered the credential under (the start's binding), so
+    this ties the provider's own record of the registration to the operation. Pure.
+    """
+    check_registration_binding(operation, nickname)
 
 
 def receipt_outcome_for_binding(user_id: str, binding, *purposes: CredentialOperationPurpose) -> str | None:
@@ -972,7 +994,7 @@ def receipt_outcome_for_binding(user_id: str, binding, *purposes: CredentialOper
     completed operation of the same principal and purpose. Receipts are kept only until
     the operation's original interactive deadline (SPEC-IDEN-002 §V). Pure read.
     """
-    if not isinstance(binding, str):
+    if not _is_binding_shaped(binding):
         return None
     receipts = (
         db.session.query(CredentialOperation)
@@ -993,10 +1015,7 @@ def receipt_outcome_for_binding(user_id: str, binding, *purposes: CredentialOper
 
 def open_passkey_operation_binding(user_id: str) -> str | None:
     """The binding of the principal's open passkey operation, for the settings page's retry control. Pure read."""
-    operation = get_open_operation(user_id)
-    if operation is None or operation.purpose not in PASSKEY_PURPOSES:
-        return None
-    return registration_binding(operation)
+    return open_passkey_operation_presentation(user_id)[1]
 
 
 def require_current_generation(operation: CredentialOperation) -> None:
@@ -1017,12 +1036,24 @@ def require_current_generation(operation: CredentialOperation) -> None:
 def open_passkey_operation_state(user_id: str) -> str | None:
     """How the principal's open passkey operation presents: ``"registering"``,
     ``"retirement_pending"`` or ``None``. Pure read, for rendering the settings page."""
+    return open_passkey_operation_presentation(user_id)[0]
+
+
+def open_passkey_operation_presentation(user_id: str) -> tuple[str | None, str | None]:
+    """The open passkey operation's ``(state, binding)`` from one lookup, so a page renders both from the same row.
+
+    ``state`` is as ``open_passkey_operation_state``; ``binding`` is the registration binding
+    of that operation (for the retry and cancel controls), ``None`` whenever there is no state.
+    Pure read.
+    """
     operation = get_open_operation(user_id)
     if operation is None or operation.purpose not in PASSKEY_PURPOSES:
-        return None
+        return None, None
     if operation.stage in RETIREMENT_STAGES:
-        return "retirement_pending"
-    return "registering" if _deadline_open(operation) else None
+        return "retirement_pending", registration_binding(operation)
+    if _deadline_open(operation):
+        return "registering", registration_binding(operation)
+    return None, None
 
 
 def _consume_signup_capability(principal: User, proof: SignupCapability, session_nonce) -> CredentialOperation:
@@ -1135,7 +1166,7 @@ def record_registered_credential(operation: CredentialOperation, verified, *, se
     # The registration carries the issuing operation's binding as the credential nickname the
     # provider stores and returns on verification, so a registration made under another
     # (cancelled or superseded) operation cannot be recorded under this one.
-    check_registration_binding(locked, getattr(verified, "nickname", None))
+    check_registered_nickname(locked, getattr(verified, "nickname", None))
     credential_id = getattr(verified, "credential_id", None)
     if not credential_id or not isinstance(credential_id, str) or credential_id == locked.old_credential_id:
         raise CredentialOperationRefused("registration_rejected")

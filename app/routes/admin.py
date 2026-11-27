@@ -10366,12 +10366,13 @@ def passkey_settings():
     admin = db.get_or_404(User, user_id)
     from app.services.identity.builders import build_passkey_credential_views
     credentials = build_passkey_credential_views(g.canonical_context, list_admin_credentials(user_id))
+    operation_state, operation_binding = credential_lifecycle.open_passkey_operation_presentation(user_id)
 
     return render_template('admin_passkey_settings.html',
                          admin=admin,
                          credentials=credentials,
-                         operation_state=credential_lifecycle.open_passkey_operation_state(user_id),
-                         operation_binding=credential_lifecycle.open_passkey_operation_binding(user_id),
+                         operation_state=operation_state,
+                         operation_binding=operation_binding,
                          passkey_urls=_passkey_urls())
 
 

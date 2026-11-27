@@ -15,6 +15,8 @@ from __future__ import annotations
 import inspect
 import json
 import pathlib
+import shutil
+import subprocess
 import textwrap
 import uuid
 from types import SimpleNamespace
@@ -1101,11 +1103,28 @@ def test_a_sysadmin_cannot_reach_the_teacher_surface(client, app, fake_passwordl
 
     assert start_registration(client, prefix="/admin").status_code in (302, 401, 403, 404)
     assert _revoke(client, _row_id("cred-s2"), prefix="/admin").status_code in (302, 401, 403, 404)
-    assert _resume(client, user_id).status_code in (302, 401, 403, 404)
     assert client.get("/admin/passkey/settings").status_code in (302, 401, 403, 404)
     assert _bound(user_id) == ["cred-s1", "cred-s2"]
     assert _operations(user_id) == []
     assert fake_passwordless.calls == []
+
+    # A real committed retirement with its real binding, resumed over the teacher surface:
+    # refused by the surface itself (a 404 operation_not_found would not prove that).
+    fake_passwordless.fail_deletes = True
+    seed_sysadmin_session(client, user_id=user_id, username="op_sysadmin")
+    assert _revoke(client, _row_id("cred-s2"), prefix="/sysadmin").status_code == 503
+    fake_passwordless.fail_deletes = False
+    (operation,) = _open_operations(user_id)
+    binding = lifecycle.registration_binding(operation)
+    calls = list(fake_passwordless.calls)
+
+    refused = client.post("/admin/passkey/resume", json={"binding": binding})
+
+    assert refused.status_code in (302, 401, 403)
+    assert fake_passwordless.calls == calls  # no provider call was made for the refused request
+    (still_open,) = _open_operations(user_id)
+    assert still_open.id == operation.id and still_open.stage in lifecycle.RETIREMENT_STAGES
+    assert _bound(user_id) == ["cred-s1", "cred-s2"]
 
 
 def test_a_teacher_with_no_active_class_can_maintain_credentials(client, app, fake_passwordless):
@@ -1719,12 +1738,12 @@ def test_mutation_the_provider_returned_nickname_is_what_ties_a_registration_to_
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
     token_a, credential_a, _ = _cancelled_a_then_started_b(client, fake_passwordless, user_id)
     binding_b = client.last_registration_binding
-    real = lifecycle.check_registration_binding
-    # The independent echoed-binding check alone (the nickname check removed) accepts A's result.
-    monkeypatch.setattr(
-        lifecycle, "check_registration_binding",
-        lambda operation, binding: real(operation, binding_b) if binding == "x" else None,
-    )
+    # Only the candidate-recording (nickname) check is removed; the echoed-binding comparison stays.
+    monkeypatch.setattr(lifecycle, "check_registered_nickname", lambda operation, nickname: None)
+
+    wrong_echo = finish_registration(client, token_a, binding="0" * 64)
+    assert wrong_echo.status_code == 409 and wrong_echo.get_json()["code"] == "binding_mismatch"
+    assert credential_a not in _bound(user_id)
 
     response = finish_registration(client, token_a, binding=binding_b)
 
@@ -1817,10 +1836,30 @@ def test_the_expired_session_answer_is_json_with_a_message_the_client_shows(clie
             assert response.status_code == 401
             assert body["error"] == "authentication_required"
             assert isinstance(body["message"], str) and body["message"]
-    script = (pathlib.Path(__file__).resolve().parents[3] / "static" / "js" / "passkey.js").read_text(encoding="utf-8")
-    assert "data.message || data.error" in script
-    assert "config.loginUrl" in script
-    assert "cancelAfterFailure" in script  # an ambiguous auto-cancel reloads to show the operation's real state
+
+
+def test_the_client_sends_an_expired_session_to_sign_in_and_reloads_on_an_ambiguous_cancel():
+    """Behavior of static/js/passkey.js under stubbed window/document/fetch (a Node harness)."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+    root = pathlib.Path(__file__).resolve().parents[3]
+    run = subprocess.run(
+        [node, str(root / "tests" / "js" / "passkey_behavior_harness.js"), str(root / "static" / "js" / "passkey.js")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert run.returncode == 0, run.stderr
+    report = json.loads(run.stdout)
+
+    # A JSON 401 shows the server's message and navigates to the sign-in page.
+    assert report["unauthorized"]["hrefs"] == ["/admin/login"]
+    assert report["unauthorized"]["body"] == ["Your session ended. Sign in again."]
+    assert report["unauthorized"]["reloads"] == 0
+    # An unreadable answer to the automatic cancel reloads the page; the cancel carried the attempt's binding.
+    assert report["ambiguousCancel"]["reloads"] == 1
+    assert report["ambiguousCancel"]["cancelBodies"] == [{"binding": "b" * 64}]
+    # A clean cancel is an ordinary failure: no reload.
+    assert report["cleanCancel"]["reloads"] == 0
 
 
 def test_a_completed_receipt_past_its_deadline_is_no_longer_replayed(client, app, fake_passwordless):
@@ -1851,3 +1890,95 @@ def test_a_committed_retirement_still_resumes_after_its_deadline_despite_the_rec
         result = feat.resume_retirement(user_id=user_id, binding=_latest_binding(user_id))
 
     assert result == ("replaced", False) and d in _bound(user_id)
+
+
+def test_a_resume_that_loses_the_race_to_a_concurrent_completion_is_a_replay(client, app, fake_passwordless, monkeypatch):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    _retirement_committed(client, fake_passwordless, user_id)
+    binding = _latest_binding(user_id)
+    real_retire = passkey_service.retire_remote_credential
+    raced = []
+
+    def retire_then_lose_the_race(credential_id, user_id_=None):
+        real_retire(credential_id, user_id_)
+        if not raced:
+            raced.append(True)  # the other request commits while this one is at the provider
+            (open_operation,) = _open_operations(user_id)
+            with FEATContext("FEAT-IDEN-102", idempotency_key=f"test:race:{uuid.uuid4().hex}"):
+                lifecycle.complete_retirement(
+                    db.session.get(CredentialOperation, open_operation.id), authenticator_name="Other",
+                )
+
+    monkeypatch.setattr(passkey_service, "retire_remote_credential", retire_then_lose_the_race)
+
+    result = feat.resume_retirement(user_id=user_id, binding=binding)
+
+    assert result == ("replaced", True)
+
+
+def test_the_route_does_not_rotate_the_session_for_a_resume_that_only_replayed(client, app, fake_passwordless, monkeypatch):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    _retirement_committed(client, fake_passwordless, user_id)
+    binding = _latest_binding(user_id)
+    real_retire = passkey_service.retire_remote_credential
+
+    def retire_then_lose_the_race(credential_id, user_id_=None):
+        real_retire(credential_id, user_id_)
+        (open_operation,) = _open_operations(user_id)
+        with FEATContext("FEAT-IDEN-102", idempotency_key=f"test:race:{uuid.uuid4().hex}"):
+            lifecycle.complete_retirement(db.session.get(CredentialOperation, open_operation.id), authenticator_name="Other")
+
+    monkeypatch.setattr(passkey_service, "retire_remote_credential", retire_then_lose_the_race)
+    outcomes = len(_outcomes())
+
+    response = client.post("/admin/passkey/resume", json={"binding": binding})
+
+    assert response.status_code == 200 and response.get_json()["success"] is True
+    with client.session_transaction() as sess:
+        assert sess.get("user_id") == user_id  # a replay does not clear the cookie as a committed change does
+    assert len(_outcomes()) == outcomes + 1  # only the request that committed emitted an outcome
+
+
+def test_the_settings_page_renders_state_and_binding_from_one_operation_lookup(
+    client, app, fake_passwordless, monkeypatch,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    _retirement_committed(client, fake_passwordless, user_id)
+    expected = _latest_binding(user_id)
+    real = lifecycle.get_open_operation
+    calls = []
+
+    def completed_after_the_first_read(uid):
+        calls.append(uid)
+        return real(uid) if len(calls) == 1 else None  # another request completes it in between
+
+    monkeypatch.setattr(lifecycle, "get_open_operation", completed_after_the_first_read)
+
+    page = client.get("/admin/passkey/settings").get_data(as_text=True)
+
+    assert 'id="resumePasskeyButton"' in page
+    assert f'data-binding="{expected}"' in page  # never an empty binding beside the retry control
+
+
+@pytest.mark.parametrize("malformed", ["\ud800" * 64, "\ud800", "A" * 64, "0" * 63, "0" * 64 + "\n", "é" * 64])
+def test_a_malformed_binding_is_an_ordinary_refusal_never_an_error(client, app, fake_passwordless, malformed):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
+    assert start_registration(client).status_code == 200
+    finish = finish_registration(client, "t", binding=malformed)
+    cancel = client.post("/admin/passkey/cancel", json={"binding": malformed})
+    assert finish.status_code == 409 and finish.get_json()["code"] == "binding_mismatch"
+    assert cancel.status_code == 409 and cancel.get_json()["code"] == "binding_mismatch"
+    (operation,) = _open_operations(user_id)
+    assert operation.stage is CredentialOperationStage.REGISTRATION_PENDING
+    assert client.post("/admin/passkey/cancel", json={"binding": _latest_binding(user_id)}).status_code == 200
+
+    _retirement_committed(client, fake_passwordless, user_id)
+    resume = client.post("/admin/passkey/resume", json={"binding": malformed})
+    assert resume.status_code == 409 and resume.get_json()["code"] == "binding_mismatch"
+    assert len(_open_operations(user_id)) == 1  # the committed retirement was not touched
+
+    assert client.post("/admin/passkey/resume", json={"binding": _latest_binding(user_id)}).status_code == 200
+    # A completed receipt cannot be named by a malformed value either (not found, not an error).
+    assert lifecycle.receipt_outcome_for_binding(
+        user_id, malformed, CredentialOperationPurpose.PASSKEY_REPLACE,
+    ) is None

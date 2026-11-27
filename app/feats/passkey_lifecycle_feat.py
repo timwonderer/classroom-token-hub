@@ -199,10 +199,17 @@ def resume_retirement(*, user_id, binding, authenticator_name=None, correlation_
     if operation.stage not in lifecycle.RETIREMENT_STAGES:
         raise lifecycle.CredentialOperationRefused("operation_not_open")
     outcome = "revoked" if operation.purpose is CredentialOperationPurpose.PASSKEY_REVOKE else "replaced"
-    _retire_and_complete(
+    result = _retire_and_complete(
         user_id, operation.id,
         lifecycle.normalize_authenticator_name(authenticator_name), correlation_id,
     )
+    if result == lifecycle.ALREADY_COMPLETED:
+        # A concurrent request committed this retirement while this one was at the provider:
+        # this is a replay of its receipt (within the receipt's deadline), not a new change.
+        replayed = lifecycle.receipt_outcome_for_binding(user_id, binding, *purposes)
+        if replayed is None:
+            raise lifecycle.CredentialOperationRefused("operation_not_found")
+        return replayed, True
     return outcome, False
 
 
@@ -245,13 +252,15 @@ def _cancel(user_id, operation_id, session_nonce, correlation_id, *, raise_refus
         return False
 
 
-def _retire_and_complete(user_id, operation_id, authenticator_name, correlation_id) -> None:
+def _retire_and_complete(user_id, operation_id, authenticator_name, correlation_id) -> str:
     """Retire the recorded old credential remotely, then complete locally.
 
     No transaction is open during the provider call. A provider failure records the
     attempt on the operation and raises ``RemoteRetirementPending``; nothing local
     changes. A local failure after a confirmed deletion propagates and leaves the
-    operation at its retirement stage for ``resume_retirement``.
+    operation at its retirement stage for ``resume_retirement``. Returns the locked
+    completion's result: ``COMPLETED`` for the request that committed, ``ALREADY_COMPLETED``
+    when a concurrent request finished the operation first.
     """
     operation = _own(user_id, operation_id)
     if operation.stage not in lifecycle.RETIREMENT_STAGES:
@@ -269,4 +278,4 @@ def _retire_and_complete(user_id, operation_id, authenticator_name, correlation_
             lifecycle.record_provider_uncertain(_own(user_id, operation_id))
         raise RemoteRetirementPending("remote retirement not confirmed") from exc
     with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=_key(feat_name, "complete")):
-        lifecycle.complete_retirement(_own(user_id, operation_id), authenticator_name=authenticator_name)
+        return lifecycle.complete_retirement(_own(user_id, operation_id), authenticator_name=authenticator_name)
