@@ -13,6 +13,12 @@ The workflow is recoverable, not atomic with the provider: once retirement inten
 committed a provider or database failure leaves the fixed operation pending
 (``RemoteRetirementPending``), to be finished by ``resume_retirement``; it never
 restores the old credential and never removes the old local binding first.
+
+An interrupted registration (the credential verified and recorded as the candidate, the
+activation or retirement intent not yet committed) is not resumed: ``finish_registration``
+refuses it as ``registration_interrupted`` and the principal cancels and starts again.
+FEAT-IDEN-102 §VII requires resumption only from committed retirement intent, and the
+candidate holds no authority until activation, so restarting loses nothing.
 """
 from __future__ import annotations
 
@@ -52,14 +58,15 @@ def _open_operation_for(user_id, *purposes):
 
 
 def start_registration(*, user_id, session_nonce, proof, alias, display_name,
-                       replace_passkey_id=None, correlation_id=None) -> str:
+                       replace_passkey_id=None, correlation_id=None) -> tuple[str, str]:
     """Authorize, persist the pending registration, then issue one provider token.
 
     ``proof`` is a fresh ``TotpCode`` or, for a teacher's first passkey, the
     ``SignupCapability``. ``replace_passkey_id`` (a local binding id) makes this a
     selected replacement, which only a TOTP code may authorize. The pending state is
     committed before the provider is asked for a token, so a registration whose
-    credential id is not yet known is protected. A failure to obtain the token cancels
+    credential id is not yet known is protected. Returns ``(token, binding)``; the binding
+    ties the later finish request to this operation (``binding_mismatch`` otherwise). A failure to obtain the token cancels
     the operation: the token never reached the browser, so nothing can register.
     """
     purpose = (
@@ -79,34 +86,49 @@ def start_registration(*, user_id, session_nonce, proof, alias, display_name,
             operation, session_nonce=session_nonce, replace_passkey_id=replace_passkey_id,
         )
         operation_id, deadline = operation.id, operation.deadline_at
+        binding = lifecycle.registration_binding(operation)
     expires_at = lifecycle.registration_token_expiry(deadline)
     release_read_transaction()
     try:
-        return passkey_service.create_registration_token(
+        token = passkey_service.create_registration_token(
             user_id, alias=alias, display_name=display_name, expires_at=expires_at,
         )
+        return token, binding
     except Exception:
         _cancel(user_id, operation_id, session_nonce, correlation_id)
         raise
 
 
-def finish_registration(*, user_id, session_nonce, token, authenticator_name, correlation_id=None) -> str:
+def finish_registration(*, user_id, session_nonce, token, binding, authenticator_name,
+                        correlation_id=None) -> tuple[str, bool]:
     """Verify the browser's registration and complete the enrollment or replacement.
 
     The provider verifies the token first (no transaction open). The verified credential
     is then recorded as the pending candidate in its own transaction. Enrollment
     activates it in the next transaction. Replacement commits retirement intent, retires
     the selected old credential remotely, and only then swaps the local bindings.
-    Returns the outcome, ``"activated"`` or ``"replaced"``.
+    Returns ``(outcome, replayed)`` with outcome ``"activated"`` or ``"replaced"``. A
+    retry after completion (no open operation, receipt still retained) returns the stored
+    outcome with ``replayed`` true and changes nothing.
 
     Principal reconciliation with the pending credential protected (FEAT-IDEN-108,
     FEAT-IDEN-102 §VI) is not part of this command: it would run between recording the
     candidate and activating it.
     """
     correlation_id = correlation_id or generate_correlation_id()
-    operation = _open_operation_for(
-        user_id, CredentialOperationPurpose.PASSKEY_ENROLL, CredentialOperationPurpose.PASSKEY_REPLACE,
-    )
+    authenticator_name = lifecycle.normalize_authenticator_name(authenticator_name)
+    purposes = (CredentialOperationPurpose.PASSKEY_ENROLL, CredentialOperationPurpose.PASSKEY_REPLACE)
+    operation = lifecycle.get_open_operation(user_id)
+    if operation is None:
+        outcome = lifecycle.latest_receipt_outcome(user_id, *purposes)
+        if outcome is None:
+            raise lifecycle.CredentialOperationRefused("operation_not_found")
+        return outcome, True
+    if operation.purpose not in purposes:
+        raise lifecycle.CredentialOperationRefused("wrong_purpose")
+    lifecycle.check_registration_binding(operation, binding)
+    if operation.stage is CredentialOperationStage.CANDIDATE_VERIFIED:
+        raise lifecycle.CredentialOperationRefused("registration_interrupted")
     if operation.stage is not CredentialOperationStage.REGISTRATION_PENDING:
         raise lifecycle.CredentialOperationRefused("operation_not_open")
     operation_id, purpose = operation.id, operation.purpose
@@ -122,19 +144,19 @@ def finish_registration(*, user_id, session_nonce, token, authenticator_name, co
             lifecycle.activate_passkey(
                 _own(user_id, operation_id), authenticator_name=authenticator_name, session_nonce=session_nonce,
             )
-        return "activated"
+        return "activated", False
     with FEATContext(ENROLLMENT_FEAT, correlation_id=correlation_id, idempotency_key=_key(ENROLLMENT_FEAT, "intent")):
         lifecycle.commit_retirement_intent(_own(user_id, operation_id), session_nonce=session_nonce)
     _retire_and_complete(user_id, operation_id, authenticator_name, correlation_id)
-    return "replaced"
+    return "replaced", False
 
 
-def revoke_passkey(*, user_id, session_nonce, totp_code, passkey_id, correlation_id=None) -> str:
+def revoke_passkey(*, user_id, session_nonce, totp_code, passkey_id, correlation_id=None) -> tuple[str, bool]:
     """Revoke exactly one owned passkey after fresh TOTP, remote-first.
 
     One transaction authorizes the operation and commits the retirement intent (and
     refuses to revoke the only activated passkey); the provider deletion and the atomic
-    local completion follow. Returns the outcome, ``"revoked"``.
+    local completion follow. Returns ``("revoked", False)``.
     """
     correlation_id = correlation_id or generate_correlation_id()
     release_read_transaction()
@@ -149,26 +171,35 @@ def revoke_passkey(*, user_id, session_nonce, totp_code, passkey_id, correlation
         lifecycle.commit_revocation_intent(operation, passkey_id=passkey_id, session_nonce=session_nonce)
         operation_id = operation.id
     _retire_and_complete(user_id, operation_id, None, correlation_id)
-    return "revoked"
+    return "revoked", False
 
 
-def resume_retirement(*, user_id, correlation_id=None) -> str:
+def resume_retirement(*, user_id, authenticator_name=None, correlation_id=None) -> tuple[str, bool]:
     """Finish the principal's committed retirement: the exact recorded work, nothing new.
 
     Needs no fresh proof, session or deadline: the interactive authorization was
     consumed when the intent was committed (SPEC-IDEN-002 §V). It only retries the
-    recorded deletion and the local completion. Returns the operation's outcome,
-    ``"replaced"`` or ``"revoked"``.
+    recorded deletion and the local completion. ``authenticator_name`` is the optional label
+    for a replacement's new passkey (the registration-time label is not retained). Returns
+    ``(outcome, replayed)``: the operation's outcome, ``"replaced"`` or ``"revoked"``; a
+    retry after completion replays the retained receipt's outcome with ``replayed`` true.
     """
     correlation_id = correlation_id or generate_correlation_id()
-    operation = _open_operation_for(
-        user_id, CredentialOperationPurpose.PASSKEY_REPLACE, CredentialOperationPurpose.PASSKEY_REVOKE,
-    )
+    purposes = (CredentialOperationPurpose.PASSKEY_REPLACE, CredentialOperationPurpose.PASSKEY_REVOKE)
+    if lifecycle.get_open_operation(user_id) is None:
+        outcome = lifecycle.latest_receipt_outcome(user_id, *purposes)
+        if outcome is None:
+            raise lifecycle.CredentialOperationRefused("operation_not_found")
+        return outcome, True
+    operation = _open_operation_for(user_id, *purposes)
     if operation.stage not in lifecycle.RETIREMENT_STAGES:
         raise lifecycle.CredentialOperationRefused("operation_not_open")
     outcome = "revoked" if operation.purpose is CredentialOperationPurpose.PASSKEY_REVOKE else "replaced"
-    _retire_and_complete(user_id, operation.id, None, correlation_id)
-    return outcome
+    _retire_and_complete(
+        user_id, operation.id,
+        lifecycle.normalize_authenticator_name(authenticator_name), correlation_id,
+    )
+    return outcome, False
 
 
 def cancel_registration(*, user_id, session_nonce, correlation_id=None) -> bool:
@@ -218,6 +249,9 @@ def _retire_and_complete(user_id, operation_id, authenticator_name, correlation_
         raise lifecycle.CredentialOperationRefused("operation_not_open")
     old_credential_id = operation.old_credential_id
     feat_name = lifecycle.FEAT_FOR_PURPOSE[operation.purpose]
+    # A recovery or destruction that bumped the generation supersedes this operation: no
+    # remote deletion may follow it (SPEC-IDEN-002 §V).
+    lifecycle.require_current_generation(operation)
     release_read_transaction()
     try:
         passkey_service.retire_remote_credential(old_credential_id)

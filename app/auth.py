@@ -206,6 +206,18 @@ def _teacher_session_ended(message):
     return redirect(url_for('admin.login'))
 
 
+def _sysadmin_session_ended(message):
+    """The sysadmin counterpart of ``_teacher_session_ended``.
+
+    A Grafana sub-request and a fetch/XHR call get JSON 401 (a flash from a background
+    call would land on the next page); a navigation gets the flash and the login redirect.
+    """
+    if _is_grafana_proxy_subrequest() or _is_background_request():
+        return jsonify(status="error", error="authentication_required", message=message), 401
+    flash(message)
+    return redirect(url_for('sysadmin.login', next=request.path))
+
+
 def admin_required(f):
     """
     Decorator to require admin authentication for a route.
@@ -262,16 +274,10 @@ def system_admin_required(f):
         try:
             ctx = resolve_canonical_context(require_class=False)
         except (ContextNotEstablished, ContextMismatch, ContextForbidden):
-            if _is_grafana_proxy_subrequest():
-                return jsonify({"error": "System administrator access required."}), 401
-            flash("System administrator access required.")
-            return redirect(url_for('sysadmin.login', next=request.path))
+            return _sysadmin_session_ended("System administrator access required.")
 
         if not isinstance(ctx, BoundaryContext) or ctx.actor_role != 'sysadmin':
-            if _is_grafana_proxy_subrequest():
-                return jsonify({"error": "System administrator access required."}), 401
-            flash("System administrator access required.")
-            return redirect(url_for('sysadmin.login', next=request.path))
+            return _sysadmin_session_ended("System administrator access required.")
 
         last_activity = session.get('last_activity')
         now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
@@ -280,10 +286,7 @@ def system_admin_required(f):
             last_activity = datetime.fromisoformat(last_activity)
             if _session_idle_expired(last_activity, now, SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES):
                 _expire_system_admin_session()
-                if _is_grafana_proxy_subrequest():
-                    return jsonify({"error": "Session expired. Please log in again."}), 401
-                flash("Session expired. Please log in again.")
-                return redirect(url_for('sysadmin.login', next=request.path))
+                return _sysadmin_session_ended("Session expired. Please log in again.")
 
         g.canonical_context = ctx
         session['last_activity'] = now.isoformat()

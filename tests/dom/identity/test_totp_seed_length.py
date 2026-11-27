@@ -430,6 +430,8 @@ def test_open_operation_refuses_an_assertion_for_passkey_work(client, app, fake_
 
 def test_an_unissued_signup_capability_is_refused(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    db.session.query(PasskeyCredential).filter_by(user_id=user_id).delete()  # a teacher still owed a first passkey
+    db.session.commit()
 
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(
@@ -438,6 +440,19 @@ def test_an_unissued_signup_capability_is_refused(client, app, fake_passwordless
         )
 
     assert refused.value.category == "proof_rejected"
+    assert CredentialOperation.query.count() == 0
+
+
+def test_a_signup_capability_is_refused_once_a_passkey_is_activated(client, app, fake_passwordless):
+    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        open_credential_operation(
+            user_id=user_id, purpose="passkey_enroll",
+            proof=SignupCapability("x" * 43), session_nonce=_nonce(user_id),
+        )
+
+    assert refused.value.category == "initial_enrollment_only"
     assert CredentialOperation.query.count() == 0
 
 

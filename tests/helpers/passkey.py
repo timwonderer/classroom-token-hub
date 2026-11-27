@@ -40,6 +40,7 @@ class FakePasswordless:
     calls: list = field(default_factory=list)
     fail_deletes: bool = False
     lose_next_delete_response: bool = False  # the provider deletes, then the reply is lost
+    strict_missing_deletes: bool = False  # deleting an absent credential is a 404, as the provider may answer
 
     # ---- what tests use to simulate the browser ceremony ----
 
@@ -84,6 +85,8 @@ class FakePasswordless:
         self.calls.append(("delete_credential", delete_credential.credential_id))
         if self.fail_deletes:
             raise _problem(500, "unavailable")
+        if self.strict_missing_deletes and delete_credential.credential_id not in self.credentials:
+            raise _problem(404, "credential_not_found")
         self.credentials.pop(delete_credential.credential_id, None)
         if self.lose_next_delete_response:
             self.lose_next_delete_response = False
@@ -148,8 +151,18 @@ def record_passkey(user_id, credential_id, fake=None, name="Key"):
 def start_registration(client, *, prefix="/admin", code=None, **body):
     """POST the start step with a fresh TOTP code (the current one unless ``code`` is given)."""
     payload = {"totp_code": totp_code() if code is None else code, **body}
-    return client.post(f"{prefix}/passkey/register/start", json=payload)
+    response = client.post(f"{prefix}/passkey/register/start", json=payload)
+    if response.status_code == 200:
+        # What the browser would hold for the finish step.
+        client.last_registration_binding = response.get_json()["binding"]
+    return response
 
 
-def finish_registration(client, token, *, prefix="/admin", name="Key"):
-    return client.post(f"{prefix}/passkey/register/finish", json={"token": token, "authenticatorName": name})
+def finish_registration(client, token, *, binding=None, prefix="/admin", name="Key"):
+    """POST the finish step with the binding the last successful start returned, unless given."""
+    if binding is None:
+        binding = getattr(client, "last_registration_binding", None)
+    return client.post(
+        f"{prefix}/passkey/register/finish",
+        json={"token": token, "binding": binding, "authenticatorName": name},
+    )

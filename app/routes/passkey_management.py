@@ -37,6 +37,9 @@ _REFUSALS = {
     "stale_generation": (409, "Your credentials changed. Start again."),
     "operation_not_open": (409, "That passkey change is not in a state that can continue. Start again."),
     "retirement_committed": (409, "That change is already being finished and cannot be cancelled."),
+    "binding_mismatch": (409, "That passkey registration belongs to an earlier attempt. Start again."),
+    "registration_interrupted": (409, "That registration was interrupted. Cancel it and start again."),
+    "initial_enrollment_only": (403, "A sign-up capability can only enroll a first passkey."),
     "registration_rejected": (400, "That passkey could not be registered. Start again."),
 }
 
@@ -75,9 +78,15 @@ def _guarded(action):
         return jsonify({"error": "That passkey change could not be completed.", "code": "failed"}), 500
 
 
-def _signed_out_success(outcome: str, login_endpoint: str):
-    """A completed credential change voids the sign-in: say so, and send the user to sign in."""
-    session.clear()
+def _signed_out_success(result, login_endpoint: str):
+    """A completed credential change voids the sign-in: say so, and send the user to sign in.
+
+    A replayed result (the change already completed; the retained receipt answered) is the
+    same bounded success, and touches nothing.
+    """
+    outcome, replayed = result
+    if not replayed:
+        session.clear()
     flash(SUCCESS_MESSAGES[outcome], "success")
     return jsonify({
         "success": True,
@@ -99,11 +108,11 @@ def register_start(*, user_id: str, alias: str, display_name: str, allow_signup_
         replace = data.get("replace_passkey_id")
         if replace is not None and (isinstance(replace, bool) or not isinstance(replace, int)):
             raise lifecycle.CredentialOperationRefused("credential_not_found")
-        token = feat.start_registration(
+        token, binding = feat.start_registration(
             user_id=user_id, session_nonce=session.get("current_session_nonce"), proof=proof,
             alias=alias, display_name=display_name, replace_passkey_id=replace,
         )
-        return jsonify({"token": token, "apiKey": get_public_api_key()}), 200
+        return jsonify({"token": token, "binding": binding, "apiKey": get_public_api_key()}), 200
     return _guarded(action)
 
 
@@ -113,12 +122,13 @@ def register_finish(*, user_id: str, login_endpoint: str):
         data = _body()
         token = data.get("token")
         name = data.get("authenticatorName")
-        outcome = feat.finish_registration(
+        result = feat.finish_registration(
             user_id=user_id, session_nonce=session.get("current_session_nonce"),
             token=token if isinstance(token, str) else "",
+            binding=data.get("binding"),
             authenticator_name=name if isinstance(name, str) else "",
         )
-        return _signed_out_success(outcome, login_endpoint)
+        return _signed_out_success(result, login_endpoint)
     return _guarded(action)
 
 
@@ -126,19 +136,20 @@ def revoke(*, user_id: str, passkey_id: int, login_endpoint: str):
     """Revoke one passkey after fresh TOTP; success ends the sign-in."""
     def action():
         code = _body().get("totp_code")
-        outcome = feat.revoke_passkey(
+        result = feat.revoke_passkey(
             user_id=user_id, session_nonce=session.get("current_session_nonce"),
             totp_code=code if isinstance(code, str) else "", passkey_id=passkey_id,
         )
-        return _signed_out_success(outcome, login_endpoint)
+        return _signed_out_success(result, login_endpoint)
     return _guarded(action)
 
 
 def resume(*, user_id: str, login_endpoint: str):
     """Finish the principal's committed retirement; success ends the sign-in."""
     def action():
-        outcome = feat.resume_retirement(user_id=user_id)
-        return _signed_out_success(outcome, login_endpoint)
+        name = _body().get("authenticatorName")
+        result = feat.resume_retirement(user_id=user_id, authenticator_name=name if isinstance(name, str) else None)
+        return _signed_out_success(result, login_endpoint)
     return _guarded(action)
 
 

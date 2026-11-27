@@ -10,20 +10,36 @@
  * (`provider_unavailable`) from a refusal.
  */
 async function postPasskeyJson(url, body) {
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
-        },
-        body: JSON.stringify(body || {})
-    });
+    let response;
+    try {
+        response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(body || {})
+        });
+    } catch (e) {
+        const error = new Error('The connection was lost. Reload the page to see where the change stands.');
+        error.code = 'transport';
+        throw error;
+    }
     return readPasskeyResponse(response);
 }
 
 async function readPasskeyResponse(response) {
-    let data = {};
-    try { data = await response.json(); } catch (e) { data = {}; }
+    let data = null;
+    // A redirected or non-JSON answer (an expired sign-in lands on an HTML login page) is not
+    // a result this page can act on: report it as unreadable, never as success.
+    if (!response.redirected) {
+        try { data = await response.json(); } catch (e) { data = null; }
+    }
+    if (data === null || typeof data !== 'object') {
+        const error = new Error('The response could not be read. Reload the page to see where the change stands.');
+        error.code = 'unreadable';
+        throw error;
+    }
     if (!response.ok) {
         const error = new Error(data.error || 'The request failed.');
         error.code = data.code;
@@ -38,10 +54,13 @@ async function readPasskeyResponse(response) {
  * finish. If the browser ceremony or the finish step fails before the change is committed,
  * the pending operation is cancelled so the user can try again immediately.
  */
+// Failures after which the server's state is unknown or pending: never cancel, reload to see it.
+const KEEP_PENDING_CODES = new Set(['provider_unavailable', 'unreadable', 'transport']);
+
 async function registerPasskey(config, authenticatorName, totpCode, replacePasskeyId) {
     const startBody = { totp_code: totpCode };
     if (replacePasskeyId) { startBody.replace_passkey_id = Number(replacePasskeyId); }
-    const { token, apiKey } = await postPasskeyJson(config.startUrl, startBody);
+    const { token, apiKey, binding } = await postPasskeyJson(config.startUrl, startBody);
 
     let result;
     try {
@@ -52,16 +71,18 @@ async function registerPasskey(config, authenticatorName, totpCode, replacePassk
         }
     } catch (error) {
         await postPasskeyJson(config.cancelUrl, {}).catch(() => {});
+        error.code = 'ceremony';
         throw error;
     }
 
     try {
         return await postPasskeyJson(config.finishUrl, {
             token: result.token,
+            binding: binding,
             authenticatorName: authenticatorName
         });
     } catch (error) {
-        if (error.code !== 'provider_unavailable') {
+        if (!KEEP_PENDING_CODES.has(error.code)) {
             await postPasskeyJson(config.cancelUrl, {}).catch(() => {});
         }
         throw error;
@@ -214,12 +235,15 @@ function setupPasskeyManager(config) {
     }
 
     function finished(data) {
-        window.location.href = data.redirect;
+        // Only a server answer that names the sign-in page is a completed change.
+        if (data && data.redirect) { window.location.href = data.redirect; return; }
+        window.location.reload();
     }
 
     function failed(title, error, button, restoreHTML) {
-        const pending = error.code === 'provider_unavailable';
-        show('danger', pending ? 'Change saved, not yet confirmed' : title, error.message);
+        if (error instanceof TypeError && !error.code) { error.code = 'transport'; error.message = 'The connection was lost. Reload the page to see where the change stands.'; }
+        const pending = KEEP_PENDING_CODES.has(error.code);
+        show('danger', error.code === 'provider_unavailable' ? 'Change saved, not yet confirmed' : title, error.message);
         if (pending) {
             window.setTimeout(() => window.location.reload(), 4000);
             return;
@@ -296,7 +320,11 @@ function setupPasskeyManager(config) {
             const originalHTML = button.innerHTML;
             try {
                 button.disabled = true;
-                const data = await postPasskeyJson(url, {});
+                const body = {};
+                const nameInput = url === config.resumeUrl && config.resumeNameInputId
+                    ? document.getElementById(config.resumeNameInputId) : null;
+                if (nameInput && nameInput.value.trim()) { body.authenticatorName = nameInput.value.trim(); }
+                const data = await postPasskeyJson(url, body);
                 if (data.redirect) { finished(data); } else { window.location.reload(); }
             } catch (error) {
                 failed(title, error, button, originalHTML);

@@ -55,11 +55,15 @@
             {% if operation_state == 'retirement_pending' %}
             {% call cards.alert_card('warning', 'A passkey change is waiting to finish', icon='pending', body_class='mb-4') %}
                 <p>The passkey service has not yet confirmed the change. Your authenticator app still signs you in. Select <strong>Try again</strong> to finish it; no passkey is added, replaced or removed until it finishes.</p>
+                <div class="mb-3">
+                    <label for="passkey-resume-name" class="form-label">Name for the new passkey <span class="text-muted">(optional, replacements only)</span></label>
+                    <input type="text" id="passkey-resume-name" class="form-control" maxlength="100" autocomplete="off">
+                </div>
                 <button type="button" class="btn btn-primary" id="resumePasskeyButton">Try again</button>
             {% endcall %}
             {% elif operation_state == 'registering' %}
             {% call cards.alert_card('info', 'A passkey change is in progress', icon='info', body_class='mb-4') %}
-                <p>Finish the registration your device is showing, or cancel it to start over. It expires on its own after a few minutes.</p>
+                <p>Finish the registration your device is showing. If it was interrupted, cancel and start again. It expires on its own after a few minutes.</p>
                 <button type="button" class="btn btn-outline-secondary" id="cancelPasskeyButton">Cancel the change</button>
             {% endcall %}
             {% endif %}
@@ -160,6 +164,7 @@
         codeInputId: 'passkey-totp-code',
         registerButtonId: 'registerPasskeyButton',
         resumeButtonId: 'resumePasskeyButton',
+        resumeNameInputId: 'passkey-resume-name',
         cancelButtonId: 'cancelPasskeyButton',
         startUrl: {{ passkey_urls.start|tojson }},
         finishUrl: {{ passkey_urls.finish|tojson }},

@@ -144,9 +144,15 @@ def retire_remote_credential(credential_id: str) -> None:
     """
     if not credential_id or not isinstance(credential_id, str):
         raise PasskeyError("no credential to retire")
-    from passwordless import DeleteCredential
+    from passwordless import DeleteCredential, PasswordlessError
     try:
         _client().delete_credential(DeleteCredential(credential_id=credential_id))
+    except PasswordlessError as exc:
+        # The provider reports this exact credential as already absent: the deletion
+        # this call exists to achieve has happened, so a retry converges instead of looping.
+        if getattr(getattr(exc, "problem_details", None), "status", None) == 404:
+            return
+        raise PasskeyServiceUnavailable("remote credential deletion failed") from exc
     except Exception as exc:
         raise PasskeyServiceUnavailable("remote credential deletion failed") from exc
 

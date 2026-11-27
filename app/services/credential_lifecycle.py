@@ -35,6 +35,7 @@ import base64
 import binascii
 import hmac
 import secrets
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -901,6 +902,8 @@ def issue_signup_capability(user: User, *, session_nonce: str) -> str:
         or not _digests_equal(principal.current_session_nonce, session_nonce)
     ):
         raise CredentialOperationRefused("session_not_current")
+    if has_activated_passkey(principal):
+        raise CredentialOperationRefused("initial_enrollment_only")
     if get_open_operation(principal.id) is not None:
         raise CredentialOperationRefused("operation_already_open")
     now = _now()
@@ -941,6 +944,61 @@ def registration_token_expiry(deadline_at):
     return deadline_at if _is_earlier(deadline_at, expiry) else expiry
 
 
+def registration_binding(operation: CredentialOperation) -> str:
+    """The value that ties a finish request to the operation whose start issued the token.
+
+    A purpose-separated HMAC over the principal and the operation id, handed to the browser
+    with the registration token and returned with the finished registration. A token from
+    a cancelled or superseded operation carries the old operation's value and so cannot
+    complete a later one. Derived, stored nowhere; the operation id is independently random.
+    """
+    key = current_app.config["SECRET_KEY"]
+    key = key.encode("utf-8") if isinstance(key, str) else key
+    message = "\0".join(["passkey-registration:v1", str(operation.user_id), str(operation.id)])
+    return hmac.new(key, message.encode("utf-8"), sha256).hexdigest()
+
+
+def check_registration_binding(operation: CredentialOperation, binding) -> None:
+    """Refuse (``binding_mismatch``) unless ``binding`` is this operation's registration binding. Pure."""
+    if not isinstance(binding, str) or not _digests_equal(registration_binding(operation), binding):
+        raise CredentialOperationRefused("binding_mismatch")
+
+
+def require_current_generation(operation: CredentialOperation) -> None:
+    """Refuse (``stale_generation``) unless the principal's generation is the one recorded at authorization.
+
+    Run before any provider call for committed work: a recovery or destruction that
+    superseded the operation must not be followed by a remote deletion. Pure.
+    """
+    current = (
+        db.session.query(User.credential_generation)
+        .filter(User.id == operation.user_id)
+        .scalar()
+    )
+    if current is None or current != operation.authorized_generation:
+        raise CredentialOperationRefused("stale_generation")
+
+
+def latest_receipt_outcome(user_id: str, *purposes: CredentialOperationPurpose) -> str | None:
+    """The outcome of the principal's most recent completed operation of ``purposes``, if its receipt remains.
+
+    Receipts are kept only until the operation's original interactive deadline
+    (SPEC-IDEN-002 §V), so this is the stored bounded outcome a duplicate request gets back.
+    Pure read.
+    """
+    receipt = (
+        db.session.query(CredentialOperation)
+        .filter(
+            CredentialOperation.user_id == user_id,
+            CredentialOperation.purpose.in_(purposes),
+            CredentialOperation.stage == CredentialOperationStage.COMPLETED,
+        )
+        .order_by(CredentialOperation.updated_at.desc())
+        .first()
+    )
+    return _OUTCOME_FOR_PURPOSE[receipt.purpose] if receipt is not None else None
+
+
 def open_passkey_operation_state(user_id: str) -> str | None:
     """How the principal's open passkey operation presents: ``"registering"``,
     ``"retirement_pending"`` or ``None``. Pure read, for rendering the settings page."""
@@ -956,6 +1014,9 @@ def _consume_signup_capability(principal: User, proof: SignupCapability, session
     """Resolve a presented capability to the live operation it names, or refuse."""
     if principal.user_role is not UserRole.TEACHER:
         raise CredentialOperationRefused("proof_rejected")
+    if has_activated_passkey(principal):
+        # The capability authorizes initial enrollment only (FEAT-IDEN-102 §V).
+        raise CredentialOperationRefused("initial_enrollment_only")
     try:
         capability_id = str(uuid.UUID(str(proof.nonce)))
     except ValueError:
@@ -1088,13 +1149,29 @@ def _complete_locked(principal: User, operation: CredentialOperation, *, stage_b
     )
 
 
+AUTHENTICATOR_NAME_FALLBACK = "Unnamed Passkey"
+AUTHENTICATOR_NAME_MAX = 100
+
+
+def normalize_authenticator_name(name) -> str:
+    """A display label safe to store: control characters dropped, trimmed, at most 100 characters.
+
+    NUL and every other Unicode control, format or separator-line character is removed
+    (a label is display text and never authority); a blank result is the fallback. Pure.
+    """
+    if not isinstance(name, str):
+        return AUTHENTICATOR_NAME_FALLBACK
+    kept = "".join(ch for ch in name if unicodedata.category(ch) not in ("Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"))
+    return kept.strip()[:AUTHENTICATOR_NAME_MAX].strip() or AUTHENTICATOR_NAME_FALLBACK
+
+
 def _bind(principal: User, credential_id: str, authenticator_name) -> None:
     """Activate ``credential_id`` as a binding of ``principal``: the registry's only writer."""
-    name = (authenticator_name or "").strip() or "Unnamed Passkey"
+    name = normalize_authenticator_name(authenticator_name)
     try:
         with db.session.begin_nested():
             db.session.add(PasskeyCredential(
-                user_id=principal.id, credential_id=credential_id, authenticator_name=name[:100],
+                user_id=principal.id, credential_id=credential_id, authenticator_name=name,
             ))
             db.session.flush()
     except IntegrityError:
