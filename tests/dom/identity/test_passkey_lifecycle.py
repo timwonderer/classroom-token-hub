@@ -474,6 +474,33 @@ def test_a_late_cancel_bearing_an_earlier_attempts_binding_leaves_the_newer_oper
     assert _open_operations(user_id) == []
 
 
+@pytest.mark.parametrize("malformed", ["", 123, [], {}, "not-a-binding", "A" * 64, False])
+def test_a_cancel_with_a_malformed_binding_is_refused_and_the_operation_stays_open(
+    client, app, fake_passwordless, malformed,
+):
+    """A supplied binding that is not the operation's is never read as an unbound cancel."""
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    assert start_registration(client).status_code == 200
+    (before,) = _open_operations(user_id)
+
+    refused = client.post("/admin/passkey/cancel", json={"binding": malformed})
+
+    assert refused.status_code == 409 and refused.get_json()["code"] == "binding_mismatch"
+    (after,) = _open_operations(user_id)
+    assert after.id == before.id and after.stage is CredentialOperationStage.REGISTRATION_PENDING
+
+
+@pytest.mark.parametrize("body", [{}, {"binding": None}])
+def test_a_cancel_with_no_binding_or_a_null_binding_still_cancels_the_open_operation(
+    client, app, fake_passwordless, body,
+):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    assert start_registration(client).status_code == 200
+
+    assert client.post("/admin/passkey/cancel", json=body).status_code == 200
+    assert _open_operations(user_id) == []
+
+
 def test_cancelling_before_completion_frees_the_slot_and_keeps_the_old_binding(client, app, fake_passwordless):
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
     assert start_registration(client).status_code == 200

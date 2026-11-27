@@ -159,10 +159,11 @@ def resume(*, user_id: str, login_endpoint: str):
 def cancel(*, user_id: str):
     """Cancel the principal's passkey change while it can still be cancelled."""
     def action():
+        # An omitted key or JSON null is the unbound cancel. Any other value, however malformed,
+        # is passed through so the FEAT refuses it as ``binding_mismatch``.
         binding = _body().get("binding")
         feat.cancel_registration(
-            user_id=user_id, session_nonce=session.get("current_session_nonce"),
-            binding=binding if isinstance(binding, str) and binding else None,
+            user_id=user_id, session_nonce=session.get("current_session_nonce"), binding=binding,
         )
         return jsonify({"success": True}), 200
     return _guarded(action)
