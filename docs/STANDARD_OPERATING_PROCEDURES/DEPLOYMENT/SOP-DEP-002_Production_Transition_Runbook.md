@@ -159,14 +159,16 @@ advisory and are recorded as such, never as the independent verifier.
    - Before the first release carrying passkey origin verification (`PASSKEY_EXPECTED_ORIGIN`): (a) confirm by name
      only that `/root/classroom-economy/.env` has `PASSKEY_EXPECTED_ORIGIN` set to the production origin; and (b) run
      the aggregate compatibility check below from the operator's machine, with the Passwordless.dev API secret in
-     `PASSWORDLESS_API_KEY`. It is read-only, prints only counts, and keeps no inventory. Every recorded
-     `(rpid, origin)` pair must equal the configured hostname and origin; expect one line whose count equals the
-     total enrolled credentials and whose pair is `<hostname> https://<hostname>`. A non-matching pair blocks the release.
+     `PASSWORDLESS_API_KEY` and `DATABASE_URL` pointing at the production database for a read-only, aggregate-only
+     query. It prints only counts and keeps no inventory. The principal set comes from the distinct `user_id` values
+     in `passkey_credentials`, mapped to the provider id with the `user_` prefix (`PASSKEY_EXTERNAL_ID_PREFIX`,
+     `app/utils/user_ids.py`). Every recorded `(rpid, origin)` pair must equal the configured hostname and origin;
+     expect one line whose count equals the total enrolled credentials and whose pair is
+     `<hostname> https://<hostname>`. A non-matching pair blocks the release.
 
      ```bash
-     curl -s -H "ApiSecret: $PASSWORDLESS_API_KEY" https://v4.passwordless.dev/users/list \
-      | jq -r '.values[].userId' \
-      | while read -r u; do curl -s -H "ApiSecret: $PASSWORDLESS_API_KEY" "https://v4.passwordless.dev/credentials/list?userId=$u" | jq -r '.values[] | "\(.rpid) \(.origin)"'; done \
+     psql "$DATABASE_URL" -Atc "select distinct user_id from passkey_credentials" \
+      | while read -r u; do curl -s -H "ApiSecret: $PASSWORDLESS_API_KEY" "https://v4.passwordless.dev/credentials/list?userId=user_$u" | jq -r '.[] | "\(.rpid) \(.origin)"'; done \
       | sort | uniq -c
      ```
    - For each new migration, run any pre-check its docstring names against production, read-only.
@@ -441,7 +443,7 @@ Record:
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
 
-**Version 1.28 (2026-11-27):** §VII.A step 3 adds the pre-window `PASSKEY_EXPECTED_ORIGIN` confirmation and the aggregate `(rpid, origin)` compatibility check before the first release carrying passkey origin verification; owner authorization 2026-11-27.
+**Version 1.28 (2026-11-27):** §VII.A step 3 adds the pre-window `PASSKEY_EXPECTED_ORIGIN` confirmation and the aggregate `(rpid, origin)` compatibility check (principal set read-only from `passkey_credentials`, credentials from the provider's `/credentials/list`) before the first release carrying passkey origin verification; owner authorization 2026-11-27.
 
 **Version 1.27 (2026-11-26):** Adds §VII.C, the dependency-gated credential migration (pyotp); owner ruling 2026-11-26.
 
