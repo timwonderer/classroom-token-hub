@@ -234,14 +234,14 @@ def list_credential_ids(user_id: str) -> list[str]:
 def _credential_absent_from_inventory(credential_id: str, user_id: str | None) -> bool:
     """True only when the provider lists the principal's credentials and this one is not among them.
 
-    Any failure to read the inventory, or a missing principal, is "not confirmed".
+    Any failure to read the inventory, a malformed one (an entry with no usable id) or a
+    missing principal is "not confirmed".
     """
     if not user_id:
         return False
     try:
-        listed = _client().get_credentials(passkey_external_id(user_id))
         wanted = _normalized_credential_id(credential_id)
-        return all(_normalized_credential_id(item.descriptor.id) != wanted for item in listed)
+        return all(_normalized_credential_id(listed_id) != wanted for listed_id in list_credential_ids(user_id))
     except Exception:
         return False
 

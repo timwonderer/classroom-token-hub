@@ -88,3 +88,11 @@ def test_a_credential_listed_but_unknown_to_every_local_set_is_provider_only(pro
     assert _classify([provider_only_id], active=["a"], pending_id="p", retiring_id="r").provider_only == (
         provider_only_id,
     )
+
+
+def test_a_one_shot_iterator_of_active_ids_still_reports_the_absent_ones():
+    """The active ids are used twice; consuming an iterator once must not hide an unexpected absence."""
+    result = _classify(["a"], active=iter(["a", "gone"]))
+
+    assert result.provider == {"a": C.ACTIVE}
+    assert result.unexpectedly_absent == ("gone",)

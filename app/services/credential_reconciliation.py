@@ -69,6 +69,7 @@ def classify_inventory(
     Precedence is retiring, then pending, then active; anything else is provider-only
     (or protected pending when the registration is unknown). Pure.
     """
+    active_ids = tuple(active_ids)  # traversed twice below; a one-shot iterator must not run dry
     active = {credential_match_key(i) for i in active_ids}
     pending = None if pending_id is None else credential_match_key(pending_id)
     retiring = None if retiring_id is None else credential_match_key(retiring_id)

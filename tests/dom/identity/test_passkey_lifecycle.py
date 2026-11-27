@@ -2242,16 +2242,14 @@ def test_the_inventory_is_read_and_strays_deleted_with_no_transaction_open(clien
 
 
 def test_a_superseded_operation_deletes_nothing(client, app, fake_passwordless, monkeypatch):
-    """Generation is rechecked from local state before a destructive action, not only at activation."""
+    """Supersession (generation bump and cancellation) is rechecked from local state before a destructive action."""
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
     stray = _stray(fake_passwordless, user_id)
     real = passkey_service.list_credential_ids
 
     def list_then_supersede(uid):
         ids = real(uid)
-        with db.engine.begin() as connection:  # a recovery lands while the provider is being read
-            connection.execute(sa.text(
-                "UPDATE users SET credential_generation = credential_generation + 1 WHERE id = :u"), {"u": uid})
+        _supersede(uid)  # a recovery lands while the provider is being read: the owning command
         return ids
 
     monkeypatch.setattr(passkey_service, "list_credential_ids", list_then_supersede)
@@ -2298,3 +2296,16 @@ def test_an_enrollment_with_an_unknown_pending_credential_defers_every_provider_
     assert scope.pending_registration_unknown is True and scope.pending_id is None
     assert lifecycle.reconciliation_target_is_still_provider_only(operation, "stray-1") is False
     db.session.rollback()
+
+
+def test_a_malformed_inventory_entry_never_confirms_a_404_as_deleted(client, app, fake_passwordless, monkeypatch):
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    monkeypatch.setattr(
+        fake_passwordless, "get_credentials",
+        lambda _id: [SimpleNamespace(descriptor=SimpleNamespace(id=None))],
+    )
+
+    assert passkey_service._credential_absent_from_inventory("None", user_id) is False
+    assert passkey_service._credential_absent_from_inventory("cred-gone", user_id) is False
+    monkeypatch.setattr(fake_passwordless, "get_credentials", lambda _id: [])
+    assert passkey_service._credential_absent_from_inventory("cred-gone", user_id) is True

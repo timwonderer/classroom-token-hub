@@ -126,6 +126,21 @@ def test_the_expectation_is_never_taken_from_the_request(client, app, fake_passw
     assert response.status_code == 400 and _bound(user_id) == []
 
 
+def _sdk_sign_in_callers(source: str) -> bool:
+    """Pure detector: does ``source`` call ``.sign_in(`` on something and mention ``VerifySignIn``?
+
+    Whitespace between the name and the parenthesis is tolerated, as Python does.
+    """
+    import re
+    return bool(re.search(r"\.sign_in\s*\(", source)) and "VerifySignIn" in source
+
+
+def test_mutation_the_detector_catches_a_spaced_sign_in_call():
+    assert _sdk_sign_in_callers("sdk.sign_in (VerifySignIn(token))")
+    assert _sdk_sign_in_callers("sdk.sign_in(VerifySignIn(token))")
+    assert not _sdk_sign_in_callers("def sign_in(request): return None")
+
+
 def test_every_provider_verification_goes_through_the_check():
     """No caller reaches the provider's verification without it (a structural guard)."""
     import inspect
@@ -133,7 +148,7 @@ def test_every_provider_verification_goes_through_the_check():
     root = pathlib.Path(__file__).resolve().parents[3] / "app"
     callers = [
         str(path.relative_to(root)) for path in root.rglob("*.py")
-        if ".sign_in(" in path.read_text() and "VerifySignIn" in path.read_text()
+        if _sdk_sign_in_callers(path.read_text())
     ]
     assert callers == ["services/passkey_service.py"]
     source = inspect.getsource(passkey_service._verify)
