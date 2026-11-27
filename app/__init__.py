@@ -291,18 +291,21 @@ def create_app():
 
     # The deployment's public origin, the only expectation passkey ceremonies are checked
     # against (passkey_service.check_ceremony_binding). passwordless.dev records whatever
-    # origin and RP ID the browser supplied, so the app must supply its own. Required in
-    # every environment whenever passkeys are configured; there is no development bypass.
+    # origin and RP ID the browser supplied, so the app must supply its own. A missing or
+    # invalid value never stops the application: it leaves both settings empty, so every
+    # passkey ceremony is refused (fail closed) while everything else keeps working.
     from app.services.passkey_service import PasskeyOriginConfigError, parse_expected_origin
-    passkey_expected_origin = os.getenv("PASSKEY_EXPECTED_ORIGIN", "").strip()
+    passkey_expected_origin = ""
     passkey_expected_rp_id = ""
-    if os.getenv("PASSWORDLESS_API_KEY") and not passkey_expected_origin:
-        raise RuntimeError("PASSKEY_EXPECTED_ORIGIN is required when PASSWORDLESS_API_KEY is set")
-    if passkey_expected_origin:
+    raw_passkey_origin = os.getenv("PASSKEY_EXPECTED_ORIGIN", "").strip()
+    if raw_passkey_origin:
         try:
-            passkey_expected_origin, passkey_expected_rp_id = parse_expected_origin(passkey_expected_origin)
-        except PasskeyOriginConfigError as exc:
-            raise RuntimeError(str(exc)) from exc
+            passkey_expected_origin, passkey_expected_rp_id = parse_expected_origin(raw_passkey_origin)
+        except PasskeyOriginConfigError:
+            pass
+    passkey_origin_unusable = bool(
+        (os.getenv("PASSWORDLESS_API_KEY") or raw_passkey_origin) and not passkey_expected_origin
+    )
 
     app.config.from_mapping(
         DEBUG=False,
@@ -418,6 +421,11 @@ def create_app():
         file_handler.addFilter(RequestIdFilter())
         file_handler._cth_handler = True
         root_logger.addHandler(file_handler)
+
+    if passkey_origin_unusable:
+        app.logger.warning(
+            "PASSKEY_EXPECTED_ORIGIN is missing or invalid: passkey sign-in and enrollment are refused until it is set."
+        )
 
     # -------------------- DATABASE SAFETY GUARDS --------------------
     # Prevent accidental connection to the wrong database environment

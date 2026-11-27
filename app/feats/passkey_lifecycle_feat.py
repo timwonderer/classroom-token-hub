@@ -76,6 +76,8 @@ def start_registration(*, user_id, session_nonce, proof, alias, display_name,
     )
     if not lifecycle.proof_kind_allowed(purpose, proof):
         raise lifecycle.CredentialOperationRefused("proof_kind_mismatch")
+    # Before any operation row exists: a misconfigured deployment leaves nothing pending.
+    passkey_service.require_ceremony_configuration()
     correlation_id = correlation_id or generate_correlation_id()
     release_read_transaction()
     with FEATContext(ENROLLMENT_FEAT, correlation_id=correlation_id, idempotency_key=_key(ENROLLMENT_FEAT, "start")):

@@ -39,7 +39,6 @@ _REFUSALS = {
     "retirement_committed": (409, "That change is already being finished and cannot be cancelled."),
     "binding_mismatch": (409, "That passkey registration belongs to an earlier attempt. Start again."),
     "registration_interrupted": (409, "That registration was interrupted. Cancel it and start again."),
-    "initial_enrollment_only": (403, "A sign-up capability can only enroll a first passkey."),
     "registration_rejected": (400, "That passkey could not be registered. Start again."),
 }
 

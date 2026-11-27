@@ -167,10 +167,17 @@ def _create_app(monkeypatch, *, key, origin):
     return create_app()
 
 
-def test_startup_refuses_passkeys_without_an_expected_origin(monkeypatch):
+DIAGNOSTIC = "passkey ceremony refused: PASSKEY_EXPECTED_ORIGIN is not configured"
+
+
+def test_the_app_starts_with_passkeys_set_and_no_origin_and_says_so_once(monkeypatch, caplog):
     for blank in (None, "", "   "):
-        with pytest.raises(RuntimeError, match="PASSKEY_EXPECTED_ORIGIN is required when PASSWORDLESS_API_KEY is set"):
-            _create_app(monkeypatch, key="k", origin=blank)
+        caplog.clear()
+        with caplog.at_level("WARNING"):
+            app = _create_app(monkeypatch, key="k", origin=blank)
+        assert app.config["PASSKEY_EXPECTED_ORIGIN"] == "" and app.config["PASSKEY_EXPECTED_RP_ID"] == ""
+        warnings = [r for r in caplog.records if "PASSKEY_EXPECTED_ORIGIN is missing or invalid" in r.getMessage()]
+        assert len(warnings) == 1
 
 
 @pytest.mark.parametrize("origin", [
@@ -178,9 +185,40 @@ def test_startup_refuses_passkeys_without_an_expected_origin(monkeypatch):
     "https://user@cth.test", "https://cth.test?x=1", "https://cth.test#f", "https://", "https://cth.test:99999",
     "https://cth .test",
 ])
-def test_startup_refuses_a_malformed_origin(monkeypatch, origin):
-    with pytest.raises(RuntimeError, match="PASSKEY_EXPECTED_ORIGIN"):
-        _create_app(monkeypatch, key="k", origin=origin)
+def test_the_app_starts_with_a_malformed_origin_and_leaves_the_expectation_empty(monkeypatch, caplog, origin):
+    with caplog.at_level("WARNING"):
+        app = _create_app(monkeypatch, key="k", origin=origin)
+    assert app.config["PASSKEY_EXPECTED_ORIGIN"] == "" and app.config["PASSKEY_EXPECTED_RP_ID"] == ""
+    assert any("missing or invalid" in r.getMessage() for r in caplog.records)
+
+
+def test_without_an_origin_registration_start_and_verification_both_refuse_and_leave_nothing_pending(
+    client, app, fake_passwordless, caplog,
+):
+    user_id = _teacher(client, app, fake_passwordless)
+    app.config["PASSKEY_EXPECTED_ORIGIN"] = ""
+    app.config["PASSKEY_EXPECTED_RP_ID"] = ""
+    try:
+        with caplog.at_level("ERROR"):
+            started = start_registration(client)
+            from types import SimpleNamespace
+            with app.app_context(), pytest.raises(PasskeyError):
+                passkey_service.check_ceremony_binding(SimpleNamespace(origin=EXPECTED_ORIGIN, rp_id=EXPECTED_RP_ID))
+    finally:
+        app.config["PASSKEY_EXPECTED_ORIGIN"] = EXPECTED_ORIGIN
+        app.config["PASSKEY_EXPECTED_RP_ID"] = EXPECTED_RP_ID
+
+    assert started.status_code == 400
+    assert _open_operations(user_id) == [] and fake_passwordless.calls == []
+    messages = [r.getMessage() for r in caplog.records if DIAGNOSTIC in r.getMessage()]
+    assert len(messages) >= 2
+    assert all(user_id not in m for m in messages)
+
+
+def test_student_services_do_not_depend_on_the_passkey_origin(monkeypatch):
+    app = _create_app(monkeypatch, key="k", origin=None)
+    client = app.test_client()
+    assert client.get("/student/login").status_code == 200
 
 
 def test_startup_derives_the_rp_id_from_the_origin_hostname(monkeypatch):

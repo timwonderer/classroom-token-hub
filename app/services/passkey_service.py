@@ -100,23 +100,35 @@ def parse_expected_origin(raw: str) -> tuple[str, str]:
     return f"{parts.scheme}://{authority}", host
 
 
+class PasskeyOriginNotConfigured(PasskeyError):
+    public_message = "Passkeys are unavailable until this installation's origin is configured. Contact your administrator."
+
+
+def require_ceremony_configuration() -> None:
+    """Refuse (fail closed) while the deployment origin is not configured. No identifiers are logged."""
+    config = current_app.config
+    if not (config.get("PASSKEY_EXPECTED_ORIGIN") and config.get("PASSKEY_EXPECTED_RP_ID")):
+        current_app.logger.error("passkey ceremony refused: PASSKEY_EXPECTED_ORIGIN is not configured")
+        raise PasskeyOriginNotConfigured("PASSKEY_EXPECTED_ORIGIN is not configured")
+
+
 def check_ceremony_binding(verified) -> None:
-    """Refuse a verified ceremony whose origin or RP ID is not this deployment's. Pure.
+    """Refuse a verified ceremony whose origin or RP ID is not this deployment's.
 
     passwordless.dev records the origin and RP ID the browser supplied; it keeps no allowed
     list, so this compares what it echoes with the configured ``PASSKEY_EXPECTED_ORIGIN`` and
     its hostname (FEAT-IDEN-102 §VI). The expectation comes only from configuration, never
     from the request. The origin match is case-sensitive; the RP ID is a case-insensitive
-    hostname match. A missing or unconfigured value is a mismatch.
+    hostname match. A missing value, or no configured expectation, is a refusal.
     """
+    require_ceremony_configuration()
     config = current_app.config
-    expected_origin = config.get("PASSKEY_EXPECTED_ORIGIN") or ""
-    expected_rp_id = config.get("PASSKEY_EXPECTED_RP_ID") or ""
+    expected_origin = config["PASSKEY_EXPECTED_ORIGIN"]
+    expected_rp_id = config["PASSKEY_EXPECTED_RP_ID"]
     origin = getattr(verified, "origin", None)
     rp_id = getattr(verified, "rp_id", None)
     if (
-        not expected_origin or not expected_rp_id
-        or not isinstance(origin, str) or not isinstance(rp_id, str)
+        not isinstance(origin, str) or not isinstance(rp_id, str)
         or origin.rstrip("/") != expected_origin.rstrip("/")
         or rp_id.lower() != expected_rp_id.lower()
     ):
