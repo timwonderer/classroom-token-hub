@@ -994,13 +994,13 @@ def test_deleting_the_principal_removes_its_operation(app):
 
 def test_the_provider_is_called_with_no_transaction_open(client, app, fake_passwordless):
     seen = []
-    original = fake_passwordless.sign_in
+    original = fake_passwordless.send  # the provider's /signin/verify round trip
 
-    def sign_in(verify):
+    def send(request, **kwargs):
         seen.append(db.session().in_transaction())
-        return original(verify)
+        return original(request, **kwargs)
 
-    fake_passwordless.sign_in = sign_in
+    fake_passwordless.send = send
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     _nonce(user_id)  # an incidental read leaves a transaction open, as a request would
     assert db.session().in_transaction()
@@ -1116,8 +1116,8 @@ def _open_with(user_id, fake, challenge, credential="cred-1"):
 def test_a_sign_in_token_without_a_valid_challenge_is_refused_and_the_provider_is_not_called(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
     calls = []
-    original = fake_passwordless.sign_in
-    fake_passwordless.sign_in = lambda verify: calls.append(verify) or original(verify)
+    original = fake_passwordless.send
+    fake_passwordless.send = lambda request, **kw: calls.append(request) or original(request, **kw)
 
     for bad in ("", "x" * 64, None):
         with pytest.raises(CredentialOperationRefused) as refused:

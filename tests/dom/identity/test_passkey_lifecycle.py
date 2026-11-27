@@ -285,12 +285,12 @@ def test_the_registration_token_never_outlives_the_operation_deadline(client, ap
 def test_every_provider_call_runs_with_no_database_transaction_open(client, app, fake_passwordless):
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
     open_during = []
-    for name in ("register_token", "sign_in", "delete_credential"):
+    for name in ("register_token", "send", "delete_credential"):  # ``send`` is the /signin/verify round trip
         original = getattr(fake_passwordless, name)
 
-        def spy(arg, _original=original):
+        def spy(arg, _original=original, **kwargs):
             open_during.append(db.session().in_transaction())
-            return _original(arg)
+            return _original(arg, **kwargs)
 
         setattr(fake_passwordless, name, spy)
 

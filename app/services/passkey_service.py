@@ -136,11 +136,12 @@ def check_ceremony_binding(verified) -> None:
 
 
 def _verify(token: str):
-    from passwordless import PasswordlessError, VerifySignIn
+    from passwordless import PasswordlessError
+    from app.utils.passwordless_client import verify_signin_token
     if not token or not isinstance(token, str):
         raise PasskeyError("missing token")
     try:
-        verified = _client().sign_in(VerifySignIn(token))
+        verified = verify_signin_token(_client(), token)
     except PasswordlessError as exc:
         # An invalid, expired or already-used token is a refused credential,
         # not a server error.

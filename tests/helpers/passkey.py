@@ -77,10 +77,14 @@ class FakePasswordless:
 
     def _token(self, external_id, credential_id, type_, success=True, nickname=None) -> str:
         token = f"verify_{secrets.token_hex(8)}"
-        self.tokens[token] = SimpleNamespace(
-            success=success, user_id=external_id, credential_id=credential_id, type=type_,
-            nickname=nickname, origin=self.origin, rp_id=self.rp_id,
-        )
+        # The JSON body /signin/verify returns, with its real key spellings (``rpId``, not ``rpid``).
+        body = {
+            "success": success, "userId": external_id, "credentialId": credential_id, "type": type_,
+            "nickname": nickname, "origin": self.origin, "rpId": self.rp_id,
+            "timestamp": "2026-11-27T12:00:00Z", "expiresAt": "2026-11-27T12:01:00Z",
+            "tokenId": f"tid-{secrets.token_hex(4)}", "device": "Chrome", "country": "US",
+        }
+        self.tokens[token] = {k: v for k, v in body.items() if v is not None or k == "nickname"}
         return token
 
     # ---- the PasswordlessClient surface ----
@@ -94,11 +98,29 @@ class FakePasswordless:
             self.aliases[alias] = register_token.user_id
         return SimpleNamespace(token=f"register_{secrets.token_hex(8)}")
 
-    def sign_in(self, verify_sign_in):
-        payload = self.tokens.pop(verify_sign_in.token, None)  # tokens are single use
+    # The SDK's HTTP layer: ``verify_signin_token`` POSTs through ``options`` and ``session``.
+    @property
+    def options(self):
+        from passwordless import PasswordlessOptions
+        return PasswordlessOptions("test-secret-not-real")
+
+    @property
+    def session(self):
+        return self
+
+    def prepare_request(self, request):
+        return request
+
+    def send(self, request, **kwargs):
+        import json
+        assert request.url.endswith("/signin/verify"), request.url
+        token = json.loads(request.data)["token"]
+        payload = self.tokens.pop(token, None)  # tokens are single use
         if payload is None:
-            raise _problem(400, "invalid_token")
-        return payload
+            problem = {"type": "https://docs.passwordless.dev/guide/errors.html#invalid_token",
+                       "title": "invalid_token", "status": 400, "errorCode": "invalid_token"}
+            return SimpleNamespace(status_code=400, text=json.dumps(problem), headers={}, json=lambda: problem)
+        return SimpleNamespace(status_code=200, text=json.dumps(payload), headers={})
 
     def delete_credential(self, delete_credential):
         self.calls.append(("delete_credential", delete_credential.credential_id))

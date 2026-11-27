@@ -126,19 +126,21 @@ def test_the_expectation_is_never_taken_from_the_request(client, app, fake_passw
     assert response.status_code == 400 and _bound(user_id) == []
 
 
-def _sdk_sign_in_callers(source: str) -> bool:
-    """Pure detector: does ``source`` call ``.sign_in(`` on something and mention ``VerifySignIn``?
+def _provider_verify_callers(source: str) -> bool:
+    """Pure detector: does ``source`` call ``verify_signin_token(`` or the SDK's ``.sign_in(``?
 
-    Whitespace between the name and the parenthesis is tolerated, as Python does.
+    Whitespace between the name and the parenthesis is tolerated, as Python does; a ``def`` is not a call.
     """
     import re
-    return bool(re.search(r"\.sign_in\s*\(", source)) and "VerifySignIn" in source
+    return bool(re.search(r"(?<!def )\bverify_signin_token\s*\(|\.sign_in\s*\(\s*VerifySignIn", source))
 
 
 def test_mutation_the_detector_catches_a_spaced_sign_in_call():
-    assert _sdk_sign_in_callers("sdk.sign_in (VerifySignIn(token))")
-    assert _sdk_sign_in_callers("sdk.sign_in(VerifySignIn(token))")
-    assert not _sdk_sign_in_callers("def sign_in(request): return None")
+    assert _provider_verify_callers("sdk.sign_in (VerifySignIn(token))")
+    assert _provider_verify_callers("sdk.sign_in(VerifySignIn(token))")
+    assert _provider_verify_callers("verified = verify_signin_token (client, token)")
+    assert not _provider_verify_callers("def verify_signin_token(client, token): ...")
+    assert not _provider_verify_callers("def sign_in(request): return None")
 
 
 def test_every_provider_verification_goes_through_the_check():
@@ -148,11 +150,48 @@ def test_every_provider_verification_goes_through_the_check():
     root = pathlib.Path(__file__).resolve().parents[3] / "app"
     callers = [
         str(path.relative_to(root)) for path in root.rglob("*.py")
-        if _sdk_sign_in_callers(path.read_text())
+        if _provider_verify_callers(path.read_text())
     ]
     assert callers == ["services/passkey_service.py"]
     source = inspect.getsource(passkey_service._verify)
     assert "check_ceremony_binding(verified)" in source
+
+
+# ---- the real /signin/verify response shape -----------------------------------
+
+def _raw_verify(**overrides):
+    import json
+    body = {
+        "success": True, "userId": "u1", "credentialId": "c1", "type": "passkey_signin",
+        "nickname": None, "origin": EXPECTED_ORIGIN, "rpId": EXPECTED_RP_ID,
+        "timestamp": "2026-11-27T12:00:00Z", "expiresAt": "2026-11-27T12:01:00Z",
+        "tokenId": "t1", "device": "Chrome", "country": "US",
+    }
+    body.update(overrides)
+    return json.dumps({k: v for k, v in body.items() if v is not Ellipsis})
+
+
+def test_a_raw_verify_response_with_rpId_passes_the_binding(app):
+    from app.utils.passwordless_client import parse_signin_verify_response
+    verified = parse_signin_verify_response(_raw_verify())
+    assert verified.rp_id == EXPECTED_RP_ID
+    with app.app_context():
+        passkey_service.check_ceremony_binding(verified)  # no refusal
+
+
+def test_a_raw_verify_response_without_rpId_is_refused(app):
+    from app.utils.passwordless_client import parse_signin_verify_response
+    verified = parse_signin_verify_response(_raw_verify(rpId=Ellipsis))
+    assert verified.rp_id is None
+    with app.app_context():
+        with pytest.raises(passkey_service.PasskeyError):
+            passkey_service.check_ceremony_binding(verified)
+
+
+def test_the_sdk_schema_drops_rpId_which_is_why_the_parser_is_narrowed():
+    """Documents the defect: the stock schema reads ``rpid`` and so loses ``/signin/verify``'s ``rpId``."""
+    from passwordless.serialization import VerifiedUserSchema
+    assert VerifiedUserSchema().loads(_raw_verify()).rp_id is None
 
 
 # ---- startup -----------------------------------------------------------------

@@ -9,13 +9,19 @@ https://docs.passwordless.dev/guide/get-started.html
 import os
 from typing import Dict, Any
 
+from marshmallow import fields, post_load
 from passwordless import (
     PasswordlessClient,
     PasswordlessClientBuilder,
     PasswordlessOptions,
     RegisterToken,
     RegisteredToken,
+    VerifiedUser,
+    VerifySignIn,
 )
+from passwordless.client import handle_response_error
+from passwordless.serialization import VerifiedUserSchema, VerifySignInSchema
+from requests import Request
 
 
 def get_passwordless_client() -> PasswordlessClient:
@@ -95,3 +101,43 @@ def get_public_api_key() -> str:
         )
 
     return api_public
+
+
+class _SigninVerifyResponseSchema(VerifiedUserSchema):
+    """``/signin/verify``'s response, whose RP ID key is ``rpId``.
+
+    passwordless==2.0.0 reads ``rpid`` (the key ``/credentials/list`` uses) and, with unknown
+    keys excluded, silently yields ``rp_id=None`` here. Only this one field differs.
+    """
+
+    rp_id = fields.Str(data_key="rpId")
+
+    @post_load
+    def make(self, data: Any, **kwargs: Any) -> VerifiedUser:
+        # A body lacking ``origin`` or ``rpId`` must reach the ceremony check as a missing value
+        # (a refusal), not fail here as a construction error.
+        missing = {name: None for name in VerifiedUser.__dataclass_fields__}
+        return VerifiedUser(**{**missing, **data})
+
+
+def parse_signin_verify_response(text: str) -> VerifiedUser:
+    """The verified user in a raw ``/signin/verify`` JSON body."""
+    return _SigninVerifyResponseSchema().loads(text)
+
+
+def verify_signin_token(client: PasswordlessClient, token: str) -> VerifiedUser:
+    """POST ``token`` to ``/signin/verify`` through ``client``'s configuration.
+
+    Same request, session and error handling as the SDK's ``sign_in``; only the response is
+    parsed with the correct ``rpId`` key. Raises ``PasswordlessError`` for a refused token.
+    """
+    request = Request(
+        method="POST",
+        url=client.options.api_url + "/signin/verify",
+        headers={"ApiSecret": client.options.api_secret, "Content-Type": "application/json; charset=UTF-8"},
+        data=VerifySignInSchema().dumps(VerifySignIn(token)),
+    )
+    response = client.session.send(client.session.prepare_request(request), allow_redirects=True, timeout=30)
+    if response.status_code >= 400:
+        handle_response_error(response)
+    return parse_signin_verify_response(response.text)
