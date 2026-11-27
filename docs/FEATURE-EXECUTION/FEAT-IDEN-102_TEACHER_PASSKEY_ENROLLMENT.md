@@ -1,16 +1,16 @@
-# FEAT-IDEN-102: Teacher Passkey Enrollment and Selected Replacement
+# FEAT-IDEN-102: Teacher Passkey Enrollment
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-102 | 1.3 | 2026-11-27 | 1.2 | Normative |
+| FEAT-IDEN-102 | 1.4 | 2026-11-27 | 1.3 | Normative |
 
 ## I. Purpose
 
-Enroll a required passkey or replace one explicitly selected passkey, preserving unrelated credentials and remote-first retirement.
+Enroll a required passkey, preserving unrelated credentials. A principal always holds at least one activated passkey: a passkey is changed by enrolling a new one and then revoking the old one (FEAT-IDEN-107), never by an in-place replacement.
 
 ## II. Scope
 
-Teacher or sysadmin principal initial/additional enrollment and selected replacement. Principal credential-maintenance scope; no classroom/Seat prerequisite.
+Teacher or sysadmin principal initial/additional enrollment. Principal credential-maintenance scope; no classroom/Seat prerequisite.
 
 ## III. Authority Level
 
@@ -30,8 +30,8 @@ and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 
 Resolve the authenticated teacher or sysadmin principal at the request boundary. TOTP must already
 be activated. Every principal proves fresh TOTP bound to the requested operation for
-initial or additional enrollment, replacement and revocation. A login session alone is
-insufficient. Replacement additionally requires exact selection of an owned activated credential.
+initial or additional enrollment and revocation. A login session alone is
+insufficient.
 
 In a short transaction, validate current generation/session/expiry and reserve one
 operation with database-enforced uniqueness. Persist pending registration before
@@ -55,13 +55,6 @@ principal reconciliation commands with that pending credential protected, then r
 current authority in a local transaction. Activate once, consume the operation, advance
 generation, invalidate sessions/challenges/management grants and emit ACT-IDEN-102.
 
-For replacement, record the exact selected old ID and verified pending new ID. Consume
-interactive authorization by committing retirement intent. Delete the old ID remotely;
-confirm the outcome and invoke principal reconciliation. Only then atomically activate
-the new local binding, hard-delete the selected old binding and apply generation/session/
-audit effects. Unrelated passkeys survive. This workflow is recoverable, not distributed
-atomicity; remote deletion cannot be undone by a database rollback.
-
 Each local step is one FEAT transaction through Identity commands. A later autonomous
 continuation uses FEAT-IDEN-108, never a nested FEAT call. Generation/stage checks refuse
 stale responses and SATAR/destruction-superseded activation. Authorization expiry before
@@ -69,26 +62,22 @@ retirement intent prevents completion; after intent only the fixed operation may
 
 ## VII. Failure, idempotency and presentation
 
-Before retirement intent, cancellation/expiry preserves the old credential and makes
-abandoned remote registration cleanup-only. After intent, retain minimal nonsecret
-reconciliation state and resume the fixed operation unless superseded. Provider failures
-do not justify removing the old local binding first. An uncertain deletion response is
-verified/retried; do not assume either success or rollback.
+Cancellation/expiry before activation preserves every existing credential and makes
+abandoned remote registration cleanup-only. Enrollment has no retirement step; the
+recoverable remote-first retirement workflow belongs to revocation (FEAT-IDEN-107).
 
 Use a random operation identity and unique local transition/receipt, not an audit
 identity archive or read-then-act existence check. A duplicate completion never activates
 a second credential, emits a second mutation outcome or invalidates a later session.
 After bounded receipt expiry, old requests fail closed rather than reconstructing work.
 
-Success requires fresh sign-in. Pending replacement messaging explains that TOTP can
-still be used; it does not promise the old passkey works after remote retirement began.
-Signup completion says credential setup is complete and sign-in is required. Use only
+Success requires fresh sign-in. Signup completion says credential setup is complete and sign-in is required. Use only
 DOM-OPS-002 §2.5 outcome fields; never log credential labels or identity-derived hashes.
 
 ## VIII. Required validation
 
 Cover all SPEC-IDEN-002 scenarios, including wrong principal/type/challenge, pending
-assertions, multiple passkeys A/B/C with only B replaced by D, unknown-ID pending
+assertions, multiple passkeys A/B/C with a fourth enrolled and then only B revoked, unknown-ID pending
 protection, failed inventory, provider response loss, commit failure after deletion,
 expiry, supersession, duplicate completion, session invalidation, no active classroom,
 CSRF/rate limits, accessible manual/error flows and GHSA credential-ownership guards.
@@ -96,5 +85,5 @@ CSRF/rate limits, accessible manual/error flows and GHSA credential-ownership gu
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. The 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment capability: fresh TOTP authorizes every enrollment, and enrollment is no longer authorized by the signup ceremony; cancellation, expiry and stale-operation protections are unchanged. The 2026-11-26 revision makes the enrolled passkey required (DOM-IDEN-003 §VII.A) and widens scope to sysadmin principals. The 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-27 revision (v1.4; Owner ruling 2026-11-27: passkey replacement removed; replacement is enrollment followed by revocation) removes selected-passkey replacement: the replacement operation, its purpose and its stages are gone, and the rule that a principal must always hold at least one activated passkey is unchanged (revoking the last one is refused, FEAT-IDEN-107). The earlier 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment capability: fresh TOTP authorizes every enrollment, and enrollment is no longer authorized by the signup ceremony; cancellation, expiry and stale-operation protections are unchanged. The 2026-11-26 revision makes the enrolled passkey required (DOM-IDEN-003 §VII.A) and widens scope to sysadmin principals. The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.

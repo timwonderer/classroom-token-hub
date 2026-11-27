@@ -157,7 +157,7 @@ Teacher and operator ceremonies are structurally identical and separately regist
 | GET | ~~`/admin/passkey/list`~~ | A | **removed 2026-09-27 — see §VII-D** |
 | GET | ~~`/sysadmin/passkey/list`~~ | O | **removed 2026-09-27 — see §VII-D** |
 
-‡ The `auth/start` and `auth/finish` ceremonies are unauthenticated by definition — they *are* the login. Both are rate limited to 20/min; registration, deletion, resume and cancel to 10/min. `register/start` and `delete` require a fresh `totp_code` in the JSON body (`register/start` takes `replace_passkey_id` for a selected replacement; fresh TOTP also authorizes a first passkey); a completed change answers `{"success", "message", "redirect"}` and ends the sign-in (FEAT-IDEN-102/107).
+‡ The `auth/start` and `auth/finish` ceremonies are unauthenticated by definition — they *are* the login. Both are rate limited to 20/min; registration, deletion, resume and cancel to 10/min. `register/start` and `delete` require a fresh `totp_code` in the JSON body (fresh TOTP also authorizes a first passkey; there is no replace operation, a passkey is changed by registering a new one and then deleting the old one, and deleting the only passkey is refused with `only_passkey`); a completed change answers `{"success", "message", "redirect"}` and ends the sign-in (FEAT-IDEN-102/107).
 
 ### VI-H. Hybrid page routes
 

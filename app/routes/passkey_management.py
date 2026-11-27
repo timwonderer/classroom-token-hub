@@ -1,4 +1,4 @@
-"""The HTTP half of passkey enrollment, replacement and revocation, shared by both roles.
+"""The HTTP half of passkey enrollment and revocation, shared by both roles.
 
 ``/admin/passkey/*`` and ``/sysadmin/passkey/*`` are thin wrappers over these
 functions, so the two principals run one implementation (DOM-IDEN-003 §VII.A "single
@@ -20,7 +20,6 @@ from app.utils.passwordless_client import get_public_api_key
 
 SUCCESS_MESSAGES = {
     "activated": "Passkey added. Sign in again to continue.",
-    "replaced": "Passkey replaced. Sign in again to continue.",
     "revoked": "Passkey removed. Sign in again to continue.",
 }
 
@@ -28,7 +27,7 @@ _REFUSALS = {
     "proof_rejected": (403, "That authenticator code was not accepted."),
     "proof_kind_mismatch": (403, "That authenticator code was not accepted."),
     "operation_already_open": (409, "Another credential change is already in progress. Cancel it or wait for it to expire."),
-    "only_passkey": (409, "This is your only passkey. Replace it instead of deleting it."),
+    "only_passkey": (409, "This is your only passkey. Add another passkey before deleting this one."),
     "credential_not_found": (404, "Passkey not found."),
     "operation_not_found": (404, "There is no passkey change in progress."),
     "session_not_current": (401, "Your sign-in is no longer current. Sign in again."),
@@ -95,19 +94,16 @@ def _signed_out_success(result, login_endpoint: str):
 
 
 def register_start(*, user_id: str, alias: str, display_name: str):
-    """Begin an enrollment, or a replacement when ``replace_passkey_id`` is given."""
+    """Begin an enrollment."""
     def action():
         data = _body()
         code = data.get("totp_code")
         proof = lifecycle.TotpCode(code if isinstance(code, str) else "")
-        replace = data.get("replace_passkey_id")
-        if replace is not None and (isinstance(replace, bool) or not isinstance(replace, int)):
-            raise lifecycle.CredentialOperationRefused("credential_not_found")
         # Read before any operation row exists: a missing public key must leave nothing pending.
         api_key = get_public_api_key()
         token, binding = feat.start_registration(
             user_id=user_id, session_nonce=session.get("current_session_nonce"), proof=proof,
-            alias=alias, display_name=display_name, replace_passkey_id=replace,
+            alias=alias, display_name=display_name,
         )
         return jsonify({"token": token, "binding": binding, "apiKey": api_key}), 200
     return _guarded(action)
@@ -144,11 +140,7 @@ def revoke(*, user_id: str, passkey_id: int, login_endpoint: str):
 def resume(*, user_id: str, login_endpoint: str):
     """Finish the principal's committed retirement; success ends the sign-in."""
     def action():
-        name = _body().get("authenticatorName")
-        result = feat.resume_retirement(
-            user_id=user_id, binding=_body().get("binding"),
-            authenticator_name=name if isinstance(name, str) else None,
-        )
+        result = feat.resume_retirement(user_id=user_id, binding=_body().get("binding"))
         return _signed_out_success(result, login_endpoint)
     return _guarded(action)
 

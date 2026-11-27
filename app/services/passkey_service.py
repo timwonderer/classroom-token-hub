@@ -212,13 +212,21 @@ def verify_sign_in(token: str, *, expected_role: str, expected_user_id: str | No
     return user
 
 
-def _normalized_credential_id(value) -> str:
-    """A credential id compared without base64 alphabet or padding differences."""
+def canonical_credential_id(value) -> str:
+    """The one spelling of a credential id used for every comparison and every provider call.
+
+    The id is the same bytes however it is spelled: passwordless.dev's ``/signin/verify``
+    returns standard base64 with padding (what is stored), while ``/credentials/list`` and
+    ``/credentials/delete`` use base64url without padding. The canonical form is base64url
+    without padding, the provider's own spelling; standard-alphabet or padded input maps onto
+    it, so two spellings of one id compare equal and a deletion names the id the provider
+    lists. The stored value is never rewritten.
+    """
     return str(value).replace("+", "-").replace("/", "_").rstrip("=")
 
 
 #: The comparison key reconciliation uses for credential ids (see ``credential_reconciliation``).
-credential_match_key = _normalized_credential_id
+credential_match_key = canonical_credential_id
 
 
 class InventoryUnusable(PasskeyServiceUnavailable):
@@ -253,8 +261,8 @@ def _credential_absent_from_inventory(credential_id: str, user_id: str | None) -
     if not user_id:
         return False
     try:
-        wanted = _normalized_credential_id(credential_id)
-        return all(_normalized_credential_id(listed_id) != wanted for listed_id in list_credential_ids(user_id))
+        wanted = canonical_credential_id(credential_id)
+        return all(canonical_credential_id(listed_id) != wanted for listed_id in list_credential_ids(user_id))
     except Exception:
         return False
 
@@ -271,7 +279,7 @@ def retire_remote_credential(credential_id: str, user_id: str | None = None) -> 
         raise PasskeyError("no credential to retire")
     from passwordless import DeleteCredential, PasswordlessError
     try:
-        _client().delete_credential(DeleteCredential(credential_id=credential_id))
+        _client().delete_credential(DeleteCredential(credential_id=canonical_credential_id(credential_id)))
     except PasswordlessError as exc:
         # A 404 alone is not proof: a proxy or a wrong self-hosted path answers 404 too. It
         # counts as deletion only when the provider's own credential inventory for the

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.74 | 2026-11-27 | 3.73 | Normative |
+| SOP-DOC-001 | 3.75 | 2026-11-27 | 3.74 | Normative |
 
 ---
 
@@ -110,7 +110,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-IDEN-008 — Operator Sysadmin Bootstrap](../FEATURE-EXECUTION/FEAT-IDEN-008_OPERATOR_SYSADMIN_BOOTSTRAP.md)
 - [FEAT-IDEN-009 — Identity Session Lifecycle](../FEATURE-EXECUTION/FEAT-IDEN-009_IDENTITY_SESSION_LIFECYCLE.md)
 - [FEAT-IDEN-101 — Teacher TOTP Setup](../FEATURE-EXECUTION/FEAT-IDEN-101_TEACHER_TOTP_SETUP.md)
-- [FEAT-IDEN-102 — Teacher Passkey Enrollment and Selected Replacement](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
+- [FEAT-IDEN-102 — Teacher Passkey Enrollment](../FEATURE-EXECUTION/FEAT-IDEN-102_TEACHER_PASSKEY_ENROLLMENT.md)
 - [FEAT-IDEN-103 — Teacher Recovery Proof and Random Recipient Selection](../FEATURE-EXECUTION/FEAT-IDEN-103_TEACHER_RECOVERY_INITIATION.md)
 - [FEAT-IDEN-104 — Student Recovery Code Issuance](../FEATURE-EXECUTION/FEAT-IDEN-104_STUDENT_RECOVERY_CODE_GENERATION_FOR_TEACHER.md)
 - [FEAT-IDEN-105 — Private Class Confirmation and Aggregate Validation](../FEATURE-EXECUTION/FEAT-IDEN-105_TEACHER_RECOVERY_CODE_VALIDATION.md)
@@ -288,6 +288,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.75 (2026-11-27):**
+
+- Register DOM-IDEN-003 v2.15, FEAT-IDEN-102 v1.4, FEAT-IDEN-107 v1.5 and SPEC-IDEN-002 v1.3. Owner ruling 2026-11-27: passkey replacement removed; replacement is enrollment followed by revocation. The rule that a principal always holds at least one activated passkey, and that revoking the last one is refused, is unchanged; TOTP replacement (FEAT-IDEN-106) is unchanged.
 
 **Version 3.74 (2026-11-27):**
 
