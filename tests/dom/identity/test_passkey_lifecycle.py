@@ -1045,7 +1045,7 @@ def test_a_sysadmin_needs_fresh_totp_and_cannot_use_a_capability(client, app, fa
     assert fake_passwordless.calls == [] and _operations(user_id) == []
 
 
-def test_a_teacher_cannot_reach_the_sysadmin_surface_nor_the_reverse(client, app, fake_passwordless):
+def test_a_teacher_cannot_reach_the_sysadmin_surface(client, app, fake_passwordless):
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
 
     assert start_registration(client, prefix="/sysadmin").status_code in (302, 401, 403, 404)
