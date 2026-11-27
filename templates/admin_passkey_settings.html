@@ -54,7 +54,7 @@
 
             {% if operation_state == 'retirement_pending' %}
             {% call cards.alert_card('warning', 'A passkey change is waiting to finish', icon='pending', body_class='mb-4') %}
-                <p>The passkey service has not yet confirmed the change. Your authenticator app still signs you in. Select <strong>Try again</strong> to finish it; no passkey is removed until it finishes.</p>
+                <p>The passkey service has not yet confirmed the change, so we cannot yet tell whether the passkey has been removed. Your authenticator app still signs you in. Select <strong>Try again</strong> to finish the change.</p>
                 <button type="button" class="btn btn-primary" id="resumePasskeyButton" data-binding="{{ operation_binding or '' }}">Try again</button>
             {% endcall %}
             {% elif operation_state == 'registering' %}

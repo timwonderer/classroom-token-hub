@@ -513,6 +513,8 @@ def open_operation(
         purpose = CredentialOperationPurpose(purpose)
     except ValueError:
         raise CredentialOperationRefused("unknown_purpose") from None
+    if purpose not in FEAT_FOR_PURPOSE:  # the retired ``passkey_replace`` opens nothing
+        raise CredentialOperationRefused("unknown_purpose")
     _require_feat(FEAT_FOR_PURPOSE[purpose])
     if not proof_kind_allowed(purpose, proof):
         raise CredentialOperationRefused("proof_kind_mismatch")

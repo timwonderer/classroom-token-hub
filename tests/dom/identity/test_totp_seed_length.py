@@ -428,13 +428,27 @@ def test_open_operation_refuses_an_assertion_for_passkey_work(client, app, fake_
     assert refused.value.category == "proof_kind_mismatch"
 
 
-def test_the_retired_passkey_replace_purpose_opens_nothing(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+def test_the_retired_passkey_replace_purpose_opens_nothing(client, app):
+    # The purpose guard runs before any principal lookup, so no passkey is needed.
+    user_id = initialize_as_teacher("chemistry_p1", client, app).teacher_user.id
 
     with pytest.raises(CredentialOperationRefused) as refused:
         open_credential_operation(
             user_id=user_id, purpose="passkey_replace", proof=TotpCode(_code(HELD_SEED)),
             session_nonce=_nonce(user_id),
+        )
+
+    assert refused.value.category == "unknown_purpose"
+    assert CredentialOperation.query.count() == 0
+
+
+def test_open_operation_refuses_the_retired_passkey_replace_purpose_directly(client, app):
+    user_id = initialize_as_teacher("chemistry_p1", client, app).teacher_user.id
+
+    with pytest.raises(CredentialOperationRefused) as refused:
+        lifecycle.open_operation(
+            _user(user_id), purpose=CredentialOperationPurpose.PASSKEY_REPLACE,
+            proof=TotpCode(_code(HELD_SEED)), session_nonce=_nonce(user_id),
         )
 
     assert refused.value.category == "unknown_purpose"
