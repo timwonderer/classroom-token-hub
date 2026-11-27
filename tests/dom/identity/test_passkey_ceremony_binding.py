@@ -171,10 +171,35 @@ def test_startup_refuses_a_malformed_origin(monkeypatch, origin):
 def test_startup_derives_the_rp_id_from_the_origin_hostname(monkeypatch):
     for origin, rp_id in (("https://CTH.Test:8443", "cth.test"), ("http://localhost:5000", "localhost")):
         app = _create_app(monkeypatch, key="k", origin=origin)
-        assert app.config["PASSKEY_EXPECTED_ORIGIN"] == origin.replace("CTH.Test", "CTH.Test")
+        assert app.config["PASSKEY_EXPECTED_ORIGIN"] == origin.lower()
         assert app.config["PASSKEY_EXPECTED_RP_ID"] == rp_id
 
 
 def test_startup_without_passkeys_needs_no_origin(monkeypatch):
     app = _create_app(monkeypatch, key="", origin=None)
     assert app.config["PASSKEY_EXPECTED_ORIGIN"] == "" and app.config["PASSKEY_EXPECTED_RP_ID"] == ""
+
+
+@pytest.mark.parametrize("raw, origin, rp_id", [
+    ("https://CTH.Test", "https://cth.test", "cth.test"),
+    ("https://cth.test:443", "https://cth.test", "cth.test"),
+    ("https://cth.test:8443", "https://cth.test:8443", "cth.test"),
+    ("http://cth.test:80", "http://cth.test", "cth.test"),
+    ("HTTP://Localhost:5000", "http://localhost:5000", "localhost"),
+    ("https://CTH.Test:443", "https://cth.test", "cth.test"),
+])
+def test_the_configured_origin_is_canonicalized_as_a_browser_serializes_it(raw, origin, rp_id):
+    assert passkey_service.parse_expected_origin(raw) == (origin, rp_id)
+
+
+@pytest.mark.parametrize("raw", ["https://cth.test/p", "https://cth.test?q", "https://cth.test#f", "https://u@cth.test"])
+def test_canonicalization_still_rejects_path_query_fragment_and_userinfo(raw):
+    with pytest.raises(passkey_service.PasskeyOriginConfigError):
+        passkey_service.parse_expected_origin(raw)
+
+
+def test_a_browser_origin_passes_when_configured_in_a_non_canonical_spelling(monkeypatch):
+    app = _create_app(monkeypatch, key="k", origin="https://CTH.Test:443")
+    from types import SimpleNamespace
+    with app.app_context():
+        passkey_service.check_ceremony_binding(SimpleNamespace(origin="https://cth.test", rp_id="cth.test"))

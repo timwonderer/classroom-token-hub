@@ -70,15 +70,16 @@ class PasskeyOriginConfigError(ValueError):
 def parse_expected_origin(raw: str) -> tuple[str, str]:
     """``(origin, rp_id)`` from the configured deployment origin; raises ``PasskeyOriginConfigError``.
 
-    The origin is ``scheme://host[:port]`` with no userinfo, path, query or fragment. The RP ID
-    is its hostname, lowercased and without the port.
+    The origin is ``scheme://host[:port]`` with no userinfo, path, query or fragment, returned
+    canonicalized as a browser serializes it (lowercase, default port dropped). The RP ID is
+    the canonical hostname, without the port.
     """
     from urllib.parse import urlsplit
     value = (raw or "").strip()
     try:
         parts = urlsplit(value)
         host = parts.hostname
-        parts.port  # noqa: B018  (raises ValueError on a malformed port)
+        port = parts.port  # raises ValueError on a malformed port
     except ValueError as exc:
         raise PasskeyOriginConfigError("PASSKEY_EXPECTED_ORIGIN is not a valid origin") from exc
     if (
@@ -90,7 +91,13 @@ def parse_expected_origin(raw: str) -> tuple[str, str]:
             "PASSKEY_EXPECTED_ORIGIN must be https://host[:port] or http://host[:port] with no path, "
             "query, fragment or userinfo"
         )
-    return f"{parts.scheme}://{parts.netloc}", host.lower()
+    # WHATWG origin serialization, which is what a browser reports: lowercase scheme and host,
+    # an explicit default port dropped, a non-default port kept, no trailing slash.
+    host = host.lower()
+    authority = f"[{host}]" if ":" in host else host
+    if port is not None and port != {"https": 443, "http": 80}[parts.scheme]:
+        authority = f"{authority}:{port}"
+    return f"{parts.scheme}://{authority}", host
 
 
 def check_ceremony_binding(verified) -> None:
