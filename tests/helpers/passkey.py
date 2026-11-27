@@ -7,10 +7,18 @@ registration completes with a ``passkey_register`` token and a sign-in with a
 ``passkey_signin`` token; ``/users/delete`` removes a user's credentials and
 aliases and succeeds for an unknown user; an alias bound to another user id
 is a 409 ``alias_conflict``.
+
+Credential ids are spelled as the real tenant spells them (confirmed on staging, 2026-11-27):
+``/signin/verify`` returns ``credentialId`` in standard base64 with padding, while
+``/credentials/list`` returns the same credential in unpadded base64url and
+``/credentials/delete`` matches only that spelling (anything else is a 404). ``credentials``
+holds the ``/signin/verify`` spelling; ``get_credentials`` and ``delete_credential`` apply the
+provider's own spelling.
 """
 
 from __future__ import annotations
 
+import base64
 import secrets
 import uuid
 from dataclasses import dataclass, field
@@ -38,6 +46,16 @@ EXPECTED_ORIGIN = "https://cth.test"
 EXPECTED_RP_ID = "cth.test"
 
 
+def provider_credential_id(credential_id: str) -> str:
+    """The spelling ``/credentials/list`` reports and ``/credentials/delete`` matches: base64url, no padding."""
+    return credential_id.replace("+", "-").replace("/", "_").rstrip("=")
+
+
+def new_standard_base64_credential_id(length: int = 16) -> str:
+    """A credential id as ``/signin/verify`` returns it: standard base64, padded, ``+``/``/`` possible."""
+    return base64.b64encode(secrets.token_bytes(length)).decode()
+
+
 @dataclass
 class FakePasswordless:
     credentials: dict = field(default_factory=dict)  # credential_id -> external user id
@@ -62,7 +80,7 @@ class FakePasswordless:
         of the latest start (``pending_nickname``) unless a test says otherwise.
         """
         external_id = external_id or passkey_external_id(user_id)
-        credential_id = f"cred-{secrets.token_hex(4)}"
+        credential_id = new_standard_base64_credential_id()
         self.credentials[credential_id] = external_id
         return self._token(
             external_id, credential_id, "passkey_register",
@@ -131,9 +149,12 @@ class FakePasswordless:
                 type="https://docs.passwordless.dev/guide/errors.html", title="Unexpected error",
                 status=404, detail="<html>Not Found</html>",
             ))
-        if self.strict_missing_deletes and delete_credential.credential_id not in self.credentials:
+        # The provider matches the id it lists (base64url), not the one /signin/verify returned.
+        held = {provider_credential_id(key): key for key in self.credentials}
+        match = held.get(delete_credential.credential_id)
+        if match is None:
             raise _problem(404, "credential_not_found")
-        self.credentials.pop(delete_credential.credential_id, None)
+        self.credentials.pop(match)
         if self.lose_next_delete_response:
             self.lose_next_delete_response = False
             raise _problem(504, "timeout")
@@ -143,7 +164,7 @@ class FakePasswordless:
         if self.fail_inventory:
             raise _problem(500, "unavailable")
         return [
-            SimpleNamespace(descriptor=SimpleNamespace(type="public-key", id=credential_id), user_id=owner)
+            SimpleNamespace(descriptor=SimpleNamespace(type="public-key", id=provider_credential_id(credential_id)), user_id=owner)
             for credential_id, owner in self.credentials.items() if owner == user_id
         ]
 

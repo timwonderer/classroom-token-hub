@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.14 | 2026-11-27 | 2.13 | Constitutional |
+| DOM-IDEN-003 | 2.15 | 2026-11-27 | 2.14 | Constitutional |
 
 ---
 
@@ -239,8 +239,7 @@ checks and explicit mutation commands; FEAT orchestrates them. No route, GET, qu
 or validator may mutate credentials, reconcile inventory or issue authorization.
 
 Mandatory dual enrollment applies (below); multiple passkeys may coexist. Existing
-teachers prove fresh TOTP for passkey enrollment, selected-passkey replacement and
-removal. TOTP replacement requires a fresh assertion using an activated, locally
+teachers prove fresh TOTP for passkey enrollment and removal. TOTP replacement requires a fresh assertion using an activated, locally
 owned passkey. Missing proof does not authorize a weaker maintenance path: SATAR
 remains independent recovery. No contact information, backup codes, administrative
 overrides, physical-device separation or synchronization restrictions are introduced.
@@ -249,7 +248,7 @@ overrides, physical-device separation or synchronization restrictions are introd
 
 A teacher principal SHALL hold one activated TOTP credential and at least one activated
 passkey. Ordinary sign-in may use either. Maintenance of each requires its own fresh,
-purpose-bound proof: fresh TOTP for passkey enrollment, replacement and revocation;
+purpose-bound proof: fresh TOTP for passkey enrollment and revocation;
 a fresh assertion from an activated passkey for TOTP replacement. Enrollment may be
 deferred past signup; a principal without an activated passkey is noncompliant until
 one is enrolled (see Credential compliance gate). Fresh TOTP is the proof for the first
@@ -271,8 +270,8 @@ FEAT-IDEN-007 with its own confirmation and authorization, until it complies.
 Compliance is evaluated from current credential state on every request; no completion
 flag is stored. Rendering the gate mutates nothing (INV-ARC-007).
 
-Revoking the only activated passkey is refused; selected-passkey replacement is the
-lawful path. SATAR recovery completion leaves the principal with a new TOTP and no
+Revoking the only activated passkey is refused; the lawful path is to enroll a new passkey
+and then revoke the old one. SATAR recovery completion leaves the principal with a new TOTP and no
 passkey; the gate directs enrollment at the next sign-in, authorized by the fresh
 recovery TOTP.
 
@@ -320,14 +319,13 @@ secret, consume authorization, advance generation, revoke sessions and emit audi
 Failure/cancellation before that commit preserves the old TOTP. No old-secret fallback
 or backup code is retained. A secret is not activated merely by being displayed.
 
-Selected-passkey replacement records exact old/new credential IDs. Register and verify
-the new credential, persist it as non-authoritative pending material, then commit
-retirement intent before deleting the old credential remotely. After confirmed remote
-retirement and required reconciliation, atomically activate the new binding, hard-delete
-the old binding and apply generation/session/audit effects. Preserve unrelated passkeys.
-Ordinary removal uses the same remote-first retirement without a replacement.
+Passkey removal records the exact credential ID, commits retirement intent before deleting
+the credential remotely, and after confirmed remote retirement and required reconciliation
+atomically hard-deletes the binding and applies generation/session/audit effects.
+Preserve unrelated passkeys. There is no in-place passkey replacement: a passkey is changed
+by enrolling a new one and then revoking the old one.
 
-Provider failure leaves routine replacement/removal incomplete. An uncertain response
+Provider failure leaves routine removal incomplete. An uncertain response
 requires verification/retry, not assumed success. A crash after remote deletion cannot
 restore the old credential; this is a durable, recoverable workflow, not a distributed
 atomic transaction. Before retirement intent, cancellation preserves the old credential
@@ -354,7 +352,7 @@ class ownership or economic state.
 ### Reconciliation authority
 
 Identity owns one canonical reconciliation implementation, invoked at initial/additional
-passkey enrollment, replacement, removal, SATAR and account-destruction completion
+passkey enrollment, removal, SATAR and account-destruction completion
 boundaries, and periodically under system authority through FEAT-IDEN-108. Initiating
 FEATs compose shared domain commands; no FEAT-to-FEAT execution is introduced.
 System reconciliation may read only minimal Identity/provider state needed to evaluate
@@ -624,6 +622,8 @@ Revisions to this document SHALL:
 2. Update the effective date.
 3. Maintain consistency with DOM-IDEN-001 and DOM-IDEN-005.
 4. Maintain consistency with INV-CORE-000.
+
+**2026-11-27 amendment (v2.15; Owner ruling 2026-11-27: passkey replacement removed; replacement is enrollment followed by revocation):** Removes selected-passkey replacement as an operation; the requirement that a principal holds at least one activated passkey, and the refusal to revoke the last one, are unchanged. Credential-lifecycle replacement of the TOTP seed is a different operation and is unchanged.
 
 **2026-11-27 amendment (owner authorization 2026-11-27):** Removes the signup-derived five-minute enrollment capability and the signup enrollment election; fresh TOTP is the proof for the first passkey enrollment. Explicit cancellation, expiry, reservation and stale-operation protections are unchanged.
 

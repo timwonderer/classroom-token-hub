@@ -33,11 +33,7 @@
 
             {% if operation_state == 'retirement_pending' %}
             {% call cards.alert_card('warning', 'A passkey change is waiting to finish', icon='pending', body_class='mb-4') %}
-                <p>The passkey service has not yet confirmed the change. Your authenticator app still signs you in. Select <strong>Try again</strong> to finish it; no passkey is added, replaced or removed until it finishes.</p>
-                <div class="mb-3">
-                    <label for="passkey-resume-name" class="form-label">Name for the new passkey <span class="text-muted">(optional, replacements only)</span></label>
-                    <input type="text" id="passkey-resume-name" class="form-control" maxlength="100" autocomplete="off">
-                </div>
+                <p>The passkey service has not yet confirmed the change, so we cannot yet tell whether the passkey has been removed. Your authenticator app still signs you in. Select <strong>Try again</strong> to finish the change.</p>
                 <button type="button" class="btn btn-primary" id="resumePasskeyButton" data-binding="{{ operation_binding or '' }}">Try again</button>
             {% endcall %}
             {% elif operation_state == 'registering' %}
@@ -53,7 +49,7 @@
                     <input type="text" id="passkey-totp-code" class="form-control" inputmode="numeric"
                            autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-describedby="passkey-totp-help">
                     <div id="passkey-totp-help" class="form-text">
-                        Enter the current 6-digit code from your authenticator app before you register, replace or delete a passkey.
+                        Enter the current 6-digit code from your authenticator app before you register or delete a passkey.
                         After a change you sign in again.
                     </div>
                 </div>
@@ -98,12 +94,6 @@
                                     {% endif %}
                                 </div>
                                 <div class="d-flex flex-column align-items-end gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary replace-passkey-btn"
-                                            data-credential-id="{{ cred.id }}"
-                                            data-credential-name="{{ cred.authenticator_name or 'Unnamed Passkey' }}"{% if operation_state %} disabled{% endif %}>
-                                        <span class="material-symbols-outlined icon-xs" aria-hidden="true">swap_horiz</span>
-                                        Replace
-                                    </button>
                                     {% if credentials|length > 1 %}
                                     <button type="button" class="btn btn-sm btn-outline-danger delete-passkey-btn"
                                             data-credential-id="{{ cred.id }}"
@@ -112,7 +102,7 @@
                                         Delete
                                     </button>
                                     {% else %}
-                                    <span class="text-muted small">Your only passkey: replace it rather than delete it.</span>
+                                    <span class="text-muted small">Your only passkey: add another before you delete this one.</span>
                                     {% endif %}
                                 </div>
                             </div>
@@ -143,7 +133,6 @@
         codeInputId: 'passkey-totp-code',
         registerButtonId: 'registerPasskeyButton',
         resumeButtonId: 'resumePasskeyButton',
-        resumeNameInputId: 'passkey-resume-name',
         loginUrl: {{ url_for('sysadmin.login')|tojson }},
         cancelButtonId: 'cancelPasskeyButton',
         startUrl: {{ passkey_urls.start|tojson }},
