@@ -50,22 +50,22 @@ that the pattern is safe — only a reviewed disposition under §V.2 is.
 - CodeQL runs on the `security-extended` query suite (not the narrower default
   setup), configured in Settings → Code security, not as a committed workflow file.
 - `main`'s branch ruleset (id `10357616`) carries a `code_scanning` rule with
-  `security_alerts_threshold: high_or_higher`. GitHub's `code_scanning` rule has two
-  independent threshold fields: `security_alerts_threshold`
-  (`none`/`critical`/`high_or_higher`/`medium_or_higher`/`all`, by severity) and
-  `alerts_threshold` (`none`/`errors`/`errors_and_warnings`/`all`, by code-scanning
-  alert severity: Error, Warning, or Note). This SOP's threshold rationale concerns
-  `security_alerts_threshold` only. **Rationale:** `high_or_higher` blocks merge on a
-  new Critical or High finding the PR's diff introduces, while leaving Medium/Low/Note
-  findings to flow through the per-alert triage in §V.2 rather than blocking every PR
-  on a tool with a known false-positive rate. This was chosen deliberately over
-  `critical` alone (which would let a new High-severity finding merge unblocked) and
-  over `none`/no rule (which reproduces the original gap). Missing or in-progress
-  CodeQL analysis on the PR head blocks merge separately from either threshold field,
-  and this was experimentally verified fail-closed (confirmed 2026-10-11 against a
-  draft PR). A rule that only scopes to alerts the PR's diff introduces is a
-  deliberate, narrower scope than the whole-repository backlog; §V.4 exists because of
-  that gap.
+  `security_alerts_threshold: high_or_higher`. GitHub's `code_scanning` rule has two independent
+  threshold fields: `security_alerts_threshold`
+  (`none`/`critical`/`high_or_higher`/`medium_or_higher`/`all`, by severity) and `alerts_threshold`
+  (`none`/`errors`/`errors_and_warnings`/`all`, by code-scanning alert severity: Error, Warning, or
+  Note). This SOP's threshold rationale concerns `security_alerts_threshold` only.
+
+  **Rationale:** `high_or_higher` blocks merge on a new Critical or High finding the PR's diff
+  introduces, while leaving Medium/Low/Note findings to flow through the per-alert triage in §V.2
+  rather than blocking every PR on a tool with a known false-positive rate. This was chosen
+  deliberately over `critical` alone (which would let a new High-severity finding merge unblocked)
+  and over `none`/no rule (which reproduces the original gap).
+
+  Missing or in-progress CodeQL analysis on the PR head blocks merge separately from either
+  threshold field, and this was experimentally verified fail-closed (confirmed 2026-10-11 against a
+  draft PR). A rule that only scopes to alerts the PR's diff introduces is a deliberate, narrower
+  scope than the whole-repository backlog; §V.4 exists because of that gap.
 - **What the ruleset does not do:** it has no required status check for this
   repository's own test suite. A structural guard test (such as
   `tests/guards/unsafe_jinja_filter_markup.py`'s `test_no_unsafe_jinja_markup.py`)

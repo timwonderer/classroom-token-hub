@@ -38,7 +38,20 @@ PROD pairs one opening `active` event with its corresponding closing `inactive` 
 
 PROD derives credited seconds through canonical elapsed duration; invalidation changes only compensation eligibility. Original scans, credited duration evidence, and current attendance state are preserved and remain inspectable. Invalidation is terminal: it cannot be edited, reversed, deleted while its target exists, or converted into a new payable interval. Paid work remains historically settled, including after correction or reversal; it never re-enters unpaid work.
 
-`attendance_interval_invalidation` is the append-only PROD-owned decision record. Required fields are `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json`, `lineage_event_id`, `lineage_token` (64 characters), and `lineage_version`. Business fields are frozen at INSERT. Audit linkage is opaque and excluded from the protected payload; all three fields initialize together exactly once in the creating transaction, whose commit requires matching complete creation evidence. Late attachment, replacement, partial linkage and missing evidence fail closed under DOM-PROD-001 §XI.4 and the Operations creation protocol. Reasons are exactly `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no unrestricted notes are accepted or persisted. Unique interval identity prevents a second invalidation under any key. Command identity is `(class_id, FEAT-PROD-005, idempotency_key)`.
+`attendance_interval_invalidation` is the append-only PROD-owned decision record. Required fields
+are `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`,
+`recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json`,
+`lineage_event_id`, `lineage_token` (64 characters), and `lineage_version`. Business fields are
+frozen at INSERT.
+
+Audit linkage is opaque and excluded from the protected payload; all three fields initialize
+together exactly once in the creating transaction, whose commit requires matching complete creation
+evidence. Late attachment, replacement, partial linkage and missing evidence fail closed under
+DOM-PROD-001 §XI.4 and the Operations creation protocol. Reasons are exactly `INVALID_ATTENDANCE`,
+`NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no unrestricted notes are accepted or persisted.
+
+Unique interval identity prevents a second invalidation under any key. Command identity is
+`(class_id, FEAT-PROD-005, idempotency_key)`.
 
 Source-event references are within PROD. `class_id` and seat references are shared anchors; other-domain internal rows are referenced only through opaque locators. The protected-row audit pointer is the narrowly mandated linkage of `INV-ARC-016`, not a general permission for cross-domain foreign keys.
 
@@ -72,11 +85,39 @@ This graph reconstruction is incorporated by DOM-PROD-001 §XV.10, DOM-LED-001 �
 
 #### A. Complete original business graph
 
-PROD owns a class/target-scoped graph connecting completed canonical pair identities to every original business contribution and original settlement boundary relevant to them. A contribution is an originally selected UTC subsegment of a canonical interval: an open-at-payroll fragment, a later clipped remainder, a completed whole-pair contribution, or a separately identified positive incident top-up loss component. A still-open canonical interval cannot be invalidated. Its eventual canonical closing event may postdate an original fragment payment. Reconstruct the original payroll-window selection from the complete immutable timestamp-ordered sources under the recognized original rule; a later close assigns the historical subsegment to today's completed canonical pair and is not inserted into the earlier selection. Canonical pairing and unique source continuity establish that identity, rather than timestamp proximity or a separately demanded original visibility snapshot. Preserve full raw pair duration separately from the original selected/truncated pricing duration; repeated-active restart follows the recognized original rule, while the completed pair retains its canonical continuation identity.
+PROD owns a class/target-scoped graph connecting completed canonical pair identities to every
+original business contribution and original settlement boundary relevant to them. A contribution is
+an originally selected UTC subsegment of a canonical interval: an open-at-payroll fragment, a later
+clipped remainder, a completed whole-pair contribution, or a separately identified positive incident
+top-up loss component. A still-open canonical interval cannot be invalidated.
+
+Its eventual canonical closing event may postdate an original fragment payment. Reconstruct the
+original payroll-window selection from the complete immutable timestamp-ordered sources under the
+recognized original rule; a later close assigns the historical subsegment to today's completed
+canonical pair and is not inserted into the earlier selection. Canonical pairing and unique source
+continuity establish that identity, rather than timestamp proximity or a separately demanded
+original visibility snapshot.
+
+Preserve full raw pair duration separately from the original selected/truncated pricing duration;
+repeated-active restart follows the recognized original rule, while the completed pair retains its
+canonical continuation identity.
 
 Each contribution identifies the original PROD event and window, canonical opening/closing IDs, selected subsegment endpoints, original rule/writer assignment, original policy/share assignment, the complete immutable original-window source set. Zero-value `payroll` events and every intervening `payroll` boundary remain in the ordered business timeline; they can change a later window even when absent from incident `corrected_event_ids`. They do not invent zero-cent Ledger credits. Manual credits/top-ups remain non-boundary events. PROD establishes historical membership; it never discovers membership from a monetary total or computes attributable cents.
 
-The graph must be closed over all connected contributions, events, shares and original positive credits, including other intervals sharing an event or top-up. A later modern frozen membership does not replace earlier historical participation for the same pair; mixed histories use the complete graph while retaining strict proof for every modern contribution. Complete bounded immutable source-window selection under the recognized original rule, retained configuration, incident references and uniquely matched Ledger aggregates establish the reconstruction. The complete relevant source set must be read; totals or incident IDs alone are insufficient. Cap exhaustion, ambiguous ordering/graphs, missing actual writer/configuration inputs or changed evidence deny the entire graph; never qualify a convenient subset. Missing separately signed historical visibility alone is no longer a denial. Existing fixed invocation bounds in SPEC-PROD-002 §V cover the complete graph before any page slice; pagination cannot divide its proof.
+The graph must be closed over all connected contributions, events, shares and original positive
+credits, including other intervals sharing an event or top-up. A later modern frozen membership does
+not replace earlier historical participation for the same pair; mixed histories use the complete
+graph while retaining strict proof for every modern contribution.
+
+Complete bounded immutable source-window selection under the recognized original rule, retained
+configuration, incident references and uniquely matched Ledger aggregates establish the
+reconstruction. The complete relevant source set must be read; totals or incident IDs alone are
+insufficient. Cap exhaustion, ambiguous ordering/graphs, missing actual writer/configuration inputs
+or changed evidence deny the entire graph; never qualify a convenient subset.
+
+Missing separately signed historical visibility alone is no longer a denial. Existing fixed
+invocation bounds in SPEC-PROD-002 §V cover the complete graph before any page slice; pagination
+cannot divide its proof.
 
 PROD identifies same-domain source references; Ledger independently binds each positive original credit through its own immutable class/target/account/mechanism/actor and original-business linkage evidence. Opaque Ledger origin locators are stable and versioned, not randomized presentation tokens or internal cross-domain FKs. Every original credit belongs to exactly one proven originating business event; multiple positive credits require independently proven per-credit share partition, never a proportional split guessed from their amounts. Unrelated teacher manual credits are not attendance contributions. The 79 observed PROD-PAY-001 source references are candidates, not an allowlist or proof of unique top-up membership.
 
@@ -84,21 +125,93 @@ PROD identifies same-domain source references; Ledger independently binds each p
 
 Ledger receives immutable PROD-owned graph membership/rule inputs, Policies-owned original settings and Operations-owned canonical evidence through FEAT. It validates monetary identity and exact original pricing before deriving allocations. Preserve each writer's original selection, duration aggregation, whole-second truncation, arithmetic operation order, decimal context and per-window/per-setting quantization. In particular, floor/truncate of an aggregate is not replaced by the sum of individually truncated fragments. The original integer pricing seconds and newly derived exact duration weights are distinct quantities.
 
-For an ordinary proven original credit, reproduce each original setting/window share's integer cents once under its independently assigned original descriptor. Within that share, group all selected subsegments belonging to the same canonical pair; the pair's weight is their proven exact elapsed duration, represented in integer microseconds or exact rational seconds. Reject duplicate edges and conflicting overlapping selection claims; grouping is not permission to count the same original subsegment twice. Do not independently round component durations or component earnings. Allocate that share's original integer cents proportionally to these weights by exact rational largest remainder. Equal remainders sort by ascending canonical closing UTC, opening-event ID, then closing-event ID, independent of input order. A zero-weight pair receives zero; positive share cents with zero total weight is an integrity/unavailable evidence failure, not an allocation to a guessed pair. Shares sum exactly to their original credit; pair allocations never change after another pair is invalidated.
+For an ordinary proven original credit, reproduce each original setting/window share's integer cents
+once under its independently assigned original descriptor. Within that share, group all selected
+subsegments belonging to the same canonical pair; the pair's weight is their proven exact elapsed
+duration, represented in integer microseconds or exact rational seconds. Reject duplicate edges and
+conflicting overlapping selection claims; grouping is not permission to count the same original
+subsegment twice.
 
-For a proven positive PROD-PAY-001 incident top-up, preserve the original positive window deltas separately. The source descriptor at `ad9574334d72fd92cc93402e851ab0ebc22aaad9`, `app/services/payroll/corrections.py:build_class_correction_proposal`, computes each included legacy window's delta as the original quantized whole worked-seconds price minus the separately quantized replay-paid-seconds price; a window is included only when worked seconds exceed paid seconds and the delta is positive. Preserve the exact source operation order, rate selection, decimal context and quantization; do not price aggregate unpaid seconds at today's/latest rate or combine windows before rounding. The recognized original incident summary and linked credit must select this pinned descriptor unambiguously; a caller may not choose it by claim or matching amount alone. Original summary amounts are historical observations, not Ledger monetary authority; validate every window delta against the proven original credit. Do not execute the retired writer.
+Do not independently round component durations or component earnings. Allocate that share's original
+integer cents proportionally to these weights by exact rational largest remainder. Equal remainders
+sort by ascending canonical closing UTC, opening-event ID, then closing-event ID, independent of
+input order. A zero-weight pair receives zero; positive share cents with zero total weight is an
+integrity/unavailable evidence failure, not an allocation to a guessed pair.
 
-For each included original top-up window, independently prove the complete original worked and replay-paid selected subsegments and their unique canonical-pair assignment. Require each pair's uniquely proven replay-paid temporal subsegments to be a subset of its proven worked subsegments within that original window. Form their nonoverlapping temporal set difference before summing exact durations; the grouped duration is the pair's **loss weight**. Paid-outside-worked segments, duplicate edges, conflicting overlapping claims or ambiguity in the temporal set membership deny attribution even when scalar durations match. These are new read-only rational duration weights, not a claim of historically stored integer per-pair seconds. The original writer's whole-second worked and paid aggregates are replayed separately; do not require or manufacture equality to the sum of individually floored loss weights. Negative loss weight, conflicting overlap, ambiguous loss assignment, or a positive delta with zero total loss weight denies attribution. Zero loss weight receives zero. Apply largest remainder with the same canonical pair tie order to that window's proven positive delta. Sum its derived allocations exactly to the original window delta, and all original window deltas exactly to the positive top-up credit. If an original top-up total matches but its loss components cannot be proven, attribution remains unavailable.
+Shares sum exactly to their original credit; pair allocations never change after another pair is
+invalidated.
+
+For a proven positive PROD-PAY-001 incident top-up, preserve the original positive window deltas
+separately. The source descriptor at `ad9574334d72fd92cc93402e851ab0ebc22aaad9`,
+`app/services/payroll/corrections.py:build_class_correction_proposal`, computes each included legacy
+window's delta as the original quantized whole worked-seconds price minus the separately quantized
+replay-paid-seconds price; a window is included only when worked seconds exceed paid seconds and the
+delta is positive.
+
+Preserve the exact source operation order, rate selection, decimal context and quantization; do not
+price aggregate unpaid seconds at today's/latest rate or combine windows before rounding. The
+recognized original incident summary and linked credit must select this pinned descriptor
+unambiguously; a caller may not choose it by claim or matching amount alone. Original summary
+amounts are historical observations, not Ledger monetary authority; validate every window delta
+against the proven original credit.
+
+Do not execute the retired writer.
+
+For each included original top-up window, independently prove the complete original worked and
+replay-paid selected subsegments and their unique canonical-pair assignment. Require each pair's
+uniquely proven replay-paid temporal subsegments to be a subset of its proven worked subsegments
+within that original window. Form their nonoverlapping temporal set difference before summing exact
+durations; the grouped duration is the pair's **loss weight**.
+
+Paid-outside-worked segments, duplicate edges, conflicting overlapping claims or ambiguity in the
+temporal set membership deny attribution even when scalar durations match. These are new read-only
+rational duration weights, not a claim of historically stored integer per-pair seconds. The original
+writer's whole-second worked and paid aggregates are replayed separately; do not require or
+manufacture equality to the sum of individually floored loss weights.
+
+Negative loss weight, conflicting overlap, ambiguous loss assignment, or a positive delta with zero
+total loss weight denies attribution. Zero loss weight receives zero. Apply largest remainder with
+the same canonical pair tie order to that window's proven positive delta. Sum its derived
+allocations exactly to the original window delta, and all original window deltas exactly to the
+positive top-up credit. If an original top-up total matches but its loss components cannot be
+proven, attribution remains unavailable.
 
 A positive top-up is a new original credit, never negative compensation and never a reduction of an earlier credit's cap. One interval may legitimately have allocations on several original fragment/remainder/top-up credits. Recover all proven contributions once per origin; do not omit a legitimate top-up merely because it concerns seconds also described by an original fragment. Conversely, duplicate edges or splitting one pair into several components must not create extra rounding positions or count a credit cent twice. Require conservation independently for every original share/window and credit, and for the complete graph. No amount is added to PROD summary, receipt or attendance rows.
 
 #### C. Prior compensation and later execution boundary
 
-Ledger proves every original credit's complete prior compensation, including accepted pending and posted principal effects, under its strict modern creation evidence or separately validated legacy reconstruction contract. Funding legs have zero attribution. Missing modern version-specific evidence denies; legacy absence of new columns cannot imply zero. A legacy reversal needs its original business reference, unique scoped monetary counterpart and exact original full magnitude, not an unsigned pointer alone. A proven full reversal or complete residual recovery of an origin makes all its remaining interval contribution zero. Partial compensation requires uniquely proven attribution to this graph's canonical pair/contribution identities; a known aggregate recovered total does not identify which pair was compensated. Never subtract the same unknown partial recovery from every interval, cap an arbitrary interval at the aggregate remainder, or invent a proportional allocation. Ambiguous partial attribution denies the entire paid invalidation, even where a separate per-credit residual command can prove its aggregate remainder.
+Ledger proves every original credit's complete prior compensation, including accepted pending and
+posted principal effects, under its strict modern creation evidence or separately validated legacy
+reconstruction contract. Funding legs have zero attribution. Missing modern version-specific
+evidence denies; legacy absence of new columns cannot imply zero. A legacy reversal needs its
+original business reference, unique scoped monetary counterpart and exact original full magnitude,
+not an unsigned pointer alone.
+
+A proven full reversal or complete residual recovery of an origin makes all its remaining interval
+contribution zero. Partial compensation requires uniquely proven attribution to this graph's
+canonical pair/contribution identities; a known aggregate recovered total does not identify which
+pair was compensated. Never subtract the same unknown partial recovery from every interval, cap an
+arbitrary interval at the aggregate remainder, or invent a proportional allocation.
+
+Ambiguous partial attribution denies the entire paid invalidation, even where a separate per-credit
+residual command can prove its aggregate remainder.
 
 For each origin c, Ledger derives C_c original credit cents, A_i,c fixed allocation to interval i, and attributable prior interval recovery R_i,c. For qualified partial attribution, require 0 ≤ R_i,c ≤ A_i,c and complete conservation between attributed prior principal effects and the origin's proven total recovery. The interval's proposed recovery is the sum over all origins of A_i,c − R_i,c, except an origin proven fully recovered contributes zero. Each original credit also retains the independent cap 0 ≤ total accepted recovery ≤ C_c. A full/residual origin recovery absorbs all remaining contributions only when its complete provenance proves that disposition; no unrelated negative entry can do so. Complete graph reconstruction or strict modern evidence, scoped posting admission and prior compensation remain required even for zero-cent or fully recovered eligibility-only outcomes.
 
-FEAT-PROD-005 composes the reconstruction directly through owning-domain interfaces, without executing FEAT-PROD-006. Lock target seat → ClassEconomy → every original credit in stable locator order → monetary sources. Revalidate complete graph/preview/caps/balances, resolve combined funding once and use one reservation for every origin principal and protection leg. Each origin has its own immutable recovery principal/intent and cap. Full/residual/interval commands serialize together. Missing/changed evidence or any failure rolls back eligibility, receipt, business corrections, monetary effects, reservation and audits together. Terminal eligibility, accepted replay, no correction fee and original cycle/Interpretation preservation remain binding. Existing invalidation receipt JSON records complete opaque original-business/origin/result locator sets, with reconstruction bound by expected-preview identity and canonical request digest, without financial amount or cached earnings; new fields are protected as part of the existing complete JSON payload.
+FEAT-PROD-005 composes the reconstruction directly through owning-domain interfaces, without
+executing FEAT-PROD-006. Lock target seat → ClassEconomy → every original credit in stable locator
+order → monetary sources. Revalidate complete graph/preview/caps/balances, resolve combined funding
+once and use one reservation for every origin principal and protection leg. Each origin has its own
+immutable recovery principal/intent and cap. Full/residual/interval commands serialize together.
+
+Missing/changed evidence or any failure rolls back eligibility, receipt, business corrections,
+monetary effects, reservation and audits together. Terminal eligibility, accepted replay, no
+correction fee and original cycle/Interpretation preservation remain binding.
+
+Existing invalidation receipt JSON records complete opaque original-business/origin/result locator
+sets, with reconstruction bound by expected-preview identity and canonical request digest, without
+financial amount or cached earnings; new fields are protected as part of the existing complete JSON
+payload.
 
 #### D. Current worked acceptance requirements
 

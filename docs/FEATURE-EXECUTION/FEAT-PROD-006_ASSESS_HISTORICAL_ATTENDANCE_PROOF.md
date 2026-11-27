@@ -32,7 +32,20 @@ Normative, subordinate to INV-CORE-000/001 and the owning-domain authorities bel
 
 `assess_historical_attendance_proof(*, ctx, target_seat_id, payroll_event_ids=None, limit=50)` uses class/actor only from current canonical context, never a caller-supplied authority claim. Domain query budgets are fixed server-owned positive bounds under SPEC-PROD-002 §V. Inputs must be canonical positive IDs and bounded selection; scope denial reveals no foreign records. Class Configuration owns current teacher/class binding, and Identity owns current teacher capability and target resolution; this read does not infer authority from a historic actor.
 
-Policies `get_historical_payroll_setting_inputs` supplies bounded immutable retained setting inputs through the existing setting-query boundary. FEAT supplies them to PROD without a direct domain call. PROD `get_historical_attendance_business_evidence` supplies canonical pairs, source-set/boundary limitations, selected payroll facts, retained original pricing and explicit descriptor candidates. Ledger `assess_historical_payroll_money` supplies scoped credit identities, arithmetic comparison, compensation completeness and independent current monetary proof eligibility. Operations `diagnose_historical_audit_coverages` (single-row form `diagnose_historical_audit_coverage`) supplies envelope continuity/coverage observations and limitations. Domain-owned immutable DTOs cross the FEAT boundary; no domain calls another domain or constructs another domain's truth. The FEAT maps observations without computing money, reparsing attendance, or reinterpreting signatures.
+Policies `get_historical_payroll_setting_inputs` supplies bounded immutable retained setting inputs
+through the existing setting-query boundary. FEAT supplies them to PROD without a direct domain
+call. PROD `get_historical_attendance_business_evidence` supplies canonical pairs,
+source-set/boundary limitations, selected payroll facts, retained original pricing and explicit
+descriptor candidates.
+
+Ledger `assess_historical_payroll_money` supplies scoped credit identities, arithmetic comparison,
+compensation completeness and independent current monetary proof eligibility. Operations
+`diagnose_historical_audit_coverages` (single-row form `diagnose_historical_audit_coverage`)
+supplies envelope continuity/coverage observations and limitations. Domain-owned immutable DTOs
+cross the FEAT boundary; no domain calls another domain or constructs another domain's truth.
+
+The FEAT maps observations without computing money, reparsing attendance, or reinterpreting
+signatures.
 
 ## VI. Read orchestration
 

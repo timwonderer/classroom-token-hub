@@ -209,19 +209,19 @@ and partial index, it restores the original IN syntax so PostgreSQL re-creates
 the migration's actual catalog expression. The digest for verification is the
 original migrated schema, **not** an expression-normalized comparison.
 
-The manifest inventories every public sequence and the 15 approved support
-categories. The generator refuses other populated application tables. The seed
-migration gives all categories its transaction timestamp: the installer uses
-its own transaction timestamp and checks all 15 share it. Absolute creation
-time is the only excluded seed field. The Alembic row is verified separately.
-When it derives the checkout's sole head, the generator also runs the direct
-installer on a second database with an ordinary database owner and compares
-both results before writing the output. With `--revision` for any other
-revision, as CI uses it, there is no installer round trip: the installer only
-installs a checkout's sole head. That output proves derivation only. The
-temporary server stops on completion. Review artifact and manifest changes
-against the exact migrations; a new seed or object class requires explicit
-review. Never regenerate from production, a developer database or ORM metadata.
+The manifest inventories every public sequence and the 15 approved support categories. The generator
+refuses other populated application tables. The seed migration gives all categories its transaction
+timestamp: the installer uses its own transaction timestamp and checks all 15 share it. Absolute
+creation time is the only excluded seed field. The Alembic row is verified separately.
+
+When it derives the checkout's sole head, the generator also runs the direct installer on a second
+database with an ordinary database owner and compares both results before writing the output. With
+`--revision` for any other revision, as CI uses it, there is no installer round trip: the installer
+only installs a checkout's sole head. That output proves derivation only. The temporary server stops
+on completion.
+
+Review artifact and manifest changes against the exact migrations; a new seed or object class
+requires explicit review. Never regenerate from production, a developer database or ORM metadata.
 
 ## B1 qualification evidence
 

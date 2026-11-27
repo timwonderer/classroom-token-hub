@@ -294,7 +294,25 @@ The `transactions` row above describes the historical surface; it does not subst
 
 The row marked `ledger_transaction` (version 2) is the retained **signature version 2** registry. Every listed attribute must exist in the model/schema and emitter; signing an absent attribute as `None` is prohibited. Creation freezes all sixteen fields before INSERT, including command reservation, initiating FEAT, command key, and immutable class posting sequence. The FEAT emits that final creation payload once; cursor reconciliation and informational `posted_at` initialization do not alter it. Version 2 changes the protected payload schema, not the HMAC algorithm or key, and does not require re-signing any accepted event.
 
-New Ledger effects use signature version 3 with exactly nineteen model/schema fields: the unchanged sixteen version-2 fields plus immutable `compensation_origin_locator`, nonnegative integer `compensation_amount_cents`, and `correction_intent_locator`. Locator columns are nullable String(128); the cent column permits NULL only on historical rows. New effects explicitly set cents (zero for non-recovery), without a default or historical backfill. These are fixed before INSERT and audit emission. Non-compensation and protection-transfer legs record zero attributable recovery and no compensation intent; a recovery leg names its opaque original credit and correction intent. The emitter and verifier select the exact registry by event signature version. Accepted version-2 rows remain verifiable against their original sixteen fields; newly present compensation fields are not retroactively added to those signatures and cannot establish historical compensation authority. Required-field coverage is evaluated against the registry of the linked event's signature version, never against the newest global registry. A version-2 signature cannot prove any of the three version-3 compensation fields merely because the model now contains them. A missing registered attribute or unsupported signature version is unavailable coverage, never a fabricated null. The HMAC algorithm and signer key are unchanged. No historical audit pointer, token, version or payload is replaced.
+New Ledger effects use signature version 3 with exactly nineteen model/schema fields: the unchanged
+sixteen version-2 fields plus immutable `compensation_origin_locator`, nonnegative integer
+`compensation_amount_cents`, and `correction_intent_locator`. Locator columns are nullable
+String(128); the cent column permits NULL only on historical rows. New effects explicitly set cents
+(zero for non-recovery), without a default or historical backfill. These are fixed before INSERT and
+audit emission.
+
+Non-compensation and protection-transfer legs record zero attributable recovery and no compensation
+intent; a recovery leg names its opaque original credit and correction intent. The emitter and
+verifier select the exact registry by event signature version. Accepted version-2 rows remain
+verifiable against their original sixteen fields; newly present compensation fields are not
+retroactively added to those signatures and cannot establish historical compensation authority.
+
+Required-field coverage is evaluated against the registry of the linked event's signature version,
+never against the newest global registry. A version-2 signature cannot prove any of the three
+version-3 compensation fields merely because the model now contains them. A missing registered
+attribute or unsupported signature version is unavailable coverage, never a fabricated null. The
+HMAC algorithm and signer key are unchanged. No historical audit pointer, token, version or payload
+is replaced.
 
 Historical Ledger signature version 1 retains its original field definition and hash-chain inputs. Where the retired persisted `status` input prevents faithful row-payload reconstruction, return DEGRADED with bounded `VERIFIER_COVERAGE_UNAVAILABLE` evidence; canonical creation-proof consumers return UNAVAILABLE; the distinct Ledger-owned reconstruction contract may consume authenticated original envelope/chain observations without treating them as creation proof. A non-NULL historical pointer is not relabeled UNVERIFIED (INV-ARC-016 §VI). Do not fabricate an original status, reinterpret the signature as version 2, rewrite the row, or issue a replacement signature. Historical chain verification remains unchanged; only NULL linkage denotes UNVERIFIED.
 
@@ -336,7 +354,18 @@ caller enters FEAT context
   → FEAT transaction commits
 ```
 
-For `payroll_event` and `attendance_interval_invalidation`, the creation protocol is `INSERT → initialize complete linkage once → commit`. The owning PROD FEAT freezes every business field, including all of `summary_json` or the complete nonmonetary `receipt_json`, before INSERT. Operations emits the §5.4 payload through `audit_protected()` after flush and attaches `lineage_event_id`, `lineage_token`, and `lineage_version` together exactly once in that same creating transaction. This initialization is the sole exception to an UPDATE prohibition: business fields cannot change even before commit, and no field, including linkage, can change after commit. Only FEAT-PROD-005 may originate invalidation creation evidence. FEAT-PROD-003/004/005 may originate payroll creation evidence; FEAT-STOR-003 may do so only for its incorporated productivity-insurance `manual_credit` command (FEAT-STOR-003 §VIII, DOM-PROD-001 §VIII).
+For `payroll_event` and `attendance_interval_invalidation`, the creation protocol is `INSERT →
+initialize complete linkage once → commit`. The owning PROD FEAT freezes every business field,
+including all of `summary_json` or the complete nonmonetary `receipt_json`, before INSERT.
+Operations emits the §5.4 payload through `audit_protected()` after flush and attaches
+`lineage_event_id`, `lineage_token`, and `lineage_version` together exactly once in that same
+creating transaction.
+
+This initialization is the sole exception to an UPDATE prohibition: business fields cannot change
+even before commit, and no field, including linkage, can change after commit. Only FEAT-PROD-005 may
+originate invalidation creation evidence. FEAT-PROD-003/004/005 may originate payroll creation
+evidence; FEAT-STOR-003 may do so only for its incorporated productivity-insurance `manual_credit`
+command (FEAT-STOR-003 §VIII, DOM-PROD-001 §VIII).
 
 Both application and database guards SHALL reject late attachment, replacement, partial linkage, and creation without required lineage. The database defers the creation check until transaction completion and checks the final persisted row and matching creation event; Operations' application guard additionally checks the canonical protected payload digest. Privileged SQL does not become a lawful write path through satisfying structural linkage constraints; the strict verifier remains responsible for cryptographic chain and payload proof (`INV-ARC-016` §V/IX). Emission, initialization, or commit validation failure rolls back business rows, Ledger effects, and audit chain changes together. Existing lifecycle guards govern seat/class destruction. Historical NULL linkage remains UNVERIFIED and SHALL NOT be backfilled or signed by this rollout.
 
@@ -348,10 +377,44 @@ For correction execution, the originating FEAT obtains the complete source/candi
 
 ### 6.2A Pure historical audit coverage diagnostics
 
-The historical reconstruction FEATs also compose the unchanged canonical §6.2 query for modern sources and §6.2A observations for old sources. These observations can be accepted as coverage metadata by Ledger's separate reconstruction evidence; they do not expand original signed fields or relabel original lawfulness. Legacy NULL linkage remains UNVERIFIED. Retired v1 status that cannot be faithfully reproduced remains DEGRADED with VERIFIER_COVERAGE_UNAVAILABLE; its complete linked envelope/chain is still checked. Missing coverage differs from authenticated payload/HMAC/chain/scope contradiction, which remains INVALID and denies recovery. Coverage-only inability is not diagnosed as actual tampering; known contradictions cannot be suppressed as a coverage gap. New business and monetary writes still require complete current lawful lineage. These diagnostics are read-side interpretation of retained historical state: they create no state, supply no alternate path for creating new state, and do not persist a competing semantic authority (`SOP-DB-004` §VII).
+The historical reconstruction FEATs also compose the unchanged canonical §6.2 query for modern
+sources and §6.2A observations for old sources. These observations can be accepted as coverage
+metadata by Ledger's separate reconstruction evidence; they do not expand original signed fields or
+relabel original lawfulness. Legacy NULL linkage remains UNVERIFIED. Retired v1 status that cannot
+be faithfully reproduced remains DEGRADED with VERIFIER_COVERAGE_UNAVAILABLE; its complete linked
+envelope/chain is still checked.
+
+Missing coverage differs from authenticated payload/HMAC/chain/scope contradiction, which remains
+INVALID and denies recovery. Coverage-only inability is not diagnosed as actual tampering; known
+contradictions cannot be suppressed as a coverage gap. New business and monetary writes still
+require complete current lawful lineage.
+
+These diagnostics are read-side interpretation of retained historical state: they create no state,
+supply no alternate path for creating new state, and do not persist a competing semantic authority
+(`SOP-DB-004` §VII).
 
 
-Operations owns `diagnose_historical_audit_coverage(table, row, class_id, *, source_descriptor=None, emitter_provenance=None, max_chain_events=1000)`, composed through FEAT-PROD-006 and directly through FEAT-PROD-005/003 reconstruction coordination. Incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V, VII–VIII for exact original envelope/field coverage and bounded pure diagnostics. The batch query `diagnose_historical_audit_coverages(table, rows, class_id, *, max_chain_events=1000, max_rows=1000)` returns one immutable observation per scoped row and walks the complete class chain once per invocation. Both budgets are positive integers at most 1000; there is no caller-supplied chain-verification override or persisted cache. Historical descriptor/provenance parameters remain unavailable for record assignment in this phase and reject non-null caller values. It reports linked-event scope, complete chain/head envelope authentication, version, confirmed/candidate field coverage and unavailable original protected values independently. A verified chain prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Excessive or unavailable chain evidence produces unavailable completeness. No autoflush, integrity-status mutation, signature repair or audit emission is allowed.
+Operations owns `diagnose_historical_audit_coverage(table, row, class_id, *, source_descriptor=None,
+emitter_provenance=None, max_chain_events=1000)`, composed through FEAT-PROD-006 and directly
+through FEAT-PROD-005/003 reconstruction coordination. Incorporates
+[SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V, VII–VIII for
+exact original envelope/field coverage and bounded pure diagnostics.
+
+The batch query `diagnose_historical_audit_coverages(table, rows, class_id, *,
+max_chain_events=1000, max_rows=1000)` returns one immutable observation per scoped row and walks
+the complete class chain once per invocation. Both budgets are positive integers at most 1000; there
+is no caller-supplied chain-verification override or persisted cache. Historical
+descriptor/provenance parameters remain unavailable for record assignment in this phase and reject
+non-null caller values.
+
+It reports linked-event scope, complete chain/head envelope authentication, version,
+confirmed/candidate field coverage and unavailable original protected values independently. A
+verified chain prefix is insufficient. Scalar head observations before and after the complete walk
+must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ,
+never a false integrity failure. No row locks or transaction mutation are used.
+
+Excessive or unavailable chain evidence produces unavailable completeness. No autoflush,
+integrity-status mutation, signature repair or audit emission is allowed.
 
 Version 1 is not a per-record emitter identifier. Explicit exact-source descriptor and independently established emitter provenance are needed before confirmed field coverage. The deployed eleven-field payload cannot be replaced by the retired eight-field verifier registry. Original creation status cannot be supplied from today's cursor or guessed values. Even authenticated envelope/chain evidence never returns `VerifiedCreationEvidence`, establishes unsigned facts, or overrides canonical §6.2. Diagnostic observations remain separate from INV-ARC-016's four canonical lineage states. Current v2/v3 payload verification is unchanged.
 
@@ -363,7 +426,22 @@ DOM-LED-001 §VII.0 and FEAT-LED-002 §VII.2/4 require an immutable new reversal
 
 Operations owns `verified_creation_evidences(items, class_id, *, required_fields=(), max_chain_events, max_rows)`, the batch form of §6.2 for FEATs that must prove many records in one class. `items` are `(table, row)` pairs. It returns an immutable `CreationEvidenceBatch` holding one §6.2 result per item, in request order, plus a `chain_status` (`COMPLETE`, `UNAVAILABLE` or `INVALID`) and a reason. Reuse is confined to the single invocation: the complete class chain is walked and authenticated once, and every item then receives every row-specific §6.2 check (scoped pointer, INSERT linkage, token and signature version, exact linked-version field coverage including `required_fields`, current protected payload digest) against that walk. A `None` entry under `COMPLETE` is a row-specific proof failure and grants no authority.
 
-Both budgets are server-owned ceilings (`CREATION_PROOF_MAX_CHAIN_EVENTS`, `CREATION_PROOF_MAX_ROWS`); callers may lower them, never raise them, and invalid budgets are rejected before any read. A chain or row count beyond its budget returns every entry unavailable; a verified chain prefix is never treated as a complete chain. The chain head is read as an independent scalar snapshot before and after the walk, never from a cached mutable ORM row. Disagreement returns unavailable `EVIDENCE_CHANGED_DURING_READ`; a missing head, missing signing key or infrastructure failure returns unavailable; a malformed head, continuity break, HMAC mismatch or head/walk disagreement returns `INVALID`. In every non-`COMPLETE` outcome all entries are unavailable. There is no persisted proof cache, mutable verification flag, caller-supplied verification result or bypass; the query runs without autoflush, locks or writes, so previews stay pure and commands keep their atomicity and existing integrity denials. The single-row §6.2 query is unchanged. FEAT-PROD-005/003/006 reconstruction and Ledger reversal-input coordination compose this query in place of one §6.2 call per record.
+Both budgets are server-owned ceilings (`CREATION_PROOF_MAX_CHAIN_EVENTS`,
+`CREATION_PROOF_MAX_ROWS`); callers may lower them, never raise them, and invalid budgets are
+rejected before any read. A chain or row count beyond its budget returns every entry unavailable; a
+verified chain prefix is never treated as a complete chain. The chain head is read as an independent
+scalar snapshot before and after the walk, never from a cached mutable ORM row.
+
+Disagreement returns unavailable `EVIDENCE_CHANGED_DURING_READ`; a missing head, missing signing key
+or infrastructure failure returns unavailable; a malformed head, continuity break, HMAC mismatch or
+head/walk disagreement returns `INVALID`. In every non-`COMPLETE` outcome all entries are
+unavailable.
+
+There is no persisted proof cache, mutable verification flag, caller-supplied verification result or
+bypass; the query runs without autoflush, locks or writes, so previews stay pure and commands keep
+their atomicity and existing integrity denials. The single-row §6.2 query is unchanged.
+FEAT-PROD-005/003/006 reconstruction and Ledger reversal-input coordination compose this query in
+place of one §6.2 call per record.
 
 ### 6.3 Scheduled checks and fresh-install acceptance
 

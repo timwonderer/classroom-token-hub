@@ -39,7 +39,21 @@ Descriptors are immutable server-owned exact-source algorithms; clients cannot s
 
 Pinned closed-session source `ad9574334d72fd92cc93402e851ab0ebc22aaad9`, `app/services/attendance_service.py:calculate_seat_payroll_intervals` / `_split_sessions`, continues an existing session on repeated active rows, caps at canonical class-day end, pays closed intervals after the prior payroll boundary, and clips already-paid legacy portions. Original setting is selected at close; complete retained original settings determine it. Pricing `app/services/payroll/pricing.py:amount_for` first divides the original rate by 60 at Decimal precision 28/ROUND_HALF_EVEN, multiplies by the aggregate integer share seconds and quantizes that share once to cents. Preserve `elapsed_duration`'s aggregate truncation; do not sum independently floored interval seconds.
 
-Pinned legacy source `c42f882b8e610d43f355d684a8632d1fa8d50f72`, `app/feats/prod.py:_calculate_attendance_seconds_since`, uses the prior payroll's inclusive lower timestamp bound, restarts on repeated active rows, caps each segment at its opening's class-day end, and uses the run instant for trailing open work. Its rate is the original retained setting at the original run boundary, including the pinned legacy `pay_rate_per_second` rule that treats a retained falsy rate as its then-declared $0.25/minute constant. Preserve that original algorithm separately in Policies' `legacy_rate_per_minute` input; do not apply the legacy zero-rate behavior to modern frozen pricing or substitute a current default. Replay must account explicitly for surviving sources after the original boundary and never infer a different source shape solely from matched totals. Current frozen `allocation_version = 1` uses its canonical modern membership and multiply-first pricing; it cannot enter legacy reconstruction to bypass original business/monetary creation verification. Modern signatures are checked against their exact registries.
+Pinned legacy source `c42f882b8e610d43f355d684a8632d1fa8d50f72`,
+`app/feats/prod.py:_calculate_attendance_seconds_since`, uses the prior payroll's inclusive lower
+timestamp bound, restarts on repeated active rows, caps each segment at its opening's class-day end,
+and uses the run instant for trailing open work. Its rate is the original retained setting at the
+original run boundary, including the pinned legacy `pay_rate_per_second` rule that treats a retained
+falsy rate as its then-declared $0.25/minute constant.
+
+Preserve that original algorithm separately in Policies' `legacy_rate_per_minute` input; do not
+apply the legacy zero-rate behavior to modern frozen pricing or substitute a current default. Replay
+must account explicitly for surviving sources after the original boundary and never infer a
+different source shape solely from matched totals.
+
+Current frozen `allocation_version = 1` uses its canonical modern membership and multiply-first
+pricing; it cannot enter legacy reconstruction to bypass original business/monetary creation
+verification. Modern signatures are checked against their exact registries.
 
 ### VI.1 Whole-pair and remainder reconstruction
 
@@ -51,15 +65,50 @@ Ledger `validate_historical_settlement` uniquely binds the original positive cre
 
 Include all connected original fragments, closed remainders, recognized PROD-PAY-001 positive incident top-up windows and their canonical completed pair identities. Still-open pairs cannot be invalidated. Keep every intervening zero-valued payroll boundary. Unrelated manual credits have no inferred work allocation. Each selected segment belongs uniquely to one canonical pair; duplicate/overlapping claims, missing original events/credits, conflicting source assignment or changed evidence deny the entire graph, never its inconvenient portion.
 
-For the ad957 incident descriptor `app/services/payroll/corrections.py:build_class_correction_proposal`, preserve each original included window's positive delta: separately quantized whole worked-seconds price minus separately quantized replay-paid-seconds price. Original corrected-payroll-event IDs identify its windows; validate every delta and their exact sum against the uniquely identified positive top-up credit. Establish replay-paid segments as a subset of worked segments; form nonoverlapping temporal set difference for each pair's exact loss-duration weight. Preserve original whole-second aggregate truncation separately from those rational weights. Group a pair's components before largest remainder; splitting one pair cannot give it extra rounding positions. A positive delta with zero/negative/ambiguous loss denies. Top-up is an additional original credit, not recovery of another origin.
+For the ad957 incident descriptor
+`app/services/payroll/corrections.py:build_class_correction_proposal`, preserve each original
+included window's positive delta: separately quantized whole worked-seconds price minus separately
+quantized replay-paid-seconds price. Original corrected-payroll-event IDs identify its windows;
+validate every delta and their exact sum against the uniquely identified positive top-up credit.
 
-Ledger returns distinct `ReconstructedSettlement`/`ReconstructedOrigin` evidence containing fixed allocations and complete prior recoveries. It is not `LedgerCreationEvidence` or Operations `VerifiedCreationEvidence`. Legacy prior reversal requires original business reference, unique negative counterpart, full original credit magnitude and matching scoped original writer facts; count it once. Absence of new origin/intent columns alone cannot imply zero. Modern recovery principals and their business interval associations require complete current v3 creation evidence. Unattributed relevant negatives, unknown partial attribution or unsupported versions deny. Funding legs have zero attribution; all accepted pending and posted principals count against the original-credit cap. Fully recovered origins contribute zero; partial interval recovery requires unique contribution identity. No proportional guess for unknown recovery is allowed.
+Establish replay-paid segments as a subset of worked segments; form nonoverlapping temporal set
+difference for each pair's exact loss-duration weight. Preserve original whole-second aggregate
+truncation separately from those rational weights. Group a pair's components before largest
+remainder; splitting one pair cannot give it extra rounding positions. A positive delta with
+zero/negative/ambiguous loss denies. Top-up is an additional original credit, not recovery of
+another origin.
+
+Ledger returns distinct `ReconstructedSettlement`/`ReconstructedOrigin` evidence containing fixed
+allocations and complete prior recoveries. It is not `LedgerCreationEvidence` or Operations
+`VerifiedCreationEvidence`. Legacy prior reversal requires original business reference, unique
+negative counterpart, full original credit magnitude and matching scoped original writer facts;
+count it once. Absence of new origin/intent columns alone cannot imply zero.
+
+Modern recovery principals and their business interval associations require complete current v3
+creation evidence. Unattributed relevant negatives, unknown partial attribution or unsupported
+versions deny. Funding legs have zero attribution; all accepted pending and posted principals count
+against the original-credit cap. Fully recovered origins contribute zero; partial interval recovery
+requires unique contribution identity. No proportional guess for unknown recovery is allowed.
 
 Each origin's original credit equals original quantized shares and bounds total accepted recovery. Complete graph correction uses one atomic FEAT, stable origin locks, one aggregate funding resolution and one reservation covering all principal/funding legs. Exact accepted replay precedes fresh reconstruction. Confirmation revalidates complete graph, balances, configuration and prior compensation under locks. Any missing origin, changed preview or intermediate failure rolls back eligibility, business, monetary, reservation and audit effects together. No original rows/signatures or cycle/Interpretation history changes.
 
 ## VII. Audit diagnostics and monetary boundary
 
-Operations diagnoses the linked original event's scope, envelope HMAC and continuous complete chain/head within budget, independently of row-payload coverage. A verified prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Batch diagnostics walk one bounded complete class chain once per invocation; no caller proof input or persisted cache is allowed. Unsupported per-record source assignment is rejected rather than accepted through an arbitrary descriptor argument. Missing linkage is a coverage gap; wrong scope, invalid envelope or broken chain are integrity failures; unavailable infrastructure or over-budget chain is unavailable. Diagnostics must not write canonical integrity status. Assessment and reconstruction themselves write nothing and offer no old-format or compatibility path for creating state; any correction effect is written only by FEAT-PROD-005/003 under current lineage, command reservation and immutability guards (§VIII).
+Operations diagnoses the linked original event's scope, envelope HMAC and continuous complete
+chain/head within budget, independently of row-payload coverage. A verified prefix is insufficient.
+Scalar head observations before and after the complete walk must agree; concurrent legitimate
+advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No
+row locks or transaction mutation are used.
+
+Batch diagnostics walk one bounded complete class chain once per invocation; no caller proof input
+or persisted cache is allowed. Unsupported per-record source assignment is rejected rather than
+accepted through an arbitrary descriptor argument. Missing linkage is a coverage gap; wrong scope,
+invalid envelope or broken chain are integrity failures; unavailable infrastructure or over-budget
+chain is unavailable. Diagnostics must not write canonical integrity status.
+
+Assessment and reconstruction themselves write nothing and offer no old-format or compatibility path
+for creating state; any correction effect is written only by FEAT-PROD-005/003 under current
+lineage, command reservation and immutability guards (§VIII).
 
 At deployed `ad9574334`, `app/services/ledger_posting_service.py:_TRANSACTION_AUDIT_FIELDS` and `app/utils/transaction_idempotency.py:_TRANSACTION_AUDIT_FIELDS` declare exactly eleven fields: amount, account_type, type, status, class_id, seat_id, target_seat_id, actor_seat_id, mechanism, description, correlation_id. The historical verifier's eight-field list is not the emitter definition. This source establishes a descriptor only; version 1 by itself does not establish per-record emitter provenance. Preserve exact historical payload serialization if provenance and original protected values are available. Without them report declared candidate coverage separately from confirmed signed coverage. Do not substitute a hypothetical creation status, derived cursor status, or guessed status until a digest matches.
 
@@ -69,7 +118,18 @@ Envelope authentication alone never proves unsigned timestamp, amount_cents, pos
 
 FEAT-PROD-006 assessment remains pure; reconstruction supplies internally validated evidence to FEAT-PROD-005/003, not an executable client permission. Modern exact creation proof and recognized legacy reconstruction are distinct per-source modes. Unknown original fields alone do not deny a supported legacy reconstruction; actual INVALID scope/payload/HMAC/chain evidence does. Unavailable cryptographic infrastructure prevents required evidence and new lawful audit emission. Every new effect and business decision uses current lineage, command reservation and immutability guards.
 
-Targeted acceptance includes genuine ad957 predecessor-created and forward-migrated original evidence; successful aggregate replay/cent allocation without fabricated old fields; legacy repeated-active/open fragments, closed remainder and incident top-up; zero boundaries; aggregate fractional-second truncation; mismatching totals or conflicting membership; invalid/ambiguous settings; unsupported writer/versions; actual chain/HMAC/payload contradiction; modern malformed records refusing historical fallback; prior legacy reversal counted once, complete modern partial/full/residual recovery; pending originals; mixed-origin graphs; same-key exact retry and changed-intent mismatch; concurrent payroll/full/partial/residual recovery, complete rollback and original signature preservation. Consult pytest_result first; targeted tests only. Synthetic observations must be distinguished from genuine predecessor fixtures.
+Targeted acceptance includes genuine ad957 predecessor-created and forward-migrated original
+evidence; successful aggregate replay/cent allocation without fabricated old fields; legacy
+repeated-active/open fragments, closed remainder and incident top-up; zero boundaries; aggregate
+fractional-second truncation; mismatching totals or conflicting membership; invalid/ambiguous
+settings; unsupported writer/versions; actual chain/HMAC/payload contradiction; modern malformed
+records refusing historical fallback; prior legacy reversal counted once, complete modern
+partial/full/residual recovery; pending originals; mixed-origin graphs; same-key exact retry and
+changed-intent mismatch; concurrent payroll/full/partial/residual recovery, complete rollback and
+original signature preservation.
+
+Consult pytest_result first; targeted tests only. Synthetic observations must be distinguished from
+genuine predecessor fixtures.
 
 ## IX. Amendment
 

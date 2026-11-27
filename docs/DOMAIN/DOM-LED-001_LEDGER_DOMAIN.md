@@ -104,25 +104,25 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
   | `void_item_removed` | — |
 
   This table is the single authoritative enumeration. The DB `CHECK` constraint and the write-time casing validator (both introduced by a later PR against this contract; see `FEAT-LED-005` §IX) MUST draw their allow-lists from this table, not re-derive them from current writers — a value this table omits is a gap in this contract to amend, not a value for either enforcement mechanism to infer or admit on its own.
-- **INV-LED-014: Transfer Correlation Identity**. An internal account transfer is one
-  class-scoped operation identified by one `correlation_id`. It MUST contain exactly
-  two `ledger_transaction` legs: one debit from the source account and one credit
-  to the destination account, with equal absolute `amount_cents` values and a
-  signed total of zero. The legs MUST share the same `class_id`, `seat_id`, and
-  `correlation_id`, and MUST be created and committed atomically. A transfer
-  `correlation_id` MUST NOT be reused to create another transfer pair. This
-  invariant governs the current internal checking/savings transfer semantics;
-  cross-seat transfers are not authorized by this contract. Ledger owns
-  `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the
-  sole pure constructor of this two-leg effect vector's shared fields; every
-  caller — the standalone internal-transfer command and the overdraft-protection
-  funding legs inside `apply_resolved_ledger_plan` alike — composes it instead of
-  hand-building the pair's effect dicts. This does not change how either caller
-  reserves or fingerprints the pair: per `SPEC-LED-002` §4.2, the standalone
-  internal-transfer command (`create_transfer_pair`) keeps its own dedicated
-  `_command_fingerprint` replay serializer, never the general effect-plan
-  `create_reserved_effects` fingerprint, so a reservation accepted before this
-  constructor existed still replay-matches on retry.
+- **INV-LED-014: Transfer Correlation Identity**. An internal account transfer is one class-scoped
+  operation identified by one `correlation_id`. It MUST contain exactly two `ledger_transaction`
+  legs: one debit from the source account and one credit to the destination account, with equal
+  absolute `amount_cents` values and a signed total of zero. The legs MUST share the same
+  `class_id`, `seat_id`, and `correlation_id`, and MUST be created and committed atomically. A
+  transfer `correlation_id` MUST NOT be reused to create another transfer pair. This invariant
+  governs the current internal checking/savings transfer semantics; cross-seat transfers are not
+  authorized by this contract.
+
+  Ledger owns `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the sole
+  pure constructor of this two-leg effect vector's shared fields; every caller — the standalone
+  internal-transfer command and the overdraft-protection funding legs inside
+  `apply_resolved_ledger_plan` alike — composes it instead of hand-building the pair's effect dicts.
+
+  This does not change how either caller reserves or fingerprints the pair: per `SPEC-LED-002` §4.2,
+  the standalone internal-transfer command (`create_transfer_pair`) keeps its own dedicated
+  `_command_fingerprint` replay serializer, never the general effect-plan `create_reserved_effects`
+  fingerprint, so a reservation accepted before this constructor existed still replay-matches on
+  retry.
 
 Multi-seat balance-dependent commands MUST acquire every affected seat anchor in ascending seat-ID order before acquiring any ClassEconomy lock or applying monetary effects. Ledger owns `lock_ledger_seats(class_id, seat_ids)` for this scoped complete-set validation and locking; FEAT orchestration supplies the affected seats. This extends the seat-first order without changing immutable sequence allocation or settlement authority.
 
@@ -166,7 +166,35 @@ not, by itself, define command-level idempotency.
 
 Under `INV-CORE-000` §III.1,3–6, `INV-ARC-006` §V, `INV-ARC-009` §V, and `INV-ARC-016` §V, Ledger owns monetary compensation facts and exposes pure scoped queries for original credit, attributable recovered cents, and remaining recoverable cents. Ledger does not decide whether work was eligible or which work contributed to a payment. Originating FEATs supply a domain-authorized correction intent; Ledger accepts only its own authoritative monetary result.
 
-For a positive original credit of `C` cents, let `R` be the sum of committed compensation amounts attributable to that original. Committed compensation includes accepted pending and posted effects, independent of reconciliation state. Ledger MUST enforce `0 <= R <= C`; a new recovery `D` MUST satisfy `0 <= D <= C - R`. Compensation linkage is immutable and class/target-seat scoped. Every partial/residual recovery and exact payroll reversal MUST carry the origin locator, intent locator and attributable cents. Ledger derives attributable recovery as the absolute signed debit magnitude applied to the original credited account; the compensation cents MUST equal that magnitude and cannot be caller-chosen bookkeeping independent of the effect. Funding legs and fees MUST carry zero attributable cents. Modern required lineage and actual integrity contradictions fail closed. Legacy reconstruction evidence follows §IX.3–4; missing post-rollout fields alone do not deny that distinct authority. Ledger exposes the complete scoped original/recovery candidate requirements. For modern version-2/3 sources the originating FEAT obtains Operations' immutable verified creation evidence for every candidate and maps it to Ledger's neutral `LedgerCreationEvidence` input: exact table/row/class locators, linkage event/token/version, covered protected field names and immutable protected values. Ledger matches these inputs to its own current locked source rows and required version-specific coverage; missing, extra, mismatched or incomplete candidates deny recovery. This server-side evidence cannot be supplied by a client or replaced by a verification boolean. No Ledger-to-Operations call or internal class/registry dependency is authorized. An exact whole-transaction reversal is permitted only when `R = 0`, and contributes `C` to `R`. A partial or residual correction is a separately authorized fresh debit, never `REVERSAL` or `VOID`. A residual correction contributes exactly `C - R`. Once `R = C`, later eligibility invalidation has no additional monetary recovery. Transfer debit/credit legs and fees contribute zero to `R`; account funding is not recovery from the original credit. Zero recovery does not create a zero-amount correction row.
+For a positive original credit of `C` cents, let `R` be the sum of committed compensation amounts
+attributable to that original. Committed compensation includes accepted pending and posted effects,
+independent of reconciliation state. Ledger MUST enforce `0 <= R <= C`; a new recovery `D` MUST
+satisfy `0 <= D <= C - R`. Compensation linkage is immutable and class/target-seat scoped. Every
+partial/residual recovery and exact payroll reversal MUST carry the origin locator, intent locator
+and attributable cents.
+
+Ledger derives attributable recovery as the absolute signed debit magnitude applied to the original
+credited account; the compensation cents MUST equal that magnitude and cannot be caller-chosen
+bookkeeping independent of the effect. Funding legs and fees MUST carry zero attributable cents.
+Modern required lineage and actual integrity contradictions fail closed. Legacy reconstruction
+evidence follows §IX.3–4; missing post-rollout fields alone do not deny that distinct authority.
+
+Ledger exposes the complete scoped original/recovery candidate requirements. For modern version-2/3
+sources the originating FEAT obtains Operations' immutable verified creation evidence for every
+candidate and maps it to Ledger's neutral `LedgerCreationEvidence` input: exact table/row/class
+locators, linkage event/token/version, covered protected field names and immutable protected values.
+
+Ledger matches these inputs to its own current locked source rows and required version-specific
+coverage; missing, extra, mismatched or incomplete candidates deny recovery. This server-side
+evidence cannot be supplied by a client or replaced by a verification boolean. No
+Ledger-to-Operations call or internal class/registry dependency is authorized. An exact
+whole-transaction reversal is permitted only when `R = 0`, and contributes `C` to `R`.
+
+A partial or residual correction is a separately authorized fresh debit, never `REVERSAL` or `VOID`.
+A residual correction contributes exactly `C - R`. Once `R = C`, later eligibility invalidation has
+no additional monetary recovery. Transfer debit/credit legs and fees contribute zero to `R`; account
+funding is not recovery from the original credit. Zero recovery does not create a zero-amount
+correction row.
 
 All settlement, correction and full-reversal commands for the seat serialize through §VII INV-LED-015. Acquire the scoped seat lock first, then ClassEconomy, then the original Ledger transaction lock when compensation is involved, then pending transactions and snapshots in their existing deterministic order. An originating payroll settlement also acquires the seat lock before evaluating settlement eligibility, although it is a credit; its FEAT re-evaluates owning-domain evidence within that boundary. Check the cap and append all recovery effects inside the same transaction; previews cannot reserve recovery. Different command keys do not permit double recovery for the same correction intent. Ledger structurally enforces unique `(class_id, target_seat_id, compensation_origin_locator, correction_intent_locator)` recovery intent identity, independently of command reservations.
 
@@ -287,11 +315,49 @@ SPEC-LED-001 §III–V governs Ledger's independent reconstruction queries. With
 
 ### IX.2 Pure historical monetary assessment
 
-Ledger exposes `get_historical_payroll_credit_records(*, ctx, class_id, target_seat_id, limit=1000)` to provide scoped bounded source records for FEAT-to-Operations composition only; it does not provide an unscoped table read or resolve business membership. Ledger owns `assess_historical_payroll_money(*, ctx, class_id, target_seat_id, business_input, records, audit_observations=(), creation_evidence=())`: a pure bounded query through FEAT-PROD-006 that resolves uniquely scoped credit locators, compares original recorded monetary amounts with explicit original-rule replay inputs, identifies unsupported compensation evidence and reports current strict proof eligibility separately. Business inputs and audit observations are immutable FEAT-supplied data, never cross-domain calls or verification booleans. This domain incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VIII for diagnostic arithmetic/monetary boundaries only. Preserve exact historical arithmetic order; no current price substitution, invented allocation, persisted earnings, default-zero compensation or signature-version override is authorized. Diagnostic v1 coverage alone never supplies creation proof. The separate internally validated reconstruction contract in §IX.3–4 may establish legacy recovery authority under §VII.1A without upgrading original lineage. Modern v2/v3 verification remains exact and unchanged.
+Ledger exposes `get_historical_payroll_credit_records(*, ctx, class_id, target_seat_id, limit=1000)`
+to provide scoped bounded source records for FEAT-to-Operations composition only; it does not
+provide an unscoped table read or resolve business membership.
+
+Ledger owns `assess_historical_payroll_money(*, ctx, class_id, target_seat_id, business_input,
+records, audit_observations=(), creation_evidence=())`: a pure bounded query through FEAT-PROD-006
+that resolves uniquely scoped credit locators, compares original recorded monetary amounts with
+explicit original-rule replay inputs, identifies unsupported compensation evidence and reports
+current strict proof eligibility separately.
+
+Business inputs and audit observations are immutable FEAT-supplied data, never cross-domain calls or
+verification booleans. This domain incorporates
+[SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VIII for
+diagnostic arithmetic/monetary boundaries only. Preserve exact historical arithmetic order; no
+current price substitution, invented allocation, persisted earnings, default-zero compensation or
+signature-version override is authorized.
+
+Diagnostic v1 coverage alone never supplies creation proof. The separate internally validated
+reconstruction contract in §IX.3–4 may establish legacy recovery authority under §VII.1A without
+upgrading original lineage. Modern v2/v3 verification remains exact and unchanged.
 
 ### IX.3 Historical Reconstruction Evidence
 
-Ledger incorporates SPEC-PROD-001 §VI.1–2 and SPEC-PROD-002 §V–VIII for `validate_historical_settlement(*, ctx, graph, audit_observations, creation_evidence, business_creation_evidence=())`. FEAT supplies the immutable PROD graph, Operations observations and modern canonical creation evidence through owning-domain interfaces. Ledger re-reads complete bounded class/target monetary sources, validates original positive credit identity, exact original money and prior recovery, then returns immutable `ReconstructedSettlement(graph, origins, material, creation_evidence=())` with `ReconstructedOrigin` records. Its frozen modern creation-evidence set remains complete even when an original zero-cent run has no Ledger origin; recovery revalidation uses that exact modern proof without upgrading any old lineage. This is Ledger reconstruction evidence, a separate authority type from `LedgerCreationEvidence` and Operations `VerifiedCreationEvidence`; it is never a verification flag or client-supplied amount. A full reversal of another origin is excluded from this payment’s recovery candidates only when complete canonical creation evidence proves the version-3 signed compensation-origin locator, the counterpart credit, matching class/target/account/correlation, and exact opposite cents. Dangling or contradictory locators and unproven legacy attribution remain fail-closed; an unsigned original-effect ID alone is not proof of unrelatedness. No domain calls another domain.
+Ledger incorporates SPEC-PROD-001 §VI.1–2 and SPEC-PROD-002 §V–VIII for
+`validate_historical_settlement(*, ctx, graph, audit_observations, creation_evidence,
+business_creation_evidence=())`. FEAT supplies the immutable PROD graph, Operations observations and
+modern canonical creation evidence through owning-domain interfaces.
+
+Ledger re-reads complete bounded class/target monetary sources, validates original positive credit
+identity, exact original money and prior recovery, then returns immutable
+`ReconstructedSettlement(graph, origins, material, creation_evidence=())` with `ReconstructedOrigin`
+records. Its frozen modern creation-evidence set remains complete even when an original zero-cent
+run has no Ledger origin; recovery revalidation uses that exact modern proof without upgrading any
+old lineage.
+
+This is Ledger reconstruction evidence, a separate authority type from `LedgerCreationEvidence` and
+Operations `VerifiedCreationEvidence`; it is never a verification flag or client-supplied amount. A
+full reversal of another origin is excluded from this payment’s recovery candidates only when
+complete canonical creation evidence proves the version-3 signed compensation-origin locator, the
+counterpart credit, matching class/target/account/correlation, and exact opposite cents.
+
+Dangling or contradictory locators and unproven legacy attribution remain fail-closed; an unsigned
+original-effect ID alone is not proof of unrelatedness. No domain calls another domain.
 
 Recognized original v1/legacy business representations may qualify by immutable source reconstruction, unique original credit binding and exact replay-paid aggregate equality despite unavailable retired status, original business linkage or newly introduced allocation/compensation fields. Class, target, actor, mechanism, account, original business identity and descriptor-supported original command/correlation linkage must agree uniquely; random route tokens, time proximity or amount equality alone are not identities. Unknown versions/shapes deny. Modern v2/v3 originals and all modern recovery/business effects retain full required version-specific creation evidence; malformed modern frozen records cannot enter legacy reconstruction. Mixed graphs enforce the appropriate evidence independently for each source.
 
@@ -305,7 +371,19 @@ The reconstruction is complete over original fragment/remainder/top-up credits, 
 
 Every origin independently enforces §VII.1A: total attributable recovery never exceeds original credit. Full/residual recovery consumes the complete remainder; partial recovery requires unique interval attribution, otherwise paid interval recovery denies even if aggregate residual is independently calculable. Do not arbitrarily prorate prior recovery or cap an interval at an unknown remainder. A fully recovered or zero-cent contribution has no new debit but still requires complete reconstruction.
 
-`resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
+`resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking
+directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once
+over the complete debit, and retain one principal/intent per origin.
+
+`apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under
+target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding
+and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan
+may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate
+full preview evidence and balances; any changed evidence or failure rolls back everything.
+
+Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction
+fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation
+linkage is rewritten.
 
 ## X. Change Notes
 

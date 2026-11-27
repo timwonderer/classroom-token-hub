@@ -102,17 +102,18 @@ stale monitoring remains explicit. HTTP 4xx responses, including 404, remain num
 observations and MUST NOT by themselves declare a feature outage. One fresh 5xx is
 reported as an observed server error, not a diagnosis or canonical incident.
 
-A component MAY designate request-resolution routes: routes the application's own
-page calls only with an identifier it has just shown the user, to act on that item.
-A 404 there means the item the user was shown could not be found, so it is a failed
-request rather than an expected absence. `SPEC-OPS-006` closes the list of designated
-routes; at 2.12 it is the hall-pass approve, reject and cancel routes and nothing
-else. Such a 404 is not an outage, a diagnosis or a canonical incident, and it never
-creates one. A single one may be a double click or a stale page, so it is a signal
-only when a window holds enough of them: `SPEC-OPS-006` fixes that rate-plus-minimum
-rule. When the rule holds, the component reports an observed error and the overall
-summary reads `Detected problems`, exactly as for a fresh 5xx: signals of a possible
-problem were observed. Every other 404 keeps the rule above and qualifies nothing.
+A component MAY designate request-resolution routes: routes the application's own page calls only
+with an identifier it has just shown the user, to act on that item. A 404 there means the item the
+user was shown could not be found, so it is a failed request rather than an expected absence.
+`SPEC-OPS-006` closes the list of designated routes; at 2.12 it is the hall-pass approve, reject and
+cancel routes and nothing else. Such a 404 is not an outage, a diagnosis or a canonical incident,
+and it never creates one.
+
+A single one may be a double click or a stale page, so it is a signal only when a window holds
+enough of them: `SPEC-OPS-006` fixes that rate-plus-minimum rule. When the rule holds, the component
+reports an observed error and the overall summary reads `Detected problems`, exactly as for a fresh
+5xx: signals of a possible problem were observed. Every other 404 keeps the rule above and qualifies
+nothing.
 
 Public current cards and historical percentages do not depend on internal integrity
 evaluator registration. Internal readiness, correctness, lineage, reconciliation

@@ -232,7 +232,22 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `hall_pass_set
 
 **Interval correction schema contract (1.13):**
 
-`attendance_interval_invalidation` is the append-only terminal eligibility surface owned by PROD and authorized through FEAT-PROD-005. It requires `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json` (immutable nonmonetary accepted-command receipt), `lineage_event_id`, `lineage_token` (String(64)), and `lineage_version` (Integer). The audit triple starts all-null, initializes completely once in the creating transaction, and is excluded from its own protected payload. Application and deferred database guards enforce the creation protocol and permanently freeze committed business/linkage fields. Unique `(class_id, target_seat_id, opening_event_id, closing_event_id)` and `(class_id, idempotency_key)` enforce terminal decisions and FEAT-PROD-005 command replay. Reasons are `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no free notes. Opening/closing references are within PROD; class/seat references use shared anchors. Target-seat/class destruction removes dependent business records, while actor provenance does not own another target's records.
+`attendance_interval_invalidation` is the append-only terminal eligibility surface owned by PROD and
+authorized through FEAT-PROD-005. It requires `id`, `class_id`, `actor_seat_id`, `target_seat_id`,
+`opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`,
+`correlation_id`, `receipt_json` (immutable nonmonetary accepted-command receipt),
+`lineage_event_id`, `lineage_token` (String(64)), and `lineage_version` (Integer).
+
+The audit triple starts all-null, initializes completely once in the creating transaction, and is
+excluded from its own protected payload. Application and deferred database guards enforce the
+creation protocol and permanently freeze committed business/linkage fields. Unique `(class_id,
+target_seat_id, opening_event_id, closing_event_id)` and `(class_id, idempotency_key)` enforce
+terminal decisions and FEAT-PROD-005 command replay.
+
+Reasons are `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no free notes.
+Opening/closing references are within PROD; class/seat references use shared anchors.
+Target-seat/class destruction removes dependent business records, while actor provenance does not
+own another target's records.
 
 `payroll_event` additionally permits `payroll_event_type = correction`. Its protected `summary_json` carries original-event and correction-intent provenance and complete original settlement membership/pricing/allocation-version inputs, not monetary amounts. Original-payroll-event and invalidation IDs refer within PROD; Ledger and policy references are opaque non-FK locators. No persisted earnings cache or amount column is authorized. The incorporated `SPEC-PROD-001` contract is enforced through owning PROD commands and declared FEAT orchestration, never DOM-to-DOM calls.
 

@@ -1091,15 +1091,17 @@ Revisions to this document must:
   previously open in `DOM-ITR-001` §XIII.c. Codifies landed behavior; no change to fee amounts.
 - **1.3 (2026-08-29)** — Scope/authority correction, not a runtime-behavior change. § 4.5.4
   previously carried PRODUCTIVITY approval- and submission-time execution semantics that the
-  section's own scope boundary (§ 4.5) assigns to `FEAT-STOR-003`. This revision: (a) removes
-  `remaining_weekly_CWI_capacity` from the approval-time `actual_payout` composition, leaving
-  the two-term `min(gross_reimbursement, remaining_period_payout_capacity)`; (b) reclassifies
-  the weekly `CWI` payout comparison and the weekly `expected_weekly_hours` comparison from
-  non-overridable hard boundaries to advisory economic-coherence guidance; (c) identifies the
-  configured daily payroll limit as the mechanical submission-time hours ceiling; and (d)
-  updates all dependent references (hard-boundary list, preset "Mechanical bound" column,
-  composition and rounding notes, and the premium-envelope note). The landed implementation
-  (`FEAT-STOR-003` v1.1 and the PRODUCTIVITY claim-approval code) already implements this
-  contract; runtime behavior is unchanged. Governed downstream by the INV → DOM → FEAT
-  hierarchy (`INV-CORE-001`); the resulting monetary rule remains deterministic and traceable
+  section's own scope boundary (§ 4.5) assigns to `FEAT-STOR-003`.
+
+  This revision: (a) removes `remaining_weekly_CWI_capacity` from the approval-time `actual_payout`
+  composition, leaving the two-term `min(gross_reimbursement, remaining_period_payout_capacity)`;
+  (b) reclassifies the weekly `CWI` payout comparison and the weekly `expected_weekly_hours`
+  comparison from non-overridable hard boundaries to advisory economic-coherence guidance; (c)
+  identifies the configured daily payroll limit as the mechanical submission-time hours ceiling; and
+  (d) updates all dependent references (hard-boundary list, preset "Mechanical bound" column,
+  composition and rounding notes, and the premium-envelope note).
+
+  The landed implementation (`FEAT-STOR-003` v1.1 and the PRODUCTIVITY claim-approval code) already
+  implements this contract; runtime behavior is unchanged. Governed downstream by the INV → DOM →
+  FEAT hierarchy (`INV-CORE-001`); the resulting monetary rule remains deterministic and traceable
   per `INV-CORE-000`.

@@ -206,7 +206,22 @@ Per enrolled seat in the completed window:
 
 This closes the *vocabulary*, not the *classifier*. As of this revision, `ledger_provenance_query_service.py`'s runtime classifier has not yet cut over to §6.3's `type NOT IN {...}` rule: it still classifies by the removed `SYSTEM_ORIGINATED_FEAT_CODES` `feat_code` membership test, per `DOM-ITR-001` §XIII.b's KNOWN NONCOMPLIANCE entry. That cutover is separate, already-scheduled PR scope, not part of this constraint. §6.3's text above states the contractual rule the cutover PR must implement, not current runtime behavior.
 
-What the constraint does **not** do, once that cutover lands: accept either spelling of every aliased value (`Interest`/`interest`, `REVERSAL`/`reversal`, `Withdrawal`/`withdrawal`, `Deposit`/`deposit`) on a brand-new row, because the write-time **casing** validator that retires the legacy spellings for new writes is separate, later-PR scope (`FEAT-LED-005` §IX). Until that PR lands, a new row can still legally carry a legacy-cased value — the CHECK constraint closes the *set* of lawful values, not the *spelling* a new row must use within that set. §6.3's `type NOT IN {...}` clause already enumerates both spellings of each aliased exclusion value for exactly this reason, so once the classifier cutover lands, this casing gap will not weaken the Q1b classifier: every value the CHECK constraint now permits is already accounted for in §6.3's exclusion set. §6.3's note that the `type` clause is redundant with, not a replacement for, the `mechanism` clause still holds — `mechanism = SELF` remains the clause this classifier does not depend on write-time casing discipline for. Treat both the classifier cutover and the casing-validator precondition as open until their respective PRs merge and this section is updated to record that.
+What the constraint does **not** do, once that cutover lands: accept either spelling of every
+aliased value (`Interest`/`interest`, `REVERSAL`/`reversal`, `Withdrawal`/`withdrawal`,
+`Deposit`/`deposit`) on a brand-new row, because the write-time **casing** validator that retires
+the legacy spellings for new writes is separate, later-PR scope (`FEAT-LED-005` §IX).
+
+Until that PR lands, a new row can still legally carry a legacy-cased value — the CHECK constraint
+closes the *set* of lawful values, not the *spelling* a new row must use within that set. §6.3's
+`type NOT IN {...}` clause already enumerates both spellings of each aliased exclusion value for
+exactly this reason, so once the classifier cutover lands, this casing gap will not weaken the Q1b
+classifier: every value the CHECK constraint now permits is already accounted for in §6.3's
+exclusion set. §6.3's note that the `type` clause is redundant with, not a replacement for, the
+`mechanism` clause still holds — `mechanism = SELF` remains the clause this classifier does not
+depend on write-time casing discipline for.
+
+Treat both the classifier cutover and the casing-validator precondition as open until their
+respective PRs merge and this section is updated to record that.
 
 ---
 

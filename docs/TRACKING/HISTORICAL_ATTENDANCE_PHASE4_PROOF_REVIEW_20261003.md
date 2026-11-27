@@ -127,4 +127,22 @@ Any proposed historical recovery exception requires an explicit higher-authority
 
 ## Verification record
 
-Prior results consulted: Phase 1's genuine predecessor v1/forward-migration and diagnostic handoff; Phase 2/3 targeted documentation handoffs; `pytest_result/20261004_pytest_test_docs_archive_citations_summary_1.md`. Existing passing runtime tests are context, not rerun or new production certification. This phase edits this informative review, its existing tracking handoff, and exact exclusions for both working documents in `docs-site/docusaurus.config.js`; the publication guard requires these informative working records to remain off the public documentation site. Verification passed **53 distinct targeted documentation checks**: four affected link/archive checks, 45 working-state publication checks, and four documentation-index checks. The independent selection passed eight link/archive/index checks plus two affected publication checks; its six overlapping checks are not added again. Author results are `pytest_result/20261004_pytest_specific_summary_5.md`; independent review confirmed source coverage, identity-transform explanations, scope, denial gates, publication exclusions and absence of historical proof substitutions. No unresolved actionable finding remains. Final whitespace checks passed. No runtime tests or full suite were required or run for these documentation/publication changes.
+Prior results consulted: Phase 1's genuine predecessor v1/forward-migration and diagnostic handoff;
+Phase 2/3 targeted documentation handoffs;
+`pytest_result/20261004_pytest_test_docs_archive_citations_summary_1.md`. Existing passing runtime
+tests are context, not rerun or new production certification.
+
+This phase edits this informative review, its existing tracking handoff, and exact exclusions for
+both working documents in `docs-site/docusaurus.config.js`; the publication guard requires these
+informative working records to remain off the public documentation site. Verification passed **53
+distinct targeted documentation checks**: four affected link/archive checks, 45 working-state
+publication checks, and four documentation-index checks.
+
+The independent selection passed eight link/archive/index checks plus two affected publication
+checks; its six overlapping checks are not added again. Author results are
+`pytest_result/20261004_pytest_specific_summary_5.md`; independent review confirmed source coverage,
+identity-transform explanations, scope, denial gates, publication exclusions and absence of
+historical proof substitutions. No unresolved actionable finding remains. Final whitespace checks
+passed.
+
+No runtime tests or full suite were required or run for these documentation/publication changes.
