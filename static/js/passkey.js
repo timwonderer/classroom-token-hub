@@ -65,9 +65,10 @@ const KEEP_PENDING_CODES = new Set(['provider_unavailable', 'unreadable', 'trans
  * not have reached the server) marks the original error as a transport failure, so the page
  * reloads to render the operation's real state with its cancel/resume control.
  */
-async function cancelAfterFailure(config, error) {
+async function cancelAfterFailure(config, error, binding) {
     try {
-        await postPasskeyJson(config.cancelUrl, {});
+        // The failed attempt's binding keeps a late cancel from ending a newer attempt.
+        await postPasskeyJson(config.cancelUrl, binding ? { binding: binding } : {});
     } catch (cancelError) {
         if (KEEP_PENDING_CODES.has(cancelError.code)) {
             error.code = 'transport';
@@ -92,7 +93,7 @@ async function registerPasskey(config, authenticatorName, totpCode, replacePassk
         }
     } catch (error) {
         error.code = 'ceremony';
-        await cancelAfterFailure(config, error);
+        await cancelAfterFailure(config, error, binding);
         throw error;
     }
 
@@ -104,7 +105,7 @@ async function registerPasskey(config, authenticatorName, totpCode, replacePassk
         });
     } catch (error) {
         if (!KEEP_PENDING_CODES.has(error.code)) {
-            await cancelAfterFailure(config, error);
+            await cancelAfterFailure(config, error, binding);
         }
         throw error;
     }

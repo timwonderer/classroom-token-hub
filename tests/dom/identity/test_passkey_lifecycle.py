@@ -450,6 +450,28 @@ def test_a_pending_or_candidate_credential_cannot_sign_in(client, app, fake_pass
     assert _bound(user_id) == ["cred-a"]
 
 
+def test_a_late_cancel_bearing_an_earlier_attempts_binding_leaves_the_newer_operation_open(
+    client, app, fake_passwordless,
+):
+    """Two tabs: A is cancelled and B started; A's late auto-cancel must not end B."""
+    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
+    assert start_registration(client).status_code == 200
+    binding_a = client.last_registration_binding
+    assert client.post("/admin/passkey/cancel", json={"binding": binding_a}).status_code == 200
+    assert start_registration(client).status_code == 200
+    binding_b = client.last_registration_binding
+    (before,) = _open_operations(user_id)
+
+    late = client.post("/admin/passkey/cancel", json={"binding": binding_a})
+
+    assert late.status_code == 409 and late.get_json()["code"] == "binding_mismatch"
+    (after,) = _open_operations(user_id)
+    assert after.id == before.id and after.stage is CredentialOperationStage.REGISTRATION_PENDING
+    # B's own binding (and, where none exists, the unbound form) still cancels it.
+    assert client.post("/admin/passkey/cancel", json={"binding": binding_b}).status_code == 200
+    assert _open_operations(user_id) == []
+
+
 def test_cancelling_before_completion_frees_the_slot_and_keeps_the_old_binding(client, app, fake_passwordless):
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
     assert start_registration(client).status_code == 200

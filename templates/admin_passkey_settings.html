@@ -64,7 +64,7 @@
             {% elif operation_state == 'registering' %}
             {% call cards.alert_card('info', 'A passkey change is in progress', icon='info', body_class='mb-4') %}
                 <p>Finish the registration your device is showing. If it was interrupted, cancel and start again. It expires on its own after a few minutes.</p>
-                <button type="button" class="btn btn-outline-secondary" id="cancelPasskeyButton">Cancel the change</button>
+                <button type="button" class="btn btn-outline-secondary" id="cancelPasskeyButton" data-binding="{{ operation_binding or '' }}">Cancel the change</button>
             {% endcall %}
             {% endif %}
 

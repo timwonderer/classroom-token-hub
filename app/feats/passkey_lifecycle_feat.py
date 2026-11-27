@@ -206,10 +206,13 @@ def resume_retirement(*, user_id, binding, authenticator_name=None, correlation_
     return outcome, False
 
 
-def cancel_registration(*, user_id, session_nonce, correlation_id=None) -> bool:
+def cancel_registration(*, user_id, session_nonce, binding=None, correlation_id=None) -> bool:
     """Cancel the principal's passkey operation while it can still be cancelled.
 
-    The old credential is untouched. Refused once retirement intent is committed.
+    The old credential is untouched. Refused once retirement intent is committed. When
+    ``binding`` is supplied it names the attempt being cancelled and must be the open
+    operation's (``binding_mismatch`` otherwise, nothing cancelled), so a late cancel from
+    a superseded attempt cannot cancel a newer one. Without it the open operation is cancelled.
     """
     correlation_id = correlation_id or generate_correlation_id()
     operation = lifecycle.get_open_operation(user_id)
@@ -217,6 +220,8 @@ def cancel_registration(*, user_id, session_nonce, correlation_id=None) -> bool:
         return False
     if operation.purpose not in lifecycle.PASSKEY_PURPOSES:
         raise lifecycle.CredentialOperationRefused("wrong_purpose")
+    if binding is not None:
+        lifecycle.check_registration_binding(operation, binding)
     return _cancel(user_id, operation.id, session_nonce, correlation_id, raise_refusal=True)
 
 

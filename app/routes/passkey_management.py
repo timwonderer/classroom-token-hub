@@ -159,6 +159,10 @@ def resume(*, user_id: str, login_endpoint: str):
 def cancel(*, user_id: str):
     """Cancel the principal's passkey change while it can still be cancelled."""
     def action():
-        feat.cancel_registration(user_id=user_id, session_nonce=session.get("current_session_nonce"))
+        binding = _body().get("binding")
+        feat.cancel_registration(
+            user_id=user_id, session_nonce=session.get("current_session_nonce"),
+            binding=binding if isinstance(binding, str) and binding else None,
+        )
         return jsonify({"success": True}), 200
     return _guarded(action)
