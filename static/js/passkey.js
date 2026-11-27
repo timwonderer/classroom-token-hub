@@ -53,8 +53,8 @@ async function readPasskeyResponse(response) {
 /**
  * Register a passkey, as a new enrollment or (with replacePasskeyId) a selected replacement.
  * Backend steps: start (fresh TOTP code in, registration token out) -> p.register(token) ->
- * finish. A failure is shown as an error; the pending operation stays until it is finished,
- * cancelled with the page's Cancel control, or expires.
+ * finish. A failure is shown as an error and the page then reloads, so it renders the pending
+ * operation with its Cancel control; the operation stays until it is finished, cancelled, or expires.
  */
 // Failures after which the server's state is unknown or pending: reload to see it.
 const KEEP_PENDING_CODES = new Set(['provider_unavailable', 'unreadable', 'transport']);
@@ -78,11 +78,16 @@ async function registerPasskey(config, authenticatorName, totpCode, replacePassk
         throw error;
     }
 
-    return postPasskeyJson(config.finishUrl, {
-        token: result.token,
-        binding: binding,
-        authenticatorName: authenticatorName
-    });
+    try {
+        return await postPasskeyJson(config.finishUrl, {
+            token: result.token,
+            binding: binding,
+            authenticatorName: authenticatorName
+        });
+    } catch (error) {
+        error.pendingOperation = true;  // the operation is still pending: reload to show its Cancel control
+        throw error;
+    }
 }
 
 /**
@@ -238,7 +243,7 @@ function setupPasskeyManager(config) {
 
     function failed(title, error, button, restoreHTML) {
         if (error instanceof TypeError && !error.code) { error.code = 'transport'; error.message = 'The connection was lost. Reload the page to see where the change stands.'; }
-        const pending = KEEP_PENDING_CODES.has(error.code);
+        const pending = KEEP_PENDING_CODES.has(error.code) || error.code === 'ceremony' || error.pendingOperation === true;
         if (error.status === 401 || error.code === 'authentication_required') {
             show('danger', 'Sign in again', error.message);
             if (config.loginUrl) { window.setTimeout(() => { window.location.href = config.loginUrl; }, 4000); }

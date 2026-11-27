@@ -70,7 +70,7 @@ const settle = () => new Promise((r) => setImmediate(r));
     await settle();
     report.unauthorized = { hrefs: s.state.hrefs, reloads: s.state.reloads, body: s.state.shown.map((a) => a.body) };
 
-    // The ceremony fails: the error is shown, nothing is cancelled and the page does not reload.
+    // The ceremony fails: the error is shown, nothing is cancelled, and the page reloads to show the pending operation.
     s = await scenario('ceremony', async (url) => (url === '/start'
         ? jsonResponse(200, { token: 't', apiKey: 'k', binding: 'b'.repeat(64) }) : jsonResponse(200, { success: true })));
     await s.handlers.register();

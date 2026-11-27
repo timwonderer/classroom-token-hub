@@ -1767,9 +1767,10 @@ def test_the_client_sends_an_expired_session_to_sign_in_and_leaves_a_failed_cere
     assert report["unauthorized"]["hrefs"] == ["/admin/login"]
     assert report["unauthorized"]["body"] == ["Your session ended. Sign in again."]
     assert report["unauthorized"]["reloads"] == 0
-    # A failed ceremony is only shown: no automatic cancel request, no reload.
+    # A failed ceremony is shown, sends no automatic cancel request, and reloads (after the delay)
+    # so the page renders the pending operation with its Cancel control.
     assert report["ceremonyFailure"]["urls"] == ["/start"]
-    assert report["ceremonyFailure"]["reloads"] == 0
+    assert report["ceremonyFailure"]["reloads"] == 1
     assert report["ceremonyFailure"]["body"] == ["ceremony failed"]
 
 
