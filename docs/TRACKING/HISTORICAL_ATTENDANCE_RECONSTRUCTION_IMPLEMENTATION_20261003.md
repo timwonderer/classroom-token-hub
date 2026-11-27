@@ -98,7 +98,20 @@ All four new migrations now guard additive DDL and reinstall functions/triggers 
 The owner reaffirmed original-row immutability. Modern and historical reversal state now derives from a new exact reversal effect carrying original correlation and exact original-effect ID; pointer writes are removed. DOM-LED-001 §VII.0 and FEAT-LED-002 §VII clarify this existing authority, with immutable historical pointer retention and structural unique-child admission. A malformed reconstructed recovery result receives a named integrity denial and rolls back. Day-bounded observations without closing IDs remain ineligible under FEAT-PROD-005, and are labelled separately from still-open work. Local ephemeral test artifacts above are recorded as plain text, not published links.
 
 
-Review-fix verification consulted prior `pytest_result` first. The command, immutable-lineage, rerun migration, selected accessibility, projection and documentation batch passed 760 checks with two expected standalone-fragment skips. An initial combined run also passed 38 route/browser/serialization/historical checks, while exposing a malformed local accessibility selector and three obsolete tenancy fixtures; corrected selectors and fixtures subsequently passed. The separate tenancy/seat-serialization batch passed 17 checks, with the two final boundary-safe fixtures passing again. Three genuine historical full-reversal/malformed-result regressions passed after the proposed original-pointer mutation was removed. Final rerun of the stronger migration guard test and sanitized route denial passed; the operator verifier and pure open/day-boundary distinction passed separately. These sets overlap and are not added as distinct coverage. No full suite ran. Existing audit-verifier Query.get deprecation warnings remain.
+Review-fix verification consulted prior `pytest_result` first. The command, immutable-lineage, rerun
+migration, selected accessibility, projection and documentation batch passed 760 checks with two
+expected standalone-fragment skips. An initial combined run also passed 38
+route/browser/serialization/historical checks, while exposing a malformed local accessibility
+selector and three obsolete tenancy fixtures; corrected selectors and fixtures subsequently passed.
+
+The separate tenancy/seat-serialization batch passed 17 checks, with the two final boundary-safe
+fixtures passing again. Three genuine historical full-reversal/malformed-result regressions passed
+after the proposed original-pointer mutation was removed. Final rerun of the stronger migration
+guard test and sanitized route denial passed; the operator verifier and pure open/day-boundary
+distinction passed separately. These sets overlap and are not added as distinct coverage. No full
+suite ran.
+
+Existing audit-verifier Query.get deprecation warnings remain.
 
 Migration lint against the existing baseline reports zero errors and four pre-existing warnings outside the new migrations. All four changed migrations lint without errors or warnings. CI migration-chain validation and policy guardrails pass locally. New checks preserve original monetary/audit fields and reject rewriting every v3 compensation field immediately after rerunning the earlier guard installer. GitHub CI on the pushed fix remains separately observed; local results do not imply merge readiness. The owner has approved the immutable-effect linkage repair; subsequent validation is recorded below.
 

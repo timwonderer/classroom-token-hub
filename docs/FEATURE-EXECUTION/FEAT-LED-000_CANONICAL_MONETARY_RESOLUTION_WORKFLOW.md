@@ -192,7 +192,19 @@ The initiating FEAT resolves Identity actor/target seats and queries Class Confi
 
 Ledger performs monetary balance, funding, fee-arithmetic and compensation decisions using its own queries plus these supplied directives. Ledger domain functions do not import or call Class Configuration or Identity. The initiating FEAT refreshes their conclusions under serialization for confirmation; preview receives the same pure inputs and writes nothing. All existing charge/deduction callers must supply this interface directly; there is no legacy helper or fallback configuration lookup.
 
-The `BankingDirective` is the immutable Class-owned projection with `class_id`, `version_locator`, `protection_enabled`, optional `flat_fee`, nullable immutable `progressive_fee` pairs, optional `cwi`, and optional UTC `fee_period_start`. Correction directives exclude all fee/CWI/period evaluation. Fee authority supplied by the initiating FEAT is explicitly `NONE`, `FAILED_AGREEMENT`, or `EXPLICIT_FEE`; labels alone grant no authority. `NONE` never emits a fee, including payroll corrections. `progressive_fee=()` means absent/not requested; a tuple of tier/rate pairs means available evidence; `None` means configured evidence unavailable or malformed. Only the applicable fee calculation rejects `None`; `NONE` authority and a fully funded charge ignore irrelevant fee evidence. Period/CWI/fee inputs affect only a separately authorized applicable fee. Ledger derives the exact fee arithmetic and recovery funding from these inputs; it never queries the Class configuration table itself.
+The `BankingDirective` is the immutable Class-owned projection with `class_id`, `version_locator`,
+`protection_enabled`, optional `flat_fee`, nullable immutable `progressive_fee` pairs, optional
+`cwi`, and optional UTC `fee_period_start`. Correction directives exclude all fee/CWI/period
+evaluation. Fee authority supplied by the initiating FEAT is explicitly `NONE`, `FAILED_AGREEMENT`,
+or `EXPLICIT_FEE`; labels alone grant no authority. `NONE` never emits a fee, including payroll
+corrections.
+
+`progressive_fee=()` means absent/not requested; a tuple of tier/rate pairs means available
+evidence; `None` means configured evidence unavailable or malformed. Only the applicable fee
+calculation rejects `None`; `NONE` authority and a fully funded charge ignore irrelevant fee
+evidence. Period/CWI/fee inputs affect only a separately authorized applicable fee. Ledger derives
+the exact fee arithmetic and recovery funding from these inputs; it never queries the Class
+configuration table itself.
 
 
 Fee applicability is an explicit owning-domain decision separate from protection. A payroll correction supplies no-fee authority and creates no obligation/deferred deduction. An own-account transfer supplies no protection/no fee and must satisfy the existing sufficient-source-funds rule. An authorized checking charge may debit below zero even if savings cannot cover the entire shortfall; insufficient savings is not itself a denial and never permits a partial savings sweep.
@@ -272,7 +284,18 @@ This FEAT is upstream of posting and does not replace posting authority.
 
 This workflow explicitly incorporates `SPEC-ECON-003` §4.5.1.1A under `DOM-CLASS-001` §X and `DOM-CLASS-002` §VII. The originating FEAT obtains the class-scoped protection configuration from Class Configuration and available integer-cent balances from Ledger; it passes authorized policy inputs into Ledger resolution without direct domain-to-domain calls. For all authorized checking charges/deductions, including penalties and payroll corrections, resolve an exact savings-to-checking transfer only when protection is enabled and savings covers the **entire** shortfall. Otherwise transfer nothing and allow checking to become negative. No partial savings sweep is permitted. Own-account transfers require sufficient source funds, use no protection and incur no fee.
 
-Funding is separate from business eligibility and failed-agreement fee applicability. The originating business FEAT owns any applicable fee/obligation orchestration. Payroll corrections incur no NSF fee, obligation or deferred deduction. The originating FEAT composes Operations' public typed creation-evidence query over the complete Ledger-owned candidate requirements; Ledger accepts only evidence matching its locked scoped sources and never invokes Operations itself. A correction plan uses `DOM-LED-001` §VII.1A for attributable recovery; funding transfer legs contribute no recovered cents. Productivity owns interval eligibility, frozen source inputs and provenance, and the allocation policy incorporated by `FEAT-PROD-005` and `FEAT-PROD-003` through `SPEC-PROD-001`. Ledger establishes authoritative arithmetic monetary allocations and the recovery cap from proven inputs supplied by the originating FEAT; it does not reconstruct attendance evidence or pricing-policy truth.
+Funding is separate from business eligibility and failed-agreement fee applicability. The
+originating business FEAT owns any applicable fee/obligation orchestration. Payroll corrections
+incur no NSF fee, obligation or deferred deduction. The originating FEAT composes Operations' public
+typed creation-evidence query over the complete Ledger-owned candidate requirements; Ledger accepts
+only evidence matching its locked scoped sources and never invokes Operations itself.
+
+A correction plan uses `DOM-LED-001` §VII.1A for attributable recovery; funding transfer legs
+contribute no recovered cents. Productivity owns interval eligibility, frozen source inputs and
+provenance, and the allocation policy incorporated by `FEAT-PROD-005` and `FEAT-PROD-003` through
+`SPEC-PROD-001`. Ledger establishes authoritative arithmetic monetary allocations and the recovery
+cap from proven inputs supplied by the originating FEAT; it does not reconstruct attendance evidence
+or pricing-policy truth.
 
 Pure preview reports the resolved debit, funding legs and resulting balances without writes. Confirmation revalidates under the shared seat/original-credit locks; any changed expected preview fails closed. All business records, reservations, effects and audit evidence commit atomically through the originating FEAT.
 

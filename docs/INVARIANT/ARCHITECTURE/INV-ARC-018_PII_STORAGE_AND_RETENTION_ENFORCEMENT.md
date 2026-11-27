@@ -110,17 +110,18 @@ Only the following PII fields are permitted in the v2 schema. Any PII column not
 
 ### Credential state is not an expanded PII inventory
 
-Authentication secrets, sensitive capability verifiers, credential metadata and
-nonsecret operation state are distinct from the PII inventory above. This amendment
-authorizes no additional names, contact information or identity lookup representation.
-INV-ARC-019 and incorporated SPEC-SEC-001/SPEC-IDEN-002 govern credential operations.
-Pending secret material loses authority immediately on expiry, consumption or
-supersession and is erased at the earliest lawful cleanup execution. Nonsecret
-reconciliation needs do not justify retaining secrets. All principal-associated
-operation state is destroyed with the principal. No post-destruction identity mapping,
-including a hash or observability correlation pack, may be retained for orphan discovery.
-DOM-OPS-002 §2.5 outcome events are non-identifying by construction, not a claim of
-absolute anonymity; they preserve no recoverable identity association.
+Authentication secrets, sensitive capability verifiers, credential metadata and nonsecret operation
+state are distinct from the PII inventory above. This amendment authorizes no additional names,
+contact information or identity lookup representation. INV-ARC-019 and incorporated
+SPEC-SEC-001/SPEC-IDEN-002 govern credential operations. Pending secret material loses authority
+immediately on expiry, consumption or supersession and is erased at the earliest lawful cleanup
+execution.
+
+Nonsecret reconciliation needs do not justify retaining secrets. All principal-associated operation
+state is destroyed with the principal. No post-destruction identity mapping, including a hash or
+observability correlation pack, may be retained for orphan discovery. DOM-OPS-002 §2.5 outcome
+events are non-identifying by construction, not a claim of absolute anonymity; they preserve no
+recoverable identity association.
 
 ## VII. Prohibited Storage Patterns
 

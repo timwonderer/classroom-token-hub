@@ -242,19 +242,25 @@ service is restarted only after the completeness check passes.
 2. Confirm the connection target is not a local, test, or legacy database.
 3. Confirm PostgreSQL version and required extensions match the rehearsal.
 4. Confirm no application process is writing to the database.
-5. A new installation starts from the **supported fresh-install release** (`SOP-DEP-002`
-   §VII.B), declared in `migrations/fresh/supported_release.json`. Follow the
-   [fresh database installation procedure](../../self-hosting/fresh-database.md) with a checkout
-   of that release. Install only on an explicitly identified, enrolled, offline, empty target.
-   Verify the complete installed schema and required initial data before recording
-   its single Alembic revision. If verification fails, keep the database offline
-   and unversioned; do not stamp or serve it. When the intended release is newer, the
-   installation then reaches it by `flask db upgrade` through the supported lineage, as an
-   ordinary upgrade, before any classroom use. No other release is initialized from empty:
-   replaying the lineage from the era baseline is the CI and test path, not an installation
-   path. If no safe supported fresh-install release is declared, no new installation starts.
-   Existing installations continue to use the migration path under SOP-DB-004 and
-   SOP-DEP-002; never enroll or initialize them as new.
+5. A new installation starts from the **supported fresh-install release** (`SOP-DEP-002` §VII.B),
+   declared in `migrations/fresh/supported_release.json`. Follow the [fresh database installation
+   procedure](../../self-hosting/fresh-database.md) with a checkout of that release.
+
+   Install only on an explicitly identified, enrolled, offline, empty target.
+
+   Verify the complete installed schema and required initial data before recording its single
+   Alembic revision.
+
+   If verification fails, keep the database offline and unversioned; do not stamp or serve it. When
+   the intended release is newer, the installation then reaches it by `flask db upgrade` through the
+   supported lineage, as an ordinary upgrade, before any classroom use.
+
+   No other release is initialized from empty: replaying the lineage from the era baseline is the CI
+   and test path, not an installation path. If no safe supported fresh-install release is declared,
+   no new installation starts.
+
+   Existing installations continue to use the migration path under SOP-DB-004 and SOP-DEP-002; never
+   enroll or initialize them as new.
 
 6. Confirm `flask db current` reports the expected single head.
 7. Confirm the schema contains no v1-only objects. The v1 identity tables
@@ -422,25 +428,28 @@ output is advisory only and is **not** independent verification authority.
 4. Do **not** use `alembic downgrade` / `flask db downgrade` as automatic
    recovery. Downgrade is a rehearsed, explicitly targeted operation; the bare
    form aborts with "Ambiguous walk" when the head is a merge point.
-5. **Some revisions cannot be downgraded at all.** `c7a7b8c9d0e1`
-   (seat-owned records) raises on downgrade: it removes principal references
-   from classroom facts, and rebinding cannot reconstruct which principal a
-   seat previously carried. `c1a1b2d3e4f5` (claim-artifact cleanup) downgrades
-   to a no-op for the same reason — erased claim material is not recoverable.
-   Three attendance/payroll recovery revisions also reject every downgrade,
-   including on empty tables: `e7c2a9d4f610` (derive Ledger posting from
-   reconciliation; restoring mutable status would weaken immutable audit
-   evidence), `f8b2d6e0a410` (immutable compensation provenance), and
-   `f9a3c7d1e620` (terminal attendance invalidation evidence). Their schema
-   protections must not be removed through a backward migration.
+5. **Some revisions cannot be downgraded at all.** `c7a7b8c9d0e1` (seat-owned records) raises on
+   downgrade: it removes principal references from classroom facts, and rebinding cannot reconstruct
+   which principal a seat previously carried. `c1a1b2d3e4f5` (claim-artifact cleanup) downgrades to
+   a no-op for the same reason — erased claim material is not recoverable.
+
+   Three attendance/payroll recovery revisions also reject every downgrade, including on empty
+   tables: `e7c2a9d4f610` (derive Ledger posting from reconciliation; restoring mutable status would
+   weaken immutable audit evidence), `f8b2d6e0a410` (immutable compensation provenance), and
+   `f9a3c7d1e620` (terminal attendance invalidation evidence). Their schema protections must not be
+   removed through a backward migration.
+
    The complete list is `migrations/forward_only_register.txt`, which
-   `tests/test_forward_only_revision_register.py` holds equal to the revisions
-   whose own `downgrade()` raises or does nothing (`SOP-DB-004` §V.5); the
-   revisions named above are examples, not the set.
-   Rolling back past any of these revisions requires restoring the database
-   snapshot taken in step 6; otherwise use a separately reviewed forward fix.
-   Confirm that snapshot exists before applying them. *Version 2.7 supersedes
-   2.6's incomplete revision list; the fix-forward/restore policy is unchanged.*
+   `tests/test_forward_only_revision_register.py` holds equal to the revisions whose own
+   `downgrade()` raises or does nothing (`SOP-DB-004` §V.5); the revisions named above are examples,
+   not the set.
+
+   Rolling back past any of these revisions requires restoring the database snapshot taken in step
+   6; otherwise use a separately reviewed forward fix. Confirm that snapshot exists before applying
+   them.
+
+   *Version 2.7 supersedes 2.6's incomplete revision list; the fix-forward/restore policy is
+   unchanged.*
 6. Confirm a recoverable snapshot of the target database exists before the test
    window opens.
 7. Reopen traffic only after the decision is recorded.

@@ -93,23 +93,24 @@ hall passes or elsewhere, has none. The sampler counts their 404s with one fixed
 query on the same stream, window and evaluation time as the component's counts,
 reduced to a single number; no route or status label leaves the host.
 
-Sample once per minute. A snapshot older than 300 seconds is stale; source lag
-older than 180 seconds makes monitoring unavailable/stale rather than normal.
-Missing source freshness cannot prove current monitoring. Source future timestamps
-must not refresh evidence. The static telemetry endpoint polling request can keep the nginx stream active.
-Source recency measures nginx log-source activity only; it cannot certify complete
-ingestion, application readiness or feature correctness. No new application health endpoint is required; the existing bounded platform
-health read remains authorized independently below.
-A successfully queried empty route group with a fresh
-source is `NO_TRAFFIC`; an unavailable source is `MONITOR_UNAVAILABLE`.
-A transport retry must preserve source timestamps. Receipt time is persisted
-separately and never renews evidence. Collection or validation failures produce bounded unavailable evidence, never
-invented zero counts or a fabricated source sampled time. The persistence API is
-`append_snapshot(snapshot_or_none, received_at, diagnostic=None)`. A null snapshot
-records a collector failure using receipt time and one of `TRANSPORT_UNAVAILABLE`,
-`ACCESS_DENIED`, `INVALID_SNAPSHOT`, or `STALE_SNAPSHOT`, separately
-from genuine source-minute snapshots, so a failed attempt cannot suppress a valid
-sample from the same minute. Transport failure is not a source measurement.
+Sample once per minute. A snapshot older than 300 seconds is stale; source lag older than 180
+seconds makes monitoring unavailable/stale rather than normal. Missing source freshness cannot prove
+current monitoring. Source future timestamps must not refresh evidence. The static telemetry
+endpoint polling request can keep the nginx stream active. Source recency measures nginx log-source
+activity only; it cannot certify complete ingestion, application readiness or feature correctness.
+
+No new application health endpoint is required; the existing bounded platform health read remains
+authorized independently below. A successfully queried empty route group with a fresh source is
+`NO_TRAFFIC`; an unavailable source is `MONITOR_UNAVAILABLE`. A transport retry must preserve source
+timestamps. Receipt time is persisted separately and never renews evidence. Collection or validation
+failures produce bounded unavailable evidence, never invented zero counts or a fabricated source
+sampled time.
+
+The persistence API is `append_snapshot(snapshot_or_none, received_at, diagnostic=None)`. A null
+snapshot records a collector failure using receipt time and one of `TRANSPORT_UNAVAILABLE`,
+`ACCESS_DENIED`, `INVALID_SNAPSHOT`, or `STALE_SNAPSHOT`, separately from genuine source-minute
+snapshots, so a failed attempt cannot suppress a valid sample from the same minute. Transport
+failure is not a source measurement.
 
 Initial policy thresholds are strict greater-than comparisons:
 
@@ -123,21 +124,20 @@ Initial policy thresholds are strict greater-than comparisons:
 - 404 / requests > 5%: elevated not-found responses;
 - p95 > 1500 ms: high latency.
 
-404 is a descriptive anomaly signal, not `SYSTEM_FAILURE`: expected resource
-absence may account for it. Failed-request 404s that meet the failed-request rule
-are a signal of a possible problem on their component; they are still not
-`SYSTEM_FAILURE`, an outage or an incident. Except for that rule's minimum, all
-threshold crossings remain visible regardless of sample size. Any nonempty window
-without a threshold crossing is `NORMAL`; there is no other minimum count.
-This numerical classification does not certify successful classroom actions.
-Distinct states are `NORMAL`, `ELEVATED_ERRORS`, `HIGH_LATENCY`,
-`NO_TRAFFIC`, `MONITOR_UNAVAILABLE`, and `STALE`. Show all applicable reasons;
-where a single state is required, unavailable/stale takes precedence, followed by
-elevated errors, high latency, no traffic and normal. Elevated errors
-must distinguish server-error responses, failed-request 404s and other not-found
-responses in visible wording.
-These numerical thresholds are disclosed publicly and changed only with a versioned
-code/contract amendment. They do not diagnose user impact or create incidents.
+404 is a descriptive anomaly signal, not `SYSTEM_FAILURE`: expected resource absence may account for
+it. Failed-request 404s that meet the failed-request rule are a signal of a possible problem on
+their component; they are still not `SYSTEM_FAILURE`, an outage or an incident. Except for that
+rule's minimum, all threshold crossings remain visible regardless of sample size. Any nonempty
+window without a threshold crossing is `NORMAL`; there is no other minimum count.
+
+This numerical classification does not certify successful classroom actions. Distinct states are
+`NORMAL`, `ELEVATED_ERRORS`, `HIGH_LATENCY`, `NO_TRAFFIC`, `MONITOR_UNAVAILABLE`, and `STALE`. Show
+all applicable reasons; where a single state is required, unavailable/stale takes precedence,
+followed by elevated errors, high latency, no traffic and normal. Elevated errors must distinguish
+server-error responses, failed-request 404s and other not-found responses in visible wording.
+
+These numerical thresholds are disclosed publicly and changed only with a versioned code/contract
+amendment. They do not diagnose user impact or create incidents.
 
 ## VII. Storage and history
 
@@ -222,32 +222,31 @@ hero's timestamp is the older of the two fresh endpoint/database PASS/FAIL check
 timestamps, never stale/future evidence or the request snapshot time. Each state
 carries a visible word as well as its colour (INV-ARC-020).
 
-Feature cards describe recent activity, not yes/no functionality estimates. While
-the hero is `Under maintenance`, every card reads `Closed for maintenance`: nobody
-can enter, whatever requests from behind the gate show. Otherwise a
-current operator notice for the card's capability takes precedence: an `AWARE`
-notice reads `Checking reports`, any other active notice `Having problems`.
-Otherwise any fresh 5xx, or a fresh window meeting the failed-request rule (§VI), is
-`Checking: errors seen` — an automatic observation at the `AWARE` level, which never
-creates or implies a notice; p95 above 1,500 ms is
-`Slower than usual`; a window containing 2xx/3xx is `Working`. Windows with only
-remaining response classes say `Nothing to report`, claiming neither success nor
-outage. Apart from the failed-request rule's minimum, these labels have no minimum count. Quiet windows say `Quiet`; missing or
-stale collection says `Status unknown`. All cards disclose their scope in visible
-text.
+Feature cards describe recent activity, not yes/no functionality estimates. While the hero is `Under
+maintenance`, every card reads `Closed for maintenance`: nobody can enter, whatever requests from
+behind the gate show. Otherwise a current operator notice for the card's capability takes
+precedence: an `AWARE` notice reads `Checking reports`, any other active notice `Having problems`.
 
-The current telemetry projection retains `last_activity`, a map of the closed
-component keys to their latest nonempty, valid, fresh source window's `sampled_at`,
-`source_latest_at` and validated `component`. The collector updates it atomically
-with the current pointer only when that pointer advances. Idle or failed attempts
-preserve historical activity without refreshing its timestamp; duplicate or delayed
-samples cannot overwrite it. Readers validate retained data and exclude future or
-older-than-seven-day entries; advancing writes prune expired entries. No new raw
-fields, tenant labels or business data are retained. Absence means no retained
-activity. Historical outcomes use neutral styling during inactivity or monitoring
-loss, visibly labeled `Last observed` with the original five-minute window end.
-They never establish present health or conceal a monitoring failure. Public GET
-remains read-only.
+Otherwise any fresh 5xx, or a fresh window meeting the failed-request rule (§VI), is `Checking:
+errors seen` — an automatic observation at the `AWARE` level, which never creates or implies a
+notice; p95 above 1,500 ms is `Slower than usual`; a window containing 2xx/3xx is `Working`. Windows
+with only remaining response classes say `Nothing to report`, claiming neither success nor outage.
+Apart from the failed-request rule's minimum, these labels have no minimum count.
+
+Quiet windows say `Quiet`; missing or stale collection says `Status unknown`. All cards disclose
+their scope in visible text.
+
+The current telemetry projection retains `last_activity`, a map of the closed component keys to
+their latest nonempty, valid, fresh source window's `sampled_at`, `source_latest_at` and validated
+`component`. The collector updates it atomically with the current pointer only when that pointer
+advances. Idle or failed attempts preserve historical activity without refreshing its timestamp;
+duplicate or delayed samples cannot overwrite it.
+
+Readers validate retained data and exclude future or older-than-seven-day entries; advancing writes
+prune expired entries. No new raw fields, tenant labels or business data are retained. Absence means
+no retained activity. Historical outcomes use neutral styling during inactivity or monitoring loss,
+visibly labeled `Last observed` with the original five-minute window end. They never establish
+present health or conceal a monitoring failure. Public GET remains read-only.
 
 A fresh window meeting the failed-request rule makes the hero `Detected problems`, as
 a fresh 5xx does; failed-request 404s below the rule, and every other 404, change
@@ -285,18 +284,17 @@ Installing the sampler and endpoint is a separate reviewed deployment operation.
 
 ### Independent platform checks
 
-Platform connectivity is persisted separately from request telemetry. Its record has
-exactly `schema_version`, UTC ISO `received_at`, and `checks`. A
-`platform-check-v2` record contains exactly one `endpoint`, one `database` and one
-`gate` result; a `platform-check-v1` record, written before v2, contains exactly the
-first two and is read as carrying no gate evidence. Each result has `key`,
+Platform connectivity is persisted separately from request telemetry. Its record has exactly
+`schema_version`, UTC ISO `received_at`, and `checks`. A `platform-check-v2` record contains exactly
+one `endpoint`, one `database` and one `gate` result; a `platform-check-v1` record, written before
+v2, contains exactly the first two and is read as carrying no gate evidence. Each result has `key`,
 `outcome` (PASS/FAIL/UNKNOWN), `checked_at` (UTC ISO or null), and a closed diagnostic.
-Endpoint HTTP_OK is PASS; HTTP_UNAVAILABLE is FAIL. Actual database
-DATABASE_REACHABLE is PASS and DATABASE_UNAVAILABLE is FAIL. ACCESS_DENIED,
-TRANSPORT_UNAVAILABLE, HTTP_REFUSED, INVALID_RESPONSE and NOT_COLLECTED are UNKNOWN for either check;
-STALE_SOURCE is additionally permitted for database UNKNOWN. UNKNOWN carries null
-checked_at; proven checks preserve their source timestamp, never later than receipt.
-Current results expire after 300 seconds; future or malformed evidence is unknown.
+
+Endpoint HTTP_OK is PASS; HTTP_UNAVAILABLE is FAIL. Actual database DATABASE_REACHABLE is PASS and
+DATABASE_UNAVAILABLE is FAIL. ACCESS_DENIED, TRANSPORT_UNAVAILABLE, HTTP_REFUSED, INVALID_RESPONSE
+and NOT_COLLECTED are UNKNOWN for either check; STALE_SOURCE is additionally permitted for database
+UNKNOWN. UNKNOWN carries null checked_at; proven checks preserve their source timestamp, never later
+than receipt. Current results expire after 300 seconds; future or malformed evidence is unknown.
 
 The health read's HTTP status maps to exactly one endpoint diagnostic. A 2xx body
 that validates is HTTP_OK. HTTP_UNAVAILABLE is an HTTP 5xx response and nothing
@@ -309,19 +307,19 @@ diagnostic. A refusal is not executed evidence of failure (INV-ARC-017).
 A bounded read of the existing health endpoint may obtain these two actual checks
 without collecting its feature placeholders. This is connectivity, not domain proof.
 
-The `gate` check observes whether the Application Availability Gate (DOM-OPS-001)
-is closed. Outside operational work the application hostname has no Cloudflare
-Access policy in front of public pages, so the check sends one bounded GET for a
-static public asset on that hostname with **no** service token or other credential,
-follows no redirect, and reads only the status line and `Location` header. A
-redirect whose `Location` host is a Cloudflare Access login host
-(`*.cloudflareaccess.com`) is `GATE_CLOSED` (FAIL). Any other HTTP response — including
-an application error, which the endpoint check reports separately — is `GATE_OPEN`
-(PASS). An HTTP 401 or 403 is `UNEXPECTED_DENIAL` (UNKNOWN), because a public asset is
-never denied when the gate is open and the gate's own response is not otherwise
-established. Transport failure is `TRANSPORT_UNAVAILABLE` (UNKNOWN). The health read
-cannot stand in for this check: a redirect there is `ACCESS_DENIED`, which remains
-UNKNOWN and never implies the gate is closed.
+The `gate` check observes whether the Application Availability Gate (DOM-OPS-001) is closed. Outside
+operational work the application hostname has no Cloudflare Access policy in front of public pages,
+so the check sends one bounded GET for a static public asset on that hostname with **no** service
+token or other credential, follows no redirect, and reads only the status line and `Location`
+header. A redirect whose `Location` host is a Cloudflare Access login host
+(`*.cloudflareaccess.com`) is `GATE_CLOSED` (FAIL).
+
+Any other HTTP response — including an application error, which the endpoint check reports
+separately — is `GATE_OPEN` (PASS). An HTTP 401 or 403 is `UNEXPECTED_DENIAL` (UNKNOWN), because a
+public asset is never denied when the gate is open and the gate's own response is not otherwise
+established. Transport failure is `TRANSPORT_UNAVAILABLE` (UNKNOWN). The health read cannot stand in
+for this check: a redirect there is `ACCESS_DENIED`, which remains UNKNOWN and never implies the
+gate is closed.
 
 The collector probes the gate before anything else. While the gate is `GATE_CLOSED`, it
 reads nothing from the application: it makes no health read and stores no request
@@ -336,17 +334,19 @@ These records do not contribute to request-window history or service-card proofs
 
 ## IX. Validation
 
-Focused tests cover strict schema/redaction, query failure, malformed/multi-series
-responses, no/low traffic, thresholds and their boundaries, 404 versus semantic
-failure, failed-request 404s on the designated routes against 404s elsewhere, both
-schema versions, every hall-pass route falling in the hall-pass group and no other, stale/future timestamps, retry idempotency, monotonic current pointer,
-UTC rollover, non-overlapping error totals, duplicate/out-of-order delivery,
-30-day boundaries, missing/empty/malformed history and coverage, independent notices, auth/CSRF and pure
-GET. Endpoint tests cover 5xx as FAIL and a 429 or 404 as UNKNOWN `HTTP_REFUSED`,
-which leaves the hero `Unknown`, not `Mostly unavailable`. Gate tests cover an Access redirect, an open response, an application error,
-401/403, transport failure, a redirected health read with an open gate, and a closed gate that reads nothing from the application. Render
-populated/idle/stale history and cards for keyboard/touch access.
-A deployed claim requires source → collector → Firestore → rendered evidence.
+Focused tests cover strict schema/redaction, query failure, malformed/multi-series responses, no/low
+traffic, thresholds and their boundaries, 404 versus semantic failure, failed-request 404s on the
+designated routes against 404s elsewhere, both schema versions, every hall-pass route falling in the
+hall-pass group and no other, stale/future timestamps, retry idempotency, monotonic current pointer,
+UTC rollover, non-overlapping error totals, duplicate/out-of-order delivery, 30-day boundaries,
+missing/empty/malformed history and coverage, independent notices, auth/CSRF and pure GET.
+
+Endpoint tests cover 5xx as FAIL and a 429 or 404 as UNKNOWN `HTTP_REFUSED`, which leaves the hero
+`Unknown`, not `Mostly unavailable`. Gate tests cover an Access redirect, an open response, an
+application error, 401/403, transport failure, a redirected health read with an open gate, and a
+closed gate that reads nothing from the application. Render populated/idle/stale history and cards
+for keyboard/touch access. A deployed claim requires source → collector → Firestore → rendered
+evidence.
 
 ## X. Amendment
 

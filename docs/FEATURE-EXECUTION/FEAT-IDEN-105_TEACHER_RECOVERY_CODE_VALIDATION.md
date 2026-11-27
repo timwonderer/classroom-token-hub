@@ -41,17 +41,18 @@ Either recipient suffices. A match records class satisfied_at and satisfied_roun
 then invalidates both outstanding codes in this same class transaction. A wrong
 entry cannot erase an already accepted class proof or mutate another class.
 
-The teacher submits the full set once collected. The User-owned coordinator checks
-only deposited class results against the complete current ownership manifest.
-All classes satisfied in the current round produces one setup nonce, with encrypted
-pending username/TOTP material. In that same local transaction, apply DOM-IDEN-003
-§VII.A supersession: advance credential generation, invalidate existing sessions and
-outstanding authentication/routine-management grants, and record the non-identifying
-audit event. Bind setup to that generation. Repeating the same success cannot repeat
-invalidation or create a second setup grant from the aggregate success itself. Recovery initiation alone has no such effect. Otherwise increment submission_round and return a
-single generic failure. Previous-round codes and proofs then become inert without
-a cross-class mutation sweep. Recipients remain frozen and all classes require
-fresh codes. No progress endpoint exposes private satisfaction.
+The teacher submits the full set once collected. The User-owned coordinator checks only deposited
+class results against the complete current ownership manifest. All classes satisfied in the current
+round produces one setup nonce, with encrypted pending username/TOTP material. In that same local
+transaction, apply DOM-IDEN-003 §VII.A supersession: advance credential generation, invalidate
+existing sessions and outstanding authentication/routine-management grants, and record the
+non-identifying audit event.
+
+Bind setup to that generation. Repeating the same success cannot repeat invalidation or create a
+second setup grant from the aggregate success itself. Recovery initiation alone has no such effect.
+Otherwise increment submission_round and return a single generic failure. Previous-round codes and
+proofs then become inert without a cross-class mutation sweep. Recipients remain frozen and all
+classes require fresh codes. No progress endpoint exposes private satisfaction.
 
 Resume PINs retain the attempt and confirmations without storing student codes.
 A valid unambiguous PIN rotates the access nonce, invalidates old setup grants and, when the

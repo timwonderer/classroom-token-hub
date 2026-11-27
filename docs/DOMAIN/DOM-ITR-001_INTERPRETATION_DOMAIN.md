@@ -237,7 +237,7 @@ A **durable, immutable, self-describing** record of one completed economic cycle
 - `reference_configuration`: JSONB — a **versioned, immutable informational projection** of the authoritative economic configuration actually consumed while interpreting the cycle (see below)
 - `observations_json`: JSONB — the materialized Descriptive observations and Interpretive signals, each carrying its §IV output-property declarations
 
-##### `reference_configuration` contract
+#### `reference_configuration` contract
 
 `reference_configuration` is a **versioned snapshot** of the governing economic inputs that were in effect for the cycle, captured at materialization time. Conceptual structure:
 

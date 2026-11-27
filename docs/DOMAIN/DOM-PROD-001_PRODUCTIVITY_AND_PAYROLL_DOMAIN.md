@@ -64,7 +64,21 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 
 ### IV.1 Incorporated contract and governing sections
 
-[INV-CORE-000](../INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md) §III.1–6 and [INV-CORE-001](../INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md) §III, VIII govern isolation, authority, financial traceability, and lifecycle. [INV-ARC-006](../INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md) §V–VII, [INV-ARC-007](../INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md) §V, and [INV-ARC-009](../INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md) §V–VII govern commands, pure reads, and domain-owned conclusions. [INV-ARC-015](../INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md) §VI–VII and [INV-ARC-016](../INVARIANT/ARCHITECTURE/INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md) §V–VI, IX–XI govern time and protected lineage. [INV-ARC-021](../INVARIANT/ARCHITECTURE/INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md) §V, VII forbids direct cross-domain calls and internal cross-domain FKs.
+[INV-CORE-000](../INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md) §III.1–6 and
+[INV-CORE-001](../INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md)
+§III, VIII govern isolation, authority, financial traceability, and lifecycle.
+
+[INV-ARC-006](../INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md) §V–VII,
+[INV-ARC-007](../INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md) §V, and
+[INV-ARC-009](../INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md) §V–VII govern
+commands, pure reads, and domain-owned conclusions.
+
+[INV-ARC-015](../INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md)
+§VI–VII and
+[INV-ARC-016](../INVARIANT/ARCHITECTURE/INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md) §V–VI,
+IX–XI govern time and protected lineage.
+[INV-ARC-021](../INVARIANT/ARCHITECTURE/INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md) §V,
+VII forbids direct cross-domain calls and internal cross-domain FKs.
 
 This domain incorporates [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) for interval identity, eligibility, pricing-input provenance, and business correction authorization. This incorporation authorizes no direct dependency on another domain. Cross-domain monetary, identity, configuration, and audit coordination is declared by the applicable FEAT.
 
@@ -475,7 +489,20 @@ Fields: `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`,
 - One row per `(class_id, target_seat_id, opening_event_id, closing_event_id)` and one accepted command per `(class_id, FEAT-PROD-005, idempotency_key)` are structurally unique. The target, pair, reason, actor, and expected preview identity define immutable replay intent; `receipt_json` retains `expected_preview_identity`, `fingerprint_version`, `canonical_intent_digest`, `original_settlement_disposition`, and `opaque_outcome_locators`. This immutable protected receipt permits exact replay, including unpaid or previously recovered work, without monetary values.
 - No amount, balance, mutable eligibility flag, or earnings cache is authorized. The row is destroyed only with its owning target seat or class (§VII.1.a).
 
-`payroll_event.summary_json` for new settlements retains allocation-version 1, exact interval IDs, credited seconds, and original pricing inputs under SPEC-PROD-001. Each correction retains its `original_payroll_event_id` (same-domain reference); a multi-origin invalidation receipt retains the complete original business event/origin/effect locator sets. A correction retains `correction_intent` (`INTERVAL_INVALIDATION` or `RESIDUAL_RECOVERY`), invalidation ID where relevant, original policy provenance, and opaque Ledger locators. It stores no original, allocated, recovered, or remaining monetary amount. Full/residual recovery business events also retain a protected nonmonetary `command_receipt` containing `expected_preview_identity`, `fingerprint_version`, `canonical_intent_digest`, `original_settlement_disposition`, and `opaque_outcome_locators`, permitting exact accepted-command replay without repricing or a second recovery. A correction retains the original `payroll_cycle_id` as lineage where present and never opens/closes a cycle.
+`payroll_event.summary_json` for new settlements retains allocation-version 1, exact interval IDs,
+credited seconds, and original pricing inputs under SPEC-PROD-001. Each correction retains its
+`original_payroll_event_id` (same-domain reference); a multi-origin invalidation receipt retains the
+complete original business event/origin/effect locator sets.
+
+A correction retains `correction_intent` (`INTERVAL_INVALIDATION` or `RESIDUAL_RECOVERY`),
+invalidation ID where relevant, original policy provenance, and opaque Ledger locators. It stores no
+original, allocated, recovered, or remaining monetary amount.
+
+Full/residual recovery business events also retain a protected nonmonetary `command_receipt`
+containing `expected_preview_identity`, `fingerprint_version`, `canonical_intent_digest`,
+`original_settlement_disposition`, and `opaque_outcome_locators`, permitting exact accepted-command
+replay without repricing or a second recovery. A correction retains the original `payroll_cycle_id`
+as lineage where present and never opens/closes a cycle.
 
 ## XII. Cross-Domain Rules
 
@@ -582,7 +609,18 @@ The exact implementation may evolve, but business consumers SHALL interact with 
 
 ### 9. Pure historical business assessment
 
-`get_historical_attendance_business_evidence` remains the bounded pure diagnostic query through FEAT-PROD-006. Separately, `reconstruct_historical_payroll_graph(*, ctx, target_seat_id, setting_inputs, source_limit=2000, event_limit=1000, as_of_utc=None)` is a PROD-owned pure query composed by FEAT-PROD-006 for assessment and directly by FEAT-PROD-005/003 for correction. It returns immutable `HistoricalReconstructedGraph` inputs: original payroll windows including zero runs, canonical pairs, exact selected temporal contributions, original setting/share inputs, historical rule descriptors, incident source references and existing recovery business references. No monetary arithmetic or cross-domain query occurs here. Explicit class scope comes from canonical `ctx`; target and all supplied settings must match it. This domain incorporates SPEC-PROD-002 §V–VIII and SPEC-PROD-001 §VI.1–2 for this operation.
+`get_historical_attendance_business_evidence` remains the bounded pure diagnostic query through
+FEAT-PROD-006. Separately, `reconstruct_historical_payroll_graph(*, ctx, target_seat_id,
+setting_inputs, source_limit=2000, event_limit=1000, as_of_utc=None)` is a PROD-owned pure query
+composed by FEAT-PROD-006 for assessment and directly by FEAT-PROD-005/003 for correction.
+
+It returns immutable `HistoricalReconstructedGraph` inputs: original payroll windows including zero
+runs, canonical pairs, exact selected temporal contributions, original setting/share inputs,
+historical rule descriptors, incident source references and existing recovery business references.
+No monetary arithmetic or cross-domain query occurs here. Explicit class scope comes from canonical
+`ctx`; target and all supplied settings must match it.
+
+This domain incorporates SPEC-PROD-002 §V–VIII and SPEC-PROD-001 §VI.1–2 for this operation.
 
 Complete bounded immutable attendance, original payroll boundaries and retained versioned settings are the source authority for the historical selection replay. Their absence or ambiguity denies; lack of a newly introduced allocation/receipt/audit field alone does not. The former requirement for a separately signed original source snapshot or creation-visibility attestation is superseded for this reconstruction contract. Changed relevant evidence during the read or confirmation denies. Returned membership is an explicit reconstruction, not original recorded allocation or canonical lawful-lineage state. PROD supplies it to Ledger only through FEAT.
 
@@ -625,7 +663,20 @@ The change is an effective-dated append to `payroll_settings` whose `effective_d
 
 ### 4. Interaction with `record_payroll_event`
 
-`record_payroll_event` (§VIII.3) writes only `payroll` and `manual_credit` under FEAT-PROD-003 or class settlement FEAT-PROD-004; the approved FEAT-STOR-003 productivity-insurance payout may compose its manual-credit domain path. `record_payroll_business_correction` (§VIII.6) writes interval/correction business events under FEAT-PROD-005 or FEAT-PROD-003. `record_payroll_business_recovery` (§VIII.4) exclusively writes signed full/residual recovery business records under FEAT-PROD-003. No generic type parameter bypasses these declarations. When invoked as part of a class-level run orchestrated by `FEAT-PROD-004`, the caller supplies the run's `payroll_cycle_id`; `record_payroll_event` stamps it unchanged onto each `payroll` row. `record_payroll_event` does not generate `payroll_cycle_id` and does not itself orchestrate any cross-domain side effect. Class-level cycle completion orchestration is exclusively `FEAT-PROD-004`'s responsibility; correction orchestration is declared separately by `FEAT-PROD-003` and `FEAT-PROD-005`.
+`record_payroll_event` (§VIII.3) writes only `payroll` and `manual_credit` under FEAT-PROD-003 or
+class settlement FEAT-PROD-004; the approved FEAT-STOR-003 productivity-insurance payout may compose
+its manual-credit domain path. `record_payroll_business_correction` (§VIII.6) writes
+interval/correction business events under FEAT-PROD-005 or FEAT-PROD-003.
+`record_payroll_business_recovery` (§VIII.4) exclusively writes signed full/residual recovery
+business records under FEAT-PROD-003.
+
+No generic type parameter bypasses these declarations. When invoked as part of a class-level run
+orchestrated by `FEAT-PROD-004`, the caller supplies the run's `payroll_cycle_id`;
+`record_payroll_event` stamps it unchanged onto each `payroll` row. `record_payroll_event` does not
+generate `payroll_cycle_id` and does not itself orchestrate any cross-domain side effect.
+
+Class-level cycle completion orchestration is exclusively `FEAT-PROD-004`'s responsibility;
+correction orchestration is declared separately by `FEAT-PROD-003` and `FEAT-PROD-005`.
 
 ### 5. The next payroll date is derived, never stored
 
@@ -639,7 +690,17 @@ It takes one of three forms:
 
 The anchor for forms 2 and 3 is the *scheduled occurrence* the last `SYSTEM` `payroll` event settled, recorded in its `summary_json`, not the wall-clock instant the run happened to execute, so a late run never moves later paydays. An event that predates that record anchors on its `recorded_at`. Only `payroll` events with `mechanism = SYSTEM` anchor the schedule: a teacher-started (`TEACHER`) payroll run, a `manual_credit` (including a platform-computed correction recorded as `SYSTEM`), a `reversal`, and a `correction` never move it.
 
-`first_pay_date` and the pay schedule are read from the setting in force at the moment of evaluation. Every setting has a `first_pay_date`; a class without payroll settings has not set up payroll and has no scheduled payroll date. Every payroll date is a boundary of one recurrence anchored on `first_pay_date` (`SPEC-TIME-001` §IX.12, `anchored_recurrence_boundary`): boundary *n* is computed from the anchor and *n*, never from the previous boundary, at class-local midnight. `pay_schedule_type` is the whole cadence and is `weekly`, `biweekly` or `monthly`: weekly and biweekly step one or two weeks; monthly steps calendar months with `overflow = roll_forward`, so an anchor on the 31st runs 1/31 → 3/1 → 3/31 → 5/1 → 5/31. Pay frequency is derived this way and never stored as a number of days (operator ruling 2026-09-30). The next payroll date is boundary 0 until the schedule has run, then the first boundary strictly after the last `SYSTEM` occurrence.
+`first_pay_date` and the pay schedule are read from the setting in force at the moment of
+evaluation. Every setting has a `first_pay_date`; a class without payroll settings has not set up
+payroll and has no scheduled payroll date. Every payroll date is a boundary of one recurrence
+anchored on `first_pay_date` (`SPEC-TIME-001` §IX.12, `anchored_recurrence_boundary`): boundary *n*
+is computed from the anchor and *n*, never from the previous boundary, at class-local midnight.
+
+`pay_schedule_type` is the whole cadence and is `weekly`, `biweekly` or `monthly`: weekly and
+biweekly step one or two weeks; monthly steps calendar months with `overflow = roll_forward`, so an
+anchor on the 31st runs 1/31 → 3/1 → 3/31 → 5/1 → 5/31. Pay frequency is derived this way and never
+stored as a number of days (operator ruling 2026-09-30). The next payroll date is boundary 0 until
+the schedule has run, then the first boundary strictly after the last `SYSTEM` occurrence.
 
 ### 6. Work recorded before the class's first payroll setting
 
@@ -689,7 +750,25 @@ PROD-PAY-001 uses explicit original corrected-event IDs and per-window worked/re
 
 *Ratifies the rule already implemented and cited in code as "DOM-PROD-001 §VI.3" (issue #1439); §VI is the Schema Authority Declaration and has no subsections, so that citation named nothing.*
 
-A session is payable once it has closed after the seat's last `payroll` event, and it is paid in full by the first payroll run that executes while it is closed and unpaid (§XV.3 prices it by the setting in force when it closed). Eligibility follows recorded pair membership at the instant a run executes, never a timestamp-defined window: a session not yet closed when a run executes is simply absent from that run, whatever timestamp its close later carries, and the next run — not a correction of the one that already ran — picks it up once it closes (§XV.7). A still-open session is never payable: it contributes no amount to any run while it remains open, and becomes payable only once it closes. Every *payable* session is therefore paid exactly once, by exactly one run, and never split across runs. This exactly-once guarantee governs version-1 settlement of eligible, not-yet-paid sessions only: it does not override terminal interval invalidation (§VIII.5, `attendance_interval_invalidation`), which can make a closed session never payable at all rather than payable-once; it does not make the unprovable category below payable; and it does not qualify, narrow or re-litigate the separately authorized historical reconstruction of pre-rule fragment, remainder and multi-payment participation in §XV.9–10.
+A session is payable once it has closed after the seat's last `payroll` event, and it is paid in
+full by the first payroll run that executes while it is closed and unpaid (§XV.3 prices it by the
+setting in force when it closed).
+
+Eligibility follows recorded pair membership at the instant a run executes, never a
+timestamp-defined window: a session not yet closed when a run executes is simply absent from that
+run, whatever timestamp its close later carries, and the next run — not a correction of the one that
+already ran — picks it up once it closes (§XV.7). A still-open session is never payable: it
+contributes no amount to any run while it remains open, and becomes payable only once it closes.
+
+Every *payable* session is therefore paid exactly once, by exactly one run, and never split across
+runs.
+
+This exactly-once guarantee governs version-1 settlement of eligible, not-yet-paid sessions only: it
+does not override terminal interval invalidation (§VIII.5, `attendance_interval_invalidation`),
+which can make a closed session never payable at all rather than payable-once; it does not make the
+unprovable category below payable; and it does not qualify, narrow or re-litigate the separately
+authorized historical reconstruction of pre-rule fragment, remainder and multi-payment participation
+in §XV.9–10.
 
 A class-level run (`FEAT-PROD-004`) that finds no seat with a closed, unpaid session has nothing to settle and MUST be refused rather than recorded as an empty cycle (`NoPayableAttendanceError`, not a zero-event `payroll_cycle_id`). A student still working when the run executes is paid by the first run after they clock out, not by the run in progress when they were working, and a session that closes with a backdated timestamp after an earlier run has already executed is paid by the next run, not retroactively attributed to the one that already ran (§XV.7).
 

@@ -1,14 +1,18 @@
 # HTTP error pages: draft contracts, rulings and ratification plan
 
 Date: November 24, 2026 (America/Los_Angeles), revision 5 — **final package for ratification**.
+
 Status: **UNRATIFIED DRAFT — governs nothing.** This is an informative tracking package under
 [SOP-DOC-000](../STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md) §V–VI, not a
-SPEC. It holds two proposed normative texts — **`SPEC-DES-002` HTTP Error Page Presentation**
-(Part D) and **`SPEC-OPS-007` HTTP Error Communication** (Part E) — a proposed `SPEC-OPS-003`
-amendment for error-response logging (Part F), the incorporation amendments (Part G), the
-remaining conflicts with governing documentation (Part H), and the plan to ratification and implementation (Parts I–K).
+SPEC. It holds two proposed normative texts — **`SPEC-DES-002` HTTP Error Page Presentation** (Part
+D) and **`SPEC-OPS-007` HTTP Error Communication** (Part E) — a proposed `SPEC-OPS-003` amendment
+for error-response logging (Part F), the incorporation amendments (Part G), the remaining conflicts
+with governing documentation (Part H), and the plan to ratification and implementation (Parts I–K).
+
 Findings are classified in Part 3. Nothing here changes a template, stylesheet, handler or ratified
-document. On ratification each text becomes or amends a numbered document, is registered through
+document.
+
+On ratification each text becomes or amends a numbered document, is registered through
 [SOP-DOC-001](../STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX.md), and this package
 moves to `docs/archive/v2-tracking-2026/`.
 

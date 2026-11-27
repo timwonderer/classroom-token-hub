@@ -83,7 +83,20 @@ SSO does not protect this asset; it changes what the asset *is*. A SAML assertio
 
 The display name itself is also weaker than typical PII in a second respect: it is not student-asserted or institution-verified identity. The first name and last initial on a seat are free-text values the teacher enters when provisioning the roster, for the sole functional purpose of letting the student recognize and claim their own seat. Nothing in the claim flow requires this value to match a legal name, cross-checks it against any system of record, or treats it as authoritative — it is an unverified label, not a verified identity attribute. This is a materially different starting point than a SAML/OIDC assertion, which is by definition sourced from and verified against the institution's system of record. Adopting SSO would not be replacing one identity system with a better one; for this specific field, it would be the first time any verified identity entered the system at all.
 
-Access to this display name is also narrow today: outside of direct database access, the only principals who can ever see a seat's decrypted first name and last initial are the teacher who owns that seat's class and the student who holds the seat itself, both through `identity_profiles`. Students do not see other students' names — they have no peer-name lookup surface. System administrators have no route that decrypts or displays `identity_profiles`: `app/routes/system_admin.py` decrypts only `totp_secret_encrypted` for its own login flow and never resolves an `IdentityProfile`, and `DOM-SUP-001`'s Support domain contract requires sysadmin-facing surfaces to expose only opaque references (`anonymous_code`, `actor_public_id`) — a decrypted name is never surfaced in a sysadmin view. A breach that compromises application-layer access (rather than the underlying database directly) would therefore not expose a single name beyond what one teacher could already see for their own roster, or a student for their own seat.
+Access to this display name is also narrow today: outside of direct database access, the only
+principals who can ever see a seat's decrypted first name and last initial are the teacher who owns
+that seat's class and the student who holds the seat itself, both through `identity_profiles`.
+Students do not see other students' names — they have no peer-name lookup surface.
+
+System administrators have no route that decrypts or displays `identity_profiles`:
+`app/routes/system_admin.py` decrypts only `totp_secret_encrypted` for its own login flow and never
+resolves an `IdentityProfile`, and `DOM-SUP-001`'s Support domain contract requires sysadmin-facing
+surfaces to expose only opaque references (`anonymous_code`, `actor_public_id`) — a decrypted name
+is never surfaced in a sysadmin view.
+
+A breach that compromises application-layer access (rather than the underlying database directly)
+would therefore not expose a single name beyond what one teacher could already see for their own
+roster, or a student for their own seat.
 
 ### 4.2 SSO undermines tenant isolation 
 
@@ -99,7 +112,28 @@ CTH is used by individual teachers across institutions, charter schools, and hom
 
 ### 4.5 CSF 2.0 does not mandate SSO specifically, and is risk-based by design
 
-NIST CSF 2.0's `PR.AA` (Identity Management, Authentication, and Access Control) category requires that "identities and credentials for authorized users... are managed by the organization" and that access is "limited to authorized users... and authorized devices, services, and connections is managed commensurate with the assessed risk." The phrase "commensurate with the assessed risk" is load-bearing: CSF 2.0 is a risk-based framework, not a fixed control checklist, and a control's appropriateness depends on the sensitivity of the asset it protects. SSO is a common implementation pattern for satisfying `PR.AA` for systems holding grades, SIS records, financial-aid data, or other high-sensitivity education records. Applied to a system whose worst-case exposure is a first name, last initial, and play-money ledger, a blanket SSO mandate is disproportionate to the asset, and — per §5.1 — actively counterproductive to the risk it is meant to manage. CTH satisfies the same underlying control objectives — credential management, least-privilege scoping, session expiry, MFA for administrative roles — through mechanisms suited to its actual risk profile: locally salted, scrypt-hashed credentials (`SPEC-SEC-001`), mandatory TOTP for system administrators (`SPEC-OPS-004`), a session-expiry window per role (a fixed, non-sliding 10-minute hard cap from login for students, via `User.current_session_expires_at`; a sliding idle timeout refreshed on each request for teachers and system administrators, 10 and 60 minutes respectively — `app/auth.py`, enforced by `RoleScopedSessionInterface` in `app/session_lifetime.py`), and CSRF/Turnstile-protected entry points (`app/__init__.py`'s CSRF configuration; `verify_turnstile_token()` in `app/utils/turnstile.py`).
+NIST CSF 2.0's `PR.AA` (Identity Management, Authentication, and Access Control) category requires
+that "identities and credentials for authorized users... are managed by the organization" and that
+access is "limited to authorized users... and authorized devices, services, and connections is
+managed commensurate with the assessed risk." The phrase "commensurate with the assessed risk" is
+load-bearing: CSF 2.0 is a risk-based framework, not a fixed control checklist, and a control's
+appropriateness depends on the sensitivity of the asset it protects.
+
+SSO is a common implementation pattern for satisfying `PR.AA` for systems holding grades, SIS
+records, financial-aid data, or other high-sensitivity education records. Applied to a system whose
+worst-case exposure is a first name, last initial, and play-money ledger, a blanket SSO mandate is
+disproportionate to the asset, and — per §5.1 — actively counterproductive to the risk it is meant
+to manage.
+
+CTH satisfies the same underlying control objectives — credential management, least-privilege
+scoping, session expiry, MFA for administrative roles — through mechanisms suited to its actual risk
+profile: locally salted, scrypt-hashed credentials (`SPEC-SEC-001`), mandatory TOTP for system
+administrators (`SPEC-OPS-004`), a session-expiry window per role (a fixed, non-sliding 10-minute
+hard cap from login for students, via `User.current_session_expires_at`; a sliding idle timeout
+refreshed on each request for teachers and system administrators, 10 and 60 minutes respectively —
+`app/auth.py`, enforced by `RoleScopedSessionInterface` in `app/session_lifetime.py`), and
+CSRF/Turnstile-protected entry points (`app/__init__.py`'s CSRF configuration;
+`verify_turnstile_token()` in `app/utils/turnstile.py`).
 
 ## 5. Comparative Risk Assessment
 

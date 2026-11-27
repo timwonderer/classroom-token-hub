@@ -483,19 +483,19 @@ maintenance distinction in your installation note.
 
 ## 10. Check the classroom, then move the web address
 
-Before changing DNS, have your agent verify the restored audit chains using
-the original `AUDIT_HMAC_KEY`, including the full expected count and head hash.
-An audit chain is the tamper-evident record of protected changes. A default
-500-event sample or a matching row count is insufficient. Read-only
-verification must not create replacement audit events to obtain a pass.
-The before-start `exact` check (or the explicitly eligible `initial` check)
-must have passed before step 9 started the services. For nonempty history,
-now run the `extends` phase of [Check the complete audit history](upgrades.md#check-the-complete-audit-history)
-using the same independent baseline, restored release and runtime file. This
-checks the saved history remains intact while allowing new scheduled work.
-Run it again after a permitted test transaction and before reopening. If
-history remains empty, `extends` repeats the initial-state safeguards and
-preserves that limited result; don't claim nonempty business-audit verification.
+Before changing DNS, have your agent verify the restored audit chains using the original
+`AUDIT_HMAC_KEY`, including the full expected count and head hash. An audit chain is the
+tamper-evident record of protected changes. A default 500-event sample or a matching row count is
+insufficient. Read-only verification must not create replacement audit events to obtain a pass. The
+before-start `exact` check (or the explicitly eligible `initial` check) must have passed before step
+9 started the services.
+
+For nonempty history, now run the `extends` phase of [Check the complete audit
+history](upgrades.md#check-the-complete-audit-history) using the same independent baseline, restored
+release and runtime file. This checks the saved history remains intact while allowing new scheduled
+work. Run it again after a permitted test transaction and before reopening. If history remains
+empty, `extends` repeats the initial-state safeguards and preserves that limited result; don't claim
+nonempty business-audit verification.
 
 **Before changing DNS, in both recovery situations:** confirm the Part 7.10
 Access application covers the entire CTH hostname and admits only the

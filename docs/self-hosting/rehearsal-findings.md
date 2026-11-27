@@ -195,17 +195,17 @@ required for clean-host validation. Prefer evaluating the provider's existing
 reset mechanism before asking an operator to repeat resource enrollment.
 [DigitalOcean rebuild documentation](https://docs.digitalocean.com/products/droplets/how-to/rebuild/)
 
-Rebuild is destructive, not an in-place installer repair. The failed guest's
-manifest, runtime secrets, packages and journal are lost. Keep needed inputs
-privately outside the guest, choose the same approved OS baseline, and verify
-the new SSH host key and machine identity before supplying secrets. Do not
-silently accept a changed SSH fingerprint. The owner subsequently completed
-the rebuild. The new console-observed host key matched the network key; guest
-metadata retained the provider ID and all four old installation paths were
-absent. A subsequent SSH-terminal screenshot showed the corrected release
-and manifest prepared, then successful `apply host` and `check host` receipts.
-The later owner-attended run completed all installer stages, exercised the
-Cloudflare Access boundary, and restored an encrypted staging database backup
-locally as recorded above. The owner reports the Droplet destroyed; no other
-billable cloud resources were created. These results do not establish full
-application acceptance or independent handbook reproducibility.
+Rebuild is destructive, not an in-place installer repair. The failed guest's manifest, runtime
+secrets, packages and journal are lost. Keep needed inputs privately outside the guest, choose the
+same approved OS baseline, and verify the new SSH host key and machine identity before supplying
+secrets. Do not silently accept a changed SSH fingerprint. The owner subsequently completed the
+rebuild.
+
+The new console-observed host key matched the network key; guest metadata retained the provider ID
+and all four old installation paths were absent. A subsequent SSH-terminal screenshot showed the
+corrected release and manifest prepared, then successful `apply host` and `check host` receipts. The
+later owner-attended run completed all installer stages, exercised the Cloudflare Access boundary,
+and restored an encrypted staging database backup locally as recorded above.
+
+The owner reports the Droplet destroyed; no other billable cloud resources were created. These
+results do not establish full application acceptance or independent handbook reproducibility.

@@ -40,7 +40,21 @@ These are declared FEAT-level cross-domain dependencies. PROD never calls anothe
 
 Command inputs: canonical teacher `ctx`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `reason_code`, `idempotency_key`, and `expected_preview_identity`. Reasons are exactly `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, and `DUPLICATE_PARTICIPATION`. No monetary amount or unrestricted personal note is accepted. The FEAT generates the correction correlation, normalizes recorded time to UTC, and propagates its command identity and sanitized intent to domain commands.
 
-A pure read composes Identity actor/target resolution; PROD completed-pair, eligibility, settlement-membership, and business permission queries; Ledger original credit, compensation proof, and balance queries; and Class Configuration protection queries. It returns original scans and credited duration, eligibility separately from settlement state, original settlement evidence, proposed recovery, savings transfer, resulting balances, and opaque expected-preview identity. For an unpaid interval, preview requires canonical closed-work and eligibility evidence only: proposed compensation is zero, protection transfer is absent, and no payment, pricing, or funding/balance permission is required. Work recorded before any payroll setting remains invalidatable under DOM-PROD-001 §XV.6. Preview neither reserves nor writes/flushes/commits. The identity covers pair/source evidence, invalidation state, protected lineage, and settlement disposition; for paid work it additionally covers original allocation inputs/version, original credit and compensation state, and any applicable protection configuration/balance inputs; a client cannot grant authority with it.
+A pure read composes Identity actor/target resolution; PROD completed-pair, eligibility,
+settlement-membership, and business permission queries; Ledger original credit, compensation proof,
+and balance queries; and Class Configuration protection queries. It returns original scans and
+credited duration, eligibility separately from settlement state, original settlement evidence,
+proposed recovery, savings transfer, resulting balances, and opaque expected-preview identity.
+
+For an unpaid interval, preview requires canonical closed-work and eligibility evidence only:
+proposed compensation is zero, protection transfer is absent, and no payment, pricing, or
+funding/balance permission is required. Work recorded before any payroll setting remains
+invalidatable under DOM-PROD-001 §XV.6. Preview neither reserves nor writes/flushes/commits.
+
+The identity covers pair/source evidence, invalidation state, protected lineage, and settlement
+disposition; for paid work it additionally covers original allocation inputs/version, original
+credit and compensation state, and any applicable protection configuration/balance inputs; a client
+cannot grant authority with it.
 
 ## VI. Atomic Command
 
@@ -67,7 +81,23 @@ Recognized v1/legacy sources may qualify despite old missing modern fields or or
 
 The signed preview binds canonical actor/class/target/reason/pair, full original-window source/settings/rule and graph identity, each original credit's exact fixed allocations and all prior recovery associations, original audit dispositions, current banking configuration and combined balance/funding outcome. Exclude current clock and unrelated class-chain advancement. Resolve accepted same-key receipt before fresh reconstruction; changed request digest denies REPLAY_MISMATCH. Another key for a terminally invalidated pair returns ALREADY_INVALIDATED. Keep the same key for uncertain retries.
 
-For new commands lock target seat → ClassEconomy → all original credits in stable Ledger locator order → monetary sources. Reconstruct and revalidate complete proof/preview under those locks. Ledger resolves combined debit/protection once and returns one complete effect plan; one reservation covers every per-origin recovery principal and funding leg. Each origin has its own cap and stable correction-intent uniqueness. The existing protected receipt JSON freezes complete opaque original-business/origin/effect locators, with reconstruction bound by the existing expected-preview identity and request digest, never amounts or cached earnings. Each per-origin correction business JSON retains its original event/intent and opaque principal outcome locator; canonical schema already protects the entire JSON. PROD writers consume the immutable graph/owning-domain result rather than query Ledger or compute cents. Zero-cent or fully recovered graphs append eligibility only after complete evidence; a missing origin never permits eligibility-only or subset recovery. Any reservation, funding, business, audit or commit failure rolls back all effects. New rows receive full current creation lineage; original signatures, payroll cycles and Interpretation remain unchanged.
+For new commands lock target seat → ClassEconomy → all original credits in stable Ledger locator
+order → monetary sources. Reconstruct and revalidate complete proof/preview under those locks.
+Ledger resolves combined debit/protection once and returns one complete effect plan; one reservation
+covers every per-origin recovery principal and funding leg. Each origin has its own cap and stable
+correction-intent uniqueness.
+
+The existing protected receipt JSON freezes complete opaque original-business/origin/effect
+locators, with reconstruction bound by the existing expected-preview identity and request digest,
+never amounts or cached earnings. Each per-origin correction business JSON retains its original
+event/intent and opaque principal outcome locator; canonical schema already protects the entire
+JSON. PROD writers consume the immutable graph/owning-domain result rather than query Ledger or
+compute cents.
+
+Zero-cent or fully recovered graphs append eligibility only after complete evidence; a missing
+origin never permits eligibility-only or subset recovery. Any reservation, funding, business, audit
+or commit failure rolls back all effects. New rows receive full current creation lineage; original
+signatures, payroll cycles and Interpretation remain unchanged.
 
 ## VII. Funding, History, and Lifecycle
 

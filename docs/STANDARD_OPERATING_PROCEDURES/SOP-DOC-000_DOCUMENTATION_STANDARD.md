@@ -192,17 +192,17 @@ application serves or indexes in its search.
 
 The technical site is built from `docs-generator-proof/` (Hugo + Hextra) and published at
 `classroomtokenhub.com/docs/`. It includes `docs/INVARIANT`, `docs/DOMAIN`,
-`docs/FEATURE-EXECUTION`, `docs/SPEC`, `docs/STANDARD_OPERATING_PROCEDURES`,
-`docs/MAP`, `docs/PRINCIPLES`, `docs/REFERENCE`, `docs/self-hosting`, and two
-durable files from `docs/TRACKING`: the documentation roadmap and the domain plan
-template. It leaves out `docs/user-guides` (owned by the application),
-`docs/archive`, `docs/assets` (apart from the illustrations a published document
-embeds), `docs/ops`, the rest of `docs/TRACKING`, which is working state, and
-engineering notes, which are not published. The publication allowlist in
-`docs-generator-proof/build.py` is the layer that governs this: a new document
-outside it is not published until someone decides it should be, and
-`tests/test_docs_site_publishes_no_working_state.py` pins that default for
-`TRACKING` and `ops`.
+`docs/FEATURE-EXECUTION`, `docs/SPEC`, `docs/STANDARD_OPERATING_PROCEDURES`, `docs/MAP`,
+`docs/PRINCIPLES`, `docs/REFERENCE`, `docs/self-hosting`, and two durable files from
+`docs/TRACKING`: the documentation roadmap and the domain plan template.
+
+It leaves out `docs/user-guides` (owned by the application), `docs/archive`, `docs/assets` (apart
+from the illustrations a published document embeds), `docs/ops`, the rest of `docs/TRACKING`, which
+is working state, and engineering notes, which are not published.
+
+The publication allowlist in `docs-generator-proof/build.py` is the layer that governs this: a new
+document outside it is not published until someone decides it should be, and
+`tests/test_docs_site_publishes_no_working_state.py` pins that default for `TRACKING` and `ops`.
 
 The application does not render these documents. A request for one is forwarded
 to the technical site when its base URL is configured; otherwise the path is absent.

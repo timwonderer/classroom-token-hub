@@ -124,17 +124,18 @@ is explicitly transported. They do not require the public request collector to
 fetch or persist feature evaluator results. SPEC-OPS-006 is the sole numerical
 public monitoring contract; these assessments do not gate its cards or history.
 
-Application/Operations health evidence is append-only within its retention
-class. A replaceable current assessment MAY be derived from it. An internal
-health endpoint is a pure GET: it reads a bounded assessment and MUST NOT
-execute a FEAT, repair a record, or start a verifier. If internal results are transported, the authorized collector
-receives only capability key, observation class, lawful outcome/epistemic
-pair, checked-at time, a closed diagnostic code, and the bounded evaluator
-version when a registered feature evaluator ran. The collector derives the
-bounded evidence source from the validated signal origin and stamps its own
-transport `probe_version`; neither value substitutes for the owning evaluator
-version. An unregistered `UNKNOWN` has no evaluator version. No class/user/seat
-identifier, contact detail, credential, financial value, row ID, free-form
+Application/Operations health evidence is append-only within its retention class. A replaceable
+current assessment MAY be derived from it. An internal health endpoint is a pure GET: it reads a
+bounded assessment and MUST NOT execute a FEAT, repair a record, or start a verifier.
+
+If internal results are transported, the authorized collector receives only capability key,
+observation class, lawful outcome/epistemic pair, checked-at time, a closed diagnostic code, and the
+bounded evaluator version when a registered feature evaluator ran. The collector derives the bounded
+evidence source from the validated signal origin and stamps its own transport `probe_version`;
+neither value substitutes for the owning evaluator version. An unregistered `UNKNOWN` has no
+evaluator version.
+
+No class/user/seat identifier, contact detail, credential, financial value, row ID, free-form
 exception, or raw verifier result crosses that boundary.
 
 For every external observation, including a transported application result,
@@ -154,21 +155,20 @@ The external status service stores observations and projects communication;
 it does not become the authority for Identity, Productivity, Ledger, or
 canonical Operations incidents.
 
-Transport is not provenance: the external collector's fetch of an
-application-reported feature result does not make that result an independent
-`EXTERNAL_PROBE`. Feature results MUST retain the distinct bounded evidence
-source `APPLICATION_RUNTIME_EVIDENCE` in external observation records.
-The collector's own HTTP reachability result remains `EXTERNAL_PROBE`.
-Neither source may overwrite the other's evidence or freshness timestamp.
-The collector derives `APPLICATION_RUNTIME_EVIDENCE` only from a validated,
-closed application signal; it derives `EXTERNAL_PROBE` only from its own
-reachability check. The observation `probe_version` identifies the collector
-transport protocol, not the feature evaluator. A feature evaluator MUST
-provide a separately bounded and validated evaluator version in the
-application-to-collector signal before its result can be registered as `PASS`
-or `FAIL`. The external observation stores that version separately from
-`probe_version`. Until that producer and transport field are implemented,
-its internal result remains `CHECK_NOT_REGISTERED` / `UNKNOWN`.
+Transport is not provenance: the external collector's fetch of an application-reported feature
+result does not make that result an independent `EXTERNAL_PROBE`. Feature results MUST retain the
+distinct bounded evidence source `APPLICATION_RUNTIME_EVIDENCE` in external observation records. The
+collector's own HTTP reachability result remains `EXTERNAL_PROBE`. Neither source may overwrite the
+other's evidence or freshness timestamp.
+
+The collector derives `APPLICATION_RUNTIME_EVIDENCE` only from a validated, closed application
+signal; it derives `EXTERNAL_PROBE` only from its own reachability check. The observation
+`probe_version` identifies the collector transport protocol, not the feature evaluator. A feature
+evaluator MUST provide a separately bounded and validated evaluator version in the
+application-to-collector signal before its result can be registered as `PASS` or `FAIL`.
+
+The external observation stores that version separately from `probe_version`. Until that producer
+and transport field are implemented, its internal result remains `CHECK_NOT_REGISTERED` / `UNKNOWN`.
 
 ## VIII. Internal assessment wording
 

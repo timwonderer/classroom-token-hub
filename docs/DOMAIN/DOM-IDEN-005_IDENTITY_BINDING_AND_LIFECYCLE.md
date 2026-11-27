@@ -53,7 +53,7 @@ The **Membership-by-Existence** principle can be summarized as:
 
 Existence within Classroom Token Hub is binary. An identity either exists as an active participant or it does not exist. Intermediate states, soft deletes, archived identities, historical shadows, or dormant participants are constitutionally prohibited. Destruction of a `class` or `user` SHALL mean complete destruction.
 
-# VI. Teacher Identity Lifecycle
+## VI. Teacher Identity Lifecycle
 
 Teacher participation SHALL originate through lawful teacher provisioning. A lawful teacher lifecycle SHALL satisfy the following sequence:
 
@@ -96,7 +96,7 @@ This exception does not extend to ordinary passkey replacement/removal.
 
 ---
 
-# VII. Student Identity Lifecycle
+## VII. Student Identity Lifecycle
 
 Student participation originates through classroom provisioning.
 
@@ -153,7 +153,7 @@ Removal of the final Seat SHALL destroy the corresponding `User`.
 
 ---
 
-# VIII. Identity Binding
+## VIII. Identity Binding
 
 Identity binding is the constitutional act of associating one authenticated `User` with one previously unclaimed `Seat`.
 
@@ -175,7 +175,7 @@ Binding SHALL be the sole constitutional mechanism through which a `User` acquir
 
 ---
 
-# IX. Identity Recovery
+## IX. Identity Recovery
 
 Identity recovery restores authentication capability without altering participation.
 
@@ -200,7 +200,7 @@ Recovery never reconstructs identity.
 
 ---
 
-# X. Cross-Domain Authority
+## X. Cross-Domain Authority
 
 Canonical identity objects are governed exclusively by **DOM-IDEN-001**.
 
@@ -212,7 +212,7 @@ Provisioning workflows SHALL terminate in the canonical identity model before ru
 
 ---
 
-# XI. Amendment
+## XI. Amendment
 
 Revisions to this document SHALL:
 

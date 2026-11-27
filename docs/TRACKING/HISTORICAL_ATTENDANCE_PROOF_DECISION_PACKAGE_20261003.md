@@ -57,7 +57,18 @@ Consult `pytest_result` first. Existing genuine historical v2 tests prove origin
 
 **Blocked approach:** signing today's reconstructed membership and using that new row to label old creation evidence VERIFIED would contradict INV-ARC-016 §V and DOM-OPS-002 §6.1–6.2. Teacher confirmation cannot grant missing cryptographic coverage. No lower-level SPEC, migration, route or compatibility adapter may make this substitution.
 
-Legacy v1 must be examined using each actual emitter, not the old verifier's registry alone. At deployed `ad9574334`, both monetary emitters sign eleven fields: amount, account_type, type, status, class_id, seat_id, description, correlation_id, target_seat_id, actor_seat_id, mechanism. The old verifier listed eight. Exact source locations: `app/services/ledger_posting_service.py:8–12`, `app/utils/transaction_idempotency.py:139–143`, and `app/utils/audit_verifier.py:28–39` in that revision. The payload did not protect timestamp, amount_cents, posting_sequence, command reservation, idempotency key, policy reference or compensation attribution. The HMAC envelope authenticates its declared chain/row/operation/context/payload digest (`app/services/audit_service.py:190–214,293–311`); it does not silently expand that payload coverage. Writer history before this deployment still needs exact per-record attribution.
+Legacy v1 must be examined using each actual emitter, not the old verifier's registry alone. At
+deployed `ad9574334`, both monetary emitters sign eleven fields: amount, account_type, type, status,
+class_id, seat_id, description, correlation_id, target_seat_id, actor_seat_id, mechanism. The old
+verifier listed eight. Exact source locations: `app/services/ledger_posting_service.py:8–12`,
+`app/utils/transaction_idempotency.py:139–143`, and `app/utils/audit_verifier.py:28–39` in that
+revision.
+
+The payload did not protect timestamp, amount_cents, posting_sequence, command reservation,
+idempotency key, policy reference or compensation attribution. The HMAC envelope authenticates its
+declared chain/row/operation/context/payload digest
+(`app/services/audit_service.py:190–214,293–311`); it does not silently expand that payload
+coverage. Writer history before this deployment still needs exact per-record attribution.
 
 The old creation command signs PENDING, while old settlement changes stored status and attaches sequence. Under the locked decisions, do not substitute a hypothetical creation status, use a derived cursor label as signed input, enumerate guessed states until a digest matches, or add a verifier override. A version-1 diagnostic must report the covered and unavailable facts without returning the typed creation proof expected by recovery.
 
@@ -65,7 +76,21 @@ This plan preserves the higher invariants. If originals cannot provide all requi
 
 ## Phase 1 — Pure historical assessment, no monetary enablement
 
-Implemented through [DOM-PROD-001](../DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md) §XIII.9 and the dedicated pure read [FEAT-PROD-006](../FEATURE-EXECUTION/FEAT-PROD-006_ASSESS_HISTORICAL_ATTENDANCE_PROOF.md), with [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) explicitly incorporated by the owning domain contracts. The bounded class/target assessment reuses canonical pairing/time evidence and returns separate business, monetary and audit observations. Policies supplies retained setting inputs, Class Configuration establishes current owner binding, and Identity establishes teacher/target scope. Operations walks a bounded complete chain once per invocation and reports legitimate concurrent head advancement as unavailable. Historical source descriptors remain conditional candidates: matching replay does not establish per-record writer assignment or original source visibility. No fallback is installed in current payroll selection, and no retired incident writer is invoked. No teacher controls or new routes are included in this phase.
+Implemented through [DOM-PROD-001](../DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md)
+§XIII.9 and the dedicated pure read
+[FEAT-PROD-006](../FEATURE-EXECUTION/FEAT-PROD-006_ASSESS_HISTORICAL_ATTENDANCE_PROOF.md), with
+[SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) explicitly
+incorporated by the owning domain contracts. The bounded class/target assessment reuses canonical
+pairing/time evidence and returns separate business, monetary and audit observations.
+
+Policies supplies retained setting inputs, Class Configuration establishes current owner binding,
+and Identity establishes teacher/target scope. Operations walks a bounded complete chain once per
+invocation and reports legitimate concurrent head advancement as unavailable. Historical source
+descriptors remain conditional candidates: matching replay does not establish per-record writer
+assignment or original source visibility.
+
+No fallback is installed in current payroll selection, and no retired incident writer is invoked. No
+teacher controls or new routes are included in this phase.
 
 Return separate dimensions: canonical pair availability; business replay consistency; original membership completeness; original pricing/rounding provenance; scoped credit identity; signed-field coverage; compensation completeness; and current execution eligibility. Keep observation results separate from INV-ARC-016's canonical lineage states. Money and recovered totals come from Ledger; Operations owns signature/chain coverage; PROD owns participation and business membership. Compose them at the FEAT read boundary.
 
@@ -129,7 +154,19 @@ Verification: independent PostgreSQL sessions racing interval/full/residual reco
 
 The [field-by-field Phase 4 review](HISTORICAL_ATTENDANCE_PHASE4_PROOF_REVIEW_20261003.md) incorporates the later read-only TablePlus aggregate observations and exact pinned source. Present audit links, reservation references, positive sequences, scoped cursor admission and consistent monetary projections are structural evidence. Original HMAC envelope context potentially authenticates actor metadata, initiating FEAT and correlation; the separately stored context digest/key is not an HMAC input. The eleven-field v1 payload is narrower than modern monetary proof and original full values are not stored. Legacy key/FEAT differences have source-supported historical mechanisms and are not declared corruption from modern parity alone.
 
-The recorded reversal is positive diagnostic recovery evidence even though Ledger origin pointers are absent; unknown compensation must not become zero. The 153 pricing summaries and 79 incident top-ups remain candidates. Original business visibility/lineage and independent creation/posting/compensation gates remain unsatisfied. Phase 4's review is complete; its conditional integration branch stops. No runtime, schema, normative authority, signature, historical row or production changes are included. The next proposed delivery is existing diagnostic presentation under Phase 5, preserving the visible historical recovery denial and separately requiring an implementation plan. The three-file package (review, tracking handoff and exact public-documentation exclusions) passed **53 distinct targeted documentation checks**, with independent source/authority review clear and final whitespace checks passing. Author and independent overlapping checks are counted once; no runtime or full-suite tests were run.
+The recorded reversal is positive diagnostic recovery evidence even though Ledger origin pointers
+are absent; unknown compensation must not become zero. The 153 pricing summaries and 79 incident
+top-ups remain candidates. Original business visibility/lineage and independent
+creation/posting/compensation gates remain unsatisfied. Phase 4's review is complete; its
+conditional integration branch stops. No runtime, schema, normative authority, signature, historical
+row or production changes are included.
+
+The next proposed delivery is existing diagnostic presentation under Phase 5, preserving the visible
+historical recovery denial and separately requiring an implementation plan. The three-file package
+(review, tracking handoff and exact public-documentation exclusions) passed **53 distinct targeted
+documentation checks**, with independent source/authority review clear and final whitespace checks
+passing. Author and independent overlapping checks are counted once; no runtime or full-suite tests
+were run.
 
 ## Current ruling — Immutable-source reconstruction and lawful new correction
 

@@ -244,7 +244,17 @@ Policies owns `get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500
 
 ### X.2 Original payroll-setting reconstruction inputs
 
-Policies incorporates SPEC-PROD-002 §VI.1 through FEAT-PROD-006/005/003. Its existing bounded immutable setting inputs support original rule-based selection for historical windows. Separate original signed visibility proof is not an additional requirement when complete retained immutable versioned settings determine that selection. Missing, malformed, foreign or tied ambiguous settings deny; use the exact original effective-date/bootstrap selection rule. Return raw `rate_per_minute` separately from `legacy_rate_per_minute`, which encodes only the pinned original falsy-rate $0.25/minute rule; modern pricing never adopts that legacy behavior. Today's active/latest rate cannot reprice history. Operations retains canonical lineage and coverage separately; actual protected-payload or chain contradictions reject, while absent old linkage alone is an explicit coverage gap. No setting is amended, signed or backfilled.
+Policies incorporates SPEC-PROD-002 §VI.1 through FEAT-PROD-006/005/003. Its existing bounded
+immutable setting inputs support original rule-based selection for historical windows. Separate
+original signed visibility proof is not an additional requirement when complete retained immutable
+versioned settings determine that selection. Missing, malformed, foreign or tied ambiguous settings
+deny; use the exact original effective-date/bootstrap selection rule.
+
+Return raw `rate_per_minute` separately from `legacy_rate_per_minute`, which encodes only the pinned
+original falsy-rate $0.25/minute rule; modern pricing never adopts that legacy behavior. Today's
+active/latest rate cannot reprice history. Operations retains canonical lineage and coverage
+separately; actual protected-payload or chain contradictions reject, while absent old linkage alone
+is an explicit coverage gap. No setting is amended, signed or backfilled.
 
 ### X.3 Graph-setting contribution
 
