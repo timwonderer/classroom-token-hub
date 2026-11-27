@@ -33,6 +33,11 @@ def _problem(status: int, error_code: str) -> PasswordlessError:
     ))
 
 
+#: The deployment origin the suite configures (tests/conftest.py) and the fake's ceremonies report.
+EXPECTED_ORIGIN = "https://cth.test"
+EXPECTED_RP_ID = "cth.test"
+
+
 @dataclass
 class FakePasswordless:
     credentials: dict = field(default_factory=dict)  # credential_id -> external user id
@@ -44,6 +49,8 @@ class FakePasswordless:
     strict_missing_deletes: bool = False  # deleting an absent credential is a 404, as the provider may answer
     generic_404_deletes: bool = False  # deletes answer a bare proxy-style 404 (no problem code), whatever is held
     fail_inventory: bool = False  # the credential listing is unavailable
+    origin: str | None = EXPECTED_ORIGIN  # what the browser reported for the ceremony (the real SDK's ``origin``)
+    rp_id: str | None = EXPECTED_RP_ID    # and ``rp_id``
     pending_nickname: str | None = None  # what the browser would register the next credential under
 
     # ---- what tests use to simulate the browser ceremony ----
@@ -72,7 +79,7 @@ class FakePasswordless:
         token = f"verify_{secrets.token_hex(8)}"
         self.tokens[token] = SimpleNamespace(
             success=success, user_id=external_id, credential_id=credential_id, type=type_,
-            nickname=nickname,
+            nickname=nickname, origin=self.origin, rp_id=self.rp_id,
         )
         return token
 

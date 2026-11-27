@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.27 | 2026-11-26 | 1.26 | Normative |
+| SOP-DEP-002 | 1.28 | 2026-11-27 | 1.27 | Normative |
 
 ## I. Purpose
 
@@ -156,6 +156,19 @@ advisory and are recorded as such, never as the independent verifier.
    - `git diff vPREV <SHA> -- requirements.txt migrations/versions` lists what is new.
    - Read the CHANGELOG for new required settings, and confirm by name only (never values) that production's
      `/root/classroom-economy/.env` has them.
+   - Before the first release carrying passkey origin verification (`PASSKEY_EXPECTED_ORIGIN`): (a) confirm by name
+     only that `/root/classroom-economy/.env` has `PASSKEY_EXPECTED_ORIGIN` set to the production origin; and (b) run
+     the aggregate compatibility check below from the operator's machine, with the Passwordless.dev API secret in
+     `PASSWORDLESS_API_KEY`. It is read-only, prints only counts, and keeps no inventory. Every recorded
+     `(rpid, origin)` pair must equal the configured hostname and origin; expect one line whose count equals the
+     total enrolled credentials and whose pair is `<hostname> https://<hostname>`. A non-matching pair blocks the release.
+
+     ```bash
+     curl -s -H "ApiSecret: $PASSWORDLESS_API_KEY" https://v4.passwordless.dev/users/list \
+      | jq -r '.values[].userId' \
+      | while read -r u; do curl -s -H "ApiSecret: $PASSWORDLESS_API_KEY" "https://v4.passwordless.dev/credentials/list?userId=$u" | jq -r '.values[] | "\(.rpid) \(.origin)"'; done \
+      | sort | uniq -c
+     ```
    - For each new migration, run any pre-check its docstring names against production, read-only.
    - Host: `ssh root@cth 'cd /root/classroom-economy && git rev-parse HEAD && git status --porcelain && systemctl
      is-active cth-student-setup redis-server'`. HEAD is the previous release; the tree is clean apart from
@@ -427,6 +440,8 @@ Record:
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.28 (2026-11-27):** §VII.A step 3 adds the pre-window `PASSKEY_EXPECTED_ORIGIN` confirmation and the aggregate `(rpid, origin)` compatibility check before the first release carrying passkey origin verification; owner authorization 2026-11-27.
 
 **Version 1.27 (2026-11-26):** Adds §VII.C, the dependency-gated credential migration (pyotp); owner ruling 2026-11-26.
 

@@ -23,7 +23,7 @@ URLS = {"MARKETING_SITE_URL", "EXTERNAL_DOCS_BASE_URL", "PASSWORDLESS_API_URL"}
 INFORMATION_URLS = {"EXTERNAL_DOCS_BASE_URL", "MARKETING_SITE_URL"}
 OPTIONAL = URLS
 REQUIRED = KEYS | PROVIDERS | (URLS - OPTIONAL) | {"FLASK_ENV", "DATABASE_URL", "STUDENT_SETUP_REDIS_URL",
-                                      "RATELIMIT_STORAGE_URI", "LOG_FILE"}
+                                      "RATELIMIT_STORAGE_URI", "LOG_FILE", "PASSKEY_EXPECTED_ORIGIN"}
 
 
 def require(ok, message):
@@ -93,7 +93,10 @@ def parse_env(raw, cfg):
     require(not missing, "missing runtime fields: " + ", ".join(sorted(missing)))
     expected = {"FLASK_ENV": "production", "DATABASE_URL": f"postgresql:///{cfg['database']}?host=/var/run/postgresql&port=5432",
                 "STUDENT_SETUP_REDIS_URL": "unix://" + SETUP_SOCKET, "RATELIMIT_STORAGE_URI": "redis+unix://" + RATE_SOCKET,
-                "LOG_FILE": "/var/log/cth-web/app.log"}
+                "LOG_FILE": "/var/log/cth-web/app.log",
+                # The manifest hostname is the authoritative deployment origin at install time;
+                # the application itself reads only this variable.
+                "PASSKEY_EXPECTED_ORIGIN": f"https://{cfg['hostname']}"}
     for key, wanted in expected.items():
         require(values[key] == wanted, "incorrect reference binding for " + key)
     for key in KEYS - {"ENCRYPTION_KEY"}:

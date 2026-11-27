@@ -303,6 +303,12 @@ Your **runtime file**, `/etc/cth/runtime.env`, holds the settings read when
 CTH starts. If the release needs a new setting, add it before invoking its
 Flask commands: those commands also load the application configuration.
 
+Releases from the passkey origin verification change onward require the line
+`PASSKEY_EXPECTED_ORIGIN=https://<your hostname>` in `/etc/cth/runtime.env`
+before any Flask command runs; the new parser rejects a runtime file without
+it, and the application refuses to start without it when passkeys are
+configured. The hostname is the one in your installation manifest.
+
 Use the setting names and formats you identified in step 2. If none changed,
 leave the file alone and still run the validation below. Otherwise open the
 private file on the server:

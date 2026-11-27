@@ -17,7 +17,7 @@ class RuntimeTests(unittest.TestCase):
                         tls_cert="/etc/cth/origin.crt", tls_key="/etc/cth/origin.key")
         self.env = {k: str(i) * 64 for i, k in enumerate(sorted(runtime.KEYS))}
         self.env.update(ENCRYPTION_KEY=base64.urlsafe_b64encode(bytes(range(32))).decode(),
-                        FLASK_ENV="production", LOG_FILE="/var/log/cth-web/app.log",
+                        FLASK_ENV="production", LOG_FILE="/var/log/cth-web/app.log", PASSKEY_EXPECTED_ORIGIN="https://hub.example.org",
                         DATABASE_URL="postgresql:///cth_fiction?host=/var/run/postgresql&port=5432",
                         STUDENT_SETUP_REDIS_URL="unix://" + runtime.SETUP_SOCKET,
                         RATELIMIT_STORAGE_URI="redis+unix://" + runtime.RATE_SOCKET,
@@ -42,7 +42,9 @@ class RuntimeTests(unittest.TestCase):
                          ("PASSWORDLESS_API_URL", "https://app.classroomtokenhub.com"),
                          ("PASSWORDLESS_API_URL", "https://provider.example.org@elsewhere.example.org"),
                          ("LD_PRELOAD", "/somewhere/lib.so"), ("TURNSTILE_SECRET_KEY", "ab$HOME"),
-                         ("LOG_FILE", "/opt/cth/app.log")):
+                         ("LOG_FILE", "/opt/cth/app.log"),
+                         ("PASSKEY_EXPECTED_ORIGIN", "https://other.example.org"),
+                         ("PASSKEY_EXPECTED_ORIGIN", "https://hub.example.org/login")):
             with self.subTest(key=key), self.assertRaises(ValueError) as err:
                 self.parse(dict(self.env, **{key: bad}))
             self.assertNotIn(bad, str(err.exception))

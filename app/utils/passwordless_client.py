@@ -15,8 +15,6 @@ from passwordless import (
     PasswordlessOptions,
     RegisterToken,
     RegisteredToken,
-    VerifySignIn,
-    VerifiedUser,
 )
 
 
@@ -76,25 +74,6 @@ def create_register_token(user_id: str, username: str, displayname: str) -> str:
 
     response: RegisteredToken = client.register_token(register_token)
     return response.token
-
-
-def verify_signin_token(token: str) -> VerifiedUser:
-    """
-    Verify a sign-in token from the frontend.
-
-    Args:
-        token: The authentication token from frontend
-
-    Returns:
-        VerifiedUser object containing user_id and metadata
-
-    Raises:
-        Exception: If verification fails
-    """
-    client = get_passwordless_client()
-
-    verify_signin = VerifySignIn(token)
-    return client.sign_in(verify_signin)
 
 
 def get_public_api_key() -> str:

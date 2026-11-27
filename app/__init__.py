@@ -289,9 +289,26 @@ def create_app():
     # SECRET_KEY default and raises "CSRF is not configured."
     csrf_secret_key = os.getenv("CSRF_SECRET_KEY", "").strip() or None
 
+    # The deployment's public origin, the only expectation passkey ceremonies are checked
+    # against (passkey_service.check_ceremony_binding). passwordless.dev records whatever
+    # origin and RP ID the browser supplied, so the app must supply its own. Required in
+    # every environment whenever passkeys are configured; there is no development bypass.
+    from app.services.passkey_service import PasskeyOriginConfigError, parse_expected_origin
+    passkey_expected_origin = os.getenv("PASSKEY_EXPECTED_ORIGIN", "").strip()
+    passkey_expected_rp_id = ""
+    if os.getenv("PASSWORDLESS_API_KEY") and not passkey_expected_origin:
+        raise RuntimeError("PASSKEY_EXPECTED_ORIGIN is required when PASSWORDLESS_API_KEY is set")
+    if passkey_expected_origin:
+        try:
+            passkey_expected_origin, passkey_expected_rp_id = parse_expected_origin(passkey_expected_origin)
+        except PasskeyOriginConfigError as exc:
+            raise RuntimeError(str(exc)) from exc
+
     app.config.from_mapping(
         DEBUG=False,
         ENV=flask_env,
+        PASSKEY_EXPECTED_ORIGIN=passkey_expected_origin,
+        PASSKEY_EXPECTED_RP_ID=passkey_expected_rp_id,
         SECRET_KEY=os.environ["SECRET_KEY"],
         SECRET_KEY_FALLBACKS=secret_key_fallbacks,
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],

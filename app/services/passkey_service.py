@@ -20,6 +20,7 @@ import logging
 import os
 
 import sqlalchemy as sa
+from flask import current_app
 
 from app.extensions import db
 from app.models import User
@@ -62,16 +63,72 @@ def _credentials() -> sa.Table:
     return db.metadata.tables["passkey_credentials"]
 
 
+class PasskeyOriginConfigError(ValueError):
+    """``PASSKEY_EXPECTED_ORIGIN`` is not a bare ``http(s)://host[:port]`` origin."""
+
+
+def parse_expected_origin(raw: str) -> tuple[str, str]:
+    """``(origin, rp_id)`` from the configured deployment origin; raises ``PasskeyOriginConfigError``.
+
+    The origin is ``scheme://host[:port]`` with no userinfo, path, query or fragment. The RP ID
+    is its hostname, lowercased and without the port.
+    """
+    from urllib.parse import urlsplit
+    value = (raw or "").strip()
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname
+        parts.port  # noqa: B018  (raises ValueError on a malformed port)
+    except ValueError as exc:
+        raise PasskeyOriginConfigError("PASSKEY_EXPECTED_ORIGIN is not a valid origin") from exc
+    if (
+        parts.scheme not in ("http", "https") or not host or "@" in parts.netloc
+        or parts.path or parts.query or parts.fragment or value.endswith(("?", "#"))
+        or any(c.isspace() for c in value)
+    ):
+        raise PasskeyOriginConfigError(
+            "PASSKEY_EXPECTED_ORIGIN must be https://host[:port] or http://host[:port] with no path, "
+            "query, fragment or userinfo"
+        )
+    return f"{parts.scheme}://{parts.netloc}", host.lower()
+
+
+def check_ceremony_binding(verified) -> None:
+    """Refuse a verified ceremony whose origin or RP ID is not this deployment's. Pure.
+
+    passwordless.dev records the origin and RP ID the browser supplied; it keeps no allowed
+    list, so this compares what it echoes with the configured ``PASSKEY_EXPECTED_ORIGIN`` and
+    its hostname (FEAT-IDEN-102 §VI). The expectation comes only from configuration, never
+    from the request. The origin match is case-sensitive; the RP ID is a case-insensitive
+    hostname match. A missing or unconfigured value is a mismatch.
+    """
+    config = current_app.config
+    expected_origin = config.get("PASSKEY_EXPECTED_ORIGIN") or ""
+    expected_rp_id = config.get("PASSKEY_EXPECTED_RP_ID") or ""
+    origin = getattr(verified, "origin", None)
+    rp_id = getattr(verified, "rp_id", None)
+    if (
+        not expected_origin or not expected_rp_id
+        or not isinstance(origin, str) or not isinstance(rp_id, str)
+        or origin.rstrip("/") != expected_origin.rstrip("/")
+        or rp_id.lower() != expected_rp_id.lower()
+    ):
+        raise PasskeyError("ceremony origin or RP ID does not match this deployment")
+
+
 def _verify(token: str):
     from passwordless import PasswordlessError, VerifySignIn
     if not token or not isinstance(token, str):
         raise PasskeyError("missing token")
     try:
-        return _client().sign_in(VerifySignIn(token))
+        verified = _client().sign_in(VerifySignIn(token))
     except PasswordlessError as exc:
         # An invalid, expired or already-used token is a refused credential,
         # not a server error.
         raise PasskeyError("passwordless.dev rejected the token") from exc
+    # Every verification (registration, sign-in, step-up, TOTP replacement) passes here.
+    check_ceremony_binding(verified)
+    return verified
 
 
 def create_registration_token(user_id: str, *, alias: str, display_name: str, expires_at=None) -> str:

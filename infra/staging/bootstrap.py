@@ -94,6 +94,7 @@ def checked_runtime(args, machine_id, env):
     values.update(
         ENCRYPTION_KEY=base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
         FLASK_ENV="production",
+        PASSKEY_EXPECTED_ORIGIN="https://" + cfg["hostname"],
         DATABASE_URL="postgresql:///cth_stage?host=/var/run/postgresql&port=5432",
         RATELIMIT_STORAGE_URI="redis+unix://" + runtime.RATE_SOCKET,
         STUDENT_SETUP_REDIS_URL="unix://" + runtime.SETUP_SOCKET,
