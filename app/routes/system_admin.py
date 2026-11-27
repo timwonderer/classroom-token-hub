@@ -224,8 +224,7 @@ def logout():
 def passkey_register_start():
     """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token.
 
-    A ``replace_passkey_id`` in the body makes this a selected replacement. A system
-    admin has no signup capability and always proves fresh TOTP.
+    A ``replace_passkey_id`` in the body makes this a selected replacement.
     """
     ctx = g.canonical_context
     user = get_current_user()
@@ -234,7 +233,6 @@ def passkey_register_start():
     username = session.get("sysadmin_auth_username") or user.auth_username or f"sysadmin_{user.id}"
     return passkey_management.register_start(
         user_id=user.id, alias=username, display_name=f"System administrator: {username}",
-        allow_signup_capability=False,
     )
 
 

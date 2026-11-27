@@ -10210,7 +10210,7 @@ def api_economy_validate(feature):
 @admin_required
 @limiter.limit("10 per minute")
 def passkey_register_start():
-    """FEAT-IDEN-102: authorize with a fresh TOTP code (or the signup capability), issue a registration token.
+    """FEAT-IDEN-102: authorize with a fresh TOTP code, issue a registration token.
 
     A ``replace_passkey_id`` in the body makes this a selected replacement.
     """
@@ -10221,7 +10221,6 @@ def passkey_register_start():
         user_id=user.id,
         alias=session.get("admin_auth_username") or f"user_{user.id}",
         display_name=user.get_display_username(),
-        allow_signup_capability=True,
     )
 
 

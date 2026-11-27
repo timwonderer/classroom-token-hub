@@ -174,16 +174,10 @@ class TotpCode:
     code: str = field(repr=False)
 
 
-@dataclass(frozen=True)
-class SignupCapability:
-    """The signup-derived five-minute enrollment capability (FEAT-IDEN-101)."""
-    nonce: str = field(repr=False)
-
-
 #: Which proof kinds may open which operation (DOM-IDEN-003 §VII.A).
 _PROOFS_FOR_PURPOSE = {
     CredentialOperationPurpose.TOTP_REPLACE: (PasskeyAssertion,),
-    CredentialOperationPurpose.PASSKEY_ENROLL: (TotpCode, SignupCapability),
+    CredentialOperationPurpose.PASSKEY_ENROLL: (TotpCode,),
     CredentialOperationPurpose.PASSKEY_REPLACE: (TotpCode,),
     CredentialOperationPurpose.PASSKEY_REVOKE: (TotpCode,),
 }
@@ -509,10 +503,8 @@ def open_operation(
 
     The command, not its caller, checks that the proof kind matches the purpose
     (a passkey assertion for ``totp_replace``, already provider-verified by
-    ``verify_proof`` and passed as ``verified``; a TOTP code, or for a teacher's first
-    passkey enrollment the signup capability, for passkey work) and evaluates the
-    proof against current state. A signup capability is an operation issued by
-    ``issue_signup_capability``; presenting it returns that operation, never a new one. It refuses when the principal already has an open
+    ``verify_proof`` and passed as ``verified``; a TOTP code for passkey work) and
+    evaluates the proof against current state. It refuses when the principal already has an open
     operation, which the partial unique index also enforces.
 
     Raises ``CredentialOperationRefused`` (and ``PasskeyError`` for a refused
@@ -546,9 +538,6 @@ def open_operation(
 
     if recovery_setup_is_live(principal.id):
         raise CredentialOperationRefused("recovery_active")
-
-    if isinstance(proof, SignupCapability):
-        return _consume_signup_capability(principal, proof, session_nonce)
 
     # Decide on the proof against current, locked state.
     if isinstance(proof, PasskeyAssertion):
@@ -837,8 +826,6 @@ def _emit_outcome(*, action: str, actor_type: str, stage_before: str, stage_afte
 # (FEAT-IDEN-102, FEAT-IDEN-107; SPEC-IDEN-002 §V workflow stages)
 # ---------------------------------------------------------------------------
 
-#: Signup-derived initial-enrollment capability lifetime (FEAT-IDEN-101, SPEC-IDEN-002 §V).
-SIGNUP_CAPABILITY_SECONDS = 5 * 60
 #: Stands in for the session binding verifier once it is consumed into a retirement
 #: intent (SPEC-IDEN-002 §VI: erase on consumption). It is not the digest of any nonce.
 ERASED_SESSION_BINDING = "0" * 64
@@ -883,50 +870,6 @@ def get_open_operation(user_id: str) -> CredentialOperation | None:
         )
         .one_or_none()
     )
-
-
-def issue_signup_capability(user: User, *, session_nonce: str) -> str:
-    """Issue the one five-minute initial-passkey capability for a just-provisioned teacher.
-
-    FEAT-IDEN-101 calls this in the transaction that provisions the principal, after the
-    signup TOTP was verified and the teacher elected to enroll now. The capability is an
-    ``authorized`` ``passkey_enroll`` operation bound to the principal, the credential
-    generation and the signup session; its id is the capability the browser presents.
-    It cannot replace a credential, is never renewed and is never rebuilt from a login.
-    """
-    _require_feat("FEAT-IDEN-101")
-    principal = _lock_user(user.id)
-    if principal is None or principal.user_role is not UserRole.TEACHER or not principal.totp_secret_encrypted:
-        raise CredentialOperationRefused("ineligible_principal")
-    if (
-        not isinstance(session_nonce, str) or not session_nonce
-        or not _digests_equal(principal.current_session_nonce, session_nonce)
-    ):
-        raise CredentialOperationRefused("session_not_current")
-    if has_activated_passkey(principal):
-        raise CredentialOperationRefused("initial_enrollment_only")
-    if get_open_operation(principal.id) is not None:
-        raise CredentialOperationRefused("operation_already_open")
-    now = _now()
-    deadline = canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
-        timestamp=now, elapsed_seconds=SIGNUP_CAPABILITY_SECONDS,
-    ).shifted_timestamp_utc
-    session_end = principal.current_session_expires_at
-    if session_end is not None and _is_earlier(session_end, deadline):
-        deadline = session_end
-    operation = CredentialOperation(
-        user_id=principal.id,
-        purpose=CredentialOperationPurpose.PASSKEY_ENROLL,
-        stage=CredentialOperationStage.AUTHORIZED,
-        authorized_generation=principal.credential_generation,
-        session_binding_hash=session_binding_digest(CredentialOperationPurpose.PASSKEY_ENROLL, session_nonce),
-        deadline_at=deadline,
-        attempt_count=0,
-    )
-    db.session.add(operation)
-    db.session.flush()
-    return operation.id
 
 
 #: A provider registration token's own lifetime; the SDK default, stated so it is not implicit.
@@ -1054,34 +997,6 @@ def open_passkey_operation_presentation(user_id: str) -> tuple[str | None, str |
     if _deadline_open(operation):
         return "registering", registration_binding(operation)
     return None, None
-
-
-def _consume_signup_capability(principal: User, proof: SignupCapability, session_nonce) -> CredentialOperation:
-    """Resolve a presented capability to the live operation it names, or refuse."""
-    if principal.user_role is not UserRole.TEACHER:
-        raise CredentialOperationRefused("proof_rejected")
-    if has_activated_passkey(principal):
-        # The capability authorizes initial enrollment only (FEAT-IDEN-102 §V).
-        raise CredentialOperationRefused("initial_enrollment_only")
-    try:
-        capability_id = str(uuid.UUID(str(proof.nonce)))
-    except ValueError:
-        raise CredentialOperationRefused("proof_rejected") from None
-    operation = (
-        db.session.query(CredentialOperation)
-        .filter_by(id=capability_id, user_id=principal.id)
-        .populate_existing()
-        .with_for_update()
-        .one_or_none()
-    )
-    if (
-        operation is None
-        or operation.purpose is not CredentialOperationPurpose.PASSKEY_ENROLL
-        or operation.stage is not CredentialOperationStage.AUTHORIZED
-    ):
-        raise CredentialOperationRefused("proof_rejected")
-    _recheck_pre_intent(principal, operation, CredentialOperationStage.AUTHORIZED, session_nonce)
-    return operation
 
 
 def _lock_passkey_operation(operation: CredentialOperation, *purposes: CredentialOperationPurpose):

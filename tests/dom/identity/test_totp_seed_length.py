@@ -48,7 +48,6 @@ from app.services.credential_lifecycle import (
     CredentialCompliance,
     CredentialOperationRefused,
     PasskeyAssertion,
-    SignupCapability,
     TotpCode,
     credential_compliance,
     decoded_secret_bits,
@@ -427,32 +426,6 @@ def test_open_operation_refuses_an_assertion_for_passkey_work(client, app, fake_
         )
 
     assert refused.value.category == "proof_kind_mismatch"
-
-
-def test_an_unissued_signup_capability_is_refused(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless, passkey=False)  # still owed a first passkey
-
-    with pytest.raises(CredentialOperationRefused) as refused:
-        open_credential_operation(
-            user_id=user_id, purpose="passkey_enroll",
-            proof=SignupCapability("x" * 43), session_nonce=_nonce(user_id),
-        )
-
-    assert refused.value.category == "proof_rejected"
-    assert CredentialOperation.query.count() == 0
-
-
-def test_a_signup_capability_is_refused_once_a_passkey_is_activated(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-
-    with pytest.raises(CredentialOperationRefused) as refused:
-        open_credential_operation(
-            user_id=user_id, purpose="passkey_enroll",
-            proof=SignupCapability("x" * 43), session_nonce=_nonce(user_id),
-        )
-
-    assert refused.value.category == "initial_enrollment_only"
-    assert CredentialOperation.query.count() == 0
 
 
 def test_totp_code_opens_passkey_enrollment_and_a_wrong_code_does_not(client, app, fake_passwordless):

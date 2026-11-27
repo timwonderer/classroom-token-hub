@@ -62,8 +62,8 @@ def start_registration(*, user_id, session_nonce, proof, alias, display_name,
                        replace_passkey_id=None, correlation_id=None) -> tuple[str, str]:
     """Authorize, persist the pending registration, then issue one provider token.
 
-    ``proof`` is a fresh ``TotpCode`` or, for a teacher's first passkey, the
-    ``SignupCapability``. ``replace_passkey_id`` (a local binding id) makes this a
+    ``proof`` is a fresh ``TotpCode``, the authorization for a first enrollment as for any
+    other. ``replace_passkey_id`` (a local binding id) makes this a
     selected replacement, which only a TOTP code may authorize. The pending state is
     committed before the provider is asked for a token, so a registration whose
     credential id is not yet known is protected. Returns ``(token, binding)``; the binding

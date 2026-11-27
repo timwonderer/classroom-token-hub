@@ -1,7 +1,7 @@
 """Passkey enrollment, selected replacement and revocation (FEAT-IDEN-102, FEAT-IDEN-107).
 
 SPEC-IDEN-002 §V/§IX and DOM-IDEN-003 §VII.A: a passkey is added, replaced or removed
-only after fresh TOTP (or, for a teacher's first passkey, the signup capability); the
+only after fresh TOTP; the
 pending registration is persisted before the provider issues a token; the old credential
 is retired remotely before its local binding goes; and completion advances the
 credential generation, voids the sign-in and emits one non-identifying outcome.
@@ -38,7 +38,7 @@ from app.models import (
 )
 from app.services import credential_lifecycle as lifecycle
 from app.services import passkey_service
-from app.services.credential_lifecycle import CredentialOperationRefused, SignupCapability, TotpCode
+from app.services.credential_lifecycle import CredentialOperationRefused, TotpCode
 from app.utils.encryption import decrypt_totp
 from app.utils.user_ids import passkey_external_id
 from tests.helpers import temporal
@@ -524,118 +524,6 @@ def test_a_failed_token_request_cancels_the_operation(client, app, fake_password
 
 
 # ---------------------------------------------------------------------------
-# signup capability (teacher only; FEAT-IDEN-101 issues it)
-# ---------------------------------------------------------------------------
-
-def _issue_capability(user_id, nonce=None):
-    with FEATContext("FEAT-IDEN-101", idempotency_key=f"test:capability:{uuid.uuid4().hex}"):
-        return lifecycle.issue_signup_capability(_user(user_id), session_nonce=nonce or _nonce(user_id))
-
-
-def test_the_signup_capability_authorizes_the_first_passkey_without_a_code(client, app, fake_passwordless):
-    _, user_id = _teacher(client, app, fake_passwordless, passkeys=())
-    capability = _issue_capability(user_id)
-
-    started = client.post("/admin/passkey/register/start", json={"signup_capability": capability})
-    assert started.status_code == 200, started.get_json()
-    client.last_registration_binding = started.get_json()["binding"]
-    fake_passwordless.pending_nickname = client.last_registration_binding
-    token, credential_id = _new_credential(fake_passwordless, user_id)
-    finished = finish_registration(client, token)
-
-    assert finished.status_code == 200
-    assert _bound(user_id) == [credential_id]
-    assert _signed_out(client)
-
-
-def test_a_signup_capability_cannot_be_replayed_or_reused_for_a_second_operation(client, app, fake_passwordless):
-    _, user_id = _teacher(client, app, fake_passwordless, passkeys=())
-    capability = _issue_capability(user_id)
-    assert client.post("/admin/passkey/register/start", json={"signup_capability": capability}).status_code == 200
-
-    replay = client.post("/admin/passkey/register/start", json={"signup_capability": capability})
-
-    assert replay.status_code == 403 and replay.get_json()["code"] == "proof_rejected"
-
-
-def test_a_signup_capability_expires_after_five_minutes_and_is_never_renewed(client, app, fake_passwordless):
-    _, user_id = _teacher(client, app, fake_passwordless, passkeys=())
-    capability = _issue_capability(user_id)
-    (operation,) = _open_operations(user_id)
-    assert temporal.seconds_between(temporal.now(), operation.deadline_at) <= lifecycle.SIGNUP_CAPABILITY_SECONDS
-
-    with temporal.pinned_clock(temporal.shifted(operation.deadline_at, seconds=1)):
-        response = client.post("/admin/passkey/register/start", json={"signup_capability": capability})
-
-    assert response.status_code == 409 and response.get_json()["code"] == "operation_expired"
-
-
-def test_a_signup_capability_is_bound_to_its_session_principal_and_purpose(client, app, fake_passwordless):
-    _, user_id = _teacher(client, app, fake_passwordless, passkeys=())
-    other = initialize("biology_block_a", app)
-    other_id = other.teacher_user.id
-    give_totp_seed(other_id)
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:nonce:{uuid.uuid4().hex}"):
-        _user(other_id).current_session_nonce = "the-other-teachers-sign-in"
-    capability = _issue_capability(user_id, nonce=_nonce(user_id))
-
-    # Another principal, with a real session of its own, presenting it.
-    with pytest.raises(CredentialOperationRefused) as other_principal:
-        feat.start_registration(
-            user_id=other_id, session_nonce="the-other-teachers-sign-in",
-            proof=SignupCapability(capability), alias="a", display_name="A",
-        )
-    assert other_principal.value.category == "proof_rejected"
-    # A selected replacement can never be authorized by it.
-    with pytest.raises(CredentialOperationRefused) as replacement:
-        feat.start_registration(
-            user_id=user_id, session_nonce=_nonce(user_id), proof=SignupCapability(capability),
-            alias="a", display_name="A", replace_passkey_id=1,
-        )
-    assert replacement.value.category == "proof_kind_mismatch"
-    # The same principal from a different session.
-    with pytest.raises(CredentialOperationRefused) as session:
-        feat.start_registration(
-            user_id=user_id, session_nonce="a-different-sign-in", proof=SignupCapability(capability),
-            alias="a", display_name="A",
-        )
-    assert session.value.category == "session_not_current"
-    assert fake_passwordless.calls == []
-
-
-def test_the_signup_capability_is_for_a_first_passkey_only(client, app, fake_passwordless):
-    _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
-
-    with pytest.raises(CredentialOperationRefused) as issuing:
-        _issue_capability(user_id)
-    assert issuing.value.category == "initial_enrollment_only"
-    assert _open_operations(user_id) == []
-
-    # A capability issued while the teacher held none cannot be spent once one exists.
-    _, second_id = _teacher(client, app, fake_passwordless, passkeys=(), key="biology_block_a")
-    capability = _issue_capability(second_id)
-    record_passkey(second_id, "cred-late", fake_passwordless)
-    refused = client.post("/admin/passkey/register/start", json={"signup_capability": capability})
-    assert refused.status_code == 403
-    assert refused.get_json()["code"] == "initial_enrollment_only"
-    assert fake_passwordless.calls == []
-
-
-def test_a_sysadmin_has_no_signup_capability(client, app, fake_passwordless):
-    user_id = _sysadmin(client, fake_passwordless, passkeys=())
-
-    with pytest.raises(CredentialOperationRefused):
-        with FEATContext("FEAT-IDEN-101", idempotency_key=f"test:capability:{uuid.uuid4().hex}"):
-            lifecycle.issue_signup_capability(_user(user_id), session_nonce=_nonce(user_id))
-    with pytest.raises(CredentialOperationRefused) as refused:
-        feat.start_registration(
-            user_id=user_id, session_nonce=_nonce(user_id), proof=SignupCapability(str(uuid.uuid4())),
-            alias="a", display_name="A",
-        )
-    assert refused.value.category == "proof_rejected"
-
-
-# ---------------------------------------------------------------------------
 # selected replacement
 # ---------------------------------------------------------------------------
 
@@ -1105,13 +993,10 @@ def test_a_sysadmin_enrolls_replaces_and_revokes_through_the_same_implementation
     assert {e.feat_id for e in _outcomes()} == {"FEAT-IDEN-102", "FEAT-IDEN-107"}
 
 
-def test_a_sysadmin_needs_fresh_totp_and_cannot_use_a_capability(client, app, fake_passwordless):
+def test_a_sysadmin_needs_fresh_totp(client, app, fake_passwordless):
     user_id = _sysadmin(client, fake_passwordless, passkeys=("cred-s1",))
 
     assert client.post("/sysadmin/passkey/register/start", json={}).status_code == 403
-    response = client.post("/sysadmin/passkey/register/start", json={"signup_capability": str(uuid.uuid4())})
-
-    assert response.status_code == 403
     assert fake_passwordless.calls == [] and _operations(user_id) == []
 
 

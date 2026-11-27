@@ -95,16 +95,12 @@ def _signed_out_success(result, login_endpoint: str):
     }), 200
 
 
-def register_start(*, user_id: str, alias: str, display_name: str, allow_signup_capability: bool):
+def register_start(*, user_id: str, alias: str, display_name: str):
     """Begin an enrollment, or a replacement when ``replace_passkey_id`` is given."""
     def action():
         data = _body()
-        capability = data.get("signup_capability")
-        if allow_signup_capability and capability is not None:
-            proof = lifecycle.SignupCapability(str(capability))
-        else:
-            code = data.get("totp_code")
-            proof = lifecycle.TotpCode(code if isinstance(code, str) else "")
+        code = data.get("totp_code")
+        proof = lifecycle.TotpCode(code if isinstance(code, str) else "")
         replace = data.get("replace_passkey_id")
         if replace is not None and (isinstance(replace, bool) or not isinstance(replace, int)):
             raise lifecycle.CredentialOperationRefused("credential_not_found")
