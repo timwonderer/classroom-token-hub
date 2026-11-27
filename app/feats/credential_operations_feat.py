@@ -113,7 +113,8 @@ def issue_totp_replacement_challenge(*, user_id, session_nonce) -> str:
 def begin_totp_replacement(*, user_id, session_nonce, proof, account_name, correlation_id=None):
     """Authorize a replacement with a fresh passkey assertion, then stage the pending seed.
 
-    Returns ``(secret, provisioning_uri)``. The principal's current secret is untouched. If
+    Returns ``(secret, provisioning_uri, binding)``; ``binding`` names this replacement for its Cancel
+    control (``abandon_totp_replacement``). The principal's current secret is untouched. If
     staging fails after the operation opened, the operation is cancelled so nothing is left
     holding the principal's single operation slot.
     """
@@ -122,10 +123,12 @@ def begin_totp_replacement(*, user_id, session_nonce, proof, account_name, corre
         session_nonce=session_nonce, correlation_id=correlation_id,
     )
     try:
-        return hold_totp_candidate(
+        secret, uri = hold_totp_candidate(
             user_id=user_id, operation_id=operation_id, session_nonce=session_nonce,
             account_name=account_name, correlation_id=correlation_id,
         )
+        binding = lifecycle.registration_binding(_own_operation(user_id, operation_id))
+        return secret, uri, binding
     except Exception:
         db.session.rollback()
         try:
@@ -135,12 +138,14 @@ def begin_totp_replacement(*, user_id, session_nonce, proof, account_name, corre
         raise
 
 
-def _open_replacement_id(user_id) -> str:
+def _open_replacement_id(user_id, binding=None) -> str:
     operation = lifecycle.get_open_operation(user_id)
     if operation is None:
         raise lifecycle.CredentialOperationRefused("operation_not_found")
     if operation.purpose is not CredentialOperationPurpose.TOTP_REPLACE:
         raise lifecycle.CredentialOperationRefused("wrong_purpose")
+    if binding is not None:
+        lifecycle.check_registration_binding(operation, binding)
     operation_id = operation.id
     release_read_transaction()
     return operation_id
@@ -153,10 +158,16 @@ def confirm_totp_replacement(*, user_id, session_nonce, code) -> bool:
     )
 
 
-def abandon_totp_replacement(*, user_id, session_nonce) -> bool:
-    """Cancel the principal's own open replacement, keeping the existing TOTP."""
+def abandon_totp_replacement(*, user_id, session_nonce, binding=None) -> bool:
+    """Cancel the principal's own open replacement, keeping the existing TOTP.
+
+    When ``binding`` is supplied it names the replacement being cancelled and must be the open
+    operation's (``binding_mismatch`` otherwise, nothing cancelled), so a late Cancel from a
+    superseded attempt cannot cancel a newer one; as for passkey changes, omitting it cancels
+    the open replacement.
+    """
     return cancel_totp_replacement(
-        user_id=user_id, operation_id=_open_replacement_id(user_id), session_nonce=session_nonce,
+        user_id=user_id, operation_id=_open_replacement_id(user_id, binding), session_nonce=session_nonce,
     )
 
 

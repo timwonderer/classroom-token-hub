@@ -1005,6 +1005,17 @@ def open_totp_replacement_in_progress(user_id: str) -> bool:
     )
 
 
+def open_totp_replacement_binding(user_id: str) -> str | None:
+    """The registration binding of the principal's live TOTP replacement, for its Cancel control. Pure read.
+
+    Same derivation as the passkey operations' binding, so a late Cancel from a superseded
+    replacement names an operation that is no longer open (``binding_mismatch``).
+    """
+    if not open_totp_replacement_in_progress(user_id):
+        return None
+    return registration_binding(get_open_operation(user_id))
+
+
 def _lock_passkey_operation(operation: CredentialOperation, *purposes: CredentialOperationPurpose):
     principal = _lock_user(operation.user_id)
     locked = _lock_operation(operation.id)

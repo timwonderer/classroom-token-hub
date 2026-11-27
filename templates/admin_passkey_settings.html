@@ -93,7 +93,7 @@
                     <div id="totp-replace-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
                     {% if totp_replacement_in_progress %}
                     <p>A replacement is already in progress. Cancel it to start again, or wait a few minutes for it to expire. Your current authenticator is unchanged.</p>
-                    <button type="button" class="btn btn-outline-secondary" id="totpCancelButton">Cancel the replacement</button>
+                    <button type="button" class="btn btn-outline-secondary" id="totpCancelButton" data-binding="{{ totp_replacement_binding or '' }}">Cancel the replacement</button>
                     {% else %}
                     <button type="button" class="btn btn-outline-primary" id="totpReplaceButton"{% if not credentials or operation_state %} disabled{% endif %}>Replace authenticator app</button>
                     {% if not credentials %}<div class="form-text">Register a passkey first; it is the proof a replacement needs.</div>{% endif %}

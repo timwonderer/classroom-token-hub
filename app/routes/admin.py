@@ -10418,6 +10418,7 @@ def passkey_settings():
                          credentials=credentials,
                          operation_state=operation_state,
                          operation_binding=operation_binding,
+                         totp_replacement_binding=credential_lifecycle.open_totp_replacement_binding(user_id),
                          totp_replacement_in_progress=credential_lifecycle.open_totp_replacement_in_progress(user_id),
                          passkey_urls=_passkey_urls(),
                          totp_urls=_totp_urls())

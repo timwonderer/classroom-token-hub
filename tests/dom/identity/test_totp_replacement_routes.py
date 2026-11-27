@@ -13,6 +13,7 @@ import pyotp
 import pytest
 
 from app import db
+from app.feats.base import FEATContext
 from app.models import AuditEvent, CredentialOperation, CredentialOperationStage, User
 from app.services import credential_lifecycle as lifecycle
 from app.utils.encryption import decrypt_totp
@@ -301,3 +302,47 @@ def test_FEAT_IDEN_106__the_challenge_endpoint_stores_nothing(client, app, fake_
     body = _challenge(client, "/admin")
     assert body["challenge"] and body["apiKey"] and body["alias"]
     assert _ops(user_id) == []
+
+
+def test_FEAT_IDEN_106__a_teacher_with_no_active_class_can_replace_the_totp(client, app, fake_passwordless):
+    """FEAT-IDEN-106 §II: no active classroom is required, so no endpoint redirects to onboarding."""
+    _, user_id = _teacher(client, app, fake_passwordless)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:classless:{uuid.uuid4().hex}"):
+        user = _user(user_id)
+        user.last_active_class_id = None
+        user.last_active_seat_id = None
+
+    assert _challenge(client, "/admin")["alias"]
+    new_secret = _start(client, fake_passwordless, "cred-a").get_json()["secret"]
+    assert client.post("/admin/totp/replace/cancel").status_code == 200
+    assert _start(client, fake_passwordless, "cred-a").status_code == 200
+    secret = _open_ops(user_id)[0].pending_totp_encrypted
+    done = _confirm(client, pyotp.TOTP(decrypt_totp(secret)).at(temporal.now()))
+    assert done.status_code == 200 and done.get_json()["redirect"].endswith("/admin/login")
+    assert new_secret != decrypt_totp(_user(user_id).totp_secret_encrypted)
+
+
+@pytest.mark.parametrize("prefix", PREFIXES)
+def test_FEAT_IDEN_106__a_stale_cancel_cannot_cancel_a_newer_replacement(client, app, fake_passwordless, prefix):
+    user_id = _principal(client, app, fake_passwordless, prefix)
+    first = _start(client, fake_passwordless, "cred-a", prefix).get_json()["binding"]
+    assert client.post(f"{prefix}/totp/replace/cancel", json={"binding": first}).status_code == 200
+    second = _start(client, fake_passwordless, "cred-a", prefix).get_json()["binding"]
+    assert first != second
+
+    stale = client.post(f"{prefix}/totp/replace/cancel", json={"binding": first})
+    assert stale.status_code == 409 and stale.get_json()["code"] == "binding_mismatch"
+    (operation,) = _open_ops(user_id)
+    assert operation.pending_totp_encrypted is not None
+
+    assert client.post(f"{prefix}/totp/replace/cancel", json={"binding": "not-a-binding"}).status_code == 409
+    assert client.post(f"{prefix}/totp/replace/cancel", json={"binding": second}).status_code == 200
+    assert _open_ops(user_id) == []
+
+
+@pytest.mark.parametrize("prefix", PREFIXES)
+def test_FEAT_IDEN_106__the_settings_page_carries_the_binding_of_the_open_replacement(client, app, fake_passwordless, prefix):
+    user_id = _principal(client, app, fake_passwordless, prefix)
+    binding = _start(client, fake_passwordless, "cred-a", prefix).get_json()["binding"]
+    page = client.get(f"{prefix}/passkey/settings").get_data(as_text=True)
+    assert f'id="totpCancelButton" data-binding="{binding}"' in page

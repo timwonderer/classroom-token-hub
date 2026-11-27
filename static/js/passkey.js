@@ -379,6 +379,8 @@ function setupTotpReplacement(config) {
                 const staged = await postPasskeyJson(config.startUrl, { token: result.token, challenge: challenge });
                 byId(config.qrId).src = staged.qr;
                 byId(config.secretId).textContent = staged.secret;
+                const abandon = byId(config.abandonButtonId);
+                if (abandon && staged.binding) { abandon.dataset.binding = staged.binding; }
                 byId(config.setupId).hidden = false;
                 const codeInput = byId(config.codeInputId);
                 if (codeInput) { codeInput.focus(); }
@@ -416,7 +418,8 @@ function setupTotpReplacement(config) {
         button.addEventListener('click', async () => {
             try {
                 button.disabled = true;
-                await postPasskeyJson(config.cancelUrl, {});
+                const body = button.dataset.binding ? { binding: button.dataset.binding } : {};
+                await postPasskeyJson(config.cancelUrl, body);
                 window.location.reload();
             } catch (error) {
                 button.disabled = false;

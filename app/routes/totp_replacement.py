@@ -30,6 +30,7 @@ _REFUSALS = {
     "challenge_invalid": _PROOF_REFUSED,
     "proof_unverified": _PROOF_REFUSED,
     "operation_already_open": (409, "Another credential change is already in progress. Cancel it or wait for it to expire."),
+    "binding_mismatch": (409, "That replacement is no longer the one in progress. Reload the page."),
     "operation_not_found": (404, "There is no authenticator replacement in progress."),
     "wrong_purpose": (409, "A different credential change is in progress. Finish or cancel it first."),
     "session_not_current": (401, "Your sign-in is no longer current. Sign in again."),
@@ -95,11 +96,11 @@ def start(*, user_id: str, account_name: str):
         proof = lifecycle.PasskeyAssertion(
             token if isinstance(token, str) else "", answered if isinstance(answered, str) else "",
         )
-        secret, uri = feat.begin_totp_replacement(
+        secret, uri, binding = feat.begin_totp_replacement(
             user_id=user_id, session_nonce=session.get("current_session_nonce"),
             proof=proof, account_name=account_name,
         )
-        return jsonify({"secret": secret, "qr": _qr_data_uri(uri)}), 200
+        return jsonify({"secret": secret, "qr": _qr_data_uri(uri), "binding": binding}), 200
     return _guarded(action)
 
 
@@ -124,8 +125,10 @@ def confirm(*, user_id: str, login_endpoint: str):
 def cancel(*, user_id: str):
     """Cancel the open replacement; the existing authenticator is untouched."""
     def action():
+        # An omitted key or JSON null is the unbound cancel; any other value is refused by the FEAT.
         feat.abandon_totp_replacement(
             user_id=user_id, session_nonce=session.get("current_session_nonce"),
+            binding=_body().get("binding"),
         )
         return jsonify({"success": True}), 200
     return _guarded(action)

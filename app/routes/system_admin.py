@@ -430,6 +430,7 @@ def passkey_settings():
                          credentials=credentials,
                          operation_state=operation_state,
                          operation_binding=operation_binding,
+                         totp_replacement_binding=credential_lifecycle.open_totp_replacement_binding(user.id),
                          totp_replacement_in_progress=credential_lifecycle.open_totp_replacement_in_progress(user.id),
                          totp_urls={
                              "challenge": url_for("sysadmin.totp_replace_challenge"),
