@@ -203,6 +203,101 @@ def _is_background_request() -> bool:
     return False
 
 
+#: Endpoints a credential-noncompliant teacher may still reach (DOM-IDEN-003 §VII.A: credential
+#: maintenance and teacher account destruction; sign-out is not decorated, so it never reaches the
+#: gate). Every request ``static/js/passkey.js`` makes on the Security page, and the one endpoint
+#: the account-destruction page posts to, is here and nothing else is.
+_ADMIN_CREDENTIAL_MAINTENANCE_ENDPOINTS = frozenset({
+    'admin.passkey_settings',
+    'admin.passkey_register_start',
+    'admin.passkey_register_finish',
+    'admin.passkey_delete',
+    'admin.passkey_resume',
+    'admin.passkey_cancel',
+    'admin.totp_replace_challenge',
+    'admin.totp_replace_start',
+    'admin.totp_replace_confirm',
+    'admin.totp_replace_cancel',
+    'admin.account_delete',
+})
+
+#: The sysadmin counterpart: credential maintenance only (a sysadmin has no account-destruction route).
+_SYSADMIN_CREDENTIAL_MAINTENANCE_ENDPOINTS = frozenset({
+    'sysadmin.passkey_settings',
+    'sysadmin.passkey_register_start',
+    'sysadmin.passkey_register_finish',
+    'sysadmin.passkey_delete',
+    'sysadmin.passkey_resume',
+    'sysadmin.passkey_cancel',
+    'sysadmin.totp_replace_challenge',
+    'sysadmin.totp_replace_start',
+    'sysadmin.totp_replace_confirm',
+    'sysadmin.totp_replace_cancel',
+})
+
+_CREDENTIAL_GATE_TABS = {
+    'passkey_missing': 'passkeys',
+    'totp_noncompliant': 'authenticator',
+}
+
+
+SECURITY_TABS = ('passkeys', 'authenticator')
+
+
+def security_active_tab() -> str:
+    """The Security page tab named by ``?tab=``, restricted to the known tabs (default: passkeys)."""
+    tab = request.args.get('tab', '')
+    return tab if tab in SECURITY_TABS else SECURITY_TABS[0]
+
+
+def credential_noncompliance(user_id):
+    """The principal's credential noncompliance, read live from the user row, or ``None``.
+
+    Evaluated on every protected request; nothing is stored or cached between requests
+    (DOM-IDEN-003 §VII.A). Read-only.
+    """
+    from app.models import User
+    from app.services.credential_lifecycle import CredentialCompliance, credential_compliance
+
+    # populate_existing: the decision is made from the row as the database holds it now, never
+    # from a copy this session loaded earlier.
+    user = db.session.get(User, user_id, populate_existing=True)
+    if user is None:
+        return None
+    compliance = credential_compliance(user)
+    return None if compliance is CredentialCompliance.COMPLIANT else compliance
+
+
+def _credential_gate_response(user_id, *, maintenance_endpoints, settings_endpoint, background):
+    """Refuse a noncompliant principal anything but credential maintenance (DOM-IDEN-003 §VII.A).
+
+    Returns ``None`` to let the request through. A background request gets JSON 403; a navigation is
+    sent to the Security tab that fixes the first noncompliance. Writes nothing, so a GET stays pure.
+    """
+    if request.endpoint in maintenance_endpoints:
+        return None
+    noncompliance = credential_noncompliance(user_id)
+    if noncompliance is None:
+        return None
+    if background:
+        return jsonify(
+            status="error",
+            error="credential_noncompliant",
+            message="Set up your required sign-in credentials before continuing.",
+        ), 403
+    return redirect(url_for(settings_endpoint, tab=_CREDENTIAL_GATE_TABS[noncompliance.value]))
+
+
+def teacher_credential_gate_response(user_id):
+    """The gate for a teacher principal; ``None`` when the request may proceed."""
+    return _credential_gate_response(
+        user_id,
+        maintenance_endpoints=_ADMIN_CREDENTIAL_MAINTENANCE_ENDPOINTS,
+        settings_endpoint='admin.passkey_settings',
+        background=_is_background_request(),
+    )
+
+
 def _teacher_session_ended(message):
     if _is_background_request():
         return jsonify(status="error", error="authentication_required", message=message), 401
@@ -252,6 +347,12 @@ def admin_required(f):
         if ctx.actor_role != 'teacher':
             return _teacher_session_ended("Your session has ended. Please log in again.")
 
+        # The credential gate runs before the classless-teacher onboarding redirect, so a
+        # teacher with no class is still sent to Security rather than to onboarding.
+        gated = teacher_credential_gate_response(ctx.user_id)
+        if gated is not None:
+            return gated
+
         if isinstance(ctx, BoundaryContext):
             if request.endpoint not in _CLASSLESS_ADMIN_ENDPOINTS:
                 return redirect(url_for('admin.onboarding'))
@@ -294,6 +395,15 @@ def system_admin_required(f):
 
         g.canonical_context = ctx
         session['last_activity'] = now.isoformat()
+
+        gated = _credential_gate_response(
+            ctx.user_id,
+            maintenance_endpoints=_SYSADMIN_CREDENTIAL_MAINTENANCE_ENDPOINTS,
+            settings_endpoint='sysadmin.passkey_settings',
+            background=_is_grafana_proxy_subrequest() or _is_background_request(),
+        )
+        if gated is not None:
+            return gated
         return f(*args, **kwargs)
     # Marks the endpoint as part of the authenticated sysadmin console, so
     # request correlation (app/services/tlcp.py) can name the surface a request

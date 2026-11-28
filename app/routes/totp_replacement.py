@@ -29,7 +29,6 @@ SUCCESS_MESSAGE = "Authenticator replaced. Sign in again with your new authentic
 _PROOF_REFUSED = (403, "That passkey was not accepted.")
 _REFUSALS = {
     "challenge_invalid": _PROOF_REFUSED,
-    "proof_unverified": _PROOF_REFUSED,
     "step_up_replayed": _PROOF_REFUSED,
     "step_up_unavailable": (503, "Authenticator replacement is unavailable right now. Nothing was changed; try again later."),
     "operation_already_open": (409, "Another credential change is already in progress. Cancel it or wait for it to expire."),

@@ -108,7 +108,9 @@ def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = Tru
     """Provision a canonical classroom entirely through production code.
 
     Creates:
-      - Teacher User (role=TEACHER)
+      - Teacher User (role=TEACHER), credential-compliant (160-bit authenticator seed plus one
+        activated passkey, SPEC-TEST-001); gate tests make it noncompliant with
+        tests/helpers/passkey.py make_passkey_missing / make_totp_noncompliant
       - ClassEconomy (join_code generated, display_name + section from spec)
       - Teacher Seat (role='teacher', bound to class_id)
       - Teacher last_active_class_id / last_active_seat_id set
@@ -246,6 +248,12 @@ def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = Tru
         )
         db.session.add(hall_pass_settings)
         db.session.flush()
+
+    # Canonical teachers pass the credential compliance gate (SPEC-TEST-001): a 160-bit
+    # authenticator seed and one activated passkey. Gate tests start from the explicit
+    # noncompliant helpers in tests/helpers/passkey.py instead.
+    from tests.helpers.passkey import ensure_credential_compliance
+    ensure_credential_compliance(teacher_user.id)
 
     return ProvisionedClassroom(
         economy=economy,

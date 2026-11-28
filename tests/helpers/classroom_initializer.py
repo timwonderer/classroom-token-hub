@@ -149,6 +149,13 @@ def _assert_db_invariants(classroom: ProvisionedClassroom) -> None:
         f"Teacher last_active_seat_id {teacher.last_active_seat_id} != teacher_seat.id {classroom.teacher_seat.id}",
     )
 
+    # SPEC-TEST-001 §IX: a provisioned teacher passes the credential compliance gate.
+    from app.services.credential_lifecycle import CredentialCompliance, credential_compliance
+    _check(
+        credential_compliance(teacher) is CredentialCompliance.COMPLIANT,
+        "Teacher is not credential-compliant (a 160-bit seed and an activated passkey)",
+    )
+
     # Re-query teacher seat
     teacher_seat = db.session.get(Seat, classroom.teacher_seat.id)
     _check(teacher_seat is not None, f"Teacher Seat not found in DB for id={classroom.teacher_seat.id}")

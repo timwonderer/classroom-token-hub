@@ -176,6 +176,9 @@ def sysadmin_session(username: str) -> dict:
         user = User.query.filter_by(username_lookup_hash=hash_username_lookup(username)).first()
         assert user is not None, "create-sysadmin did not create a sysadmin user"
 
+    from tests.helpers.passkey import ensure_credential_compliance
+    ensure_credential_compliance(user.id)
+
     nonce = f"nonce-{username}"
     with FEATContext("FEAT-IDEN-001", idempotency_key=f"axe-sweep:sysadmin:{username}:{nonce}"):
         user.current_session_nonce = nonce

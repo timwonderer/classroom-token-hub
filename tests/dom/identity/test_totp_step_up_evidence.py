@@ -46,7 +46,7 @@ from tests.helpers.canonical_classroom import _teacher_key_for
 from tests.helpers.canonical_identities import TEACHERS
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 from tests.helpers.passkey import (  # noqa: F401  (fixture)
-    HELD_SEED, MISSING, VALID_AUTH_CONFIGS, fake_passwordless, give_totp_seed, instant_text, record_passkey,
+    HELD_SEED, MISSING, VALID_AUTH_CONFIGS, fake_passwordless, give_totp_seed, instant_text, make_passkey_missing, record_passkey,
 )
 
 AWAITING = CredentialOperationStage.AWAITING_STEP_UP
@@ -135,6 +135,7 @@ def refusal(call):
 def rig(client, app, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)  # the tests name their own passkeys
     give_totp_seed(user_id)
     record_passkey(user_id, "cred-1", fake_passwordless)
     return Rig(client, app, fake_passwordless, classroom, user_id)

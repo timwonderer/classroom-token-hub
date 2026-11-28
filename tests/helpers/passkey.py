@@ -303,3 +303,43 @@ def finish_registration(client, token, *, binding=None, prefix="/admin", name="K
         f"{prefix}/passkey/register/finish",
         json={"token": token, "binding": binding, "authenticatorName": name},
     )
+
+
+# ---- credential compliance (DOM-IDEN-003 §VII.A; SPEC-TEST-001 / SPEC-TEST-002) --------------
+
+#: A 80-bit seed (the length ``pyotp.random_base32()`` yields by default), below the 112-bit floor.
+SHORT_SEED = "JBSWY3DPEHPK3PXP"
+
+
+def ensure_credential_compliance(user_id):
+    """Make ``user_id`` pass the credential compliance gate without disturbing what it already holds.
+
+    A principal with no authenticator seed gets the 160-bit ``HELD_SEED``; one with no passkey gets an
+    activated binding. A seed or passkey the test already set up is left alone, so a deliberately short
+    seed stays short. Canonical classroom and sysadmin provisioning call this, which is why a canonical
+    teacher or sysadmin reaches the dashboard.
+    """
+    from app import db
+    from app.models import User
+    from app.services.credential_lifecycle import has_activated_passkey
+
+    user = db.session.get(User, user_id)
+    if user.totp_secret_encrypted is None:
+        give_totp_seed(user_id)
+    if not has_activated_passkey(user):
+        record_passkey(user_id, f"compliant-{uuid.uuid4().hex}", name="Fixture key")
+
+
+def make_passkey_missing(user_id):
+    """The PASSKEY_MISSING scenario: the principal keeps its seed and loses every passkey."""
+    from app import db
+    from app.feats.base import FEATContext
+    from app.models import PasskeyCredential
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"test:no-passkey:{uuid.uuid4().hex}"):
+        PasskeyCredential.query.filter_by(user_id=user_id).delete()
+
+
+def make_totp_noncompliant(user_id, seed=SHORT_SEED):
+    """The TOTP_NONCOMPLIANT scenario: an activated passkey and an authenticator seed under the floor."""
+    ensure_credential_compliance(user_id)
+    give_totp_seed(user_id, seed)

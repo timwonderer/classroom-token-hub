@@ -111,10 +111,8 @@ Create a real widget.
 **What you're doing.** Registering your site with Bitwarden Passwordless.dev,
 the passkey service CTH uses.
 
-**Why.** The current installer requires these keys
-([#1791](https://github.com/timwonderer/classroom-token-hub/issues/1791)), and
-passkeys are a strongly recommended way to sign in
-([why](before-you-begin.md#strongly-recommended-with-alternatives)).
+**Why.** Every teacher account needs at least one passkey, and the installer
+requires these keys ([why](before-you-begin.md#required-by-the-current-release)).
 
 **Steps.**
 

@@ -69,7 +69,10 @@ from app.auth import (
     end_signed_in_session,
     establish_teacher_session,
     find_canonical_user_by_auth_username,
+    credential_noncompliance,
     get_current_user,
+    security_active_tab,
+    teacher_credential_gate_response,
 )
 from app.services.context_resolver import CanonicalContext
 from app.forms import (
@@ -2162,6 +2165,12 @@ def select_class_context():
     if not ctx:
         flash("Admin session is invalid. Please log in again.", "error")
         return redirect(url_for("admin.login"))
+
+    # This surface is not behind @admin_required, so it takes the credential gate itself.
+    if ctx.actor_role == "teacher":
+        gated = teacher_credential_gate_response(ctx.user_id)
+        if gated is not None:
+            return gated
 
     raw_options = _get_validated_teacher_class_options(ctx.user_id)
     if not raw_options:
@@ -10414,6 +10423,8 @@ def passkey_settings():
     totp_replacement_binding = credential_lifecycle.open_totp_replacement_binding(user_id)
     return render_template('admin_passkey_settings.html',
                          admin=admin,
+                         active_tab=security_active_tab(),
+                         compliance=getattr(credential_noncompliance(user_id), 'value', None),
                          credentials=credentials,
                          operation_state=operation_state,
                          operation_binding=operation_binding,

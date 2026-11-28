@@ -25,7 +25,7 @@ from tests.dom.identity.helpers import (
 )
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 from tests.helpers.passkey import (  # noqa: F401  (fake_passwordless is a fixture)
-    fake_passwordless, finish_registration, give_totp_seed, record_passkey, start_registration, totp_code,
+    fake_passwordless, finish_registration, give_totp_seed, make_passkey_missing, record_passkey, start_registration, totp_code,
 )
 
 
@@ -39,6 +39,7 @@ def _register_finish(client, token):
     """Authorize with a fresh TOTP code, then finish with ``token``: what the browser does."""
     with client.session_transaction() as sess:
         user_id = sess["user_id"]
+    make_passkey_missing(user_id)  # these tests start from a teacher with no passkey
     give_totp_seed(user_id)
     assert start_registration(client).status_code == 200
     # The browser registers after the start, under the start's binding.
@@ -229,6 +230,7 @@ def test_a_teacher_passkey_cannot_sign_in_as_sysadmin(client, fake_passwordless)
 def _two_passkeys(client, fake):
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)
     give_totp_seed(user_id)
     record_passkey(user_id, "cred-a", fake, "A")
     record_passkey(user_id, "cred-b", fake, "B")

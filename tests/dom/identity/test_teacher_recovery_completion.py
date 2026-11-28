@@ -15,6 +15,7 @@ from app.services.recovery_service import get_recovery_request_by_id, list_recov
 from app.utils.canonical_temporal_resolver import utc_now
 from app.utils.encryption import decrypt_totp
 from tests.helpers.classroom_initializer import initialize
+from tests.helpers.passkey import make_passkey_missing
 
 
 def call(fn, **kwargs):
@@ -41,6 +42,7 @@ def recovery(app, monkeypatch):
     assert attempt
     for c in classes:
         assert call(select_class_recipients, request_id=attempt['id'], attempt_nonce=attempt['nonce'], class_id=c.class_id)
+    make_passkey_missing(classes[0].teacher_user.id)  # the fixture's compliance passkey; this test names its own
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='recovery:passkey'):
         db.session.add(PasskeyCredential(user_id=classes[0].teacher_user.id, credential_id='old-key'))
     return SimpleNamespace(id=attempt['id'], access=attempt['nonce'], classes=classes, teacher=classes[0].teacher_user)

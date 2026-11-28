@@ -15,7 +15,7 @@ from app.services.passkey_service import PasskeyError
 from tests.dom.identity.helpers import admin_passkey_auth_finish
 from tests.helpers.classroom_initializer import initialize_as_teacher
 from tests.helpers.passkey import (  # noqa: F401  (fake_passwordless is a fixture)
-    EXPECTED_ORIGIN, EXPECTED_RP_ID, fake_passwordless, finish_registration, give_totp_seed, record_passkey,
+    EXPECTED_ORIGIN, EXPECTED_RP_ID, fake_passwordless, finish_registration, give_totp_seed, make_passkey_missing, record_passkey,
     start_registration,
 )
 from tests.dom.identity.test_passkey_lifecycle import _bound, _open_operations, _new_credential
@@ -36,6 +36,7 @@ WRONG = [
 def _teacher(client, app, fake, passkeys=()):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)  # the tests name their own passkeys
     give_totp_seed(user_id)
     for credential in passkeys:
         record_passkey(user_id, credential, fake)

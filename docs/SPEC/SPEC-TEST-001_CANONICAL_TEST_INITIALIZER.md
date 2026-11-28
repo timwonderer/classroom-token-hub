@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level     |
 |------------------|---------|----------------|------------|---------------------|
-| SPEC-TEST-001    | 1.1     | 2026-10-24     | 1.0        | Implementation Spec |
+| SPEC-TEST-001    | 1.2     | 2026-11-28     | 1.1        | Implementation Spec |
 
 ---
 
@@ -264,6 +264,15 @@ When you call any initializer function, you do not need to write:
 | Nonce generation and DB write | `set_canonical_context()` internally |
 | `resolve_canonical_context()` verification | `_assert_canonical_context()` |
 | Re-querying entities to verify DB state | `_assert_db_invariants()` |
+| Teacher credential compliance (a 160-bit authenticator seed and one activated passkey) | `provision_classroom()` via `ensure_credential_compliance()` |
+
+A provisioned teacher is **credential-compliant by default**, because the credential compliance gate
+(`DOM-IDEN-003` §VII.A) would otherwise refuse every teacher route. A test of the gate, or of anything that
+depends on a noncompliant principal, starts from the provisioned classroom and then makes the teacher
+noncompliant explicitly, with `tests/helpers/passkey.py`: `make_passkey_missing(user_id)` (the
+`PASSKEY_MISSING` state) or `make_totp_noncompliant(user_id)` (an activated passkey and a seed under the
+112-bit floor). A test never edits credential rows by hand to reach those states, and never turns the gate off.
+`ensure_credential_compliance(user_id)` restores compliance and leaves any seed or passkey the test set up alone.
 
 ---
 
@@ -288,5 +297,6 @@ A test does not read the wall clock, convert timezones or do date arithmetic its
 
 | Version | Date | Change |
 | --- | --- | --- |
+| 1.2 | 2026-11-28 | §IX: provisioned teachers are credential-compliant by default (160-bit seed plus one activated passkey); gate tests make a principal noncompliant with the explicit helpers in `tests/helpers/passkey.py` (owner approval, 2026-11-28). |
 | 1.1 | 2026-10-24 | §X: time in tests comes from `tests/helpers/temporal.py`, thin wrappers over the production resolver (owner, 2026-10-24). §VIII's example no longer imports `utc_now` from `app.utils.time`, a module that no longer exists. |
 | 1.0 | 2026-07-17 | Initial version. |

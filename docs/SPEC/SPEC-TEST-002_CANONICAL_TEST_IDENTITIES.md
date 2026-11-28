@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-TEST-002    | 2.1     | 2026-09-15     | 2.0        | Constitutional  |
+| SPEC-TEST-002    | 2.2     | 2026-11-28     | 2.1        | Constitutional  |
 
 ---
 
@@ -99,6 +99,13 @@ Four teachers are defined. Each owns one or more canonical classrooms.
 | `teacher_daniel` | `teacher.daniel` |
 
 Teachers are provisioned with hashed credentials by the initializer. Tests must never manually create teacher credentials.
+
+Canonical teachers and sysadmins are **credential-compliant by default** (`DOM-IDEN-003` §VII.A): a 160-bit
+authenticator seed and one activated passkey. The teacher initializer and the sysadmin session helpers
+(`seed_sysadmin_session`, `login_sysadmin`, the accessibility sweep's `sysadmin_session`) provision this, so a
+canonical principal reaches its dashboard through the credential compliance gate. A noncompliant principal is
+a named scenario, made explicitly from a compliant one with `make_passkey_missing` or `make_totp_noncompliant`
+(`tests/helpers/passkey.py`); see `SPEC-TEST-001` §IX.
 
 ---
 
@@ -201,7 +208,7 @@ If any self-test assertion fails, the test is aborted immediately via `pytest.fa
 | Layer | Checks |
 | --- | --- |
 | DB — ClassEconomy | `class_id` and `join_code` set; correct `user_id` |
-| DB — Teacher User | `user_role == TEACHER`; `username_hash` set; `last_active_class_id` and `last_active_seat_id` correct |
+| DB — Teacher User | `user_role == TEACHER`; `username_hash` set; `last_active_class_id` and `last_active_seat_id` correct; credential-compliant (`credential_compliance` is `COMPLIANT`) |
 | DB — Teacher Seat | `role == "teacher"`; `user_id` and `class_id` correct |
 | DB — Student User | `user_role == STUDENT`; `username_hash`, `pin_hash`, `passphrase_hash` set; `last_active_class_id` and `last_active_seat_id` correct |
 | DB — Student Seat | `role == "student"`; `user_id` and `class_id` correct; `claimed_at` set; claim hashes, `roster_fingerprint`, and `dedupe_code` cleared after claim |

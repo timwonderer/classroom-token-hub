@@ -1,15 +1,15 @@
 {% extends "layout_admin.html" %}
 {% import "macros/cards.html" as cards %}
-{% set page_title = "Passkey Settings" %}
-{% set page_subtitle = "Manage your passkeys" %}
+{% set page_title = "Security" %}
+{% set page_subtitle = "Passkeys and your authenticator app" %}
 {% set current_page = "passkey_settings" %}
 
 {% block contextual_help_body %}
-{{ help.panel_lead("Passkeys let you sign in with your device instead of typing a credential. They cannot be phished, because there is no secret to hand over.") }}
+{{ help.panel_lead("Every account needs a passkey and a strong authenticator app. Passkeys let you sign in with your device instead of typing a credential. They cannot be phished, because there is no secret to hand over.") }}
 
 {% call help.topic('pk-register', 'add_circle', 'Register a passkey') %}
 <ol class="ps-3 mb-0">
-    <li class="mb-2">Enter the current code from your authenticator app, select <strong>Register New Passkey</strong>, then follow your device's prompt — Touch ID, Face ID, Windows Hello, or a hardware key. You sign in again afterwards.</li>
+    <li class="mb-2">Select <strong>Register New Passkey</strong>, enter the current code from your authenticator app when asked, then follow your device's prompt — Touch ID, Face ID, Windows Hello, or a hardware key. You sign in again afterwards.</li>
     <li class="mb-2"><strong>Name it something you will recognize</strong> later, like "work laptop". Deciding which passkey to remove is impossible if they are all unnamed.</li>
     <li class="mb-0"><strong>Register a second one</strong> on a different device. One passkey on one device means a lost device is a lockout.</li>
 </ol>
@@ -29,28 +29,33 @@
     <div id="passkey-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
     <div class="row">
         <div class="col-lg-8 mx-auto">
-            <!-- Header -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h2 class="mb-2">
-                        <span class="material-symbols-outlined icon-middle icon-xl" aria-hidden="true">fingerprint</span>
-                        Passkey Authentication
-                    </h2>
-                    <p class="text-muted">
-                        Passkeys provide secure, passwordless authentication using your device or security key.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Info Banner -->
-            {% call cards.alert_card('info', 'About passkeys', icon='passkey', body_class='mb-4') %}
-                <p class="mb-0">Passkeys use WebAuthn/FIDO2 for phishing-resistant authentication. Works with:</p>
-                <ul class="mb-0 mt-2">
-                    <li>Hardware security keys (YubiKey, etc.)</li>
-                    <li>Platform authenticators (Touch ID, Face ID, Windows Hello)</li>
-                    <li>Synced passkeys across devices</li>
-                </ul>
+            {% if compliance == 'passkey_missing' %}
+            {% call cards.alert_card('warning', 'Register a passkey to continue', icon='passkey', body_class='mb-4') %}
+                <p class="mb-0">Every account needs at least one passkey and an authenticator app with a strong key. Your account has no passkey yet, so the rest of the site is locked until you register one. You can also sign out from the menu.</p>
             {% endcall %}
+            {% elif compliance == 'totp_noncompliant' %}
+            {% call cards.alert_card('warning', 'Replace your authenticator app to continue', icon='phonelink_lock', body_class='mb-4') %}
+                <p class="mb-0">Your authenticator app uses a key that is too short to meet the current standard, so the rest of the site is locked until you replace it. You have a passkey, which is the proof a replacement needs. Open the <strong>Authenticator app</strong> tab to replace it.</p>
+            {% endcall %}
+            {% endif %}
+
+            <ul class="nav nav-tabs mb-4" id="securityTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link{% if active_tab == 'passkeys' %} active{% endif %}" id="passkeys-tab" data-bs-toggle="tab" data-bs-target="#passkeys-pane" type="button" role="tab" aria-controls="passkeys-pane" aria-selected="{{ 'true' if active_tab == 'passkeys' else 'false' }}">
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">fingerprint</span>Passkeys
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link{% if active_tab == 'authenticator' %} active{% endif %}" id="authenticator-tab" data-bs-toggle="tab" data-bs-target="#authenticator-pane" type="button" role="tab" aria-controls="authenticator-pane" aria-selected="{{ 'true' if active_tab == 'authenticator' else 'false' }}">
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">phonelink_lock</span>Authenticator app
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="securityTabContent">
+            <div class="tab-pane fade{% if active_tab == 'passkeys' %} show active{% endif %}" id="passkeys-pane" role="tabpanel" aria-labelledby="passkeys-tab">
+
+            <p class="text-muted mb-4">Passkeys use WebAuthn/FIDO2 for phishing-resistant sign-in with a hardware key, Touch ID, Face ID, Windows Hello, or a synced passkey. Registering or deleting one asks for the current code from your authenticator app, and you sign in again afterwards.</p>
 
             {% if operation_state == 'retirement_pending' %}
             {% call cards.alert_card('warning', 'A passkey change is waiting to finish', icon='pending', body_class='mb-4') %}
@@ -64,56 +69,13 @@
             {% endcall %}
             {% endif %}
 
-            <div class="card mb-4">
-                <div class="card-body">
-                    <label for="passkey-totp-code" class="form-label">Authenticator code</label>
-                    <input type="text" id="passkey-totp-code" class="form-control" inputmode="numeric"
-                           autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-describedby="passkey-totp-help">
-                    <div id="passkey-totp-help" class="form-text">
-                        Enter the current 6-digit code from your authenticator app before you register or delete a passkey.
-                        After a change you sign in again.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Replace authenticator (FEAT-IDEN-106) -->
-            <div class="card mb-4" id="totp-replace-card">
-                <div class="card-header">
-                    <h3 class="h5 mb-0">
-                        <span class="material-symbols-outlined icon-middle" aria-hidden="true">phonelink_lock</span>
-                        Authenticator app
-                    </h3>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">Replace the authenticator app that produces your sign-in codes, for example after changing phones. You prove it is you with one of your passkeys. Your current authenticator keeps working until the new one is confirmed, then you sign in again.</p>
-                    <div id="totp-replace-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
-                    {% if totp_replacement_in_progress %}
-                    <p>A replacement is already in progress. Cancel it to start again, or wait a few minutes for it to expire. Your current authenticator is unchanged.</p>
-                    <button type="button" class="btn btn-outline-secondary" id="totpCancelButton" data-binding="{{ totp_replacement_binding or '' }}">Cancel the replacement</button>
-                    {% else %}
-                    <button type="button" class="btn btn-outline-primary" id="totpReplaceButton"{% if not credentials or operation_state %} disabled{% endif %}>Replace authenticator app</button>
-                    {% if not credentials %}<div class="form-text">Register a passkey first; it is the proof a replacement needs.</div>{% endif %}
-                    {% endif %}
-                    <div id="totp-replace-setup" class="mt-4" hidden>
-                        <p>Scan this code with your new authenticator app, or enter the key by hand. It is shown only now.</p>
-                        <img id="totp-replace-qr" alt="QR code for the new authenticator" width="200" height="200" class="mb-3 d-block">
-                        <p>Key: <code id="totp-replace-secret"></code></p>
-                        <label for="totp-replace-code" class="form-label">Code from the new authenticator</label>
-                        <input type="text" id="totp-replace-code" class="form-control mb-3" inputmode="numeric"
-                               autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6">
-                        <button type="button" class="btn btn-primary" id="totpConfirmButton">Confirm and replace</button>
-                        <button type="button" class="btn btn-outline-secondary" id="totpAbandonButton">Cancel</button>
-                    </div>
-                </div>
-            </div>
-
             <!-- Registered Passkeys -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h3 class="h5 mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined icon-middle" aria-hidden="true">security</span>
                         Your Passkeys
-                    </h3>
+                    </h2>
                     <button type="button" class="btn btn-primary" id="registerPasskeyButton"{% if operation_state %} disabled{% endif %}>
                         <span class="material-symbols-outlined icon-middle icon-sm" aria-hidden="true">add</span>
                         Register New Passkey
@@ -127,7 +89,7 @@
                                 <div class="flex-grow-1">
                                     <div class="d-flex align-items-center mb-2">
                                         <span class="material-symbols-outlined text-primary me-2" aria-hidden="true">security_key</span>
-                                        <h4 class="h6 mb-0">{{ cred.authenticator_name or "Unnamed Passkey" }}</h4>
+                                        <h3 class="h6 mb-0">{{ cred.authenticator_name or "Unnamed Passkey" }}</h3>
                                     </div>
                                     <div class="text-muted small">
                                         <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">calendar_today</span>
@@ -171,6 +133,41 @@
                     {% endif %}
                 </div>
             </div>
+            </div>
+            <div class="tab-pane fade{% if active_tab == 'authenticator' %} show active{% endif %}" id="authenticator-pane" role="tabpanel" aria-labelledby="authenticator-tab">
+            <!-- Replace authenticator (FEAT-IDEN-106) -->
+            <div class="card mb-4" id="totp-replace-card">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">
+                        <span class="material-symbols-outlined icon-middle" aria-hidden="true">phonelink_lock</span>
+                        Authenticator app
+                    </h2>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Replace the authenticator app that produces your sign-in codes, for example after changing phones. You prove it is you with one of your passkeys. Your current authenticator keeps working until the new one is confirmed, then you sign in again.</p>
+                    <div id="totp-replace-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
+                    {% if totp_replacement_in_progress %}
+                    <p>A replacement is already in progress. Cancel it to start again, or wait a few minutes for it to expire. Your current authenticator is unchanged.</p>
+                    <button type="button" class="btn btn-outline-secondary" id="totpCancelButton" data-binding="{{ totp_replacement_binding or '' }}">Cancel the replacement</button>
+                    {% else %}
+                    <button type="button" class="btn btn-outline-primary" id="totpReplaceButton"{% if not credentials or operation_state %} disabled{% endif %}>Replace authenticator app</button>
+                    {% if not credentials %}<div class="form-text">Register a passkey first; it is the proof a replacement needs.</div>{% endif %}
+                    {% endif %}
+                    <div id="totp-replace-setup" class="mt-4" hidden>
+                        <p>Scan this code with your new authenticator app, or enter the key by hand. It is shown only now.</p>
+                        <img id="totp-replace-qr" alt="QR code for the new authenticator" width="200" height="200" class="mb-3 d-block">
+                        <p>Key: <code id="totp-replace-secret"></code></p>
+                        <label for="totp-replace-code" class="form-label">Code from the new authenticator</label>
+                        <input type="text" id="totp-replace-code" class="form-control mb-3" inputmode="numeric"
+                               autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6">
+                        <button type="button" class="btn btn-primary" id="totpConfirmButton">Confirm and replace</button>
+                        <button type="button" class="btn btn-outline-secondary" id="totpAbandonButton">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            </div>
+            </div>
         </div>
     </div>
 </div>
@@ -182,8 +179,7 @@
 <script>
     setupPasskeyManager({
         feedbackId: 'passkey-feedback',
-        codeInputId: 'passkey-totp-code',
-        registerButtonId: 'registerPasskeyButton',
+                registerButtonId: 'registerPasskeyButton',
         resumeButtonId: 'resumePasskeyButton',
         loginUrl: {{ url_for('admin.login')|tojson }},
         cancelButtonId: 'cancelPasskeyButton',

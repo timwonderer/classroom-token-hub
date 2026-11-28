@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-004 | 1.7 | 2026-11-26 | 1.6 | Normative |
+| SPEC-OPS-004 | 1.8 | 2026-11-28 | 1.7 | Normative |
 
 > [!NOTE]
 > Renumbered from `SPEC-OPS-003` on 2026-09-06. This document and
@@ -45,7 +45,7 @@ Authentication factors supported by the console:
 - password with TOTP second factor;
 - passkey (WebAuthn) registration and assertion.
 
-Passkey self-service lives at `/sysadmin/passkey/settings`. Registration, listing, and deletion act only on the authenticated sysadmin's own credentials. The console exposes no surface for creating, deleting, or resetting the credentials of another operator; that provisioning is out-of-band.
+Credential self-service (the Security page) lives at `/sysadmin/passkey/settings`. Registration, listing, and deletion act only on the authenticated sysadmin's own credentials. The console exposes no surface for creating, deleting, or resetting the credentials of another operator; that provisioning is out-of-band.
 
 ### Personal credential management
 
@@ -84,7 +84,7 @@ The console navigation exposes exactly four destinations plus sign-out:
 | Dashboard | `/sysadmin/dashboard` | Platform-wide counts |
 | Support | `/sysadmin/support` | Teacher issues and developer-escalated issues |
 | Grafana | `/sysadmin/grafana` | Application logs, error events and request activity, opened in a new tab (§6.5) |
-| Passkeys | `/sysadmin/passkey/settings` | The operator's own WebAuthn credentials |
+| Security | `/sysadmin/passkey/settings` | The operator's own credentials: passkeys and the authenticator app, on two tabs |
 
 Routes outside this set are reachable by direct URL only and MUST NOT be treated as supported operator surfaces.
 
@@ -187,6 +187,9 @@ Rationale: the user guide corpus is audience-isolated at the docs route — a re
 The prior guides at `docs/user-guides/features/sysadmin/` and `docs/user-guides/sysadmin_manual.md` are superseded by this specification.
 
 ## X. Change Notes
+
+**Version 1.8 (2026-11-28):**
+- §6.1: the navigation destination formerly named Passkeys is named Security and covers both credentials: the page has a Passkeys tab and an Authenticator app tab, selected by `?tab=`. The route is unchanged. Owner approval 2026-11-28.
 
 **Version 1.5 (2026-10-27):**
 - §6.3: the resolve action no longer issues a bug reward (owner ruling 2026-10-27: retired until badges

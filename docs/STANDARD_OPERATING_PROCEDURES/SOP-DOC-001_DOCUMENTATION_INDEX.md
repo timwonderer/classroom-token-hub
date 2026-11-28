@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.76 | 2026-11-27 | 3.75 | Normative |
+| SOP-DOC-001 | 3.77 | 2026-11-28 | 3.76 | Normative |
 
 ---
 
@@ -288,6 +288,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.77 (2026-11-28):**
+
+- Register owner approval 2026-11-28 (credential compliance gate enforcement and the Security page): SOP-DEP-002 v1.28 (§VII.C: the dependency-gated pyotp migration is superseded by the credential compliance gate, DOM-IDEN-003 §VII.A; the rule against accelerating a credential migration is kept), SPEC-OPS-004 v1.8 (§6.1: the Passkeys navigation destination becomes Security, covering passkeys and the authenticator app), SPEC-TEST-001 v1.2 and SPEC-TEST-002 v2.2 (canonical teachers and sysadmins are credential-compliant by default; noncompliant principals are explicit scenarios).
 
 **Version 3.76 (2026-11-27):**
 

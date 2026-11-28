@@ -34,6 +34,8 @@ from app.auth import (
     end_signed_in_session,
     establish_sysadmin_session,
     system_admin_required,
+    credential_noncompliance,
+    security_active_tab,
     _expire_system_admin_session,
     _system_admin_timeout_expired,
     find_canonical_user_by_auth_username,
@@ -426,6 +428,8 @@ def passkey_settings():
     totp_replacement_binding = credential_lifecycle.open_totp_replacement_binding(user.id)
     return render_template("system_admin_passkey_settings.html",
                          admin=user,
+                         active_tab=security_active_tab(),
+                         compliance=getattr(credential_noncompliance(user.id), 'value', None),
                          credentials=credentials,
                          operation_state=operation_state,
                          operation_binding=operation_binding,
@@ -868,6 +872,11 @@ def grafana_auth_check():
         return Response('Unauthorized', 401)
     if not isinstance(ctx, BoundaryContext) or ctx.actor_role != 'sysadmin':
         return Response('Unauthorized', 401)
+
+    # A credential-noncompliant system admin reaches nothing but credential maintenance
+    # (DOM-IDEN-003 §VII.A); Grafana is not that.
+    if credential_noncompliance(ctx.user_id) is not None:
+        return Response('Forbidden', 403)
 
     # Check session timeout
     last_activity_str = session.get("last_activity")

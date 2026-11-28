@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.27 | 2026-11-26 | 1.26 | Normative |
+| SOP-DEP-002 | 1.28 | 2026-11-28 | 1.27 | Normative |
 
 ## I. Purpose
 
@@ -299,19 +299,14 @@ proves that bundle derives from the migration lineage.
    instructions with a notice in `before-you-begin.md` and the README until a safe release is declared. The security
    release record says which was done.
 
-### VII.C Dependency-gated credential migration (pyotp)
+### VII.C Credential migration
 
-`pyotp==2.10.0` stays pinned until the count of noncompliant TOTP seeds (below the
-SPEC-SEC-001 §V minimum) is zero. Stages, in order:
-
-1. Lifecycle contracts and FEATs are in force (DOM-IDEN-003 §VII.A; SPEC-IDEN-002).
-2. 160-bit seed generation and the credential compliance gate are deployed.
-3. A window elapses with `pyotp` 2.10.0 pinned, while principals replace noncompliant seeds through the gate.
-4. An aggregate-only, per-role count of noncompliant seeds reaches zero and is recorded in a dated `docs/ops/audits/` file. The count names no principal, seed or seed material.
-5. Only then may the `pyotp` pin be bumped.
+The `pyotp` dependency gate that stood here is superseded: enforcement is the credential compliance gate
+(DOM-IDEN-003 §VII.A), which acts on live state on every request. The `pyotp` pin is an ordinary dependency
+decision under §VII.A, not a stage of a credential migration.
 
 No retention rule, deadline, destruction mechanism or compatibility bridge may be
-introduced to accelerate this migration.
+introduced to accelerate a credential migration.
 
 ## VIII. Post-Release Verification
 
@@ -427,6 +422,8 @@ Record:
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.28 (2026-11-28):** §VII.C: the dependency-gated pyotp migration is superseded by the credential compliance gate (DOM-IDEN-003 §VII.A); the rule against accelerating a credential migration is kept; owner approval 2026-11-28.
 
 **Version 1.27 (2026-11-26):** Adds §VII.C, the dependency-gated credential migration (pyotp); owner ruling 2026-11-26.
 
