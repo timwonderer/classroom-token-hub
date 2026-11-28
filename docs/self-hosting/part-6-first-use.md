@@ -68,7 +68,9 @@ database.
 Add to your note: your **teacher username**. Your authenticator app now
 holds the code generator; keep the phone safe.
 
-**What you should see.** Your new class's dashboard.
+**What you should see.** The Security page, asking you to register a passkey.
+Your account needs one before CTH shows you anything else, so continue with
+[6.4](#64-add-a-passkey-required) now. Your class is already created.
 
 **If something looks wrong.**
 
@@ -88,28 +90,33 @@ class.
 **Steps.** Sign out, then go to `https://classroom.example.org/admin/login`
 and sign in with your username and the current code from your app.
 
-**What you should see.** Your class dashboard again.
+**What you should see.** If you have already added a passkey (6.4), your class
+dashboard again. If not, the Security page asking for one.
 
 **If something looks wrong.** See [teacher login problems](https://github.com/timwonderer/classroom-token-hub/blob/main/docs/user-guides/diagnostics/teacher/login.md).
 
-## 6.4 Add a passkey (recommended)
+## 6.4 Add a passkey (required)
 
 **What you're doing.** Letting your device sign you in with a fingerprint,
 face or PIN.
 
-**Why.** Passkeys resist phishing, and you won't need to type codes every
-time ([why](before-you-begin.md#strongly-recommended-with-alternatives)).
+**Why.** Every teacher account needs a passkey. Until yours has one, CTH shows
+you only the Security page, account deletion and sign out. Passkeys also resist
+phishing ([why](before-you-begin.md#required-by-the-current-release)).
 
-**Steps.** While signed in, open `https://classroom.example.org/admin/passkey/settings`
-and register a passkey. Then sign out and sign in with it.
+**Steps.** If CTH sent you to the Security page when you signed in, you are
+already there; otherwise open `https://classroom.example.org/admin/passkey/settings`.
+Select **Register New Passkey**, name it, enter the current code from your
+authenticator app, and follow your device's prompt. CTH then signs you out; sign
+in again.
 
-**What you should see.** Your device asks for your fingerprint, face or PIN,
-then shows your dashboard.
+**What you should see.** Your device asks for your fingerprint, face or PIN, and
+CTH signs you out. After you sign in again, it shows your dashboard.
 
 **If something looks wrong.** A passkey error usually means the
 Passwordless.dev application's origin doesn't match `https://` + your CTH
 hostname ([Part 1, 1.4](part-1-accounts-and-domain.md#14-create-the-passwordlessdev-keys)).
-You can still sign in with your username and code.
+You can still sign in with your username and code, and try again.
 
 ## 6.5 Add a test student
 

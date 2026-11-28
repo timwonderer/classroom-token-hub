@@ -64,7 +64,7 @@ from tests.helpers import temporal
 from tests.helpers.canonical_classroom import _teacher_key_for
 from tests.helpers.canonical_identities import TEACHERS
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
-from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
+from tests.helpers.passkey import fake_passwordless, make_passkey_missing  # noqa: F401  (fixture)
 
 # Sixteen base32 characters: 80 bits. Synthetic and below the SPEC-SEC-001 §V.1
 # item 7 floor; pyotp >= 2.12 cannot build a TOTP from it, so it is only ever stored
@@ -133,6 +133,7 @@ def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=HELD_SEED, cre
     """A signed-in teacher holding ``seed`` and (unless ``passkey`` is false) one activated passkey."""
     classroom = initialize_as_teacher(key, client, app)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)  # the fixture's compliance passkey: this helper decides whether there is one
     _set_seed(user_id, seed)
     if passkey:
         _add_passkey(user_id, credential)
@@ -252,6 +253,7 @@ def test_a_sub_floor_seed_does_not_sign_in(client, app, monkeypatch):
 def test_short_seed_is_reported_noncompliant(client, app):
     classroom = initialize("chemistry_p1", app)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)  # the fixture's compliance passkey: this test adds its own
     _set_seed(user_id, SHORT_SEED)
 
     assert decoded_secret_bits(_user(user_id)) == 80
@@ -266,6 +268,7 @@ def test_short_seed_is_reported_noncompliant(client, app):
 def test_a_compliant_seed_without_a_passkey_is_passkey_missing(client, app):
     classroom = initialize("chemistry_p1", app)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)
     _set_seed(user_id, mint_totp_secret())
 
     assert credential_compliance(_user(user_id)) is CredentialCompliance.PASSKEY_MISSING

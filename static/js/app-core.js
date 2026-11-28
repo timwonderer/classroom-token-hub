@@ -125,7 +125,12 @@
   const ALERT_CARD_LEVELS = ['success', 'warning', 'danger', 'info'];
   let alertCardSeq = 0;
 
-  function buildAlertCard({ level = 'info', title, icon, body, bodyNodes, role, id, dismissible = false, className = '' } = {}) {
+  // `headingTag` picks the title element ('h2'..'h6'; default 'h3', as in the
+  // macro's default) so a card can sit at the right level in the page outline
+  // (INV-ARC-020 §VI.2).
+  const ALERT_CARD_HEADINGS = ['h2', 'h3', 'h4', 'h5', 'h6'];
+
+  function buildAlertCard({ level = 'info', title, icon, body, bodyNodes, role, id, dismissible = false, className = '', headingTag = 'h3' } = {}) {
     const resolvedLevel = ALERT_CARD_LEVELS.includes(level) ? level : 'info';
     const textClass = resolvedLevel === 'warning' ? 'text-dark' : 'text-white';
 
@@ -144,7 +149,7 @@
       iconEl.textContent = icon;
       header.appendChild(iconEl);
     }
-    const heading = document.createElement('h3');
+    const heading = document.createElement(ALERT_CARD_HEADINGS.includes(headingTag) ? headingTag : 'h3');
     heading.className = `h5 fw-bold mb-0 ${textClass}`;
     heading.textContent = String(title || '');
     header.appendChild(heading);
@@ -343,6 +348,8 @@
       body.appendChild(text);
 
       let field = null;
+      let errorEl = null;
+      let requiredText = '';
       if (input) {
         const label = document.createElement('label');
         label.className = 'form-label';
@@ -355,11 +362,12 @@
         field.autocomplete = input.autocomplete || 'off';
         if (input.inputmode) field.inputMode = input.inputmode;
         if (input.placeholder) field.placeholder = input.placeholder;
-        const error = document.createElement('div');
-        error.className = 'invalid-feedback';
-        error.id = `${id}-error`;
-        error.textContent = String(input.requiredMessage || 'This field is required.');
-        body.append(label, field, error);
+        errorEl = document.createElement('div');
+        errorEl.className = 'invalid-feedback';
+        errorEl.id = `${id}-error`;
+        requiredText = String(input.requiredMessage || 'This field is required.');
+        errorEl.textContent = requiredText;
+        body.append(label, field, errorEl);
         // The error stops applying once there is input, so stop announcing it.
         field.addEventListener('input', () => {
           if (field.value.trim()) clearInvalid(field);
@@ -390,6 +398,14 @@
         if (field) {
           const value = field.value.trim();
           if (!value) {
+            errorEl.textContent = requiredText;
+            markInvalid(field, `${id}-error`);
+            return;
+          }
+          // Optional format check: the dialog stays open and the field is
+          // marked invalid with the caller's message (SPEC-DES-001 §XI.6).
+          if (input.pattern && !input.pattern.test(value)) {
+            errorEl.textContent = String(input.patternMessage || requiredText);
             markInvalid(field, `${id}-error`);
             return;
           }
@@ -420,10 +436,10 @@
   }
 
   function promptDialog(message, options = {}) {
-    const { label, type, inputmode, autocomplete, placeholder, requiredMessage, ...rest } = options;
+    const { label, type, inputmode, autocomplete, placeholder, requiredMessage, pattern, patternMessage, ...rest } = options;
     return openDialog(message, {
       title: 'Enter a value', confirmLabel: 'Continue', ...rest,
-      input: { label, type, inputmode, autocomplete, placeholder, requiredMessage },
+      input: { label, type, inputmode, autocomplete, placeholder, requiredMessage, pattern, patternMessage },
     });
   }
 

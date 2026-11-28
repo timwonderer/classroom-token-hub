@@ -15,7 +15,7 @@ from app.services import passkey_service
 from app.services.credential_reconciliation import CredentialClass as C, classify_inventory
 from tests.helpers.classroom_initializer import initialize_as_teacher
 from tests.helpers.passkey import (  # noqa: F401  (fake_passwordless is a fixture)
-    fake_passwordless, give_totp_seed, provider_credential_id, record_passkey, totp_code,
+    fake_passwordless, give_totp_seed, make_passkey_missing, provider_credential_id, record_passkey, totp_code,
 )
 
 PAIRS = [
@@ -27,6 +27,7 @@ PAIRS = [
 def _teacher(client, app, fake, passkeys):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)  # the tests name their own passkeys
     give_totp_seed(user_id)
     for credential in passkeys:
         record_passkey(user_id, credential, fake, name=f"name-{credential}")

@@ -14,6 +14,7 @@ import uuid
 
 import pyotp
 
+from tests.helpers.passkey import ensure_credential_compliance
 from app import db
 from app.extensions import limiter
 from app.feats.base import FEATContext
@@ -23,7 +24,7 @@ from app.utils.encryption import encrypt_totp
 
 
 def _create_teacher(username: str) -> tuple[User, str]:
-    totp_secret = pyotp.random_base32()
+    totp_secret = pyotp.random_base32(32)  # 160 bits: above the compliance floor (SPEC-SEC-001 §V.1 item 7)
     _, username_hash, username_lookup_hash = build_hashed_username_fields(username)
     with FEATContext("FEAT-IDEN-001", idempotency_key=f"test-s5:{uuid.uuid4().hex}"):
         user = User(
@@ -35,11 +36,13 @@ def _create_teacher(username: str) -> tuple[User, str]:
         db.session.add(user)
         db.session.flush()
     db.session.commit()
+    ensure_credential_compliance(user.id)  # a canonical teacher is credential-compliant (SPEC-TEST-002)
+    db.session.commit()
     return user, totp_secret
 
 
 def _create_sysadmin(username: str) -> tuple[User, str]:
-    totp_secret = pyotp.random_base32()
+    totp_secret = pyotp.random_base32(32)
     _, username_hash, username_lookup_hash = build_hashed_username_fields(username)
     with FEATContext("FEAT-IDEN-001", idempotency_key=f"test-s5-sysadmin:{uuid.uuid4().hex}"):
         user = User(
@@ -50,6 +53,8 @@ def _create_sysadmin(username: str) -> tuple[User, str]:
         )
         db.session.add(user)
         db.session.flush()
+    db.session.commit()
+    ensure_credential_compliance(user.id)
     db.session.commit()
     return user, totp_secret
 

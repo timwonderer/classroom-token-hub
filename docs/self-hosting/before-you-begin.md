@@ -117,7 +117,7 @@ change by leaving out a step.
 | A **domain name** you control | Your CTH needs its own web address. | A subdomain of a domain you already own is fine, for example `classroom.example.org`. |
 | **Cloudflare Turnstile** keys | CTH uses Turnstile to stop bots on sign-up and sign-in pages. It refuses to start in production without it. | Turnstile is free and works for any domain. |
 | **Cloudflare proxy** in front of the server | The installer's only network setup is "Cloudflare proxy": the server accepts web traffic only from Cloudflare. | The project recommends the proxy anyway (see below). Support for other setups is tracked in [#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792). |
-| **Passwordless.dev** keys | The installer won't accept a configuration without them. | In the app itself, passkeys are optional. Making the installer match is tracked in [#1791](https://github.com/timwonderer/classroom-token-hub/issues/1791). |
+| **Passwordless.dev** keys | Every teacher account needs at least one passkey (a fingerprint, face, device PIN or security key), and the installer won't accept a configuration without these keys. | Until an account has a passkey and an authenticator app, CTH lets it reach only the Security page, account deletion and sign out. A different passkey provider isn't supported yet: [#1793](https://github.com/timwonderer/classroom-token-hub/issues/1793). |
 | An **authenticator app** (for example 2FAS, Aegis, Google Authenticator or 1Password) | Every teacher account uses a six-digit code (TOTP) at sign-in. | Install it on your phone before Part 6. |
 
 ### Strongly recommended, with alternatives
@@ -132,21 +132,6 @@ change by leaving out a step.
 *Alternative, not available yet:* serve traffic directly with your own
 certificate. You'd skip a third-party service, but lose the hidden origin.
 The current installer can't do this; see [#1792](https://github.com/timwonderer/classroom-token-hub/issues/1792).
-
-**Passkeys through Passwordless.dev.** Passkeys let teachers and students sign
-in with a fingerprint, face or device PIN instead of typing a password.
-
-- They're harder to phish than passwords, and students find them easier.
-- Passwordless.dev handles the cryptography and has a free tier.
-
-*Alternatives, not available yet:*
-
-- **No passkeys at all.** Simpler, one fewer account; everyone signs in with
-  their existing username and TOTP (teachers), or PIN/passphrase flows
-  (students). The app supports this, but the installer doesn't yet:
-  [#1791](https://github.com/timwonderer/classroom-token-hub/issues/1791).
-- **A different passkey provider,** or passkeys built into CTH itself. Not
-  supported yet: [#1793](https://github.com/timwonderer/classroom-token-hub/issues/1793).
 
 ### Optional
 

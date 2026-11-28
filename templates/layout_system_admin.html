@@ -98,7 +98,7 @@
 
                     <a href="{{ url_for('sysadmin.passkey_settings') }}"
                         class="{% if current_page == 'passkey_settings' %}active{% endif %}" {% if current_page == 'passkey_settings' %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined" aria-hidden="true">fingerprint</span> Passkey Settings
+                        <span class="material-symbols-outlined" aria-hidden="true">shield_lock</span> Security
                     </a>
                     {#- Sign-out is a POST with a CSRF token: a GET cannot end the session. -#}
                     <form method="post" action="{{ url_for('sysadmin.logout') }}" class="sysadmin-nav-signout-form">

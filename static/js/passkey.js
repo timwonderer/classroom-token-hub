@@ -206,32 +206,42 @@ function getCsrfToken() {
 }
 
 /**
+ * Ask for a fresh authenticator code in a dialog. Resolves with the 6-digit code, or null if the
+ * person cancels. Anything that is not exactly six digits is refused here, before any request.
+ */
+async function promptTotpCode() {
+    const answer = await window.AppCore.prompt(
+        'Enter the current 6-digit code from your authenticator app.',
+        {
+            title: 'Authenticator code', label: 'Authenticator code', confirmLabel: 'Continue',
+            inputmode: 'numeric', autocomplete: 'one-time-code', requiredMessage: 'Enter the 6-digit code.',
+            // A malformed code keeps the dialog open with the field marked invalid.
+            pattern: /^[0-9]{6}$/,
+            patternMessage: 'That was not a 6-digit code. Check your authenticator app and try again.',
+        }
+    );
+    if (answer === null || answer === undefined || answer === false) { return null; }
+    const code = String(answer).trim();
+    // The dialog enforces the pattern; this keeps the guarantee local if a caller's dialog does not.
+    return /^[0-9]{6}$/.test(code) ? code : null;
+}
+
+/**
  * Passkey settings page: register, delete, retry and cancel.
- * Every action but retry and cancel needs a fresh authenticator code from the input
- * named by config.codeInputId. A completed change ends the sign-in; the server answers
+ * Register and delete need a fresh authenticator code, asked for in a dialog once the person
+ * has committed to the action. A completed change ends the sign-in; the server answers
  * with the sign-in page to go to.
  */
 function setupPasskeyManager(config) {
     const feedback = document.getElementById(config.feedbackId);
-    const codeInput = document.getElementById(config.codeInputId);
 
     function show(level, title, message) {
         if (!feedback || !window.AppCore) { return; }
         feedback.replaceChildren(window.AppCore.buildAlertCard({
-            level: level, title: title, icon: level === 'danger' ? 'error' : 'info', body: message,
+            level: level, title: title, icon: level === 'danger' ? 'error' : 'info', body: message, headingTag: 'h2',
         }));
         feedback.className = 'mb-4';
         feedback.focus();
-    }
-
-    function readCode() {
-        const code = (codeInput && codeInput.value || '').trim();
-        if (!/^[0-9]{6}$/.test(code)) {
-            show('danger', 'Authenticator code needed', 'Enter the current 6-digit code from your authenticator app, then try again.');
-            if (codeInput) { codeInput.focus(); }
-            return null;
-        }
-        return code;
     }
 
     function finished(data) {
@@ -257,13 +267,13 @@ function setupPasskeyManager(config) {
     }
 
     async function enroll(button) {
-        const code = readCode();
-        if (!code) { return; }
         const authenticatorName = await window.AppCore.prompt(
-            'Give this passkey a name you will recognise, such as "YubiKey" or "Touch ID".',
+            'Give this passkey a name you will recognize, such as "YubiKey" or "Touch ID".',
             { title: 'Name this passkey', label: 'Passkey name', confirmLabel: 'Continue', requiredMessage: 'Enter a name.' }
         );
         if (!authenticatorName) { return; }
+        const code = await promptTotpCode();
+        if (!code) { return; }
         const originalHTML = button.innerHTML;
         try {
             button.disabled = true;
@@ -281,12 +291,12 @@ function setupPasskeyManager(config) {
 
     document.querySelectorAll('.delete-passkey-btn').forEach(button => {
         button.addEventListener('click', async () => {
-            const code = readCode();
-            if (!code) { return; }
             const name = button.dataset.credentialName;
             if (!(await window.AppCore.confirm(`Delete "${name}"?`, { title: 'Delete passkey', confirmLabel: 'Delete', danger: true }))) {
                 return;
             }
+            const code = await promptTotpCode();
+            if (!code) { return; }
             const originalHTML = button.innerHTML;
             try {
                 button.disabled = true;

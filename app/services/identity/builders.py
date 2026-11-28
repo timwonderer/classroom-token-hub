@@ -741,26 +741,13 @@ def build_recovery_saved_view(ctx, recovery_request) -> dict:
     return {"expires_at_display": format_timestamp(ctx, expires_at)}
 
 
-@dataclass(frozen=True)
-class PasskeyCredentialView:
-    """One registered passkey, with its times ready to print."""
-    id: int
-    authenticator_name: Optional[str]
-    registered_display: str
-    last_used_display: Optional[str]  # None: never used
+def build_passkey_credential_views(ctx, credentials) -> list["PasskeyCredentialRowView"]:
+    """Format each credential's times through the resolver under ``ctx``.
 
-
-def build_passkey_credential_views(ctx, credentials) -> list[PasskeyCredentialView]:
-    """Format each credential's times through the resolver under ``ctx``."""
-    return [
-        PasskeyCredentialView(
-            id=cred.id,
-            authenticator_name=cred.authenticator_name,
-            registered_display=format_timestamp(ctx, cred.created_at) if cred.created_at else "Unknown",
-            last_used_display=format_timestamp(ctx, cred.last_used) if cred.last_used else None,
-        )
-        for cred in credentials
-    ]
+    The teacher and sysadmin Security pages share one row shape
+    (``PasskeyCredentialRowView``), so the shared template reads one field name.
+    """
+    return list(build_passkey_credential_rows(credentials, ctx))
 
 
 def build_account_created_on(ctx, user) -> str:

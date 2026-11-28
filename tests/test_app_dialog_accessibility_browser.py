@@ -272,6 +272,38 @@ def test_prompt_field_is_labelled_and_announces_its_error_only_once_it_applies(p
     page.wait_for_function("() => document.activeElement.id === 'opener'")
 
 
+def test_prompt_pattern_marks_the_field_invalid_and_keeps_the_dialog_open(page):
+    """SPEC-DES-001 §XI.6: a format failure is aria-invalid + a described error, in the same dialog."""
+    open_from_opener(page, "AppCore.prompt('Enter the code.', {title: 'Verify', label: 'Six digit code', requiredMessage: 'Enter the 6-digit code.', pattern: /^[0-9]{6}$/, patternMessage: 'That was not a 6-digit code.'})")
+
+    field = page.get_by_label("Six digit code")
+    field.fill("12345")
+    page.keyboard.press("Enter")
+
+    assert page.locator(".modal.show").count() == 1  # still open: nothing resolved
+    assert page.evaluate("() => window.__result") is None
+    assert field.get_attribute("aria-invalid") == "true"
+    error_id = field.get_attribute("aria-describedby")
+    assert page.locator(f"#{error_id}").inner_text() == "That was not a 6-digit code."
+    assert page.evaluate("() => document.activeElement.id") == field.get_attribute("id")
+
+    field.fill("")  # empty keeps the required message, not the pattern message
+    page.keyboard.press("Enter")
+    assert page.locator(f"#{error_id}").inner_text() == "Enter the 6-digit code."
+
+    field.fill("654321")
+    page.keyboard.press("Enter")
+    assert result(page) == "654321"
+
+
+def test_alert_card_heading_level_is_selectable_and_defaults_to_h3(page):
+    tags = page.evaluate(
+        """() => ['h2', undefined, 'script'].map((headingTag) =>
+            AppCore.buildAlertCard({title: 'T', headingTag}).querySelector('.card-header > *:not(span)').tagName)"""
+    )
+    assert tags == ["H2", "H3", "H3"]
+
+
 def test_prompt_escape_resolves_null(page):
     open_from_opener(page, "AppCore.prompt('Name it.', {title: 'Name', label: 'Name'})")
     page.keyboard.press("Escape")

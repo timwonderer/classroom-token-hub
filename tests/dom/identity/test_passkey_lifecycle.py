@@ -49,6 +49,7 @@ from tests.helpers.passkey import (  # noqa: F401  (fake_passwordless is a fixtu
     fake_passwordless,
     finish_registration,
     give_totp_seed,
+    make_passkey_missing,
     record_passkey,
     start_registration,
     totp_code,
@@ -65,6 +66,7 @@ def _teacher(client, app, fake, passkeys=("cred-a",), key="chemistry_p1"):
     """A signed-in teacher holding a 160-bit TOTP seed and the named activated passkeys."""
     classroom = initialize_as_teacher(key, client, app)
     user_id = classroom.teacher_user.id
+    make_passkey_missing(user_id)  # the fixture's compliance passkey: these tests name their own
     give_totp_seed(user_id)
     for credential in passkeys:
         record_passkey(user_id, credential, fake, name=f"name-{credential}")
@@ -82,7 +84,7 @@ def _sysadmin(client, fake, passkeys=("cred-s1",)):
     give_totp_seed(user_id)
     for credential in passkeys:
         record_passkey(user_id, credential, fake)
-    seed_sysadmin_session(client, user_id=user_id, username="op_sysadmin")
+    seed_sysadmin_session(client, user_id=user_id, username="op_sysadmin", compliant=bool(passkeys))
     return user_id
 
 
@@ -797,6 +799,7 @@ def test_a_foreign_or_missing_passkey_cannot_be_revoked(client, app, fake_passwo
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a", "cred-b"))
     other = initialize("biology_block_a", app)
     other_user = other.teacher_user.id
+    make_passkey_missing(other_user)
     record_passkey(other_user, "cred-foreign", fake_passwordless)
     foreign_row = _row_id("cred-foreign")
 
@@ -1003,13 +1006,13 @@ def test_settings_page_mutates_nothing_and_states_the_state(client, app, fake_pa
     assert (after.stage, after.updated_at, _user(user_id).credential_generation) == before
 
 
-def test_the_settings_page_has_a_labelled_code_input_and_text_states(client, app, fake_passwordless):
+def test_the_settings_page_asks_for_the_code_in_a_dialog_and_has_text_states(client, app, fake_passwordless):
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
 
     html = client.get("/admin/passkey/settings").get_data(as_text=True)
 
-    assert '<label for="passkey-totp-code"' in html and 'id="passkey-totp-code"' in html
-    assert 'autocomplete="one-time-code"' in html
+    # The authenticator code is asked for in a dialog (static/js/passkey.js), not in a page-level field.
+    assert "passkey-totp-code" not in html
     assert "Your only passkey: add another before you delete this one." in html
     assert "replace-passkey-btn" not in html
     assert "delete-passkey-btn" not in html.split("<script>")[0]  # no Delete offered for the only passkey
@@ -1020,7 +1023,7 @@ def test_the_sysadmin_settings_page_offers_the_same_controls(client, app, fake_p
 
     html = client.get("/sysadmin/passkey/settings").get_data(as_text=True)
 
-    assert 'id="passkey-totp-code"' in html and "delete-passkey-btn" in html and "replace-passkey-btn" not in html
+    assert "passkey-totp-code" not in html and "delete-passkey-btn" in html and "replace-passkey-btn" not in html
 
 
 def test_labels_are_escaped_and_never_become_authority(client, app, fake_passwordless):
@@ -1407,10 +1410,10 @@ def test_mutation_trusting_a_bare_404_would_drop_a_live_credentials_binding(
     ("Lap\x00top", "Laptop"),
     ("Tab\there\nnow", "Tabherenow"),
     ("Key‮evil", "Keyevil"),
-    ("​\x07   ", "Unnamed Passkey"),
-    ("", "Unnamed Passkey"),
-    (None, "Unnamed Passkey"),
-    (123, "Unnamed Passkey"),
+    ("​\x07   ", "Unnamed passkey"),
+    ("", "Unnamed passkey"),
+    (None, "Unnamed passkey"),
+    (123, "Unnamed passkey"),
     ("é" * 150, "é" * 100),
     ("a" * 99 + " b", "a" * 99),
 ])
@@ -1661,11 +1664,45 @@ def test_the_client_sends_an_expired_session_to_sign_in_and_leaves_a_failed_cere
     assert report["unauthorized"]["hrefs"] == ["/admin/login"]
     assert report["unauthorized"]["body"] == ["Your session ended. Sign in again."]
     assert report["unauthorized"]["reloads"] == 0
+    # Feedback cards above the tabs sit at h2, under the page's h1 (INV-ARC-020 §VI.2).
+    assert report["unauthorized"]["headingTags"] == ["h2"]
     # A failed ceremony is shown, sends no automatic cancel request, and reloads (after the delay)
     # so the page renders the pending operation with its Cancel control.
     assert report["ceremonyFailure"]["urls"] == ["/start"]
     assert report["ceremonyFailure"]["reloads"] == 1
     assert report["ceremonyFailure"]["body"] == ["ceremony failed"]
+
+
+def test_the_client_asks_for_the_authenticator_code_in_a_dialog_for_register_and_delete():
+    """Register and delete both prompt for the 6-digit code (no page-level field) and validate it before any request."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+    root = pathlib.Path(__file__).resolve().parents[3]
+    run = subprocess.run(
+        [node, str(root / "tests" / "js" / "passkey_behavior_harness.js"), str(root / "static" / "js" / "passkey.js")],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert run.returncode == 0, run.stderr
+    report = json.loads(run.stdout)
+
+    # Register: the name is asked first, then the code, in a numeric one-time-code dialog; start carries it.
+    assert report["registerCode"]["prompts"] == ["Name this passkey", "Authenticator code"]
+    assert report["registerCode"]["modal"] == [["numeric", "one-time-code"]]
+    assert report["registerCode"]["start"] == [{"totp_code": "123456"}]
+    # Anything but six digits is refused inside the one dialog (pattern + message, so it stays open with
+    # the field marked invalid) and never sent.
+    assert report["badCodes"]["asked"] == 1
+    assert report["badCodes"]["pattern"] == ["^[0-9]{6}$"]
+    assert report["badCodes"]["rejected"] == ["That was not a 6-digit code. Check your authenticator app and try again."] * 3
+    assert report["badCodes"]["startBodies"] == [{"totp_code": "654321"}]
+    # Cancelling the code dialog sends no request, on register and on delete.
+    assert report["cancelledCode"]["fetches"] == 0
+    assert report["deleteCancelled"]["fetches"] == 0
+    # Delete: confirmation, then the code, and the delete request carries it.
+    assert report["deleteCode"]["prompts"] == ["Authenticator code"]
+    assert report["deleteCode"]["fetches"] == [["/passkey/7/delete", {"totp_code": "246810"}]]
+    assert report["deleteCode"]["hrefs"] == ["/admin/login"]
 
 
 def test_a_completed_receipt_past_its_deadline_is_no_longer_replayed(client, app, fake_passwordless):
@@ -1851,6 +1888,7 @@ def test_reconciliation_never_reaches_another_principals_credentials(client, app
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=("cred-a",))
     other = initialize("biology_block_a", app).teacher_user.id
     assert other != user_id
+    make_passkey_missing(other)
     give_totp_seed(other)
     record_passkey(other, "other-bound", fake_passwordless)
     _stray(fake_passwordless, other, "other-stray")

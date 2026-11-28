@@ -17,7 +17,16 @@ from app.utils.canonical_temporal_resolver import utc_now
 
 
 def login_sysadmin(client, *, username: str, totp_secret: str):
-    """Authenticate a sysadmin through the production login route."""
+    """Authenticate a sysadmin through the production login route.
+
+    The sysadmin is made credential-compliant first (SPEC-TEST-002) unless it already is, so the
+    sign-in lands on the dashboard rather than the Security page.
+    """
+    from app.hash_utils import hash_username_lookup
+    from tests.helpers.passkey import ensure_credential_compliance
+    user = User.query.filter_by(username_lookup_hash=hash_username_lookup(username)).first()
+    if user is not None:
+        ensure_credential_compliance(user.id)
     return client.post(
         "/sysadmin/login",
         data={"username": username, "totp_code": pyotp.TOTP(totp_secret).now()},
@@ -31,8 +40,16 @@ def seed_sysadmin_session(
     user_id: int,
     username: str,
     minutes_ago: int = 0,
+    compliant: bool = True,
 ) -> None:
-    """Establish a sysadmin session for route-level auth tests."""
+    """Establish a sysadmin session for route-level auth tests.
+
+    The sysadmin is credential-compliant (SPEC-TEST-002); pass ``compliant=False`` to leave its
+    credentials as they are for a gate scenario.
+    """
+    if compliant:
+        from tests.helpers.passkey import ensure_credential_compliance
+        ensure_credential_compliance(user_id)
     nonce = f"nonce-{username}"
     with FEATContext("FEAT-IDEN-001", idempotency_key=f"operation:seed_sysadmin_session:{user_id}:{username}:{minutes_ago}"):
         user = db.session.get(User, user_id)

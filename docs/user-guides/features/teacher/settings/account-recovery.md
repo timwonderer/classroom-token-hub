@@ -84,5 +84,5 @@ To come back later: go to the teacher login page, choose **Resume Recovery**, an
 ## Related guides
 
 - [Verify a Teacher Recovery Request (Student)](../../student/account/verify-teacher-recovery.md)
-- [Passkey and Login Security](passkey.md)
+- [Security: Passkeys and Authenticator App](passkey.md)
 - [Login and Account Security Troubleshooting](../../../diagnostics/teacher/login.md)

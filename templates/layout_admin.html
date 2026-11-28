@@ -235,7 +235,7 @@
                 </button>
                 <div id="admin-settings-links" class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if settings_open %} show{% endif %}">
                     <a href="{{ url_for('admin.passkey_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'passkey_settings' %}active{% endif %}" {% if current_page == 'passkey_settings' %}aria-current="page"{% endif %}>
-                        <span class="material-symbols-outlined" aria-hidden="true">fingerprint</span> Passkey
+                        <span class="material-symbols-outlined" aria-hidden="true">shield_lock</span> Security
                     </a>
                     <a href="{{ url_for('admin.account_delete') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'account_delete' %}active{% endif %}" {% if current_page == 'account_delete' %}aria-current="page"{% endif %}>
                         <span class="material-symbols-outlined" aria-hidden="true">person_cancel</span> Account Deletion
@@ -607,7 +607,8 @@
 
             if (queryTarget) {
                 navMap.forEach((triggers, navId) => {
-                    const match = triggers.find(trigger => getTarget(trigger) === queryTarget);
+                    const match = triggers.find(trigger => getTarget(trigger) === queryTarget)
+                        || triggers.find(trigger => getTarget(trigger) === `${queryTarget}-pane`);
                     if (match) {
                         new bootstrap.Tab(match).show();
                         handledNavs.add(navId);
