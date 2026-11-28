@@ -83,6 +83,9 @@ and this project follows semantic versioning principles.
   **Passkey Replace is gone: to change a passkey, add a new one, then delete the old one** (FEAT-IDEN-102, FEAT-IDEN-107; SPEC-IDEN-002; DOM-IDEN-003; owner ruling 2026-11-27). Passkey Settings no longer has a Replace button or the "name for the new passkey" field on the retry card, `register/start` no longer accepts `replace_passkey_id`, and the `passkey_replace` operation and its completion path are removed from the lifecycle FEAT and commands. Your only passkey still cannot be deleted. The `passkey_replace` value stays in the `credential_operations.purpose` check constraint (no migration); nothing writes it. REF-API-001 and the governing documents are amended to match.
 
 ### Fixed
+- <!-- notes: fixed -->
+
+  **The teacher Account Deletion guide described the old request-and-review process.** It said deletion was a request reviewed by system administrators and offered period deletion. It now describes the self-service deletion and its confirmation gate as the app implements them.
 
 - **Removed a dead `proof_unverified` refusal entry from `app/routes/totp_replacement.py`.** No code raises that category.
 - <!-- notes: fixed -->
