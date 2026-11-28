@@ -1,8 +1,9 @@
 """Self-service TOTP replacement over HTTP (FEAT-IDEN-106, SPEC-IDEN-002 §IX).
 
-One implementation serves ``/admin`` and ``/sysadmin``. A replacement is authorized by a
-fresh passkey assertion bound to the operation; the old secret stays valid until the new
-code is confirmed.
+One implementation serves ``/admin`` and ``/sysadmin``. A replacement is authorized by dedicated
+provider step-up evidence consumed against a stored single-use challenge; the old secret stays
+valid until the new code is confirmed. The evidence rules themselves are in
+``test_totp_step_up_evidence.py``.
 """
 
 from __future__ import annotations
@@ -39,6 +40,11 @@ def _open_ops(user_id):
         CredentialOperationStage.COMPLETED, CredentialOperationStage.CANCELLED)]
 
 
+def _only_awaiting(user_id):
+    """Nothing is authorized: at most the challenge's operation, still awaiting its evidence."""
+    return all(o.stage is CredentialOperationStage.AWAITING_STEP_UP for o in _ops(user_id))
+
+
 def _stored_seed(user_id):
     return _user(user_id).totp_secret_encrypted
 
@@ -57,7 +63,7 @@ def _start(client, fake, credential, prefix="/admin", token=None, challenge=None
     if challenge is None:
         challenge = _challenge(client, prefix)["challenge"]
     if token is None:
-        token = fake.sign_in_token(credential)
+        token = fake.step_up_token(credential)
     return client.post(f"{prefix}/totp/replace/start", json={"token": token, "challenge": challenge})
 
 
@@ -145,8 +151,11 @@ def test_FEAT_IDEN_106__a_missing_or_wrong_assertion_is_refused(client, app, fak
         "no body": client.post(f"{prefix}/totp/replace/start", json={}),
         "unknown token": _start(client, fake_passwordless, "cred-a", prefix, token="verify_nope", challenge=challenge),
         "totp code as proof": _start(client, fake_passwordless, "cred-a", prefix, token=totp_code(), challenge=challenge),
+        "ordinary sign-in token": _start(
+            client, fake_passwordless, "cred-a", prefix, token=fake_passwordless.sign_in_token("cred-a"),
+            challenge=challenge),
         "no challenge": client.post(
-            f"{prefix}/totp/replace/start", json={"token": fake_passwordless.sign_in_token("cred-a")}),
+            f"{prefix}/totp/replace/start", json={"token": fake_passwordless.step_up_token("cred-a")}),
         "forged challenge": _start(client, fake_passwordless, "cred-a", prefix, challenge="0" * 64),
         "registration token": _start(
             client, fake_passwordless, "cred-a", prefix,
@@ -159,7 +168,7 @@ def test_FEAT_IDEN_106__a_missing_or_wrong_assertion_is_refused(client, app, fak
 
     for name, response in cases.items():
         assert response.status_code in (400, 403), name
-    assert _ops(user_id) == [] and _old_code_valid(user_id)
+    assert _only_awaiting(user_id) and _old_code_valid(user_id)
 
 
 @pytest.mark.parametrize("prefix", PREFIXES)
@@ -168,31 +177,33 @@ def test_FEAT_IDEN_106__a_credential_not_recorded_for_the_principal_is_refused(c
     # A valid provider assertion for a credential that is not an activated local binding.
     fake_passwordless.credentials["cred-pending"] = passkey_external_id(user_id)
     assert _start(client, fake_passwordless, "cred-pending", prefix).status_code == 403
-    assert _ops(user_id) == []
+    assert _only_awaiting(user_id)
 
 
-def test_FEAT_IDEN_106__a_passkey_token_is_single_use(client, app, fake_passwordless):
+def test_FEAT_IDEN_106__a_consumed_step_up_token_cannot_authorize_a_later_replacement(client, app, fake_passwordless):
     user_id = _principal(client, app, fake_passwordless, "/admin")
-    token = fake_passwordless.sign_in_token("cred-a")
     challenge = _challenge(client, "/admin")["challenge"]
+    token = fake_passwordless.step_up_token("cred-a")  # minted after the challenge, as the ceremony is
     assert _start(client, fake_passwordless, "cred-a", token=token, challenge=challenge).status_code == 200
     client.post("/admin/totp/replace/cancel")
-    assert _start(client, fake_passwordless, "cred-a", token=token, challenge=challenge).status_code == 403
+    # The provider still verifies it (its tokens are not single use); CTH refuses it.
+    fresh = _challenge(client, "/admin")["challenge"]
+    assert _start(client, fake_passwordless, "cred-a", token=token, challenge=fresh).status_code == 403
+    assert _only_awaiting(user_id) or all(
+        o.stage in (CredentialOperationStage.CANCELLED, CredentialOperationStage.AWAITING_STEP_UP)
+        for o in _ops(user_id))
 
 
-def test_FEAT_IDEN_106__a_challenge_from_another_session_is_refused(client, app, fake_passwordless):
+def test_FEAT_IDEN_106__a_superseded_challenge_is_refused(client, app, fake_passwordless):
     user_id = _principal(client, app, fake_passwordless, "/admin")
-    user = _user(user_id)
-    other = lifecycle._step_up_value(
-        user_id, lifecycle.CredentialOperationPurpose.TOTP_REPLACE, "another-session",
-        user.credential_generation, lifecycle._step_up_bucket())
-    assert _start(client, fake_passwordless, "cred-a", challenge=other).status_code == 403
-    # A challenge for another purpose does not authorize this one either.
-    wrong_purpose = lifecycle._step_up_value(
-        user_id, lifecycle.CredentialOperationPurpose.PASSKEY_REVOKE, user.current_session_nonce,
-        user.credential_generation, lifecycle._step_up_bucket())
-    assert _start(client, fake_passwordless, "cred-a", challenge=wrong_purpose).status_code == 403
-    assert _ops(user_id) == []
+    first = _challenge(client, "/admin")["challenge"]
+    second = _challenge(client, "/admin")["challenge"]
+    assert first != second
+    assert len(_open_ops(user_id)) == 1  # the same operation, its verifier replaced
+
+    refused = _start(client, fake_passwordless, "cred-a", challenge=first)
+    assert refused.status_code == 403 and refused.get_json()["code"] == "challenge_invalid"
+    assert _start(client, fake_passwordless, "cred-a", challenge=second).status_code == 200
 
 
 @pytest.mark.parametrize("prefix", PREFIXES)
@@ -227,7 +238,7 @@ def test_FEAT_IDEN_106__an_expired_replacement_cannot_activate(client, app, fake
 def test_FEAT_IDEN_106__a_second_start_is_refused_while_one_is_open(client, app, fake_passwordless):
     user_id = _principal(client, app, fake_passwordless, "/admin")
     assert _start(client, fake_passwordless, "cred-a").status_code == 200
-    again = _start(client, fake_passwordless, "cred-a")
+    again = client.post("/admin/totp/replace/challenge")
     assert again.status_code == 409 and again.get_json()["code"] == "operation_already_open"
     assert len(_open_ops(user_id)) == 1
 
@@ -252,15 +263,15 @@ def test_FEAT_IDEN_106__another_principal_cannot_confirm_or_cancel_the_operation
     give_totp_seed(other)
     record_passkey(other, "cred-other", fake_passwordless)
     db.session.expire_all()
-    stolen = fake_passwordless.sign_in_token("cred-a")
+    stolen = fake_passwordless.step_up_token("cred-a")
     assert _start(client, fake_passwordless, "cred-other", token=stolen).status_code == 403
-    assert _ops(other) == []
+    assert _only_awaiting(other)
 
 
 def test_FEAT_IDEN_106__a_principal_without_a_passkey_cannot_replace(client, app, fake_passwordless):
     _, user_id = _teacher(client, app, fake_passwordless, passkeys=())
     assert _start(client, fake_passwordless, "cred-x", token="verify_none").status_code in (400, 403)
-    assert _ops(user_id) == []
+    assert _only_awaiting(user_id)
 
 
 @pytest.mark.parametrize("prefix", PREFIXES)
@@ -297,11 +308,14 @@ def test_INV_ARC_007__the_settings_page_get_writes_nothing(client, app, fake_pas
     )
 
 
-def test_FEAT_IDEN_106__the_challenge_endpoint_stores_nothing(client, app, fake_passwordless):
+def test_FEAT_IDEN_106__the_challenge_endpoint_stores_only_a_challenge(client, app, fake_passwordless):
     user_id = _principal(client, app, fake_passwordless, "/admin")
     body = _challenge(client, "/admin")
-    assert body["challenge"] and body["apiKey"] and body["alias"]
-    assert _ops(user_id) == []
+    assert body["challenge"] and body["apiKey"] and body["alias"] and body["userId"] == passkey_external_id(user_id)
+    (operation,) = _ops(user_id)
+    assert operation.stage is CredentialOperationStage.AWAITING_STEP_UP
+    assert operation.pending_totp_encrypted is None and operation.step_up_token_id is None
+    assert body["challenge"] not in (operation.step_up_challenge_hash or "")  # a verifier, never the value
 
 
 def test_FEAT_IDEN_106__a_teacher_with_no_active_class_can_replace_the_totp(client, app, fake_passwordless):
