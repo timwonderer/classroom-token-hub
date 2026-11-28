@@ -9,7 +9,9 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Added
-- **Fresh-install database bundle for migration head `b1b2b4599b87`** (`migrations/fresh/b1b2b4599b87/`). It was derived with `scripts/generate_fresh_database.py` from `d079e10` on PostgreSQL 14.24 and passes `scripts/verify_fresh_bundles.py`. The supported fresh-install release (`migrations/fresh/supported_release.json`) stays v2.5.0 until the release that ships this bundle is tagged.
+- <!-- notes: internal -->
+
+  **Fresh-install database bundle for migration head `b1b2b4599b87`** (`migrations/fresh/b1b2b4599b87/`). It was derived with `scripts/generate_fresh_database.py` from `d079e10` on PostgreSQL 14.24 and passes `scripts/verify_fresh_bundles.py`. The supported fresh-install release (`migrations/fresh/supported_release.json`) stays v2.5.0 until the release that ships this bundle is tagged.
 
 - <!-- notes: new -->
 
