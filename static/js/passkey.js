@@ -356,11 +356,9 @@ function setupTotpReplacement(config) {
     if (replaceButton) {
         replaceButton.addEventListener('click', async () => {
             const originalHTML = replaceButton.innerHTML;
-            let challengeIssued = false;
             try {
                 replaceButton.disabled = true;
                 const { challenge, apiKey, userId } = await postPasskeyJson(config.challengeUrl, {});
-                challengeIssued = true;
                 const p = new Passwordless.Client({ apiKey });
                 // A dedicated step-up ceremony for this one purpose; an ordinary sign-in token is refused.
                 const result = await p.stepup({ signinMethod: { userId: userId }, purpose: 'totp-replace' });
@@ -376,10 +374,8 @@ function setupTotpReplacement(config) {
             } catch (error) {
                 replaceButton.disabled = false;
                 replaceButton.innerHTML = originalHTML;
-                if (challengeIssued) {
-                    // Free the single operation slot the issued challenge occupies; best effort, it also expires.
-                    try { await postPasskeyJson(config.cancelUrl, {}); } catch (ignored) { /* the operation expires on its own */ }
-                }
+                // No cleanup request: an unbound cancel could cancel a newer attempt's replacement. An unconsumed
+                // challenge is reused by the next attempt of this session; a staged one is cancelled server-side.
                 failed('Could not start the replacement', error);
             }
         });

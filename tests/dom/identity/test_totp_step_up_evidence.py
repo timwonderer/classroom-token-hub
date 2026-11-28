@@ -264,17 +264,18 @@ def test_FEAT_IDEN_106__the_credential_must_be_an_activated_passkey_of_the_princ
     record_passkey(other, "cred-other", fake_passwordless)
     # The provider holds these for this principal; nothing local activates them.
     fake_passwordless.credentials["cred-pending"] = passkey_external_id(rig.user_id)
-    # An activated credential of someone else, named as this principal's.
-    fake_passwordless.credentials["cred-foreign"] = passkey_external_id(rig.user_id)
     challenge = rig.issue(base)
     before = rig.snapshot()
 
     for credential, category in (
-        ("cred-pending", "step_up_credential"), ("cred-foreign", "step_up_credential"),
-        ("cred-other", "step_up_principal"),
+        ("cred-pending", "step_up_credential"), ("cred-other", "step_up_principal"),
     ):
         token = rig.token(10_000, 70_000, base, credential=credential)
         assert refusal(lambda: rig.authorize(base, 30_000, token, challenge)) == category, credential
+    # An activated credential locally owned by someone else, claimed at the provider as this principal's.
+    fake_passwordless.credentials["cred-other"] = passkey_external_id(rig.user_id)
+    token = rig.token(10_000, 70_000, base, credential="cred-other")
+    assert refusal(lambda: rig.authorize(base, 30_000, token, challenge)) == "step_up_credential"
     assert rig.snapshot() == before
 
 
@@ -672,8 +673,11 @@ def test_FEAT_IDEN_106__the_config_is_checked_again_after_verification_and_nothi
 
 def test_FEAT_IDEN_106__the_config_is_read_at_the_point_of_use_twice_and_never_cached(rig, base):
     challenge = rig.issue(base)
-    rig.authorize(base, 30_000, rig.token(10_000, 70_000, base), challenge)
-    assert [c[0] for c in rig.fake.calls].count("auth_configs") == 2  # once per step, never cached
+    token = rig.token(10_000, 70_000, base)
+    rig.fake.calls.clear()
+    rig.authorize(base, 30_000, token, challenge)
+    # The second read follows token verification (the first read was at challenge issuance).
+    assert [c[0] for c in rig.fake.calls] == ["signin_verify", "auth_configs"]
 
 
 def test_FEAT_IDEN_106__the_http_challenge_and_start_use_the_stored_challenge(rig, base):

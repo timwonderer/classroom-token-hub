@@ -190,6 +190,7 @@ class FakePasswordless:
             text = self.auth_configs_raw if self.auth_configs_raw is not None else json.dumps(self.auth_configs)
             return SimpleNamespace(status_code=200, text=text, headers={})
         assert request.url.endswith("/signin/verify"), request.url
+        self.calls.append(("signin_verify", None))
         token = json.loads(request.data)["token"]
         # Tokens are not single use at the provider; the fake consumes only the ones it was not told to keep.
         payload = self.tokens.get(token) if token in self.reusable_tokens else self.tokens.pop(token, None)

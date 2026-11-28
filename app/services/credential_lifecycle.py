@@ -1236,7 +1236,10 @@ def open_passkey_operation_presentation(user_id: str) -> tuple[str | None, str |
 
 def open_totp_replacement_in_progress(user_id: str) -> bool:
     """Whether the principal has a live TOTP replacement awaiting its new code. Pure read."""
-    operation = get_open_operation(user_id)
+    return _is_live_totp_replacement(get_open_operation(user_id))
+
+
+def _is_live_totp_replacement(operation: CredentialOperation | None) -> bool:
     return (
         operation is not None
         and operation.purpose is CredentialOperationPurpose.TOTP_REPLACE
@@ -1251,9 +1254,10 @@ def open_totp_replacement_binding(user_id: str) -> str | None:
     Same derivation as the passkey operations' binding, so a late Cancel from a superseded
     replacement names an operation that is no longer open (``binding_mismatch``).
     """
-    if not open_totp_replacement_in_progress(user_id):
+    operation = get_open_operation(user_id)
+    if not _is_live_totp_replacement(operation):
         return None
-    return registration_binding(get_open_operation(user_id))
+    return registration_binding(operation)
 
 
 def _lock_passkey_operation(operation: CredentialOperation, *purposes: CredentialOperationPurpose):

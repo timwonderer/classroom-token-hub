@@ -160,7 +160,15 @@ def _open_replacement(user_id, fake, credential="cred-1", nonce=None, **token_op
 def _live_operations(user_id=None):
     db.session.expire_all()
     return [o for o in CredentialOperation.query.all()
-            if o.stage not in (CredentialOperationStage.COMPLETED, CredentialOperationStage.CANCELLED)]
+            if (user_id is None or o.user_id == user_id)
+            and o.stage not in (CredentialOperationStage.COMPLETED, CredentialOperationStage.CANCELLED)]
+
+
+def _assert_one_awaiting_step_up(user_id):
+    """The refused attempt's challenge is still there, and nothing was authorized."""
+    live = _live_operations(user_id)
+    assert len(live) == 1
+    assert live[0].stage is CredentialOperationStage.AWAITING_STEP_UP
 
 
 def _hold(user_id, operation_id, nonce=None):
@@ -504,8 +512,7 @@ def test_evidence_for_a_foreign_unknown_or_unactivated_credential_authorizes_not
         _open_replacement(user_id, fake_passwordless, credential="cred-other")
     assert refused.value.category == "step_up_principal"
 
-    assert _live_operations() and all(
-        o.stage is CredentialOperationStage.AWAITING_STEP_UP for o in _live_operations())
+    _assert_one_awaiting_step_up(user_id)
 
 
 def test_a_sign_in_or_registration_token_of_the_wrong_type_is_refused(client, app, fake_passwordless):
@@ -515,7 +522,7 @@ def test_a_sign_in_or_registration_token_of_the_wrong_type_is_refused(client, ap
         _open_replacement(user_id, fake_passwordless, type_="passkey_register")
 
     assert refused.value.category == "step_up_type"
-    assert all(o.stage is CredentialOperationStage.AWAITING_STEP_UP for o in _live_operations())
+    _assert_one_awaiting_step_up(user_id)
 
 
 def test_open_operation_requires_the_live_session(client, app, fake_passwordless):
@@ -1041,7 +1048,7 @@ def test_a_token_naming_one_principal_with_another_principals_credential_is_refu
         _open_replacement(user_a, fake_passwordless, credential="cred-b")
 
     assert refused.value.category == "step_up_credential"
-    assert all(o.stage is CredentialOperationStage.AWAITING_STEP_UP for o in _live_operations())
+    _assert_one_awaiting_step_up(user_a)
 
 
 def test_a_non_ascii_session_nonce_is_refused_not_a_crash(client, app, fake_passwordless):
@@ -1111,26 +1118,32 @@ def test_provider_verification_is_refused_inside_an_open_transaction_with_pendin
 
 def test_a_stateless_challenge_for_another_purpose_generation_or_session_is_refused(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    user = _user(user_id)
     nonce = _nonce(user_id)
-    other_purpose = _challenge(user_id, purpose="passkey_enroll")
-    stale = _challenge(user_id)
-    other_session = lifecycle._step_up_value(
-        user_id, CredentialOperationPurpose.TOTP_REPLACE, "another-session", user.credential_generation,
-        lifecycle._step_up_bucket(),
-    )
-    other_user = lifecycle._step_up_value(
-        "00000000-0000-0000-0000-000000000000", CredentialOperationPurpose.TOTP_REPLACE, nonce,
-        user.credential_generation, lifecycle._step_up_bucket(),
-    )
+    stale = _challenge(user_id)  # built at generation 1
     with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:bump"):
         db.session.get(User, user_id).credential_generation = 2
 
+    def value(*, purpose=CredentialOperationPurpose.TOTP_REPLACE, session="current", user="current"):
+        # Built at the current generation (2); a variant changes only the field under test.
+        return lifecycle._step_up_value(
+            user_id if user == "current" else user, purpose,
+            nonce if session == "current" else session, _user(user_id).credential_generation,
+            lifecycle._step_up_bucket(),
+        )
+
+    def check(challenge):
+        lifecycle.check_step_up_challenge(
+            _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE,
+            session_nonce=nonce, challenge=challenge)
+
+    check(value())  # the control: every field current, accepted
+    other_purpose = value(purpose=CredentialOperationPurpose.PASSKEY_ENROLL)
+    other_session = value(session="another-session")
+    other_user = value(user="00000000-0000-0000-0000-000000000000")
+
     for challenge in (other_purpose, stale, other_session, other_user, "", None):
         with pytest.raises(CredentialOperationRefused) as refused:
-            lifecycle.check_step_up_challenge(
-                _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE,
-                session_nonce=nonce, challenge=challenge)
+            check(challenge)
         assert refused.value.category == "challenge_invalid"
 
 
