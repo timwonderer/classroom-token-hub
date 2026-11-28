@@ -284,7 +284,7 @@ def test_DOM_IDEN_003__every_request_the_security_page_makes_is_allowlisted(clie
     """Structural proof: each URL the page's script configures resolves to an allowlisted (or undecorated sign-in) endpoint."""
     _principal(role, client, app, "passkey_missing")
     html = client.get(f"{PREFIX[role]}/passkey/settings").get_data(as_text=True)
-    script = "\n".join(re.findall(r"<script>(.*?)</script>", html, re.S))
+    script = "\n".join(re.findall(r"<script\b[^>]*>(.*?)</script\s*>", html, re.S | re.I))
     paths = set(re.findall(r'"(/(?:admin|sysadmin)/[^"]*)"', script))
     assert len(paths) >= 10, paths
     adapter = app.url_map.bind("localhost")
