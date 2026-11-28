@@ -350,6 +350,14 @@ def _destroy_teacher_account_rows(*, canonical_context, admin_user=None):
     from app.services.passkey_service import forget_principal_remotely
     forget_principal_remotely(user_id)
 
+    # Lock the principal row before any other local work, the order every credential command
+    # uses (principal, then its operation row). Without it the cascade that removes the user's
+    # ``credential_operations`` rows could wait on an operation row a step-up consumption holds
+    # while that consumption waits on this principal: a deadlock. This is taken after the provider
+    # call above because no row lock may span provider work (SPEC-IDEN-002 §V); a stale-account
+    # purge already holds the same lock from its own entry. Re-locking within a transaction is a no-op.
+    db.session.execute(sa.select(User.id).where(User.id == user_id).with_for_update()).first()
+
     class_ids = [
         value for (value,) in db.session.query(ClassEconomy.class_id).filter(
             ClassEconomy.teacher_user_id == user_id,

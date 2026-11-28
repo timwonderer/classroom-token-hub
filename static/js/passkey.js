@@ -327,7 +327,8 @@ function setupPasskeyManager(config) {
 
 /**
  * Authenticator replacement (FEAT-IDEN-106) on the passkey settings pages.
- * Steps: challenge -> passkey assertion answering it -> start (server stages the new seed and
+ * Steps: challenge (the server stores a single-use challenge) -> passkey step-up ceremony for the
+ * purpose ``totp-replace`` -> start (the server consumes that evidence with the challenge, stages the new seed and
  * returns its QR and key) -> the user confirms with a code from the new authenticator.
  * The old authenticator keeps working until confirm succeeds, which ends the sign-in.
  */
@@ -355,12 +356,15 @@ function setupTotpReplacement(config) {
     if (replaceButton) {
         replaceButton.addEventListener('click', async () => {
             const originalHTML = replaceButton.innerHTML;
+            let challengeIssued = false;
             try {
                 replaceButton.disabled = true;
-                const { challenge, apiKey, alias } = await postPasskeyJson(config.challengeUrl, {});
+                const { challenge, apiKey, userId } = await postPasskeyJson(config.challengeUrl, {});
+                challengeIssued = true;
                 const p = new Passwordless.Client({ apiKey });
-                const result = await p.signinWithAlias(alias);
-                if (!result || result.error) { throw new Error((result && result.error) || 'Passkey check failed'); }
+                // A dedicated step-up ceremony for this one purpose; an ordinary sign-in token is refused.
+                const result = await p.stepup({ signinMethod: { userId: userId }, purpose: 'totp-replace' });
+                if (!result || result.error) { throw new Error((result && result.error && (result.error.title || result.error.errorCode)) || 'Passkey check failed'); }
                 const staged = await postPasskeyJson(config.startUrl, { token: result.token, challenge: challenge });
                 byId(config.qrId).src = staged.qr;
                 byId(config.secretId).textContent = staged.secret;
@@ -372,6 +376,10 @@ function setupTotpReplacement(config) {
             } catch (error) {
                 replaceButton.disabled = false;
                 replaceButton.innerHTML = originalHTML;
+                if (challengeIssued) {
+                    // Free the single operation slot the issued challenge occupies; best effort, it also expires.
+                    try { await postPasskeyJson(config.cancelUrl, {}); } catch (ignored) { /* the operation expires on its own */ }
+                }
                 failed('Could not start the replacement', error);
             }
         });

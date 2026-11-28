@@ -6,7 +6,7 @@ Nothing here touches the database: every mutation is a FEAT in
 ``app.feats.credential_operations_feat``. The wrappers own authentication, CSRF (the global
 ``CSRFProtect``) and rate limits.
 
-The browser supplies only the passkey token, the challenge it answered and the new code.
+The browser supplies only the step-up token, the challenge it was issued and the new code.
 The pending seed is held on the server operation and is shown once, in the response to
 ``start``; it is never in a cookie, URL or log.
 """
@@ -22,6 +22,7 @@ from app.feats import credential_operations_feat as feat
 from app.services import credential_lifecycle as lifecycle
 from app.services import passkey_service
 from app.utils.passwordless_client import get_public_api_key
+from app.utils.user_ids import passkey_external_id
 
 SUCCESS_MESSAGE = "Authenticator replaced. Sign in again with your new authenticator."
 
@@ -29,6 +30,8 @@ _PROOF_REFUSED = (403, "That passkey was not accepted.")
 _REFUSALS = {
     "challenge_invalid": _PROOF_REFUSED,
     "proof_unverified": _PROOF_REFUSED,
+    "step_up_replayed": _PROOF_REFUSED,
+    "step_up_unavailable": (503, "Authenticator replacement is unavailable right now. Nothing was changed; try again later."),
     "operation_already_open": (409, "Another credential change is already in progress. Cancel it or wait for it to expire."),
     "binding_mismatch": (409, "That replacement is no longer the one in progress. Reload the page."),
     "operation_not_found": (404, "There is no authenticator replacement in progress."),
@@ -56,7 +59,12 @@ def _guarded(action):
     except lifecycle.CredentialOperationRefused as exc:
         current_app.logger.warning("Authenticator replacement refused: %s", exc.category)
         status, message = _REFUSALS.get(exc.category, (400, exc.public_message))
-        return jsonify({"error": message, "code": exc.category}), status
+        code = exc.category
+        if code.startswith("step_up_") and code not in _REFUSALS:
+            # Which evidence check failed is logged, not told to the browser.
+            status, message = _PROOF_REFUSED
+            code = "proof_rejected"
+        return jsonify({"error": message, "code": code}), status
     except passkey_service.PasskeyServiceUnavailable:
         current_app.logger.error("Passkey provider did not confirm the request")
         return jsonify({"error": "The passkey service is unavailable. Try again shortly.", "code": "provider_unavailable"}), 503
@@ -78,27 +86,27 @@ def _qr_data_uri(uri: str) -> str:
 
 
 def challenge(*, user_id: str, alias: str):
-    """Issue the challenge the principal's passkey ceremony answers, with what the browser needs."""
+    """Store the single-use challenge for the principal's step-up ceremony; return it with what the browser needs."""
     def action():
         api_key = get_public_api_key()
         value = feat.issue_totp_replacement_challenge(
             user_id=user_id, session_nonce=session.get("current_session_nonce"),
         )
-        return jsonify({"challenge": value, "apiKey": api_key, "alias": alias}), 200
+        return jsonify({
+            "challenge": value, "apiKey": api_key, "alias": alias, "userId": passkey_external_id(user_id),
+        }), 200
     return _guarded(action)
 
 
 def start(*, user_id: str, account_name: str):
-    """Verify the fresh assertion, stage the pending seed, and show its setup material once."""
+    """Consume the step-up evidence, stage the pending seed, and show its setup material once."""
     def action():
         data = _body()
         token, answered = data.get("token"), data.get("challenge")
-        proof = lifecycle.PasskeyAssertion(
-            token if isinstance(token, str) else "", answered if isinstance(answered, str) else "",
-        )
         secret, uri, binding = feat.begin_totp_replacement(
             user_id=user_id, session_nonce=session.get("current_session_nonce"),
-            proof=proof, account_name=account_name,
+            token=token if isinstance(token, str) else "", challenge=answered if isinstance(answered, str) else "",
+            account_name=account_name,
         )
         return jsonify({"secret": secret, "qr": _qr_data_uri(uri), "binding": binding}), 200
     return _guarded(action)

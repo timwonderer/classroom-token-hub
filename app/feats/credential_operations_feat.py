@@ -17,6 +17,7 @@ from app.extensions import db
 from app.feats.base import FEATContext, is_discardable_read_autobegin, requires_feat_context
 from app.models import CredentialOperationPurpose, User
 from app.services import credential_lifecycle as lifecycle
+from app.services import passkey_service
 
 
 def release_read_transaction() -> None:
@@ -41,7 +42,12 @@ def _own_operation(user_id, operation_id):
 
 def open_credential_operation(*, user_id, purpose, proof, session_nonce,
                               correlation_id=None, idempotency_key=None) -> str:
-    """Authorize one operation for ``user_id`` and return its id."""
+    """Authorize one TOTP-proven passkey operation for ``user_id`` and return its id.
+
+    TOTP replacement is not opened here: it takes a stored step-up challenge and is authorized by
+    consuming provider step-up evidence (``issue_totp_replacement_challenge``,
+    ``authorize_totp_replacement``).
+    """
     try:
         purpose = CredentialOperationPurpose(purpose)
     except ValueError:
@@ -56,20 +62,13 @@ def open_credential_operation(*, user_id, purpose, proof, session_nonce,
             raise lifecycle.CredentialOperationRefused("ineligible_principal")
         if not lifecycle.proof_kind_allowed(purpose, proof):
             raise lifecycle.CredentialOperationRefused("proof_kind_mismatch")
-        if isinstance(proof, lifecycle.PasskeyAssertion):
-            # The challenge is checked before any provider call.
-            lifecycle.check_step_up_challenge(
-                user, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge,
-            )
-    # Provider verification runs with no transaction open.
     release_read_transaction()
-    verified = lifecycle.verify_proof(proof)
     with FEATContext(feat_name, correlation_id=correlation_id, idempotency_key=key):
         user = db.session.get(User, user_id)
         if user is None:
             raise lifecycle.CredentialOperationRefused("ineligible_principal")
         operation = lifecycle.open_operation(
-            user, purpose=purpose, proof=proof, session_nonce=session_nonce, verified=verified,
+            user, purpose=purpose, proof=proof, session_nonce=session_nonce,
         )
         return operation.id
 
@@ -102,27 +101,57 @@ def cancel_totp_replacement(*, user_id, operation_id, session_nonce,
     return lifecycle.cancel_operation(operation, purpose=CredentialOperationPurpose.TOTP_REPLACE)
 
 
-def issue_totp_replacement_challenge(*, user_id, session_nonce) -> str:
-    """The purpose-bound challenge the principal's passkey ceremony answers. Pure; stores nothing."""
-    user = db.session.get(User, user_id)
-    if user is None:
-        raise lifecycle.CredentialOperationRefused("ineligible_principal")
-    return lifecycle.issue_step_up_challenge(
-        user, purpose=CredentialOperationPurpose.TOTP_REPLACE, session_nonce=session_nonce,
-    )
+def _require_step_up_config() -> None:
+    """The provider configuration check, as a refusal. Outside any transaction; fails closed."""
+    release_read_transaction()
+    try:
+        passkey_service.require_step_up_provider_config()
+    except passkey_service.StepUpConfigUnavailable:
+        raise lifecycle.CredentialOperationRefused("step_up_unavailable") from None
 
 
-def begin_totp_replacement(*, user_id, session_nonce, proof, account_name, correlation_id=None):
-    """Authorize a replacement with a fresh passkey assertion, then stage the pending seed.
+def issue_totp_replacement_challenge(*, user_id, session_nonce, correlation_id=None) -> str:
+    """Store a single-use challenge on the principal's TOTP_REPLACE operation and return it.
+
+    The provider configuration check runs first and outside any transaction; if it fails no
+    challenge is issued. The returned value is what the browser sends back with its step-up token.
+    """
+    _require_step_up_config()
+    with FEATContext("FEAT-IDEN-106", correlation_id=correlation_id,
+                     idempotency_key=f"feat-iden-106:challenge:{uuid.uuid4().hex}"):
+        return lifecycle.issue_replacement_challenge(user_id, session_nonce=session_nonce)
+
+
+def authorize_totp_replacement(*, user_id, session_nonce, token, challenge, correlation_id=None) -> str:
+    """Consume provider step-up evidence to authorize the principal's replacement; its operation id.
+
+    Provider verification and the second configuration check run with no transaction open; the
+    pure evaluation reads the stored window; then one local transaction, opened after the provider
+    calls, takes the locks and consumes the evidence (``lifecycle.consume_step_up_evidence``).
+    """
+    release_read_transaction()
+    evidence = passkey_service.verify_step_up_token(token)
+    _require_step_up_config()
+    evaluation = lifecycle.evaluate_step_up_evidence(evidence, user_id=user_id)
+    release_read_transaction()
+    with FEATContext("FEAT-IDEN-106", correlation_id=correlation_id,
+                     idempotency_key=f"feat-iden-106:authorize:{uuid.uuid4().hex}"):
+        return lifecycle.consume_step_up_evidence(
+            evaluation, evidence, user_id=user_id, challenge=challenge, session_nonce=session_nonce,
+        ).id
+
+
+def begin_totp_replacement(*, user_id, session_nonce, token, challenge, account_name, correlation_id=None):
+    """Authorize a replacement with step-up evidence, then stage the pending seed.
 
     Returns ``(secret, provisioning_uri, binding)``; ``binding`` names this replacement for its Cancel
     control (``abandon_totp_replacement``). The principal's current secret is untouched. If
-    staging fails after the operation opened, the operation is cancelled so nothing is left
-    holding the principal's single operation slot.
+    staging fails after the operation was authorized, the operation is cancelled so nothing is
+    left holding the principal's single operation slot.
     """
-    operation_id = open_credential_operation(
-        user_id=user_id, purpose=CredentialOperationPurpose.TOTP_REPLACE, proof=proof,
-        session_nonce=session_nonce, correlation_id=correlation_id,
+    operation_id = authorize_totp_replacement(
+        user_id=user_id, session_nonce=session_nonce, token=token, challenge=challenge,
+        correlation_id=correlation_id,
     )
     try:
         secret, uri = hold_totp_candidate(
