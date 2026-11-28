@@ -210,20 +210,20 @@ function getCsrfToken() {
  * person cancels. Anything that is not exactly six digits is refused here, before any request.
  */
 async function promptTotpCode() {
-    let note = '';
-    for (;;) {
-        const answer = await window.AppCore.prompt(
-            [note, 'Enter the current 6-digit code from your authenticator app.'],
-            {
-                title: 'Authenticator code', label: 'Authenticator code', confirmLabel: 'Continue',
-                inputmode: 'numeric', autocomplete: 'one-time-code', requiredMessage: 'Enter the 6-digit code.',
-            }
-        );
-        if (answer === null || answer === undefined || answer === false) { return null; }
-        const code = String(answer).trim();
-        if (/^[0-9]{6}$/.test(code)) { return code; }
-        note = 'That was not a 6-digit code. Check your authenticator app and try again.';
-    }
+    const answer = await window.AppCore.prompt(
+        'Enter the current 6-digit code from your authenticator app.',
+        {
+            title: 'Authenticator code', label: 'Authenticator code', confirmLabel: 'Continue',
+            inputmode: 'numeric', autocomplete: 'one-time-code', requiredMessage: 'Enter the 6-digit code.',
+            // A malformed code keeps the dialog open with the field marked invalid.
+            pattern: /^[0-9]{6}$/,
+            patternMessage: 'That was not a 6-digit code. Check your authenticator app and try again.',
+        }
+    );
+    if (answer === null || answer === undefined || answer === false) { return null; }
+    const code = String(answer).trim();
+    // The dialog enforces the pattern; this keeps the guarantee local if a caller's dialog does not.
+    return /^[0-9]{6}$/.test(code) ? code : null;
 }
 
 /**
@@ -238,7 +238,7 @@ function setupPasskeyManager(config) {
     function show(level, title, message) {
         if (!feedback || !window.AppCore) { return; }
         feedback.replaceChildren(window.AppCore.buildAlertCard({
-            level: level, title: title, icon: level === 'danger' ? 'error' : 'info', body: message,
+            level: level, title: title, icon: level === 'danger' ? 'error' : 'info', body: message, headingTag: 'h2',
         }));
         feedback.className = 'mb-4';
         feedback.focus();
@@ -268,7 +268,7 @@ function setupPasskeyManager(config) {
 
     async function enroll(button) {
         const authenticatorName = await window.AppCore.prompt(
-            'Give this passkey a name you will recognise, such as "YubiKey" or "Touch ID".',
+            'Give this passkey a name you will recognize, such as "YubiKey" or "Touch ID".',
             { title: 'Name this passkey', label: 'Passkey name', confirmLabel: 'Continue', requiredMessage: 'Enter a name.' }
         );
         if (!authenticatorName) { return; }

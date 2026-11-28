@@ -12,7 +12,7 @@ function jsonResponse(status, body) {
 async function scenario(name, fetchImpl, { codes = ['123456'], deleteButtons = [] } = {}) {
     const handlers = {};
     const elements = {};
-    const state = { hrefs: [], reloads: 0, fetches: [], timers: 0, shown: [], prompts: [] };
+    const state = { hrefs: [], reloads: 0, fetches: [], timers: 0, shown: [], prompts: [], rejected: [] };
     const queue = [...codes];
     const element = (id) => elements[id] || (elements[id] = {
         id, value: '123456', dataset: {}, disabled: false, innerHTML: '',
@@ -31,8 +31,19 @@ async function scenario(name, fetchImpl, { codes = ['123456'], deleteButtons = [
             buildAlertCard: (a) => { state.shown.push(a); return {}; },
             prompt: async (message, options) => {
                 state.prompts.push({ message, title: options && options.title, inputmode: options && options.inputmode,
-                                     autocomplete: options && options.autocomplete });
-                if (options && options.title === 'Authenticator code') { return queue.length ? queue.shift() : null; }
+                                     autocomplete: options && options.autocomplete,
+                                     pattern: options && options.pattern && options.pattern.source,
+                                     patternMessage: options && options.patternMessage });
+                if (options && options.title === 'Authenticator code') {
+                    // Like AppCore's dialog: an answer that fails `pattern` keeps the dialog open
+                    // (the field is marked invalid) and the person types again, in the same prompt.
+                    while (queue.length) {
+                        const answer = queue.shift();
+                        if (!options.pattern || options.pattern.test(String(answer).trim())) { return answer; }
+                        state.rejected.push(options.patternMessage);
+                    }
+                    return null;
+                }
                 return 'My key';
             },
             confirm: async () => true,
@@ -79,7 +90,8 @@ const settle = () => new Promise((r) => setImmediate(r));
     let s = await scenario('401', async () => jsonResponse(401, { error: 'authentication_required', message: 'Your session ended. Sign in again.' }));
     await s.handlers.resume();
     await settle();
-    report.unauthorized = { hrefs: s.state.hrefs, reloads: s.state.reloads, body: s.state.shown.map((a) => a.body) };
+    report.unauthorized = { hrefs: s.state.hrefs, reloads: s.state.reloads, body: s.state.shown.map((a) => a.body),
+        headingTags: s.state.shown.map((a) => a.headingTag) };
 
     // The ceremony fails: the error is shown, nothing is cancelled, and the page reloads to show the pending operation.
     s = await scenario('ceremony', async (url) => (url === '/start'
@@ -102,12 +114,14 @@ const settle = () => new Promise((r) => setImmediate(r));
         start: s.state.fetches.filter((f) => f.url === '/start').map((f) => f.body),
     };
 
-    // A malformed code is refused in the dialog and asked for again: no request carries it.
+    // A malformed code is refused inside one dialog (it stays open, field marked invalid): no request carries it.
     s = await scenario('bad-code', async () => jsonResponse(200, { success: true }), { codes: ['12345', 'abcdef', '1234567', '654321'] });
     await s.handlers.register();
     await settle();
     report.badCodes = {
         asked: s.state.prompts.filter((p) => p.title === 'Authenticator code').length,
+        pattern: s.state.prompts.filter((p) => p.title === 'Authenticator code').map((p) => p.pattern),
+        rejected: s.state.rejected,
         startBodies: s.state.fetches.filter((f) => f.url === '/start').map((f) => f.body),
     };
 

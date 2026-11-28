@@ -1,0 +1,184 @@
+{#
+  Shared body of the Security page (teacher and sysadmin): compliance banners, the
+  Passkeys and Authenticator app tabs, and the scripts that drive them.
+
+  The role templates (admin_passkey_settings.html, system_admin_passkey_settings.html)
+  extend their own layout and include this partial. It reads the view model both
+  routes pass (compliance, active_tab, credentials, operation_state, operation_binding,
+  totp_replacement_*, passkey_urls, totp_urls) plus one role-specific value:
+
+    security_login_url  where a finished change or an ended session sends the person
+
+  and two optional styling hooks (the sysadmin shell passes its tab-strip classes):
+    security_tabs_class, security_tab_icon_class
+
+  Alerts and cards sit directly under the page's h1, so their headings are h2
+  (INV-ARC-020 §VI.2).
+#}
+{% import "macros/cards.html" as cards %}
+
+<div id="passkey-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
+
+{% if compliance == 'passkey_missing' %}
+{% call cards.alert_card('warning', 'Register a passkey to continue', icon='passkey', body_class='mb-4', heading_tag='h2') %}
+    <p class="mb-0">Every account needs at least one passkey and an authenticator app with a strong key. Your account has no passkey yet, so the rest of the site is locked until you register one. You can also sign out from the menu.</p>
+{% endcall %}
+{% elif compliance == 'totp_noncompliant' %}
+{% call cards.alert_card('warning', 'Replace your authenticator app to continue', icon='phonelink_lock', body_class='mb-4', heading_tag='h2') %}
+    <p class="mb-0">Your authenticator app uses a key that is too short to meet the current standard, so the rest of the site is locked until you replace it. You have a passkey, which is the proof a replacement needs. Select <strong>Replace authenticator app</strong> below.</p>
+{% endcall %}
+{% endif %}
+
+<p class="text-muted mb-4">Manage the passkeys and authenticator app that protect your sign-in.</p>
+
+<ul class="nav nav-tabs{% if security_tabs_class %} {{ security_tabs_class }}{% endif %} mb-4" id="securityTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link{% if active_tab == 'passkeys' %} active{% endif %}" id="passkeys-tab" data-bs-toggle="tab" data-bs-target="#passkeys-pane" type="button" role="tab" aria-controls="passkeys-pane" aria-selected="{{ 'true' if active_tab == 'passkeys' else 'false' }}">
+            <span class="material-symbols-outlined {{ security_tab_icon_class or 'me-1' }}" aria-hidden="true">fingerprint</span>Passkeys
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link{% if active_tab == 'authenticator' %} active{% endif %}" id="authenticator-tab" data-bs-toggle="tab" data-bs-target="#authenticator-pane" type="button" role="tab" aria-controls="authenticator-pane" aria-selected="{{ 'true' if active_tab == 'authenticator' else 'false' }}">
+            <span class="material-symbols-outlined {{ security_tab_icon_class or 'me-1' }}" aria-hidden="true">phonelink_lock</span>Authenticator app
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="securityTabContent">
+    <div class="tab-pane fade{% if active_tab == 'passkeys' %} show active{% endif %}" id="passkeys-pane" role="tabpanel" aria-labelledby="passkeys-tab">
+
+        <p class="text-muted mb-4">Passkeys let you sign in with a security key, Touch ID, Face ID, Windows Hello or a synced passkey, and they cannot be phished. Registering or deleting one asks for the current code from your authenticator app, and you sign in again afterwards.</p>
+
+        {% if operation_state == 'retirement_pending' %}
+        {% call cards.alert_card('warning', 'A passkey change is waiting to finish', icon='pending', body_class='mb-4', heading_tag='h2') %}
+            <p>The passkey service has not yet confirmed the change, so we cannot yet tell whether the passkey has been removed. Your authenticator app still signs you in. Select <strong>Try again</strong> to finish the change.</p>
+            <button type="button" class="btn btn-primary" id="resumePasskeyButton" data-binding="{{ operation_binding or '' }}">Try again</button>
+        {% endcall %}
+        {% elif operation_state == 'registering' %}
+        {% call cards.alert_card('info', 'A passkey change is in progress', icon='info', body_class='mb-4', heading_tag='h2') %}
+            <p>Finish the registration your device is showing. If it was interrupted, cancel and start again. It expires on its own after a few minutes.</p>
+            <button type="button" class="btn btn-outline-secondary" id="cancelPasskeyButton" data-binding="{{ operation_binding or '' }}">Cancel the change</button>
+        {% endcall %}
+        {% endif %}
+
+        {% set register_button %}
+            <button type="button" class="btn btn-light" id="registerPasskeyButton"{% if operation_state %} disabled{% endif %}>
+                <span class="material-symbols-outlined icon-middle icon-sm" aria-hidden="true">add</span>
+                Register new passkey
+            </button>
+        {% endset %}
+        {% call cards.top_card('Your passkeys', icon='security', header_actions=register_button, body_class='mb-4', heading_tag='h2') %}
+        <div class="card-body">
+            {% if credentials %}
+            <div class="list-group list-group-flush">
+                {% for cred in credentials %}
+                <div class="list-group-item px-0 d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="material-symbols-outlined text-primary me-2" aria-hidden="true">security_key</span>
+                            <h3 class="h6 mb-0">{{ cred.authenticator_name or "Unnamed passkey" }}</h3>
+                        </div>
+                        <div class="text-muted small">
+                            <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">calendar_today</span>
+                            Registered: {{ cred.created_at_display }}
+                        </div>
+                        {% if cred.last_used_display %}
+                        <div class="text-muted small">
+                            <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">schedule</span>
+                            Last used: {{ cred.last_used_display }}
+                        </div>
+                        {% else %}
+                        <div class="text-muted small">
+                            <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">schedule</span>
+                            Never used
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex flex-column align-items-end gap-2">
+                        {% if credentials|length > 1 %}
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-passkey-btn"
+                                data-credential-id="{{ cred.id }}"
+                                data-credential-name="{{ cred.authenticator_name or 'Unnamed passkey' }}"{% if operation_state %} disabled{% endif %}>
+                            <span class="material-symbols-outlined icon-xs" aria-hidden="true">delete</span>
+                            Delete
+                        </button>
+                        {% else %}
+                        <span class="text-muted small">Your only passkey: add another before you delete this one.</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <span class="material-symbols-outlined text-muted mb-3 icon-3xl" aria-hidden="true">security_key</span>
+                <p class="text-muted mb-0">You don't have any passkeys registered yet. Select Register new passkey to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endcall %}
+    </div>
+
+    <div class="tab-pane fade{% if active_tab == 'authenticator' %} show active{% endif %}" id="authenticator-pane" role="tabpanel" aria-labelledby="authenticator-tab">
+        {# Replace authenticator (FEAT-IDEN-106) #}
+        {% call cards.top_card('Authenticator app', icon='phonelink_lock', body_class='mb-4', heading_tag='h2') %}
+        <div class="card-body" id="totp-replace-card">
+            <p class="text-muted">Replace the authenticator app that produces your sign-in codes, for example after changing phones. You prove it is you with one of your passkeys. Your current authenticator keeps working until the new one is confirmed, then you sign in again.</p>
+            <div id="totp-replace-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
+            {% if totp_replacement_in_progress %}
+            <p>A replacement is already in progress. Cancel it to start again, or wait a few minutes for it to expire. Your current authenticator is unchanged.</p>
+            <button type="button" class="btn btn-outline-secondary" id="totpCancelButton" data-binding="{{ totp_replacement_binding or '' }}">Cancel the replacement</button>
+            {% else %}
+            <button type="button" class="btn btn-outline-primary" id="totpReplaceButton"{% if not credentials or operation_state %} disabled{% endif %}>Replace authenticator app</button>
+            {% if not credentials %}<div class="form-text">Register a passkey first; it is the proof a replacement needs.</div>{% endif %}
+            {% endif %}
+            <div id="totp-replace-setup" class="mt-4" hidden>
+                <p>Scan this code with your new authenticator app, or enter the key by hand. It is shown only now.</p>
+                <img id="totp-replace-qr" alt="QR code for the new authenticator" width="200" height="200" class="mb-3 d-block">
+                <p>Key: <code id="totp-replace-secret"></code></p>
+                <label for="totp-replace-code" class="form-label">Code from the new authenticator</label>
+                <input type="text" id="totp-replace-code" class="form-control mb-3" inputmode="numeric"
+                       autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6">
+                <button type="button" class="btn btn-primary" id="totpConfirmButton">Confirm and replace</button>
+                <button type="button" class="btn btn-outline-secondary" id="totpAbandonButton">Cancel</button>
+            </div>
+        </div>
+        {% endcall %}
+    </div>
+</div>
+
+<!-- Passwordless.dev SDK (Official UMD build) -->
+<script src="https://cdn.passwordless.dev/dist/1.2.4/umd/passwordless.umd.min.js" integrity="sha384-cEHJfClr1GLubfVIM+AVbDUmXTUBktVnbaq/RVBWMTMrjPcfqY/WLzsLws/xsEE/" crossorigin="anonymous"></script>
+<script src="{{ static_url('js/passkey.js') }}"></script>
+
+<script>
+    setupPasskeyManager({
+        feedbackId: 'passkey-feedback',
+        registerButtonId: 'registerPasskeyButton',
+        resumeButtonId: 'resumePasskeyButton',
+        loginUrl: {{ security_login_url|tojson }},
+        cancelButtonId: 'cancelPasskeyButton',
+        startUrl: {{ passkey_urls.start|tojson }},
+        finishUrl: {{ passkey_urls.finish|tojson }},
+        cancelUrl: {{ passkey_urls.cancel|tojson }},
+        resumeUrl: {{ passkey_urls.resume|tojson }},
+        deleteUrl: {{ passkey_urls.delete|tojson }}
+    });
+
+    setupTotpReplacement({
+        feedbackId: 'totp-replace-feedback',
+        replaceButtonId: 'totpReplaceButton',
+        cancelButtonId: 'totpCancelButton',
+        abandonButtonId: 'totpAbandonButton',
+        confirmButtonId: 'totpConfirmButton',
+        setupId: 'totp-replace-setup',
+        qrId: 'totp-replace-qr',
+        secretId: 'totp-replace-secret',
+        codeInputId: 'totp-replace-code',
+        loginUrl: {{ security_login_url|tojson }},
+        challengeUrl: {{ totp_urls.challenge|tojson }},
+        startUrl: {{ totp_urls.start|tojson }},
+        confirmUrl: {{ totp_urls.confirm|tojson }},
+        cancelUrl: {{ totp_urls.cancel|tojson }}
+    });
+</script>

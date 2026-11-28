@@ -1,5 +1,5 @@
 ---
-title: Security: Passkeys and Authenticator App
+title: "Security: Passkeys and Authenticator App"
 category: features
 subcategory: teacher-settings
 roles: [teacher]
@@ -28,7 +28,7 @@ If you have both problems you are asked for the passkey first, because a passkey
 
 ### Registering a passkey
 1. Open **Settings > Security** in the teacher sidebar. The **Passkeys** tab is selected.
-2. Select **Register New Passkey** and give it a name you will recognise, such as "work laptop".
+2. Select **Register new passkey** and give it a name you will recognize, such as "work laptop".
 3. Enter the current 6-digit code from your authenticator app when the box asks for it.
 4. Follow your browser's prompt (Touch ID, Face ID, Windows Hello or a security key). You are signed out when it is done; sign in again.
 
@@ -46,7 +46,9 @@ Use this when you get a new phone, or when the site tells you your authenticator
 4. Scan the QR code with your new authenticator app, or type in the key shown. It appears only once.
 5. Enter the 6-digit code from the new app and select **Confirm and replace**, then sign in again with the new app.
 
-Your old authenticator keeps working until step 5 succeeds. If you cancel, enter a wrong code, or wait more than ten minutes, nothing changes. If you have no working passkey, use account recovery instead.
+Your old authenticator keeps working until step 5 succeeds. If you cancel, enter a wrong code, or wait more than ten minutes, nothing changes.
+
+If you cannot sign in because your authenticator app's codes are no longer accepted, sign in with your passkey and replace the app as above. If you have no passkey either, you cannot replace the app yourself: use [account recovery](account-recovery.md) to get back in.
 
 ## Important Notes
 > [!IMPORTANT]

@@ -1410,10 +1410,10 @@ def test_mutation_trusting_a_bare_404_would_drop_a_live_credentials_binding(
     ("Lap\x00top", "Laptop"),
     ("Tab\there\nnow", "Tabherenow"),
     ("Key‮evil", "Keyevil"),
-    ("​\x07   ", "Unnamed Passkey"),
-    ("", "Unnamed Passkey"),
-    (None, "Unnamed Passkey"),
-    (123, "Unnamed Passkey"),
+    ("​\x07   ", "Unnamed passkey"),
+    ("", "Unnamed passkey"),
+    (None, "Unnamed passkey"),
+    (123, "Unnamed passkey"),
     ("é" * 150, "é" * 100),
     ("a" * 99 + " b", "a" * 99),
 ])
@@ -1664,6 +1664,8 @@ def test_the_client_sends_an_expired_session_to_sign_in_and_leaves_a_failed_cere
     assert report["unauthorized"]["hrefs"] == ["/admin/login"]
     assert report["unauthorized"]["body"] == ["Your session ended. Sign in again."]
     assert report["unauthorized"]["reloads"] == 0
+    # Feedback cards above the tabs sit at h2, under the page's h1 (INV-ARC-020 §VI.2).
+    assert report["unauthorized"]["headingTags"] == ["h2"]
     # A failed ceremony is shown, sends no automatic cancel request, and reloads (after the delay)
     # so the page renders the pending operation with its Cancel control.
     assert report["ceremonyFailure"]["urls"] == ["/start"]
@@ -1688,8 +1690,11 @@ def test_the_client_asks_for_the_authenticator_code_in_a_dialog_for_register_and
     assert report["registerCode"]["prompts"] == ["Name this passkey", "Authenticator code"]
     assert report["registerCode"]["modal"] == [["numeric", "one-time-code"]]
     assert report["registerCode"]["start"] == [{"totp_code": "123456"}]
-    # Anything but six digits is asked for again and never sent.
-    assert report["badCodes"]["asked"] == 4
+    # Anything but six digits is refused inside the one dialog (pattern + message, so it stays open with
+    # the field marked invalid) and never sent.
+    assert report["badCodes"]["asked"] == 1
+    assert report["badCodes"]["pattern"] == ["^[0-9]{6}$"]
+    assert report["badCodes"]["rejected"] == ["That was not a 6-digit code. Check your authenticator app and try again."] * 3
     assert report["badCodes"]["startBodies"] == [{"totp_code": "654321"}]
     # Cancelling the code dialog sends no request, on register and on delete.
     assert report["cancelledCode"]["fetches"] == 0

@@ -1360,7 +1360,7 @@ def _complete_locked(principal: User, operation: CredentialOperation, *, stage_b
     )
 
 
-AUTHENTICATOR_NAME_FALLBACK = "Unnamed Passkey"
+AUTHENTICATOR_NAME_FALLBACK = "Unnamed passkey"
 AUTHENTICATOR_NAME_MAX = 100
 
 

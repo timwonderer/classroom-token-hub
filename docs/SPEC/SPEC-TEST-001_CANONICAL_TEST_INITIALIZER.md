@@ -272,7 +272,11 @@ depends on a noncompliant principal, starts from the provisioned classroom and t
 noncompliant explicitly, with `tests/helpers/passkey.py`: `make_passkey_missing(user_id)` (the
 `PASSKEY_MISSING` state) or `make_totp_noncompliant(user_id)` (an activated passkey and a seed under the
 112-bit floor). A test never edits credential rows by hand to reach those states, and never turns the gate off.
-`ensure_credential_compliance(user_id)` restores compliance and leaves any seed or passkey the test set up alone.
+`ensure_credential_compliance(user_id)` supplies *missing* credentials only: it adds a passkey or a compliant seed
+where there is none, and it preserves an existing seed, including a short one the test set up. A principal made
+noncompliant by `make_totp_noncompliant(user_id)` therefore stays `TOTP_NONCOMPLIANT` after
+`ensure_credential_compliance(user_id)`; a test that needs that principal compliant again replaces the seed
+explicitly with a compliant one.
 
 ---
 

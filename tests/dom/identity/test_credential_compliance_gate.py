@@ -279,8 +279,8 @@ def test_DOM_IDEN_003__the_allowlists_are_exactly_credential_maintenance_and_acc
     assert all(e.startswith("admin.") for e in ADMIN_ALLOWED)
 
 
-def _inline_script_text(html: str) -> str:
-    """Text of every <script> element, read with the stdlib HTML parser (not a regexp)."""
+def _inline_scripts(html: str) -> list[str]:
+    """Text of each <script> element, read with the stdlib HTML parser (not a regexp)."""
     from html.parser import HTMLParser
 
     chunks: list[str] = []
@@ -300,21 +300,34 @@ def _inline_script_text(html: str) -> str:
                 chunks.append(data)
 
     _Scripts().feed(html)
-    return "\n".join(chunks)
+    return chunks
 
 
-@pytest.mark.parametrize("role", ROLES)
-def test_DOM_IDEN_003__every_request_the_security_page_makes_is_allowlisted(client, app, role):
-    """Structural proof: each URL the page's script configures resolves to an allowlisted (or undecorated sign-in) endpoint."""
-    _principal(role, client, app, "passkey_missing")
-    html = client.get(f"{PREFIX[role]}/passkey/settings").get_data(as_text=True)
-    script = _inline_script_text(html)
-    paths = set(re.findall(r'"(/(?:admin|sysadmin)/[^"]*)"', script))
-    assert len(paths) >= 10, paths
-    adapter = app.url_map.bind("localhost")
-    allowed = {"teacher": ADMIN_ALLOWED, "sysadmin": SYSADMIN_ALLOWED}[role]
-    undecorated_sign_in = {f"{PREFIX[role].strip('/')}.login"}
-    for path in paths:
+def _security_page_script(html: str) -> str:
+    """The script that configures the Security page's own requests (not the layout's shared scripts).
+
+    The admin layout carries scripts for the class switcher and the onboarding widget. Those name
+    /admin/ endpoints too, but they act only on a class selection or a widget this page does not
+    render; the page's own requests are the ones its two ``setup...`` calls configure.
+    """
+    own = [chunk for chunk in _inline_scripts(html) if "setupPasskeyManager(" in chunk]
+    assert len(own) == 1, "expected exactly one Security page configuration script"
+    return own[0]
+
+
+# A teacher or sysadmin path in any JavaScript string literal: single-quoted, double-quoted or a template literal.
+_SCRIPT_PATH = re.compile(r"""(["'`])(/(?:admin|sysadmin)/[^"'`]*)\1""")
+
+
+def _script_paths(script: str) -> set[str]:
+    """Every /admin/ or /sysadmin/ path the script text names in a string literal, whatever the quoting."""
+    return {match.group(2) for match in _SCRIPT_PATH.finditer(script)}
+
+
+def _paths_outside_allowlist(script: str, adapter, allowed, undecorated_sign_in) -> list[str]:
+    """The paths in ``script`` that do not resolve to an allowlisted (or undecorated sign-in) endpoint."""
+    offenders = []
+    for path in sorted(_script_paths(script)):
         endpoint = None
         for method in ("POST", "DELETE", "GET"):
             try:
@@ -322,8 +335,40 @@ def test_DOM_IDEN_003__every_request_the_security_page_makes_is_allowlisted(clie
                 break
             except Exception:
                 continue
-        assert endpoint is not None, path
-        assert endpoint in allowed or endpoint in undecorated_sign_in, (path, endpoint)
+        if endpoint is None or not (endpoint in allowed or endpoint in undecorated_sign_in):
+            offenders.append(path)
+    return offenders
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_DOM_IDEN_003__every_request_the_security_page_makes_is_allowlisted(client, app, role):
+    """Structural proof: each URL the page's script configures resolves to an allowlisted (or undecorated sign-in) endpoint."""
+    _principal(role, client, app, "passkey_missing")
+    html = client.get(f"{PREFIX[role]}/passkey/settings").get_data(as_text=True)
+    script = _security_page_script(html)
+    assert len(_script_paths(script)) >= 10, _script_paths(script)
+    adapter = app.url_map.bind("localhost")
+    allowed = {"teacher": ADMIN_ALLOWED, "sysadmin": SYSADMIN_ALLOWED}[role]
+    undecorated_sign_in = {f"{PREFIX[role].strip('/')}.login"}
+    assert _paths_outside_allowlist(script, adapter, allowed, undecorated_sign_in) == []
+
+
+@pytest.mark.parametrize("literal", ["'/admin/students'", '"/admin/students"', "`/admin/students`", "'/sysadmin/dashboard'"])
+def test_SOP_TEST_003__the_allowlist_detector_reports_a_request_outside_the_allowlist(app, literal):
+    """Mutation proof (SOP-TEST-003 §IX.A): a near-miss request in any quoting style is reported."""
+    adapter = app.url_map.bind("localhost")
+    accepted = (
+        'setupPasskeyManager({startUrl: "/admin/passkey/register/start", loginUrl: \'/admin/login\','
+        " cancelUrl: `/admin/passkey/cancel`});"
+    )
+    allowed = ADMIN_ALLOWED | SYSADMIN_ALLOWED
+    clean = _paths_outside_allowlist(accepted, adapter, allowed, {"admin.login"})
+    assert clean == []
+    assert len(_script_paths(accepted)) == 3  # all three quote styles are seen, not just double quotes
+
+    mutated = accepted + f" fetch({literal});"
+    reported = _paths_outside_allowlist(mutated, adapter, allowed, {"admin.login"})
+    assert reported == [literal[1:-1]]
 
 
 def test_DOM_IDEN_003__teacher_account_destruction_stays_reachable_and_its_form_posts_only_there(client, app):
