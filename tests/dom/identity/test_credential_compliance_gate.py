@@ -279,12 +279,36 @@ def test_DOM_IDEN_003__the_allowlists_are_exactly_credential_maintenance_and_acc
     assert all(e.startswith("admin.") for e in ADMIN_ALLOWED)
 
 
+def _inline_script_text(html: str) -> str:
+    """Text of every <script> element, read with the stdlib HTML parser (not a regexp)."""
+    from html.parser import HTMLParser
+
+    chunks: list[str] = []
+
+    class _Scripts(HTMLParser):
+        in_script = False
+
+        def handle_starttag(self, tag, attrs):
+            self.in_script = tag == "script"
+
+        def handle_endtag(self, tag):
+            if tag == "script":
+                self.in_script = False
+
+        def handle_data(self, data):
+            if self.in_script:
+                chunks.append(data)
+
+    _Scripts().feed(html)
+    return "\n".join(chunks)
+
+
 @pytest.mark.parametrize("role", ROLES)
 def test_DOM_IDEN_003__every_request_the_security_page_makes_is_allowlisted(client, app, role):
     """Structural proof: each URL the page's script configures resolves to an allowlisted (or undecorated sign-in) endpoint."""
     _principal(role, client, app, "passkey_missing")
     html = client.get(f"{PREFIX[role]}/passkey/settings").get_data(as_text=True)
-    script = "\n".join(re.findall(r"<script\b[^>]*>(.*?)</script\s*>", html, re.S | re.I))
+    script = _inline_script_text(html)
     paths = set(re.findall(r'"(/(?:admin|sysadmin)/[^"]*)"', script))
     assert len(paths) >= 10, paths
     adapter = app.url_map.bind("localhost")
