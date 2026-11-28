@@ -21,7 +21,7 @@ This section groups teacher account settings and controls.
 - [Account Recovery](account-recovery.md)
 
 ## Account Management
-- [Account Deletion Requests](account-deletion.md)
+- [Account Deletion](account-deletion.md)
 
 ## Help
 - [Support Tickets](support-tickets.md)
