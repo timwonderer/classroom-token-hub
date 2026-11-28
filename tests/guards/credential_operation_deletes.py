@@ -69,8 +69,9 @@ def _tainted_names(function: ast.AST) -> set[str]:
         for node in ast.walk(function):
             if isinstance(node, ast.Assign) and mentions(node.value):
                 tainted.update(t.id for t in node.targets if isinstance(t, ast.Name))
-            elif (isinstance(node, ast.AnnAssign) and node.value is not None
-                  and isinstance(node.target, ast.Name) and mentions(node.value)):
+            elif (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+                  and (_names_operations(node.annotation)
+                       or (node.value is not None and mentions(node.value)))):
                 tainted.add(node.target.id)
             elif isinstance(node, (ast.For, ast.AsyncFor)) and mentions(node.iter):
                 tainted.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))

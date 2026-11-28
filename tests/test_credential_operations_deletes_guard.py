@@ -40,6 +40,7 @@ def test_principal_destruction_is_the_cascade_not_an_application_delete():
     "def purge():\n    db.session.query(models.CredentialOperation).filter_by(user_id=1).delete()\n",
     "def purge(op):\n    op = db.session.get(CredentialOperation, 1)\n    db.session.delete(op)\n",
     "def purge():\n    op: CredentialOperation = db.session.get(CredentialOperation, 1)\n    db.session.delete(op)\n",
+    "def purge(op_id):\n    op: CredentialOperation = lookup_operation(op_id)\n    db.session.delete(op)\n",
     "def purge(user_id):\n    ops = CredentialOperation.query.filter_by(user_id=user_id).all()\n    for op in ops:\n        db.session.delete(op)\n",
     "def purge():\n    ops = db.metadata.tables['credential_operations']\n    db.session.execute(sa.delete(ops))\n",
     "def purge():\n    table = db.metadata.tables['credential_operations']\n    db.session.execute(table.delete())\n",

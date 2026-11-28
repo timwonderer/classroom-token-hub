@@ -422,13 +422,15 @@ def passkey_settings():
     credentials = build_passkey_credential_rows(list_admin_credentials(user.id))
     operation_state, operation_binding = credential_lifecycle.open_passkey_operation_presentation(user.id)
 
+    # One read: the in-progress flag and the Cancel binding come from the same operation.
+    totp_replacement_binding = credential_lifecycle.open_totp_replacement_binding(user.id)
     return render_template("system_admin_passkey_settings.html",
                          admin=user,
                          credentials=credentials,
                          operation_state=operation_state,
                          operation_binding=operation_binding,
-                         totp_replacement_binding=credential_lifecycle.open_totp_replacement_binding(user.id),
-                         totp_replacement_in_progress=credential_lifecycle.open_totp_replacement_in_progress(user.id),
+                         totp_replacement_binding=totp_replacement_binding,
+                         totp_replacement_in_progress=totp_replacement_binding is not None,
                          totp_urls={
                              "challenge": url_for("sysadmin.totp_replace_challenge"),
                              "start": url_for("sysadmin.totp_replace_start"),
