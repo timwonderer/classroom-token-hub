@@ -375,7 +375,8 @@ function setupTotpReplacement(config) {
                 replaceButton.disabled = false;
                 replaceButton.innerHTML = originalHTML;
                 // No cleanup request: an unbound cancel could cancel a newer attempt's replacement. An unconsumed
-                // challenge is reused by the next attempt of this session; a staged one is cancelled server-side.
+                // operation is reused by the next attempt of this session (with a new challenge); a failure while staging is
+                // cancelled server-side, and an operation staged before a lost response ends by Cancel or expiry.
                 failed('Could not start the replacement', error);
             }
         });

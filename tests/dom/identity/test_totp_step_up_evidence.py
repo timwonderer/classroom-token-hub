@@ -672,12 +672,12 @@ def test_FEAT_IDEN_106__the_config_is_checked_again_after_verification_and_nothi
 
 
 def test_FEAT_IDEN_106__the_config_is_read_at_the_point_of_use_twice_and_never_cached(rig, base):
+    rig.fake.calls.clear()
     challenge = rig.issue(base)
     token = rig.token(10_000, 70_000, base)
-    rig.fake.calls.clear()
     rig.authorize(base, 30_000, token, challenge)
-    # The second read follows token verification (the first read was at challenge issuance).
-    assert [c[0] for c in rig.fake.calls] == ["signin_verify", "auth_configs"]
+    # One read at challenge issuance, then verification, then the second read before consumption.
+    assert [c[0] for c in rig.fake.calls] == ["auth_configs", "signin_verify", "auth_configs"]
 
 
 def test_FEAT_IDEN_106__the_http_challenge_and_start_use_the_stored_challenge(rig, base):
