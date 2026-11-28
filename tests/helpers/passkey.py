@@ -51,15 +51,18 @@ EXPECTED_RP_ID = "cth.test"
 #: Marks a body key a test wants absent from the fake's ``/signin/verify`` response.
 MISSING = object()
 
-#: ``GET /auth-configs/list`` as the fake serves it by default: the presets the provider ships
-#: (user verification preferred) plus the ``totp-replace`` purpose configured as the deployment
-#: requires. The outer ``configurations`` envelope is an ASSUMED shape: it has not been recaptured
-#: from a live tenant yet (the spec's "recapture exact shape before fixtures" is open), so these
-#: fixtures prove CTH's handling of that shape, not the provider's.
+#: ``GET /auth-configs/list`` verbatim as the staging tenant returned it on 2026-11-28 (no secrets):
+#: the provider presets (user verification preferred) plus ``totp-replace`` configured as the
+#: deployment requires. ``timeToLive`` is whole seconds.
 VALID_AUTH_CONFIGS = {"configurations": [
-    {"purpose": "sign-in", "userVerificationRequirement": "preferred", "timeToLive": 120},
-    {"purpose": "step-up", "userVerificationRequirement": "preferred", "timeToLive": 120},
-    {"purpose": "totp-replace", "userVerificationRequirement": "required", "timeToLive": 120},
+    {"purpose": "sign-in", "userVerificationRequirement": "preferred", "timeToLive": 120, "hints": "",
+     "createdBy": "System", "createdOn": None, "editedBy": None, "editedOn": None,
+     "lastUsedOn": "2026-11-27T23:29:58.2245149+00:00"},
+    {"purpose": "totp-replace", "userVerificationRequirement": "required", "timeToLive": 120, "hints": "",
+     "createdBy": "staging-rehearsal-script", "createdOn": "2026-11-27T22:50:49.7992152+00:00",
+     "editedBy": None, "editedOn": None, "lastUsedOn": "2026-11-27T23:29:49.9256664+00:00"},
+    {"purpose": "step-up", "userVerificationRequirement": "preferred", "timeToLive": 120, "hints": "",
+     "createdBy": "System", "createdOn": None, "editedBy": None, "editedOn": None, "lastUsedOn": None},
 ]}
 
 

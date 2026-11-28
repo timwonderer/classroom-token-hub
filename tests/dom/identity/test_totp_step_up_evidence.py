@@ -602,7 +602,7 @@ def _configs(**changes):
 
 BROKEN_CONFIGS = {
     "missing": {"configurations": [e for e in VALID_AUTH_CONFIGS["configurations"] if e["purpose"] != "totp-replace"]},
-    "duplicated": {"configurations": VALID_AUTH_CONFIGS["configurations"] + [VALID_AUTH_CONFIGS["configurations"][2]]},
+    "duplicated": {"configurations": VALID_AUTH_CONFIGS["configurations"] + [VALID_AUTH_CONFIGS["configurations"][1]]},
     "user verification preferred": _configs(userVerificationRequirement="preferred"),
     "user verification discouraged": _configs(userVerificationRequirement="discouraged"),
     "user verification absent": _configs(userVerificationRequirement=None),
@@ -612,6 +612,7 @@ BROKEN_CONFIGS = {
     "ttl absent": _configs(timeToLive=None),
     "an entry without a purpose": {"configurations": VALID_AUTH_CONFIGS["configurations"] + [{"timeToLive": 5}]},
     "no envelope": {"unexpected": []},
+    "a bare list without the envelope": VALID_AUTH_CONFIGS["configurations"],
     "entries not objects": {"configurations": ["totp-replace"]},
 }
 

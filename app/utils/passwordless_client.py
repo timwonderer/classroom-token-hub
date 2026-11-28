@@ -293,7 +293,8 @@ def require_auth_config(client: PasswordlessClient, *, purpose: str, max_time_to
     """Fail closed unless exactly one ``purpose`` config exists with UV required and a bounded lifetime.
 
     Reads ``GET /auth-configs/list`` with the secret key; nothing is cached. The response is a list
-    of configurations, bare or under ``configurations``. A transport failure, an unparseable or
+    object whose ``configurations`` member is the list of configurations (the shape captured from the
+    live provider on 2026-11-28); any other shape fails closed. A transport failure, an unparseable or
     unexpected reply, a malformed entry, no matching entry, more than one, a
     ``userVerificationRequirement`` other than ``required`` or a ``timeToLive`` that is not a
     positive integer of at most ``max_time_to_live`` seconds raises ``AuthConfigUnusable``.
@@ -308,7 +309,7 @@ def require_auth_config(client: PasswordlessClient, *, purpose: str, max_time_to
         body = json.loads(text)
     except (TypeError, ValueError):
         raise AuthConfigUnusable("malformed") from None
-    entries = body.get("configurations") if isinstance(body, dict) else body
+    entries = body.get("configurations") if isinstance(body, dict) else None
     if not isinstance(entries, list) or not all(isinstance(entry, dict) for entry in entries):
         raise AuthConfigUnusable("malformed")
     if not all(isinstance(entry.get("purpose"), str) for entry in entries):
