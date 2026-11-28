@@ -114,6 +114,7 @@ class CredentialOperationPurpose(str, enum.Enum):
 
 class CredentialOperationStage(str, enum.Enum):
     """Logical stages of a credential operation (SPEC-IDEN-002 §V workflow table)."""
+    AWAITING_STEP_UP = 'awaiting_step_up'
     AUTHORIZED = 'authorized'
     REGISTRATION_PENDING = 'registration_pending'
     CANDIDATE_VERIFIED = 'candidate_verified'
@@ -534,6 +535,8 @@ class CredentialOperation(db.Model):
             'uq_credential_operations_one_open_per_user', 'user_id', unique=True,
             postgresql_where=sa.text("stage NOT IN ('completed', 'cancelled')"),
         ),
+        # Across ALL rows, not partial: a consumed provider token id stays refused while any row holds it.
+        db.Index('uq_credential_operations_step_up_token_id', 'step_up_token_id', unique=True),
     )
 
     id = db.Column(
@@ -566,6 +569,15 @@ class CredentialOperation(db.Model):
     retry_after_at = db.Column(db.DateTime(timezone=True), nullable=True)
     attempt_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
     error_category = db.Column(db.String(64), nullable=True)
+    # TOTP-replacement step-up evidence (SPEC-IDEN-002 §V "TOTP replacement step-up evidence").
+    # The challenge verifier is erased at consumption, expiry or supersession; the issue instant
+    # and window end stay for the receipt. The token id is unique across every row, so a replay
+    # is refused for as long as any row carries it; ``step_up_retain_until`` bounds that.
+    step_up_challenge_hash = db.Column(db.String(64), nullable=True)
+    step_up_issued_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    step_up_challenge_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    step_up_token_id = db.Column(db.Uuid(as_uuid=False), nullable=True)
+    step_up_retain_until = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=_resolver_now, onupdate=_resolver_now, nullable=False)
 
