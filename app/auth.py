@@ -359,6 +359,9 @@ def admin_required(f):
 
         g.canonical_context = ctx
         return f(*args, **kwargs)
+    # Lets the admin blueprint's before_request apply the credential gate to
+    # exactly the views this decorator protects, ahead of its own short circuits.
+    decorated_function.teacher_gated = True
     return decorated_function
 
 

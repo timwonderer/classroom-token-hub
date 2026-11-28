@@ -145,6 +145,22 @@ def test_DOM_IDEN_003__a_noncompliant_principal_is_sent_to_the_security_tab_that
 
 
 @pytest.mark.parametrize("state", STATES)
+def test_DOM_IDEN_003__a_disabled_feature_page_does_not_answer_before_the_gate(client, app, state):
+    """The admin blueprint's disabled-feature short circuit must not pre-empt the gate."""
+    from tests.helpers.class_domain import disable_class_feature
+
+    classroom, user_id = _teacher(client, app)
+    disable_class_feature(class_id=classroom.class_id, feature="payroll")
+    _make(user_id, state)
+    response = client.get("/admin/payroll")
+    assert response.status_code == 302
+    assert response.location.endswith(_security_location("teacher", state))
+    background = client.get("/admin/payroll", headers={"X-Requested-With": "XMLHttpRequest"})
+    assert background.status_code == 403
+    assert background.get_json()["error"] == "credential_noncompliant"
+
+
+@pytest.mark.parametrize("state", STATES)
 @pytest.mark.parametrize("role", ROLES)
 def test_DOM_IDEN_003__a_background_request_gets_json_403_not_a_redirect(client, app, role, state):
     _principal(role, client, app, state)

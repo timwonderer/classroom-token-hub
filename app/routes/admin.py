@@ -614,6 +614,18 @@ def before_request():
     g.admin_join_code = None
 
     canonical_context = getattr(g, "canonical_context", None)
+    # The credential gate must run before any blueprint-level short circuit
+    # (class-context handling, disabled-feature pages), which otherwise answer
+    # before the view's own @admin_required gets to apply it.
+    view = current_app.view_functions.get(request.endpoint or "")
+    if (
+        getattr(view, "teacher_gated", False)
+        and canonical_context is not None
+        and getattr(canonical_context, "actor_role", None) == "teacher"
+    ):
+        gated = teacher_credential_gate_response(canonical_context.user_id)
+        if gated is not None:
+            return gated
     if canonical_context and _route_uses_admin_class_context():
         context = _resolve_admin_class_context(canonical_context)
         if context:

@@ -607,7 +607,8 @@
 
             if (queryTarget) {
                 navMap.forEach((triggers, navId) => {
-                    const match = triggers.find(trigger => getTarget(trigger) === queryTarget);
+                    const match = triggers.find(trigger => getTarget(trigger) === queryTarget)
+                        || triggers.find(trigger => getTarget(trigger) === `${queryTarget}-pane`);
                     if (match) {
                         new bootstrap.Tab(match).show();
                         handledNavs.add(navId);
