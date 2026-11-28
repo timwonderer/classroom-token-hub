@@ -43,6 +43,17 @@ def pinned_clock(instant: datetime):
         yield instant
 
 
+@contextmanager
+def movable_clock(instant: datetime):
+    """A pinned clock a test can move: assign ``clock.now`` and the resolver reads the new instant.
+
+    For races in which the clock passes a boundary between two steps of one command.
+    """
+    clock = SimpleNamespace(now=instant)
+    with patch("app.utils.canonical_temporal_resolver.utc_now", side_effect=lambda: clock.now):
+        yield clock
+
+
 def now() -> datetime:
     """The resolver's current UTC instant (pinned inside ``pinned_clock``)."""
     return _resolve("current_time").canonical_now_utc

@@ -19,6 +19,7 @@ provider's own spelling.
 from __future__ import annotations
 
 import base64
+import json
 import secrets
 import uuid
 from dataclasses import dataclass, field
@@ -30,6 +31,7 @@ from passwordless.errors import PasswordlessProblemDetails
 
 from app.services import passkey_service
 from app.utils.user_ids import passkey_external_id
+from tests.helpers import temporal
 
 
 def _problem(status: int, error_code: str) -> PasswordlessError:
@@ -44,6 +46,35 @@ def _problem(status: int, error_code: str) -> PasswordlessError:
 #: The deployment origin the suite configures (tests/conftest.py) and the fake's ceremonies report.
 EXPECTED_ORIGIN = "https://cth.test"
 EXPECTED_RP_ID = "cth.test"
+
+
+#: Marks a body key a test wants absent from the fake's ``/signin/verify`` response.
+MISSING = object()
+
+#: ``GET /auth-configs/list`` verbatim as the staging tenant returned it on 2026-11-28 (no secrets):
+#: the provider presets (user verification preferred) plus ``totp-replace`` configured as the
+#: deployment requires. ``timeToLive`` is whole seconds.
+VALID_AUTH_CONFIGS = {"configurations": [
+    {"purpose": "sign-in", "userVerificationRequirement": "preferred", "timeToLive": 120, "hints": "",
+     "createdBy": "System", "createdOn": None, "editedBy": None, "editedOn": None,
+     "lastUsedOn": "2026-11-27T23:29:58.2245149+00:00"},
+    {"purpose": "totp-replace", "userVerificationRequirement": "required", "timeToLive": 120, "hints": "",
+     "createdBy": "staging-rehearsal-script", "createdOn": "2026-11-27T22:50:49.7992152+00:00",
+     "editedBy": None, "editedOn": None, "lastUsedOn": "2026-11-27T23:29:49.9256664+00:00"},
+    {"purpose": "step-up", "userVerificationRequirement": "preferred", "timeToLive": 120, "hints": "",
+     "createdBy": "System", "createdOn": None, "editedBy": None, "editedOn": None, "lastUsedOn": None},
+]}
+
+
+def instant_text(instant, *, offset_ms: int = 0) -> str:
+    """The provider's spelling of ``instant`` moved by ``offset_ms`` (a whole-millisecond offset).
+
+    ``instant`` must be a whole second (tests pin round instants), so a sub-second offset is exact.
+    """
+    assert instant.microsecond == 0, "pin a whole-second instant to express millisecond offsets"
+    whole, remainder = divmod(offset_ms, 1000)
+    moved = temporal.shifted(instant, seconds=whole)
+    return moved.strftime("%Y-%m-%dT%H:%M:%S") + f".{remainder:03d}Z"
 
 
 def provider_credential_id(credential_id: str) -> str:
@@ -70,6 +101,10 @@ class FakePasswordless:
     origin: str | None = EXPECTED_ORIGIN  # what the browser reported for the ceremony (the real SDK's ``origin``)
     rp_id: str | None = EXPECTED_RP_ID    # and ``rp_id``
     pending_nickname: str | None = None  # what the browser would register the next credential under
+    reusable_tokens: set = field(default_factory=set)  # step-up tokens: the provider does not consume them
+    auth_configs: object = field(default_factory=lambda: json.loads(json.dumps(VALID_AUTH_CONFIGS)))
+    auth_configs_raw: str | None = None  # a body served verbatim instead of ``auth_configs``
+    fail_auth_configs: bool = False  # the configuration listing is unreachable
 
     # ---- what tests use to simulate the browser ceremony ----
 
@@ -93,16 +128,33 @@ class FakePasswordless:
     def token_for(self, external_id, credential_id, *, type_="passkey_signin") -> str:
         return self._token(external_id, credential_id, type_)
 
-    def _token(self, external_id, credential_id, type_, success=True, nickname=None) -> str:
+    def _token(self, external_id, credential_id, type_, success=True, nickname=None, purpose="sign-in",
+               timestamp=None, expires_at=None, token_id=None, overrides=None) -> str:
         token = f"verify_{secrets.token_hex(8)}"
+        issued = temporal.now()
         # The JSON body /signin/verify returns, with its real key spellings (``rpId``, not ``rpid``).
         body = {
             "success": success, "userId": external_id, "credentialId": credential_id, "type": type_,
             "nickname": nickname, "origin": self.origin, "rpId": self.rp_id,
-            "timestamp": "2026-11-27T12:00:00Z", "expiresAt": "2026-11-27T12:01:00Z",
-            "tokenId": f"tid-{secrets.token_hex(4)}", "device": "Chrome", "country": "US",
+            "timestamp": timestamp or issued.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z",
+            "expiresAt": expires_at or temporal.shifted(issued, seconds=60).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z",
+            "tokenId": token_id or str(uuid.uuid4()), "device": "Chrome", "country": "US",
+            "purpose": purpose,
         }
-        self.tokens[token] = {k: v for k, v in body.items() if v is not None or k == "nickname"}
+        body = {k: v for k, v in body.items() if v is not None or k == "nickname"}
+        body.update(overrides or {})  # an override may set an explicit null or remove a key (MISSING)
+        self.tokens[token] = {k: v for k, v in body.items() if v is not MISSING}
+        return token
+
+    def step_up_token(self, credential_id, *, purpose="totp-replace", timestamp=None, expires_at=None,
+                      token_id=None, overrides=None, external_id=None, **kwargs) -> str:
+        """A ``totp-replace`` step-up token, as the provider returns it: not consumed by verification."""
+        token = self._token(
+            external_id or self.credentials[credential_id], credential_id, kwargs.pop("type_", "passkey_signin"),
+            purpose=purpose, timestamp=timestamp, expires_at=expires_at, token_id=token_id,
+            overrides=overrides, **kwargs,
+        )
+        self.reusable_tokens.add(token)
         return token
 
     # ---- the PasswordlessClient surface ----
@@ -130,10 +182,18 @@ class FakePasswordless:
         return request
 
     def send(self, request, **kwargs):
-        import json
+        if request.url.endswith("/auth-configs/list"):
+            assert request.method == "GET", request.method
+            self.calls.append(("auth_configs", None))
+            if self.fail_auth_configs:
+                raise ConnectionError("provider unreachable")
+            text = self.auth_configs_raw if self.auth_configs_raw is not None else json.dumps(self.auth_configs)
+            return SimpleNamespace(status_code=200, text=text, headers={})
         assert request.url.endswith("/signin/verify"), request.url
+        self.calls.append(("signin_verify", None))
         token = json.loads(request.data)["token"]
-        payload = self.tokens.pop(token, None)  # tokens are single use
+        # Tokens are not single use at the provider; the fake consumes only the ones it was not told to keep.
+        payload = self.tokens.get(token) if token in self.reusable_tokens else self.tokens.pop(token, None)
         if payload is None:
             problem = {"type": "https://docs.passwordless.dev/guide/errors.html#invalid_token",
                        "title": "invalid_token", "status": 400, "errorCode": "invalid_token"}

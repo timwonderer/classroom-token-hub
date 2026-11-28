@@ -180,6 +180,10 @@ _CLASSLESS_ADMIN_ENDPOINTS = frozenset({
     'admin.passkey_settings',
     'admin.passkey_auth_start',
     'admin.passkey_auth_finish',
+    'admin.totp_replace_challenge',
+    'admin.totp_replace_start',
+    'admin.totp_replace_confirm',
+    'admin.totp_replace_cancel',
 })
 
 

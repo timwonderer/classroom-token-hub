@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-IDEN-002 | 1.3 | 2026-11-27 | 1.2 | Technical Specification |
+| SPEC-IDEN-002 | 1.4 | 2026-11-27 | 1.3 | Technical Specification |
 
 ## I. Purpose
 
@@ -59,6 +59,7 @@ Each operation has an immutable purpose and target plus a constrained stage:
 
 | Stage | Permitted action |
 |---|---|
+| Awaiting step-up | TOTP replacement only: hold the single-use step-up challenge and its window; accept only qualifying step-up evidence (below); no pending seed, no authority over any credential. |
 | Authorized | Perform the specifically authorized interactive preparation within session/deadline/generation bounds. |
 | Registration pending | Obtain and verify the single new registration; protect ambiguous unknown-ID provider records; no authentication authority. |
 | Candidate verified | Stage exact verified credential/seed and revalidate before activation or retirement intent. |
@@ -80,8 +81,80 @@ cannot adopt a credential reserved for another operation's retirement. SATAR and
 may supersede routine work; no stale continuation can activate into the new generation.
 Use uniqueness plus locked transitions, not read-then-act or durable audit history, for
 idempotency. Keep a completed operation's minimal receipt only until its original
-interactive deadline; erase secret/provider-target material as soon as no work needs it.
+interactive deadline (and, where it consumed step-up evidence, until that evidence's retention time, below);
+erase secret/provider-target material as soon as no work needs it.
 An expired receipt cannot authorize re-execution; a replay then fails closed.
+
+### TOTP replacement step-up evidence
+
+**Rule.** TOTP replacement (FEAT-IDEN-106) is authorized only by dedicated provider step-up
+evidence consumed under this subsection. An ordinary sign-in token never authorizes it,
+however recent. The TOTP never authorizes its own replacement.
+
+**Four kinds of assurance, kept distinct.** (1) *Provider-authenticated evidence*: the
+passwordless.dev `/signin/verify` response for the principal's credential. (2) *CTH-enforced
+operation authorization*: CTH's own locked consumption of that evidence against a stored,
+single-use challenge on the principal's one TOTP_REPLACE operation. (3) *Provider-dependent user
+verification*: the `totp-replace` authentication configuration requires it, the authenticator
+asserts it by its own policy (it may reflect an earlier unlock and is not fresh consent), and the
+token does not carry it, so CTH cannot observe it. (4) *Cryptographic operation binding*: not
+supported. The token names neither this operation nor this challenge; the stored challenge and its
+window are CTH's own timing bound, not a signature over the operation.
+
+Constants: **W** = 120 s (challenge window), **L** = 120 s (longest accepted token lifetime),
+**S** = 10 s (clock skew, used only where stated). Every local clock reading, comparison,
+duration, expiry and retention time is a canonical temporal resolver primitive (INV-ARC-015,
+SPEC-TIME-001); provider timestamps are parsed once, at the boundary, to the resolver's instant type.
+
+1. **Challenge.** Before the ceremony, CTH stores on the principal's one current TOTP_REPLACE
+   operation (stage *awaiting step-up*) a single-use challenge verifier, its issue instant `t0`, and
+   `c = min(t0 + W, operation deadline)`. It is bound to the existing session verifier, the authorized
+   generation, the operation ID and the purpose. It is a stored challenge, not the stateless bucketed
+   challenge, which remains for TOTP-authorized passkey work. A new challenge on the same operation
+   replaces the verifier; the earlier one is dead.
+2. **Provider configuration precondition.** A challenge is issued, and evidence consumed, only while a
+   point-of-use check of the provider's authentication configurations passes: exactly one `totp-replace`
+   configuration, user verification `required`, `timeToLive` at most L. Anything else, including an
+   unreachable or malformed reply, a missing or a duplicated entry, fails TOTP replacement closed with a
+   non-identifying diagnostic and a coarse log category. The check is made twice per replacement (before the
+   challenge, and after the token is verified and before the consuming transaction), outside any database
+   transaction, never cached, with no startup or periodic check. Sign-in and every other credential
+   operation are unaffected; no application-wide failure results. A configuration relaxed and then restored
+   between the two checks requires provider administrative access, which is already full passkey compromise;
+   this is documented, not mitigated. The lifetime bound is also enforced from the evidence itself (rule 4).
+3. **Parsing.** The response is parsed from the raw JSON. A missing, null, mistyped or unparseable
+   `success`, `purpose`, `type`, `userId`, `credentialId`, `origin`, `rpId`, `timestamp`, `expiresAt` or
+   `tokenId` fails closed. Nothing is inferred from stored metadata.
+4. **Pure evaluation** (clock from the resolver; reads, writes nothing). All of: `success` is true;
+   `purpose` equals `totp-replace` exactly; `type` equals `passkey_signin` exactly; `origin` and `rpId` equal
+   the configured values exactly; `userId` is the principal's provider user ID; the canonical `credentialId`
+   is a lawfully activated passkey of the principal; `t0 <= timestamp <= c` (no skew on the lower bound);
+   `timestamp <= now + S`; `0 < expiresAt - timestamp <= L`; `now < expiresAt` and `now < c` (no skew).
+5. **Consumption.** One local transaction, opened after the provider calls. It locks the principal row, then
+   the operation row (the order every credential command uses). Only after both locks does it take a fresh
+   clock reading; the evaluation's reading is never reused. It requires: the principal exists; the stage is
+   *awaiting step-up* and a challenge verifier is present; the submitted challenge matches the stored verifier
+   (constant time); `now < c` and `now < expiresAt`; `timestamp <= now + S`; the session verifier matches the
+   current sign-in; the principal's generation equals the operation's authorized generation; and the passkey
+   binding for the `credentialId`, re-read in this transaction, exists, is the principal's and is activated.
+   It then records the token ID and the retention time, erases the challenge verifier and moves the operation
+   to *Authorized*, in the same commit. The first failing check decides the refusal. A unique-index violation
+   on the token ID is the final guard: the transaction rolls back and the request fails closed.
+6. **Failure preserves the TOTP.** No authorization failure touches the TOTP credential, the credential
+   generation or any session.
+7. **Time.** All comparisons, durations, expiries and retention are resolver primitives; no parallel time logic.
+
+**Retention.** `step_up_retain_until = expiresAt + S`, stored at consumption, so a token can qualify no later
+than about S + L after consumption. The token ID is unique across every row, not only live ones. The expiry sweep
+may delete a terminal operation only when its deadline has passed and its retention time is absent or has passed.
+Cancellation, expiry and supersession change the stage and never delete. Principal destruction removes the rows
+with the principal (ON DELETE CASCADE) and takes the principal lock before any other row, so it cannot invert the
+consumption's lock order. S covers a bounded clock correction (at most 10 s, such as an NTP step), not an
+arbitrary rollback of the clock.
+
+**Provider behavior relied on** (observed on the staging tenant, 2026-11-27): an unknown purpose silently becomes
+`sign-in`; provider tokens are not single use and may be verified again until they expire; the token carries no
+user-verification flag; the Python SDK's verified-user object drops `purpose`, so CTH parses the raw response.
 
 ### Transactions and provider I/O
 
@@ -118,6 +191,9 @@ irrelevant to an operation. No generic JSON provider-response archive is authori
 | Authorized generation | Prevent stale activation; nonsecret security state | Integer snapshot | Until operation/receipt erased |
 | Session binding verifier | Bind interactive authorization; sensitive verifier | Purpose-separated nonreversible verifier | Erase on interactive expiry, consumption into retirement intent or supersession |
 | Challenge verifier | Purpose-bound, single-use proof; sensitive verifier | Purpose-separated nonreversible verifier | Erase when consumed, expired or superseded; never retain raw token |
+| Step-up challenge issue time and window end | Bound the evidence that qualifies (`t0`, `c`); nonsecret metadata | Canonical UTC timestamps | Operation lifetime; never extend past the deadline |
+| Consumed step-up token ID | Replay prevention; nonsecret operational state | Provider token UUID, unique across all operation rows | Until the evidence retention time has passed and the operation is deleted; delete with principal |
+| Step-up evidence retention time | Keeps a spent token ID refusing replay for as long as it could qualify; nonsecret metadata | Canonical UTC timestamp (`expiresAt + S`) | Until the sweep deletes the row; delete with principal |
 | Authorization deadline | Fixed interactive lifetime; nonsecret metadata | Canonical UTC timestamp | Operation lifetime; never extend |
 | Pending TOTP seed (generated per SPEC-SEC-001 §V seed-length requirement) | Validate candidate authenticator; authentication secret | Approved encryption only | Erase upon activation, cancellation, expiry or supersession; no old-secret copy |
 | Old/new credential IDs | Exact provider work; credential metadata | Exact identifiers inside Identity only | While fixed retirement/activation work needs them; delete with principal |
@@ -220,6 +296,20 @@ completion must not be reported as successful just because external retirement s
 - Interrupted execution and lost responses are idempotent. Exact remote-before-local
   retirement remains enforced for ordinary removal.
 
+### TOTP replacement step-up evidence
+
+- A valid `totp-replace` step-up token authorizes the operation; the TOTP, generation and sessions are unchanged until activation.
+- Refused with the TOTP, generation and sessions unchanged: a fresh ordinary sign-in token, the generic step-up preset, a missing, empty or unknown purpose; each required field missing, null, mistyped or unparseable; a different principal, provider user or credential owner; an inactive or pending credential; a wrong origin or RP ID; a different session; a submitted challenge other than the stored one. Timestamp one millisecond before `t0` is refused and exactly `t0` and exactly `c` are accepted, one millisecond after `c` refused; `now + S` accepted, one millisecond more refused; a lifetime of exactly L accepted, one millisecond more, zero or negative refused; `now` equal to `expiresAt` or to `c` refused.
+- Expiry between evaluation and consumption is refused (pinned clock), and a consumption that waited for a held principal lock reads the clock after the wait.
+- Replay is refused on the first failing check: the same token on the same operation after authorization (stage); a replaced or consumed challenge with a new token (challenge); the same token on a new operation after completion, cancellation or expiry (timestamp precedes the new `t0`), including after a sweep before the retention time (row still present) and after `expiresAt` (expired).
+- The unique token ID index alone refuses otherwise qualifying evidence carrying a consumed ID, shown by mutation (SOP-TEST-003 §IX.A).
+- The sweep deletes a spent row after its retention time and keeps it before.
+- Two connections: the same token twice, and one challenge with two tokens, commit once; consumption racing passkey retirement, recovery and account destruction (both entry paths) authorizes nothing against a destroyed principal, retired credential or advanced generation, each shown failing with its lock or recheck removed.
+- A missing, duplicated, user-verification-preferred, over-lifetime or unreachable `totp-replace` configuration refuses replacement while sign-in works.
+- Every deletion of `credential_operations` rows is the sweep or principal destruction, with mutation proof.
+- The SPEC-TIME-001 guard passes.
+- These are test requirements. They are not evidence of a live-provider ceremony; that requires its own staging run.
+
 ### Lifecycle and authority
 
 - TOTP replacement, passkey enrollment and passkey removal invalidate sessions/challenges once;
@@ -251,4 +341,4 @@ production readiness. No destructive production experiment is implied by this co
 
 Increment version/date, reconcile the owning INV/DOM and affected FEAT contracts, update
 SOP-DOC-001, and preserve the distinction between approved requirements and implementation
-proposals. The 2026-11-27 revision (v1.3; Owner ruling 2026-11-27: passkey replacement removed; replacement is enrollment followed by revocation) removes the passkey replacement purpose and its stages; the `passkey_replace` purpose value is retired. The earlier 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment authorization and its five-minute lifetime; reservation, cancellation, expiry and stale-operation rules are unchanged. The 2026-11-26 revision applies the owner rulings on mandatory dual enrollment and the seed-length floor. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.
+proposals. The 2026-11-27 revision (v1.4) adds the TOTP replacement step-up evidence subsection (§V), the *awaiting step-up* stage, the step-up challenge, consumed-token and retention rows (§VI) and their validation list (§IX): TOTP replacement is authorized by provider step-up evidence consumed against a stored single-use challenge, not by the stateless challenge and a sign-in token. The earlier 2026-11-27 revision (v1.3; Owner ruling 2026-11-27: passkey replacement removed; replacement is enrollment followed by revocation) removes the passkey replacement purpose and its stages; the `passkey_replace` purpose value is retired. An earlier 2026-11-27 revision (owner authorization 2026-11-27) removes the signup-derived enrollment authorization and its five-minute lifetime; reservation, cancellation, expiry and stale-operation rules are unchanged. The 2026-11-26 revision applies the owner rulings on mandatory dual enrollment and the seed-length floor. The initial 2026-11-23 issue records owner adjudications, not deployed behavior.

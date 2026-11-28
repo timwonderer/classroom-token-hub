@@ -6,7 +6,12 @@ https://github.com/bitwarden/passwordless-python
 https://docs.passwordless.dev/guide/get-started.html
 """
 
+import json
 import os
+import re
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Dict, Any
 
 from marshmallow import fields, post_load
@@ -125,11 +130,11 @@ def parse_signin_verify_response(text: str) -> VerifiedUser:
     return _SigninVerifyResponseSchema().loads(text)
 
 
-def verify_signin_token(client: PasswordlessClient, token: str) -> VerifiedUser:
-    """POST ``token`` to ``/signin/verify`` through ``client``'s configuration.
+def _post_signin_verify(client: PasswordlessClient, token: str) -> str:
+    """POST ``token`` to ``/signin/verify`` through ``client``'s configuration; the raw response text.
 
-    Same request, session and error handling as the SDK's ``sign_in``; only the response is
-    parsed with the correct ``rpId`` key. Raises ``PasswordlessError`` for a refused token.
+    Same request, session and error handling as the SDK's ``sign_in``. Raises
+    ``PasswordlessError`` for a refused token.
     """
     request = Request(
         method="POST",
@@ -140,4 +145,183 @@ def verify_signin_token(client: PasswordlessClient, token: str) -> VerifiedUser:
     response = client.session.send(client.session.prepare_request(request), allow_redirects=True, timeout=30)
     if response.status_code >= 400:
         handle_response_error(response)
-    return parse_signin_verify_response(response.text)
+    return response.text
+
+
+def verify_signin_token(client: PasswordlessClient, token: str) -> VerifiedUser:
+    """POST ``token`` to ``/signin/verify`` and parse the verified user (``rpId`` read correctly).
+
+    Raises ``PasswordlessError`` for a refused token.
+    """
+    return parse_signin_verify_response(_post_signin_verify(client, token))
+
+
+def verify_step_up_token(client: PasswordlessClient, token: str) -> "StepUpEvidence":
+    """POST ``token`` to ``/signin/verify`` and parse it as step-up evidence, strictly.
+
+    Raises ``PasswordlessError`` for a refused token and ``StepUpEvidenceMalformed`` for a
+    response that is not well formed evidence (SPEC-IDEN-002 §V, TOTP replacement step-up).
+    """
+    return parse_step_up_evidence(_post_signin_verify(client, token))
+
+
+# ---------------------------------------------------------------------------
+# Step-up evidence (raw JSON; the SDK's ``VerifiedUser`` drops ``purpose`` and the token fields)
+# ---------------------------------------------------------------------------
+
+class StepUpEvidenceMalformed(ValueError):
+    """The ``/signin/verify`` body is not well formed step-up evidence. Carries no response content."""
+
+
+@dataclass(frozen=True)
+class StepUpEvidence:
+    """The provider-authenticated fields a TOTP replacement consumes, read from the raw JSON body.
+
+    Every field is required and typed; none is inferred from stored metadata. ``timestamp`` and
+    ``expires_at`` are timezone-aware instants. This is provider evidence only: CTH's own
+    authorization decision is made by ``credential_lifecycle.evaluate_step_up_evidence``.
+    """
+
+    success: bool
+    purpose: str
+    type: str
+    user_id: str
+    credential_id: str
+    origin: str
+    rp_id: str
+    timestamp: datetime
+    expires_at: datetime
+    token_id: str
+
+
+_PROVIDER_INSTANT = re.compile(
+    r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$"
+)
+
+
+def _parse_provider_instant(value: Any) -> datetime:
+    """An ISO-8601 instant with an explicit ``Z`` or offset, as an aware datetime; else ``StepUpEvidenceMalformed``.
+
+    The provider writes a variable number of fractional digits (``45.30Z`` and seven-digit
+    forms both occur); the fraction is carried to microseconds and anything finer is dropped.
+    """
+    if not isinstance(value, str):
+        raise StepUpEvidenceMalformed("instant")
+    match = _PROVIDER_INSTANT.match(value)
+    if match is None:
+        raise StepUpEvidenceMalformed("instant")
+    year, month, day, hour, minute, second, fraction, zone = match.groups()
+    micro = ((fraction or "") + "000000")[:6]
+    zone = "+00:00" if zone == "Z" else zone
+    try:
+        return datetime.fromisoformat(f"{year}-{month}-{day}T{hour}:{minute}:{second}.{micro}{zone}")
+    except ValueError:
+        raise StepUpEvidenceMalformed("instant") from None
+
+
+def _required_text(body: dict, key: str) -> str:
+    value = body.get(key)
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise StepUpEvidenceMalformed(key)
+    return value
+
+
+def parse_step_up_evidence(text: str) -> StepUpEvidence:
+    """The step-up evidence in a raw ``/signin/verify`` JSON body; fail closed on any defect.
+
+    A missing, null, mistyped or unparseable ``success``, ``purpose``, ``type``, ``userId``,
+    ``credentialId``, ``origin``, ``rpId``, ``timestamp``, ``expiresAt`` or ``tokenId`` raises
+    ``StepUpEvidenceMalformed`` (a body that is not a JSON object does too). The exception names
+    only the field's key, never a value.
+    """
+    try:
+        body = json.loads(text)
+    except (TypeError, ValueError):
+        raise StepUpEvidenceMalformed("json") from None
+    if not isinstance(body, dict):
+        raise StepUpEvidenceMalformed("json")
+    success = body.get("success")
+    if not isinstance(success, bool):
+        raise StepUpEvidenceMalformed("success")
+    token_id = _required_text(body, "tokenId")
+    try:
+        token_id = str(uuid.UUID(token_id))
+    except ValueError:
+        raise StepUpEvidenceMalformed("tokenId") from None
+    return StepUpEvidence(
+        success=success,
+        purpose=_required_text(body, "purpose"),
+        type=_required_text(body, "type"),
+        user_id=_required_text(body, "userId"),
+        credential_id=_required_text(body, "credentialId"),
+        origin=_required_text(body, "origin"),
+        rp_id=_required_text(body, "rpId"),
+        timestamp=_parse_provider_instant(body.get("timestamp")),
+        expires_at=_parse_provider_instant(body.get("expiresAt")),
+        token_id=token_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Provider authentication-configuration check
+# ---------------------------------------------------------------------------
+
+class AuthConfigUnusable(Exception):
+    """The provider's authentication configurations could not be read or are not as required.
+
+    ``category`` is a fixed, coarse label (never a response value or an identifier).
+    """
+
+    def __init__(self, category: str):
+        super().__init__(category)
+        self.category = category
+
+
+def _fetch_auth_configs_text(client: PasswordlessClient) -> str:
+    request = Request(
+        method="GET",
+        url=client.options.api_url + "/auth-configs/list",
+        headers={"ApiSecret": client.options.api_secret},
+    )
+    response = client.session.send(client.session.prepare_request(request), allow_redirects=True, timeout=30)
+    if response.status_code >= 400:
+        raise AuthConfigUnusable("provider_refused")
+    return response.text
+
+
+def require_auth_config(client: PasswordlessClient, *, purpose: str, max_time_to_live: int) -> None:
+    """Fail closed unless exactly one ``purpose`` config exists with UV required and a bounded lifetime.
+
+    Reads ``GET /auth-configs/list`` with the secret key; nothing is cached. The response is a list
+    object whose ``configurations`` member is the list of configurations (the shape captured from the
+    live provider on 2026-11-28); any other shape fails closed. A transport failure, an unparseable or
+    unexpected reply, a malformed entry, no matching entry, more than one, a
+    ``userVerificationRequirement`` other than ``required`` or a ``timeToLive`` that is not a
+    positive integer of at most ``max_time_to_live`` seconds raises ``AuthConfigUnusable``.
+    """
+    try:
+        text = _fetch_auth_configs_text(client)
+    except AuthConfigUnusable:
+        raise
+    except Exception:
+        raise AuthConfigUnusable("unreachable") from None
+    try:
+        body = json.loads(text)
+    except (TypeError, ValueError):
+        raise AuthConfigUnusable("malformed") from None
+    entries = body.get("configurations") if isinstance(body, dict) else None
+    if not isinstance(entries, list) or not all(isinstance(entry, dict) for entry in entries):
+        raise AuthConfigUnusable("malformed")
+    if not all(isinstance(entry.get("purpose"), str) for entry in entries):
+        raise AuthConfigUnusable("malformed")
+    matching = [entry for entry in entries if entry["purpose"] == purpose]
+    if not matching:
+        raise AuthConfigUnusable("missing")
+    if len(matching) > 1:
+        raise AuthConfigUnusable("duplicate")
+    entry = matching[0]
+    if entry.get("userVerificationRequirement") != "required":
+        raise AuthConfigUnusable("user_verification")
+    ttl = entry.get("timeToLive")
+    if isinstance(ttl, bool) or not isinstance(ttl, int) or not 0 < ttl <= max_time_to_live:
+        raise AuthConfigUnusable("time_to_live")

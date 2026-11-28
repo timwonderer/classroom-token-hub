@@ -151,6 +151,65 @@ def _verify(token: str):
     return verified
 
 
+#: L: the longest lifetime, in seconds, of a step-up token CTH accepts (SPEC-IDEN-002 §V, TOTP
+#: replacement step-up evidence). The provider's ``totp-replace`` config may carry no longer one.
+STEP_UP_MAX_LIFETIME_SECONDS = 120
+#: The provider authentication-configuration purpose a TOTP replacement's ceremony names.
+STEP_UP_AUTH_PURPOSE = "totp-replace"
+
+
+class StepUpConfigUnavailable(PasskeyServiceUnavailable):
+    """The provider's ``totp-replace`` configuration could not be confirmed as required.
+
+    ``category`` is a fixed coarse label. TOTP replacement fails closed; sign-in and every
+    other credential operation are unaffected.
+    """
+
+    public_message = "Authenticator replacement is unavailable right now. Nothing was changed; try again later."
+
+    def __init__(self, category: str):
+        super().__init__(category)
+        self.category = category
+
+
+def require_step_up_provider_config() -> None:
+    """Fail closed unless the provider's ``totp-replace`` config is as SPEC-IDEN-002 §V requires.
+
+    Provider I/O (``GET /auth-configs/list``, secret key): no transaction may be open. Made at
+    the point of use, uncached, once before a challenge is issued and once after the step-up
+    token is verified. Exactly one ``totp-replace`` entry, user verification ``required`` and a
+    ``timeToLive`` of at most ``STEP_UP_MAX_LIFETIME_SECONDS``; anything else, including an
+    unreachable or malformed reply, raises ``StepUpConfigUnavailable``. Logged by category only.
+    """
+    from app.utils.passwordless_client import AuthConfigUnusable, require_auth_config
+    try:
+        require_auth_config(
+            _client(), purpose=STEP_UP_AUTH_PURPOSE, max_time_to_live=STEP_UP_MAX_LIFETIME_SECONDS,
+        )
+    except AuthConfigUnusable as exc:
+        current_app.logger.error("totp-replace step-up refused: provider configuration check failed (%s)", exc.category)
+        raise StepUpConfigUnavailable(exc.category) from None
+
+
+def verify_step_up_token(token: str):
+    """Ask passwordless.dev to verify a step-up ``token``; the strictly parsed evidence.
+
+    Provider I/O, no local state read or written. A refused token or a malformed response is a
+    ``PasskeyError``. Origin and RP ID are compared exactly by
+    ``credential_lifecycle.evaluate_step_up_evidence``, not here.
+    """
+    from passwordless import PasswordlessError
+    from app.utils.passwordless_client import StepUpEvidenceMalformed, verify_step_up_token as _verify_step_up
+    if not token or not isinstance(token, str):
+        raise PasskeyError("missing token")
+    try:
+        return _verify_step_up(_client(), token)
+    except PasswordlessError as exc:
+        raise PasskeyError("passwordless.dev rejected the token") from exc
+    except StepUpEvidenceMalformed as exc:
+        raise PasskeyError("the verification response was not well formed") from exc
+
+
 def create_registration_token(user_id: str, *, alias: str, display_name: str, expires_at=None) -> str:
     """A passwordless.dev registration token for the principal ``user_id``.
 

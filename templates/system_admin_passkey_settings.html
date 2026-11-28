@@ -55,6 +55,37 @@
                 </div>
             </div>
 
+            <!-- Replace authenticator (FEAT-IDEN-106) -->
+            <div class="card mb-4" id="totp-replace-card">
+                <div class="card-header">
+                    <h3 class="h5 mb-0">
+                        <span class="material-symbols-outlined icon-middle" aria-hidden="true">phonelink_lock</span>
+                        Authenticator app
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Replace the authenticator app that produces your sign-in codes, for example after changing phones. You prove it is you with one of your passkeys. Your current authenticator keeps working until the new one is confirmed, then you sign in again.</p>
+                    <div id="totp-replace-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
+                    {% if totp_replacement_in_progress %}
+                    <p>A replacement is already in progress. Cancel it to start again, or wait a few minutes for it to expire. Your current authenticator is unchanged.</p>
+                    <button type="button" class="btn btn-outline-secondary" id="totpCancelButton" data-binding="{{ totp_replacement_binding or '' }}">Cancel the replacement</button>
+                    {% else %}
+                    <button type="button" class="btn btn-outline-primary" id="totpReplaceButton"{% if not credentials or operation_state %} disabled{% endif %}>Replace authenticator app</button>
+                    {% if not credentials %}<div class="form-text">Register a passkey first; it is the proof a replacement needs.</div>{% endif %}
+                    {% endif %}
+                    <div id="totp-replace-setup" class="mt-4" hidden>
+                        <p>Scan this code with your new authenticator app, or enter the key by hand. It is shown only now.</p>
+                        <img id="totp-replace-qr" alt="QR code for the new authenticator" width="200" height="200" class="mb-3 d-block">
+                        <p>Key: <code id="totp-replace-secret"></code></p>
+                        <label for="totp-replace-code" class="form-label">Code from the new authenticator</label>
+                        <input type="text" id="totp-replace-code" class="form-control mb-3" inputmode="numeric"
+                               autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6">
+                        <button type="button" class="btn btn-primary" id="totpConfirmButton">Confirm and replace</button>
+                        <button type="button" class="btn btn-outline-secondary" id="totpAbandonButton">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Registered Passkeys -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -124,7 +155,7 @@
 </div>
 
 <!-- Passwordless.dev SDK (Official UMD build) -->
-<script src="https://cdn.passwordless.dev/dist/1.1.0/umd/passwordless.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.passwordless.dev/dist/1.2.4/umd/passwordless.umd.min.js" integrity="sha384-cEHJfClr1GLubfVIM+AVbDUmXTUBktVnbaq/RVBWMTMrjPcfqY/WLzsLws/xsEE/" crossorigin="anonymous"></script>
 <script src="{{ static_url('js/passkey.js') }}"></script>
 
 <script>
@@ -140,6 +171,23 @@
         cancelUrl: {{ passkey_urls.cancel|tojson }},
         resumeUrl: {{ passkey_urls.resume|tojson }},
         deleteUrl: {{ passkey_urls.delete|tojson }}
+    });
+
+    setupTotpReplacement({
+        feedbackId: 'totp-replace-feedback',
+        replaceButtonId: 'totpReplaceButton',
+        cancelButtonId: 'totpCancelButton',
+        abandonButtonId: 'totpAbandonButton',
+        confirmButtonId: 'totpConfirmButton',
+        setupId: 'totp-replace-setup',
+        qrId: 'totp-replace-qr',
+        secretId: 'totp-replace-secret',
+        codeInputId: 'totp-replace-code',
+        loginUrl: {{ url_for('sysadmin.login')|tojson }},
+        challengeUrl: {{ totp_urls.challenge|tojson }},
+        startUrl: {{ totp_urls.start|tojson }},
+        confirmUrl: {{ totp_urls.confirm|tojson }},
+        cancelUrl: {{ totp_urls.cancel|tojson }}
     });
 </script>
 

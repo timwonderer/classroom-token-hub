@@ -22,8 +22,8 @@ Two kinds of function live here and the split is deliberate:
   ``app/feats/passkey_lifecycle_feat.py``). Each rechecks, at the mutation boundary,
   everything it relies on.
 
-This module issues no provider call except the single read-only verification
-of an assertion token, made before any row lock is taken. Registration tokens,
+This module issues no provider call: the read-only verification of a step-up token and the
+provider configuration check are made by the orchestrating FEAT before any row lock is taken. Registration tokens,
 verification of a registration and remote credential deletion are made by the
 orchestrating FEAT between its short local transactions (SPEC-IDEN-002 §V
 "Transactions and provider I/O").
@@ -63,7 +63,7 @@ from app.services import passkey_service
 from app.services.passkey_service import PasskeyError, REGISTER_TOKEN_TYPE, SIGNIN_TOKEN_TYPE
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.encryption import decrypt_totp, encrypt_totp
-from app.utils.user_ids import parse_passkey_external_id
+from app.utils.user_ids import parse_passkey_external_id, passkey_external_id
 
 # ---------------------------------------------------------------------------
 # Seed length (SPEC-SEC-001 §V.1 item 7)
@@ -157,18 +157,6 @@ def credential_compliance(user: User) -> CredentialCompliance:
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class PasskeyAssertion:
-    """A fresh passwordless.dev assertion token and the step-up challenge it answers.
-
-    A plain sign-in token is login proof and never operation authorization
-    (SPEC-IDEN-002 §V): ``challenge`` must be one ``issue_step_up_challenge`` issued
-    for this principal, purpose, session and generation.
-    """
-    token: str = field(repr=False)
-    challenge: str = field(repr=False)
-
-
-@dataclass(frozen=True)
 class TotpCode:
     """A fresh code from the principal's current authenticator."""
     code: str = field(repr=False)
@@ -176,7 +164,8 @@ class TotpCode:
 
 #: Which proof kinds may open which operation (DOM-IDEN-003 §VII.A).
 _PROOFS_FOR_PURPOSE = {
-    CredentialOperationPurpose.TOTP_REPLACE: (PasskeyAssertion,),
+    # TOTP replacement takes no proof here: it is authorized by consuming step-up evidence
+    # (``consume_step_up_evidence``), never by a TOTP code or a sign-in assertion.
     CredentialOperationPurpose.PASSKEY_ENROLL: (TotpCode,),
     CredentialOperationPurpose.PASSKEY_REVOKE: (TotpCode,),
 }
@@ -199,8 +188,9 @@ def proof_kind_allowed(purpose: CredentialOperationPurpose, proof) -> bool:
 # ---------------------------------------------------------------------------
 
 SIGN_IN_PURPOSE = "sign_in"
-#: Purposes a passkey assertion may satisfy. Passkey maintenance is TOTP-proven.
-_ASSERTION_PURPOSES = frozenset({SIGN_IN_PURPOSE, CredentialOperationPurpose.TOTP_REPLACE.value})
+#: Purposes a sign-in assertion may satisfy. Passkey maintenance is TOTP-proven; TOTP replacement
+#: is authorized only by dedicated step-up evidence (``evaluate_step_up_evidence``).
+_ASSERTION_PURPOSES = frozenset({SIGN_IN_PURPOSE})
 
 
 @dataclass(frozen=True)
@@ -360,6 +350,7 @@ OPERATION_LIFETIME_SECONDS = 10 * 60
 #: uncertain provider result are exempt from the deadline (SPEC-IDEN-002 §V) and
 #: belong to their own completion workflow.
 _DEADLINE_CANCELLABLE_STAGES = (
+    CredentialOperationStage.AWAITING_STEP_UP,
     CredentialOperationStage.AUTHORIZED,
     CredentialOperationStage.REGISTRATION_PENDING,
     CredentialOperationStage.CANDIDATE_VERIFIED,
@@ -471,6 +462,7 @@ def get_operation_for_user(operation_id: str, user_id: str) -> CredentialOperati
 
 def _erase_and_cancel(operation: CredentialOperation) -> None:
     operation.pending_totp_encrypted = None
+    operation.step_up_challenge_hash = None  # an unconsumed challenge loses authority with the operation
     operation.stage = CredentialOperationStage.CANCELLED
 
 
@@ -478,36 +470,23 @@ def _erase_and_cancel(operation: CredentialOperation) -> None:
 # Commands
 # ---------------------------------------------------------------------------
 
-def verify_proof(proof):
-    """Provider verification of a passkey assertion, for the caller to run *before* its transaction.
-
-    Returns the verified payload to pass as ``open_operation(verified=...)``, or ``None``
-    for proofs that need no provider call. This is the only provider I/O in the module;
-    no transaction or row lock may be open while it runs (SPEC-IDEN-002 §V).
-    """
-    if isinstance(proof, PasskeyAssertion):
-        return passkey_service.verify_token(proof.token)
-    return None
-
-
 def open_operation(
     user: User,
     *,
     purpose: CredentialOperationPurpose,
     proof,
     session_nonce: str,
-    verified=None,
 ) -> CredentialOperation:
     """Authorize one credential operation for ``user`` at stage ``authorized``.
 
     The command, not its caller, checks that the proof kind matches the purpose
-    (a passkey assertion for ``totp_replace``, already provider-verified by
-    ``verify_proof`` and passed as ``verified``; a TOTP code for passkey work) and
-    evaluates the proof against current state. It refuses when the principal already has an open
+    (a TOTP code for passkey work) and evaluates the proof against current state.
+    TOTP replacement is not opened here: it is issued a challenge
+    (``issue_replacement_challenge``) and authorized by consuming step-up evidence
+    (``consume_step_up_evidence``). It refuses when the principal already has an open
     operation, which the partial unique index also enforces.
 
-    Raises ``CredentialOperationRefused`` (and ``PasskeyError`` for a refused
-    assertion); nothing is written when it raises.
+    Raises ``CredentialOperationRefused``; nothing is written when it raises.
     """
     try:
         purpose = CredentialOperationPurpose(purpose)
@@ -518,12 +497,6 @@ def open_operation(
     _require_feat(FEAT_FOR_PURPOSE[purpose])
     if not proof_kind_allowed(purpose, proof):
         raise CredentialOperationRefused("proof_kind_mismatch")
-
-    if isinstance(proof, PasskeyAssertion):
-        check_step_up_challenge(user, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge)
-    if isinstance(proof, PasskeyAssertion) and verified is None:
-        # Provider I/O never runs inside this transaction; the caller verifies first.
-        raise CredentialOperationRefused("proof_unverified")
 
     principal = _lock_user(user.id)
     if principal is None or principal.user_role not in (UserRole.TEACHER, UserRole.SYSADMIN):
@@ -541,16 +514,7 @@ def open_operation(
         raise CredentialOperationRefused("recovery_active")
 
     # Decide on the proof against current, locked state.
-    if isinstance(proof, PasskeyAssertion):
-        check_step_up_challenge(principal, purpose=purpose, session_nonce=session_nonce, challenge=proof.challenge)
-        evaluate_verified_assertion(
-            verified,
-            expected_role=principal.user_role.value,
-            expected_user_id=principal.id,
-            purpose=purpose.value,
-            expected_generation=principal.credential_generation,
-        )
-    elif isinstance(proof, TotpCode):
+    if isinstance(proof, TotpCode):
         if not evaluate_totp_code(principal, proof.code):
             raise CredentialOperationRefused("proof_rejected")
     else:
@@ -699,6 +663,274 @@ def activate_totp(operation: CredentialOperation, code: str, *, session_nonce: s
     return True
 
 
+# ---------------------------------------------------------------------------
+# TOTP replacement step-up evidence (SPEC-IDEN-002 §V "TOTP replacement step-up evidence")
+#
+# Four kinds of assurance are kept distinct here and in every comment below:
+#   * provider-authenticated evidence: passwordless.dev's ``/signin/verify`` body;
+#   * CTH-enforced operation authorization: this module's locked consumption of that evidence
+#     against a stored, single-use challenge on the principal's one TOTP_REPLACE operation;
+#   * provider-dependent user verification: the ``totp-replace`` auth configuration requires UV,
+#     which the authenticator claims by its own policy (it may be an earlier unlock, not fresh
+#     consent) and which CTH cannot observe in the token;
+#   * cryptographic operation binding: NOT supported. The token names neither this operation nor
+#     this challenge; the stored challenge and its [t0, c] window are CTH's own timing bound.
+# ---------------------------------------------------------------------------
+
+#: The provider authentication-configuration purpose a TOTP replacement's ceremony names.
+STEP_UP_PURPOSE = "totp-replace"
+#: W: how long an issued challenge accepts evidence (never past the operation's deadline).
+STEP_UP_CHALLENGE_SECONDS = 120
+#: L: the longest provider token lifetime accepted, and the longest ``timeToLive`` the config may carry.
+STEP_UP_MAX_LIFETIME_SECONDS = passkey_service.STEP_UP_MAX_LIFETIME_SECONDS
+#: S: clock skew, used only where stated (evidence not from the future; retention after expiry).
+STEP_UP_SKEW_SECONDS = 10
+
+
+def _shift(instant, seconds: int):
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp", timestamp=instant, elapsed_seconds=seconds,
+    ).shifted_timestamp_utc
+
+
+def _step_up_challenge_digest(operation_id: str, challenge: str) -> str:
+    """Purpose-separated, nonreversible verifier of a step-up challenge, bound to its operation."""
+    purpose = CredentialOperationPurpose.TOTP_REPLACE.value
+    return sha256(f"credential-step-up-challenge:v2:{purpose}:{operation_id}\0{challenge}".encode()).hexdigest()
+
+
+def issue_replacement_challenge(user_id: str, *, session_nonce: str) -> str:
+    """Store a fresh single-use challenge on the principal's one TOTP_REPLACE operation; return it.
+
+    Runs before the passkey ceremony, inside FEAT-IDEN-106, after the caller's provider
+    configuration check. Locks the principal, then the operation rows. With no open operation it
+    creates one at ``awaiting_step_up``; with this session's own unconsumed one it replaces the
+    verifier (the earlier challenge is dead) without extending the operation's deadline; an
+    unconsumed one from another session or generation, or one past its deadline, holds no
+    authority and is cancelled first. Any other open operation refuses. The stored verifier is a
+    purpose-separated digest, bound to the operation id; ``t0`` is now and
+    ``c = min(t0 + W, operation deadline)``. The raw challenge is returned once and never stored.
+    """
+    _require_feat(FEAT_FOR_PURPOSE[CredentialOperationPurpose.TOTP_REPLACE])
+    principal = _lock_user(user_id)
+    if principal is None or principal.user_role not in (UserRole.TEACHER, UserRole.SYSADMIN):
+        raise CredentialOperationRefused("ineligible_principal")
+    if not principal.totp_secret_encrypted:
+        raise CredentialOperationRefused("totp_not_activated")
+    if (
+        not isinstance(session_nonce, str) or not session_nonce
+        or not principal.current_session_nonce
+        or not _digests_equal(principal.current_session_nonce, session_nonce)
+    ):
+        raise CredentialOperationRefused("session_not_current")
+    if recovery_setup_is_live(principal.id):
+        raise CredentialOperationRefused("recovery_active")
+
+    live = (
+        db.session.query(CredentialOperation)
+        .filter(
+            CredentialOperation.user_id == principal.id,
+            CredentialOperation.stage.notin_(CREDENTIAL_OPERATION_TERMINAL_STAGES),
+        )
+        .populate_existing()
+        .with_for_update()
+        .all()
+    )
+    reusable = None
+    for existing in live:
+        if existing.stage in _DEADLINE_CANCELLABLE_STAGES and not _deadline_open(existing):
+            _erase_and_cancel(existing)  # past its deadline: no authority, must not block a new one
+        elif (
+            existing.purpose is CredentialOperationPurpose.TOTP_REPLACE
+            and existing.stage is CredentialOperationStage.AWAITING_STEP_UP
+        ):
+            if (
+                principal.credential_generation == existing.authorized_generation
+                and _session_matches(existing, principal, session_nonce)
+            ):
+                reusable = existing
+            else:
+                _erase_and_cancel(existing)  # another session's or generation's: holds no authority
+        else:
+            raise CredentialOperationRefused("operation_already_open")
+
+    now = _now()
+    if reusable is None:
+        deadline = _shift(now, OPERATION_LIFETIME_SECONDS)
+        session_end = principal.current_session_expires_at
+        if session_end is not None:
+            if not _is_later(session_end, now):
+                raise CredentialOperationRefused("session_not_current")
+            if _is_earlier(session_end, deadline):
+                deadline = session_end
+        reusable = CredentialOperation(
+            user_id=principal.id,
+            purpose=CredentialOperationPurpose.TOTP_REPLACE,
+            stage=CredentialOperationStage.AWAITING_STEP_UP,
+            authorized_generation=principal.credential_generation,
+            session_binding_hash=session_binding_digest(CredentialOperationPurpose.TOTP_REPLACE, session_nonce),
+            deadline_at=deadline,
+            attempt_count=0,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(reusable)
+                db.session.flush()
+        except IntegrityError:
+            raise CredentialOperationRefused("operation_already_open") from None
+
+    window_end = _shift(now, STEP_UP_CHALLENGE_SECONDS)
+    if _is_earlier(reusable.deadline_at, window_end):
+        window_end = reusable.deadline_at
+    challenge = secrets.token_urlsafe(32)
+    reusable.step_up_challenge_hash = _step_up_challenge_digest(reusable.id, challenge)
+    reusable.step_up_issued_at = now
+    reusable.step_up_challenge_expires_at = window_end
+    db.session.flush()
+    return challenge
+
+
+@dataclass(frozen=True)
+class StepUpEvaluation:
+    operation_id: str
+    credential_id: str
+
+
+def _same_credential(left, right) -> bool:
+    return passkey_service.canonical_credential_id(left) == passkey_service.canonical_credential_id(right)
+
+
+def _activated_binding_exists(user_id: str, credential_id: str) -> bool:
+    return any(
+        _same_credential(stored, credential_id)
+        for (stored,) in db.session.query(PasskeyCredential.credential_id).filter_by(user_id=user_id).all()
+    )
+
+
+def evaluate_step_up_evidence(evidence, *, user_id: str, now=None) -> StepUpEvaluation:
+    """Decide whether provider step-up evidence qualifies, against the stored challenge window. Pure.
+
+    ``evidence`` is the ``passwordless_client.StepUpEvidence`` of an already provider-verified
+    token. ``now`` is the resolver's instant unless a test supplies one. The checks run in this
+    order and the first failing one decides the refusal (each is a ``CredentialOperationRefused``
+    whose category names it, for the log; none carries a value):
+
+    ``step_up_not_successful`` success is true; ``step_up_purpose`` purpose is exactly
+    ``totp-replace``; ``step_up_type`` type is exactly ``passkey_signin``; ``step_up_origin`` and
+    ``step_up_rp_id`` equal the configured origin and RP ID exactly; ``step_up_principal`` the
+    provider user id is the principal's; ``step_up_credential`` the credential is one of the
+    principal's lawfully activated passkeys; ``step_up_lifetime`` ``0 < expiresAt - timestamp <=
+    L``; ``step_up_expired`` ``now < expiresAt`` and ``now < c`` (no skew); then, against the
+    stored window, ``step_up_before_challenge`` ``t0 <= timestamp`` (no skew) and
+    ``step_up_after_window`` ``timestamp <= c``; ``step_up_clock`` ``timestamp <= now + S``.
+
+    The operation consulted is the principal's one open TOTP_REPLACE operation; a missing window
+    is ``challenge_invalid``. Writes nothing and consumes nothing: ``consume_step_up_evidence``
+    repeats what matters under row locks with a fresh clock reading.
+    """
+    now = _now() if now is None else now
+    if getattr(evidence, "success", None) is not True:
+        raise CredentialOperationRefused("step_up_not_successful")
+    if evidence.purpose != STEP_UP_PURPOSE:
+        raise CredentialOperationRefused("step_up_purpose")
+    if evidence.type != SIGNIN_TOKEN_TYPE:
+        raise CredentialOperationRefused("step_up_type")
+    passkey_service.require_ceremony_configuration()
+    if evidence.origin != current_app.config["PASSKEY_EXPECTED_ORIGIN"]:
+        raise CredentialOperationRefused("step_up_origin")
+    if evidence.rp_id != current_app.config["PASSKEY_EXPECTED_RP_ID"]:
+        raise CredentialOperationRefused("step_up_rp_id")
+    user = db.session.get(User, user_id)
+    if user is None or evidence.user_id != passkey_external_id(user.id):
+        raise CredentialOperationRefused("step_up_principal")
+    if not _activated_binding_exists(user.id, evidence.credential_id):
+        raise CredentialOperationRefused("step_up_credential")
+
+    operation = get_open_operation(user.id)
+    if operation is None:
+        raise CredentialOperationRefused("operation_not_found")
+    if operation.purpose is not CredentialOperationPurpose.TOTP_REPLACE:
+        raise CredentialOperationRefused("wrong_purpose")
+    issued, window_end = operation.step_up_issued_at, operation.step_up_challenge_expires_at
+    if issued is None or window_end is None:
+        raise CredentialOperationRefused("challenge_invalid")
+
+    timestamp, expires_at = evidence.timestamp, evidence.expires_at
+    if not _is_later(expires_at, timestamp) or _is_later(expires_at, _shift(timestamp, STEP_UP_MAX_LIFETIME_SECONDS)):
+        raise CredentialOperationRefused("step_up_lifetime")
+    if not _is_later(expires_at, now) or not _is_later(window_end, now):
+        raise CredentialOperationRefused("step_up_expired")
+    if _is_earlier(timestamp, issued):
+        raise CredentialOperationRefused("step_up_before_challenge")
+    if _is_later(timestamp, window_end):
+        raise CredentialOperationRefused("step_up_after_window")
+    if _is_later(timestamp, _shift(now, STEP_UP_SKEW_SECONDS)):
+        raise CredentialOperationRefused("step_up_clock")
+    return StepUpEvaluation(operation_id=operation.id, credential_id=evidence.credential_id)
+
+
+def consume_step_up_evidence(
+    evaluation: StepUpEvaluation, evidence, *, user_id: str, challenge, session_nonce,
+) -> CredentialOperation:
+    """Consume qualified evidence: record its token id and authorize the operation, in one commit.
+
+    Runs inside FEAT-IDEN-106 in the one local transaction opened after the provider calls. Locks
+    the principal, then the operation (the lock order every credential command uses). Only after
+    both locks does it read the clock, afresh: a reading taken before a wait for the lock is never
+    reused. The first failing check decides the refusal: principal exists
+    (``ineligible_principal``); the operation is the evaluated one, TOTP_REPLACE
+    (``operation_not_found``, ``wrong_purpose``); it is ``awaiting_step_up`` with a challenge
+    verifier present (``operation_not_open``); the submitted challenge matches the stored verifier,
+    in constant time (``challenge_invalid``); ``now < c`` and ``now < expiresAt``
+    (``step_up_expired``); ``timestamp <= now + S`` (``step_up_clock``); the session verifier matches
+    the current sign-in (``session_not_current``); the principal's generation equals the operation's
+    authorized generation (``stale_generation``); the credential is still an activated binding of
+    the principal, re-read in this transaction (``step_up_credential``).
+
+    Then the token id and ``retain_until = expiresAt + S`` are recorded, the challenge verifier is
+    erased and the stage becomes ``authorized``. The unique index on the token id is the final
+    guard: a violation raises ``step_up_replayed`` and the caller's transaction rolls back.
+    """
+    _require_feat(FEAT_FOR_PURPOSE[CredentialOperationPurpose.TOTP_REPLACE])
+    principal = _lock_user(user_id)
+    locked = _lock_operation(evaluation.operation_id)
+    if principal is None or principal.user_role not in (UserRole.TEACHER, UserRole.SYSADMIN):
+        raise CredentialOperationRefused("ineligible_principal")
+    if locked is None or locked.user_id != principal.id:
+        raise CredentialOperationRefused("operation_not_found")
+    if locked.purpose is not CredentialOperationPurpose.TOTP_REPLACE:
+        raise CredentialOperationRefused("wrong_purpose")
+    if locked.stage is not CredentialOperationStage.AWAITING_STEP_UP or not locked.step_up_challenge_hash:
+        raise CredentialOperationRefused("operation_not_open")
+    if not isinstance(challenge, str) or not _digests_equal(
+        locked.step_up_challenge_hash, _step_up_challenge_digest(locked.id, challenge)
+    ):
+        raise CredentialOperationRefused("challenge_invalid")
+
+    now = _now()  # fresh: after both locks, never the evaluation's reading
+    if not _is_later(locked.step_up_challenge_expires_at, now) or not _is_later(evidence.expires_at, now):
+        raise CredentialOperationRefused("step_up_expired")
+    if _is_later(evidence.timestamp, _shift(now, STEP_UP_SKEW_SECONDS)):
+        raise CredentialOperationRefused("step_up_clock")
+    if not _session_matches(locked, principal, session_nonce):
+        raise CredentialOperationRefused("session_not_current")
+    if principal.credential_generation != locked.authorized_generation:
+        raise CredentialOperationRefused("stale_generation")
+    if not _activated_binding_exists(principal.id, evaluation.credential_id):
+        raise CredentialOperationRefused("step_up_credential")
+
+    locked.step_up_token_id = evidence.token_id
+    locked.step_up_retain_until = _shift(evidence.expires_at, STEP_UP_SKEW_SECONDS)
+    locked.step_up_challenge_hash = None
+    locked.stage = CredentialOperationStage.AUTHORIZED
+    try:
+        with db.session.begin_nested():
+            db.session.flush()
+    except IntegrityError:
+        raise CredentialOperationRefused("step_up_replayed") from None
+    return locked
+
+
 def cancel_operation(
     operation: CredentialOperation, *, purpose: CredentialOperationPurpose | None = None,
 ) -> bool:
@@ -729,19 +961,25 @@ def expire_stale_operations() -> dict[str, int]:
 
     Cancelling erases the pending seed. A completed or cancelled operation is kept
     only as a receipt until its original interactive deadline has passed
-    (SPEC-IDEN-002 §V), after which a sweep deletes it, so a replay then fails closed
-    on a missing row. Receipts are dropped before this run's cancellations are made,
+    (SPEC-IDEN-002 §V) and, when it consumed step-up evidence, until that evidence's retention
+    time, after which a sweep deletes it, so a replay then fails closed on a missing row. Receipts are dropped before this run's cancellations are made,
     so a newly cancelled operation is visible as ``cancelled`` until the next sweep.
     Operations in ``retirement_committed`` or ``provider_uncertain`` are exempt from
     the deadline and left to their own completion workflow. Returns the counts.
     """
     _require_feat("FEAT-IDEN-108")
     now = _now()
+    # A row that consumed step-up evidence is kept until ``step_up_retain_until``, so its unique
+    # token id keeps refusing a replay for as long as the provider token could still qualify.
     erased = (
         db.session.query(CredentialOperation)
         .filter(
             CredentialOperation.stage.in_(CREDENTIAL_OPERATION_TERMINAL_STAGES),
             CredentialOperation.deadline_at <= now,
+            sa.or_(
+                CredentialOperation.step_up_retain_until.is_(None),
+                CredentialOperation.step_up_retain_until <= now,
+            ),
         )
         .delete(synchronize_session=False)
     )
@@ -835,8 +1073,12 @@ PASSKEY_PURPOSES = (
     CredentialOperationPurpose.PASSKEY_ENROLL,
     CredentialOperationPurpose.PASSKEY_REVOKE,
 )
-#: Stages before interactive authorization is consumed; they obey the deadline and session.
-PRE_INTENT_STAGES = _DEADLINE_CANCELLABLE_STAGES
+#: Passkey-operation stages before retirement intent; they obey the deadline and session.
+PRE_INTENT_STAGES = (
+    CredentialOperationStage.AUTHORIZED,
+    CredentialOperationStage.REGISTRATION_PENDING,
+    CredentialOperationStage.CANDIDATE_VERIFIED,
+)
 #: Stages after retirement intent; only the fixed operation may finish (SPEC-IDEN-002 §V).
 RETIREMENT_STAGES = (
     CredentialOperationStage.RETIREMENT_COMMITTED,
@@ -990,6 +1232,32 @@ def open_passkey_operation_presentation(user_id: str) -> tuple[str | None, str |
     if _deadline_open(operation):
         return "registering", registration_binding(operation)
     return None, None
+
+
+def open_totp_replacement_in_progress(user_id: str) -> bool:
+    """Whether the principal has a live TOTP replacement awaiting its new code. Pure read."""
+    return _is_live_totp_replacement(get_open_operation(user_id))
+
+
+def _is_live_totp_replacement(operation: CredentialOperation | None) -> bool:
+    return (
+        operation is not None
+        and operation.purpose is CredentialOperationPurpose.TOTP_REPLACE
+        and operation.stage is CredentialOperationStage.AUTHORIZED
+        and _deadline_open(operation)
+    )
+
+
+def open_totp_replacement_binding(user_id: str) -> str | None:
+    """The registration binding of the principal's live TOTP replacement, for its Cancel control. Pure read.
+
+    Same derivation as the passkey operations' binding, so a late Cancel from a superseded
+    replacement names an operation that is no longer open (``binding_mismatch``).
+    """
+    operation = get_open_operation(user_id)
+    if not _is_live_totp_replacement(operation):
+        return None
+    return registration_binding(operation)
 
 
 def _lock_passkey_operation(operation: CredentialOperation, *purposes: CredentialOperationPurpose):

@@ -150,14 +150,18 @@ Teacher and operator ceremonies are structurally identical and separately regist
 | POST | `/admin/passkey/register/start` · `/finish` | A | `admin_passkey_settings.html` |
 | DELETE | `/admin/passkey/<int:passkey_id>/delete` | A | `admin_passkey_settings.html` |
 | POST | `/admin/passkey/resume` · `/cancel` | A | `admin_passkey_settings.html` |
+| POST | `/admin/totp/replace/challenge` · `/start` · `/confirm` · `/cancel` | A | `admin_passkey_settings.html` |
 | POST | `/sysadmin/passkey/auth/start` · `/finish` | — ‡ | `system_admin_login.html` |
 | POST | `/sysadmin/passkey/register/start` · `/finish` | O | `system_admin_passkey_settings.html` |
 | DELETE | `/sysadmin/passkey/<int:credential_id>/delete` | O | `system_admin_passkey_settings.html` |
 | POST | `/sysadmin/passkey/resume` · `/cancel` | O | `system_admin_passkey_settings.html` |
+| POST | `/sysadmin/totp/replace/challenge` · `/start` · `/confirm` · `/cancel` | O | `system_admin_passkey_settings.html` |
 | GET | ~~`/admin/passkey/list`~~ | A | **removed 2026-09-27 — see §VII-D** |
 | GET | ~~`/sysadmin/passkey/list`~~ | O | **removed 2026-09-27 — see §VII-D** |
 
 ‡ The `auth/start` and `auth/finish` ceremonies are unauthenticated by definition — they *are* the login. Both are rate limited to 20/min; registration, deletion, resume and cancel to 10/min. `register/start` and `delete` require a fresh `totp_code` in the JSON body (fresh TOTP also authorizes a first passkey; there is no replace operation, a passkey is changed by registering a new one and then deleting the old one, and deleting the only passkey is refused with `only_passkey`); a completed change answers `{"success", "message", "redirect"}` and ends the sign-in (FEAT-IDEN-102/107).
+
+TOTP replacement (FEAT-IDEN-106), same limit of 10/min: `challenge` answers `{"challenge", "apiKey", "alias", "userId"}` after confirming the provider's `totp-replace` configuration, and stores a single-use challenge on the principal's operation (`503 step_up_unavailable` when the configuration cannot be confirmed; sign-in is unaffected); `start` takes `{"token", "challenge"}` (a `totp-replace` step-up token from the browser SDK's `stepup`, with the challenge just issued; an ordinary sign-in token is refused `403 proof_rejected`) and answers `{"secret", "qr", "binding"}`, the pending seed shown once; `confirm` takes `{"code"}` and, when it proves the pending seed, answers `{"success", "message", "redirect"}` and ends the sign-in (a wrong code is `400 code_rejected` and changes nothing); `cancel` erases the pending seed. Refusals carry a coarse `code`.
 
 ### VI-H. Hybrid page routes
 

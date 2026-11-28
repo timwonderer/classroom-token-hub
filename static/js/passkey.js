@@ -326,6 +326,100 @@ function setupPasskeyManager(config) {
 }
 
 /**
+ * Authenticator replacement (FEAT-IDEN-106) on the passkey settings pages.
+ * Steps: challenge (the server stores a single-use challenge) -> passkey step-up ceremony for the
+ * purpose ``totp-replace`` -> start (the server consumes that evidence with the challenge, stages the new seed and
+ * returns its QR and key) -> the user confirms with a code from the new authenticator.
+ * The old authenticator keeps working until confirm succeeds, which ends the sign-in.
+ */
+function setupTotpReplacement(config) {
+    const byId = (id) => (id ? document.getElementById(id) : null);
+    const feedback = byId(config.feedbackId);
+
+    function show(title, message) {
+        if (!feedback || !window.AppCore) { return; }
+        feedback.replaceChildren(window.AppCore.buildAlertCard({ level: 'danger', title: title, icon: 'error', body: message }));
+        feedback.className = 'mb-4';
+        feedback.focus();
+    }
+
+    function failed(title, error) {
+        if (error.status === 401 || error.code === 'authentication_required' || error.code === 'session_not_current') {
+            show('Sign in again', error.message);
+            if (config.loginUrl) { window.setTimeout(() => { window.location.href = config.loginUrl; }, 4000); }
+            return;
+        }
+        show(title, error.message);
+    }
+
+    const replaceButton = byId(config.replaceButtonId);
+    if (replaceButton) {
+        replaceButton.addEventListener('click', async () => {
+            const originalHTML = replaceButton.innerHTML;
+            try {
+                replaceButton.disabled = true;
+                const { challenge, apiKey, userId } = await postPasskeyJson(config.challengeUrl, {});
+                const p = new Passwordless.Client({ apiKey });
+                // A dedicated step-up ceremony for this one purpose; an ordinary sign-in token is refused.
+                const result = await p.stepup({ signinMethod: { userId: userId }, purpose: 'totp-replace' });
+                if (!result || result.error) { throw new Error((result && result.error && (result.error.title || result.error.errorCode)) || 'Passkey check failed'); }
+                const staged = await postPasskeyJson(config.startUrl, { token: result.token, challenge: challenge });
+                byId(config.qrId).src = staged.qr;
+                byId(config.secretId).textContent = staged.secret;
+                const abandon = byId(config.abandonButtonId);
+                if (abandon && staged.binding) { abandon.dataset.binding = staged.binding; }
+                byId(config.setupId).hidden = false;
+                const codeInput = byId(config.codeInputId);
+                if (codeInput) { codeInput.focus(); }
+            } catch (error) {
+                replaceButton.disabled = false;
+                replaceButton.innerHTML = originalHTML;
+                // No cleanup request: an unbound cancel could cancel a newer attempt's replacement. An unconsumed
+                // operation is reused by the next attempt of this session (with a new challenge); a failure while staging is
+                // cancelled server-side, and an operation staged before a lost response ends by Cancel or expiry.
+                failed('Could not start the replacement', error);
+            }
+        });
+    }
+
+    const confirmButton = byId(config.confirmButtonId);
+    if (confirmButton) {
+        confirmButton.addEventListener('click', async () => {
+            const input = byId(config.codeInputId);
+            const code = (input && input.value || '').trim();
+            if (!/^[0-9]{6}$/.test(code)) {
+                show('Authenticator code needed', 'Enter the 6-digit code from the new authenticator, then try again.');
+                return;
+            }
+            try {
+                confirmButton.disabled = true;
+                const data = await postPasskeyJson(config.confirmUrl, { code: code });
+                if (data && data.redirect) { window.location.href = data.redirect; } else { window.location.reload(); }
+            } catch (error) {
+                confirmButton.disabled = false;
+                failed('Could not replace the authenticator', error);
+            }
+        });
+    }
+
+    [config.cancelButtonId, config.abandonButtonId].forEach((id) => {
+        const button = byId(id);
+        if (!button) { return; }
+        button.addEventListener('click', async () => {
+            try {
+                button.disabled = true;
+                const body = button.dataset.binding ? { binding: button.dataset.binding } : {};
+                await postPasskeyJson(config.cancelUrl, body);
+                window.location.reload();
+            } catch (error) {
+                button.disabled = false;
+                failed('Could not cancel the replacement', error);
+            }
+        });
+    });
+}
+
+/**
  * Setup passkey signin button
  */
 function setupPasskeySignin(config) {

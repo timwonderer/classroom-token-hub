@@ -30,9 +30,11 @@ from app import db
 from app.feats.base import FEATContext
 from app.feats.credential_operations_feat import (
     activate_totp_replacement,
+    authorize_totp_replacement,
     cancel_totp_replacement,
     expire_credential_operations,
     hold_totp_candidate,
+    issue_totp_replacement_challenge,
     open_credential_operation,
 )
 from app.models import (
@@ -47,7 +49,6 @@ from app.services import credential_lifecycle as lifecycle
 from app.services.credential_lifecycle import (
     CredentialCompliance,
     CredentialOperationRefused,
-    PasskeyAssertion,
     TotpCode,
     credential_compliance,
     decoded_secret_bits,
@@ -140,22 +141,34 @@ def _enrolled_teacher(client, app, fake, key="chemistry_p1", seed=HELD_SEED, cre
 
 
 def _challenge(user_id, purpose="totp_replace", nonce=None):
+    """A stateless (HMAC) step-up challenge: retained for TOTP-authorized passkey work, not TOTP replacement."""
     return lifecycle.issue_step_up_challenge(
         _user(user_id), purpose=CredentialOperationPurpose(purpose), session_nonce=nonce or _nonce(user_id),
     )
 
 
-def _assertion(fake, credential="cred-1", acting=None):
-    """A sign-in token for ``credential`` with a challenge issued to ``acting`` (default: its owner)."""
-    acting = acting or parse_passkey_external_id(fake.credentials[credential])
-    return PasskeyAssertion(fake.sign_in_token(credential), _challenge(acting))
-
-
-def _open_replacement(user_id, fake, credential="cred-1", nonce=None):
-    return open_credential_operation(
-        user_id=user_id, purpose="totp_replace", proof=_assertion(fake, credential, acting=user_id),
-        session_nonce=nonce or _nonce(user_id),
+def _open_replacement(user_id, fake, credential="cred-1", nonce=None, **token_options):
+    """Authorize a TOTP replacement the way the browser does: a stored challenge, then step-up evidence."""
+    nonce = nonce or _nonce(user_id)
+    challenge = issue_totp_replacement_challenge(user_id=user_id, session_nonce=nonce)
+    token = fake.step_up_token(credential, **token_options)
+    return authorize_totp_replacement(
+        user_id=user_id, session_nonce=nonce, token=token, challenge=challenge,
     )
+
+
+def _live_operations(user_id=None):
+    db.session.expire_all()
+    return [o for o in CredentialOperation.query.all()
+            if (user_id is None or o.user_id == user_id)
+            and o.stage not in (CredentialOperationStage.COMPLETED, CredentialOperationStage.CANCELLED)]
+
+
+def _assert_one_awaiting_step_up(user_id):
+    """The refused attempt's challenge is still there, and nothing was authorized."""
+    live = _live_operations(user_id)
+    assert len(live) == 1
+    assert live[0].stage is CredentialOperationStage.AWAITING_STEP_UP
 
 
 def _hold(user_id, operation_id, nonce=None):
@@ -415,19 +428,6 @@ def test_open_operation_refuses_a_totp_code_for_totp_replace(client, app, fake_p
     assert CredentialOperation.query.count() == 0
 
 
-@pytest.mark.parametrize("purpose", ["passkey_enroll", "passkey_revoke"])
-def test_open_operation_refuses_an_assertion_for_passkey_work(client, app, fake_passwordless, purpose):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-
-    with pytest.raises(CredentialOperationRefused) as refused:
-        open_credential_operation(
-            user_id=user_id, purpose=purpose, proof=_assertion(fake_passwordless),
-            session_nonce=_nonce(user_id),
-        )
-
-    assert refused.value.category == "proof_kind_mismatch"
-
-
 def test_the_retired_passkey_replace_purpose_opens_nothing(client, app):
     # The purpose guard runs before any principal lookup, so no passkey is needed.
     user_id = initialize_as_teacher("chemistry_p1", client, app).teacher_user.id
@@ -491,7 +491,7 @@ def test_open_operation_records_exactly_the_authorized_state(client, app, fake_p
     assert operation.attempt_count == 0
 
 
-def test_an_assertion_for_a_foreign_unknown_or_unactivated_credential_opens_nothing(client, app, fake_passwordless):
+def test_evidence_for_a_foreign_unknown_or_unactivated_credential_authorizes_nothing(client, app, fake_passwordless):
     other = initialize("biology_block_a", app)
     _add_passkey(other.teacher_user.id, "cred-other")
     fake_passwordless.credentials["cred-other"] = passkey_external_id(other.teacher_user.id)
@@ -504,28 +504,25 @@ def test_an_assertion_for_a_foreign_unknown_or_unactivated_credential_opens_noth
     fake_passwordless.credentials["cred-foreign"] = passkey_external_id(user_id)
 
     for credential in ("cred-pending", "cred-unknown", "cred-foreign"):
-        with pytest.raises(PasskeyError):
+        with pytest.raises(CredentialOperationRefused) as refused:
             _open_replacement(user_id, fake_passwordless, credential=credential)
+        assert refused.value.category == "step_up_credential"
     # A real activated credential belonging to someone else, named as someone else.
-    token = fake_passwordless.token_for(passkey_external_id(other.teacher_user.id), "cred-other")
-    with pytest.raises(PasskeyError):
-        open_credential_operation(
-            user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token, _challenge(user_id)),
-            session_nonce=_nonce(user_id),
-        )
+    with pytest.raises(CredentialOperationRefused) as refused:
+        _open_replacement(user_id, fake_passwordless, credential="cred-other")
+    assert refused.value.category == "step_up_principal"
 
-    assert CredentialOperation.query.count() == 0
+    _assert_one_awaiting_step_up(user_id)
 
 
 def test_a_sign_in_or_registration_token_of_the_wrong_type_is_refused(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    token = fake_passwordless.sign_in_token("cred-1", type_="passkey_register")
 
-    with pytest.raises(PasskeyError):
-        open_credential_operation(
-            user_id=user_id, purpose="totp_replace", proof=PasskeyAssertion(token, _challenge(user_id)),
-            session_nonce=_nonce(user_id),
-        )
+    with pytest.raises(CredentialOperationRefused) as refused:
+        _open_replacement(user_id, fake_passwordless, type_="passkey_register")
+
+    assert refused.value.category == "step_up_type"
+    _assert_one_awaiting_step_up(user_id)
 
 
 def test_open_operation_requires_the_live_session(client, app, fake_passwordless):
@@ -535,7 +532,7 @@ def test_open_operation_requires_the_live_session(client, app, fake_passwordless
         _open_replacement(user_id, fake_passwordless, nonce="a-session-that-is-not-current")
 
     assert refused.value.category == "session_not_current"
-    assert CredentialOperation.query.count() == 0
+    assert CredentialOperation.query.count() == 0  # no challenge was stored for another session
 
 
 def test_second_live_operation_is_refused_and_the_index_is_what_enforces_it(client, app, fake_passwordless):
@@ -603,9 +600,8 @@ def test_a_sysadmin_holds_the_same_obligations(client, app, fake_passwordless):
     fake_passwordless.credentials["cred-sys"] = passkey_external_id(sysadmin_id)
 
     assert decoded_secret_bits(_user(sysadmin_id)) == 160
-    operation_id = open_credential_operation(
-        user_id=sysadmin_id, purpose="totp_replace", proof=_assertion(fake_passwordless, "cred-sys"),
-        session_nonce="sysadmin-session-nonce",
+    operation_id = _open_replacement(
+        sysadmin_id, fake_passwordless, credential="cred-sys", nonce="sysadmin-session-nonce",
     )
 
     assert _operation(operation_id).user_id == sysadmin_id
@@ -613,17 +609,20 @@ def test_a_sysadmin_holds_the_same_obligations(client, app, fake_passwordless):
 
 def test_commands_refuse_to_run_outside_their_feat(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    with pytest.raises(PermissionError):
-        lifecycle.open_operation(
-            _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE,
-            proof=_assertion(fake_passwordless), session_nonce=_nonce(user_id),
-        )
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:wrong-feat"):
+    evaluation = lifecycle.StepUpEvaluation(operation_id=str(uuid.uuid4()), credential_id="cred-1")
+    for run in (
+        lambda: lifecycle.open_operation(
+            _user(user_id), purpose=CredentialOperationPurpose.PASSKEY_ENROLL,
+            proof=TotpCode(_code(HELD_SEED)), session_nonce=_nonce(user_id)),
+        lambda: lifecycle.issue_replacement_challenge(user_id, session_nonce=_nonce(user_id)),
+        lambda: lifecycle.consume_step_up_evidence(
+            evaluation, None, user_id=user_id, challenge="x", session_nonce=_nonce(user_id)),
+    ):
         with pytest.raises(PermissionError):
-            lifecycle.open_operation(
-                _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE,
-                proof=_assertion(fake_passwordless), session_nonce=_nonce(user_id),
-            )
+            run()
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:wrong-feat"):
+            with pytest.raises(PermissionError):
+                run()
 
 
 # ---------------------------------------------------------------------------
@@ -886,13 +885,14 @@ def test_pure_assertion_evaluation_writes_nothing_and_sign_in_still_stamps_last_
     assert PasskeyCredential.query.filter_by(credential_id="cred-1").one().last_used is not None
 
 
-def test_an_assertion_cannot_authorize_a_purpose_it_does_not_prove(client, app, fake_passwordless):
+@pytest.mark.parametrize("purpose", ["passkey_revoke", "totp_replace"])
+def test_an_assertion_cannot_authorize_a_purpose_it_does_not_prove(client, app, fake_passwordless, purpose):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
 
     with pytest.raises(PasskeyError):
         lifecycle.evaluate_passkey_assertion(
             fake_passwordless.sign_in_token("cred-1"), expected_role="teacher",
-            expected_user_id=user_id, purpose="passkey_revoke",
+            expected_user_id=user_id, purpose=purpose,
         )
 
 
@@ -902,7 +902,7 @@ def test_assertion_evaluation_rejects_a_changed_generation(client, app, fake_pas
     with pytest.raises(PasskeyError):
         lifecycle.evaluate_passkey_assertion(
             fake_passwordless.sign_in_token("cred-1"), expected_role="teacher",
-            expected_user_id=user_id, purpose="totp_replace", expected_generation=7,
+            expected_user_id=user_id, purpose=lifecycle.SIGN_IN_PURPOSE, expected_generation=7,
         )
 
 
@@ -1034,19 +1034,8 @@ def test_the_provider_is_called_with_no_transaction_open(client, app, fake_passw
 
     _open_replacement(user_id, fake_passwordless)
 
-    assert seen == [False]
-
-
-def test_an_unverified_assertion_is_never_sent_to_the_provider_inside_the_command(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    with FEATContext("FEAT-IDEN-106", idempotency_key="seed-test:unverified"):
-        with pytest.raises(CredentialOperationRefused) as refused:
-            lifecycle.open_operation(
-                _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE,
-                proof=_assertion(fake_passwordless), session_nonce=_nonce(user_id),
-            )
-    assert refused.value.category == "proof_unverified"
-    assert fake_passwordless.tokens  # the token was not consumed
+    # Config check (challenge), verify, config check (authorize): every provider call, no transaction open.
+    assert seen == [False, False, False]
 
 
 def test_a_token_naming_one_principal_with_another_principals_credential_is_refused(client, app, fake_passwordless):
@@ -1055,10 +1044,11 @@ def test_a_token_naming_one_principal_with_another_principals_credential_is_refu
     _add_passkey(user_b, "cred-b")  # activated locally, for B
     fake_passwordless.credentials["cred-b"] = passkey_external_id(user_a)  # the token names A
 
-    with pytest.raises(PasskeyError):
+    with pytest.raises(CredentialOperationRefused) as refused:
         _open_replacement(user_a, fake_passwordless, credential="cred-b")
 
-    assert CredentialOperation.query.count() == 0
+    assert refused.value.category == "step_up_credential"
+    _assert_one_awaiting_step_up(user_a)
 
 
 def test_a_non_ascii_session_nonce_is_refused_not_a_crash(client, app, fake_passwordless):
@@ -1104,11 +1094,7 @@ def test_the_deadline_is_rechecked_after_the_code_is_verified(client, app, fake_
 
 def test_provider_verification_is_refused_inside_an_open_transaction_with_pending_work(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    token = fake_passwordless.sign_in_token("cred-1")
-    calls = []
-    fake_passwordless.sign_in = lambda verify: calls.append(verify) or None
     nonce = _nonce(user_id)
-    proof = PasskeyAssertion(token, _challenge(user_id))
 
     db.session.begin_nested() if db.session().in_transaction() else db.session.begin()
     db.session.add(CredentialOperation(
@@ -1118,92 +1104,62 @@ def test_provider_verification_is_refused_inside_an_open_transaction_with_pendin
     ))
     try:
         with pytest.raises(CredentialOperationRefused) as refused:
-            open_credential_operation(
-                user_id=user_id, purpose="totp_replace", proof=proof,
-                session_nonce=nonce,
-            )
+            issue_totp_replacement_challenge(user_id=user_id, session_nonce=nonce)
         assert refused.value.category == "transaction_open"
-        assert calls == []
+        assert fake_passwordless.calls == []  # no provider call was made
         assert db.session.new  # the pending work was not rolled back
     finally:
         db.session.rollback()
 
 
 # ---------------------------------------------------------------------------
-# purpose-bound step-up assertions
+# the stateless (HMAC) step-up challenge, kept for TOTP-authorized passkey work
 # ---------------------------------------------------------------------------
 
-def _open_with(user_id, fake, challenge, credential="cred-1"):
-    return open_credential_operation(
-        user_id=user_id, purpose="totp_replace",
-        proof=PasskeyAssertion(fake.sign_in_token(credential), challenge), session_nonce=_nonce(user_id),
-    )
-
-
-def test_a_sign_in_token_without_a_valid_challenge_is_refused_and_the_provider_is_not_called(client, app, fake_passwordless):
+def test_a_stateless_challenge_for_another_purpose_generation_or_session_is_refused(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    calls = []
-    original = fake_passwordless.send
-    fake_passwordless.send = lambda request, **kw: calls.append(request) or original(request, **kw)
-
-    for bad in ("", "x" * 64, None):
-        with pytest.raises(CredentialOperationRefused) as refused:
-            _open_with(user_id, fake_passwordless, bad)
-        assert refused.value.category == "challenge_invalid"
-
-    assert calls == [] and CredentialOperation.query.count() == 0
-
-
-def test_a_challenge_for_another_purpose_generation_or_session_is_refused(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    user = _user(user_id)
     nonce = _nonce(user_id)
-    other_purpose = _challenge(user_id, purpose="passkey_enroll")
-    stale = _challenge(user_id)
-    other_session = lifecycle._step_up_value(
-        user_id, CredentialOperationPurpose.TOTP_REPLACE, "another-session", user.credential_generation,
-        lifecycle._step_up_bucket(),
-    )
-    other_user = lifecycle._step_up_value(
-        "00000000-0000-0000-0000-000000000000", CredentialOperationPurpose.TOTP_REPLACE, nonce,
-        user.credential_generation, lifecycle._step_up_bucket(),
-    )
+    stale = _challenge(user_id)  # built at generation 1
     with FEATContext("FEAT-TEST-SETUP", idempotency_key="seed-test:bump"):
         db.session.get(User, user_id).credential_generation = 2
 
-    for challenge in (other_purpose, stale, other_session, other_user):
+    def value(*, purpose=CredentialOperationPurpose.TOTP_REPLACE, session="current", user="current"):
+        # Built at the current generation (2); a variant changes only the field under test.
+        return lifecycle._step_up_value(
+            user_id if user == "current" else user, purpose,
+            nonce if session == "current" else session, _user(user_id).credential_generation,
+            lifecycle._step_up_bucket(),
+        )
+
+    def check(challenge):
+        lifecycle.check_step_up_challenge(
+            _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE,
+            session_nonce=nonce, challenge=challenge)
+
+    check(value())  # the control: every field current, accepted
+    other_purpose = value(purpose=CredentialOperationPurpose.PASSKEY_ENROLL)
+    other_session = value(session="another-session")
+    other_user = value(user="00000000-0000-0000-0000-000000000000")
+
+    for challenge in (other_purpose, stale, other_session, other_user, "", None):
         with pytest.raises(CredentialOperationRefused) as refused:
-            _open_with(user_id, fake_passwordless, challenge)
+            check(challenge)
         assert refused.value.category == "challenge_invalid"
-    assert CredentialOperation.query.count() == 0
 
 
-def test_a_valid_challenge_opens_and_expires_after_one_further_bucket(client, app, fake_passwordless):
+def test_a_stateless_challenge_expires_after_one_further_bucket(client, app, fake_passwordless):
     _, user_id = _enrolled_teacher(client, app, fake_passwordless)
+    nonce = _nonce(user_id)
+    check = lambda: lifecycle.check_step_up_challenge(  # noqa: E731
+        _user(user_id), purpose=CredentialOperationPurpose.TOTP_REPLACE, session_nonce=nonce, challenge=challenge)
     with temporal.pinned_clock(FIXED_INSTANT):
         challenge = _challenge(user_id)
     with temporal.pinned_clock(temporal.shifted(FIXED_INSTANT, minutes=10)):
         with pytest.raises(CredentialOperationRefused) as refused:
-            _open_with(user_id, fake_passwordless, challenge)
+            check()
     assert refused.value.category == "challenge_invalid"
     with temporal.pinned_clock(temporal.shifted(FIXED_INSTANT, minutes=5)):
-        assert _open_with(user_id, fake_passwordless, challenge)
-
-
-def test_without_the_challenge_check_a_plain_sign_in_token_would_authorize(client, app, fake_passwordless, monkeypatch):
-    """Mutation proof: the challenge check is the only thing separating login from step-up."""
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    monkeypatch.setattr(lifecycle, "check_step_up_challenge", lambda *a, **k: None)
-    monkeypatch.setattr("app.feats.credential_operations_feat.lifecycle.check_step_up_challenge", lambda *a, **k: None)
-
-    assert _open_with(user_id, fake_passwordless, "not-a-challenge")
-
-
-def test_the_challenge_is_stored_nowhere(client, app, fake_passwordless):
-    _, user_id = _enrolled_teacher(client, app, fake_passwordless)
-    before = CredentialOperation.query.count()
-    _challenge(user_id)
-    assert CredentialOperation.query.count() == before == 0
+        check()
 
 
 # ---------------------------------------------------------------------------
