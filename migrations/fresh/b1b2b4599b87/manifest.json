@@ -1,0 +1,241 @@
+{
+  "categories": [
+    [
+      1,
+      "Incorrect Amount",
+      "The transaction amount is wrong",
+      "transaction",
+      true,
+      1
+    ],
+    [
+      2,
+      "Duplicate Transaction",
+      "This transaction appears twice",
+      "transaction",
+      true,
+      2
+    ],
+    [
+      3,
+      "Wrong Account",
+      "Transaction went to wrong account (checking vs savings)",
+      "transaction",
+      true,
+      3
+    ],
+    [
+      4,
+      "Timing Issue",
+      "Transaction happened at wrong time or date",
+      "transaction",
+      true,
+      4
+    ],
+    [
+      5,
+      "Incorrect Charge/Fee",
+      "I was charged incorrectly",
+      "transaction",
+      true,
+      5
+    ],
+    [
+      6,
+      "Missing Payment",
+      "I should have been paid but wasn't",
+      "transaction",
+      true,
+      6
+    ],
+    [
+      7,
+      "Clock In/Out Not Working",
+      "Unable to clock in or clock out",
+      "general",
+      true,
+      1
+    ],
+    [
+      8,
+      "Balance Incorrect",
+      "My balance doesn't make sense",
+      "general",
+      true,
+      2
+    ],
+    [
+      9,
+      "Feature Not Working",
+      "Something on the site isn't working",
+      "general",
+      true,
+      3
+    ],
+    [
+      10,
+      "Cannot Purchase Item",
+      "Unable to buy from store",
+      "general",
+      true,
+      4
+    ],
+    [
+      11,
+      "Missing Job/Assignment",
+      "My job disappeared or changed",
+      "general",
+      true,
+      5
+    ],
+    [
+      12,
+      "General question",
+      "A question about using Classroom Token Hub",
+      "general",
+      true,
+      10
+    ],
+    [
+      13,
+      "Bug report",
+      "Something in Classroom Token Hub is broken",
+      "general",
+      true,
+      11
+    ],
+    [
+      14,
+      "Feature request",
+      "An idea for something Classroom Token Hub should do",
+      "general",
+      true,
+      12
+    ],
+    [
+      15,
+      "Other Issue",
+      "Something else is wrong",
+      "general",
+      true,
+      99
+    ]
+  ],
+  "ddl_sha256": "1bcdae1a44c93b03b82ba7c683bdd8b407bd80aa3037b1c382793c01960adabd",
+  "empty_schema_sha256": "58eea9573436cc2cb8100d550f61640fb8d38002229d4141cdf3ee6542f14d79",
+  "pg_dump": "pg_dump (PostgreSQL) 14.24 (Homebrew)",
+  "postgresql": "14.24 (Homebrew)",
+  "revision": "b1b2b4599b87",
+  "schema_sha256": "2372ddc95f0b804a05561e0ae96d008e236e8048e5f25c33db4a5fe9dd8bc18f",
+  "sequences": {
+    "actor_request_trace_id_seq": [
+      1,
+      false
+    ],
+    "announcements_id_seq": [
+      1,
+      false
+    ],
+    "assessment_events_id_seq": [
+      1,
+      false
+    ],
+    "attendance_interval_invalidation_id_seq": [
+      1,
+      false
+    ],
+    "attendance_sessions_id_seq": [
+      1,
+      false
+    ],
+    "audit_events_id_seq": [
+      1,
+      false
+    ],
+    "bill_cycles_id_seq": [
+      1,
+      false
+    ],
+    "feature_settings_id_seq": [
+      1,
+      false
+    ],
+    "hall_pass_logs_id_seq": [
+      1,
+      false
+    ],
+    "hall_pass_settings_id_seq": [
+      1,
+      false
+    ],
+    "identity_profiles_id_seq": [
+      1,
+      false
+    ],
+    "insurance_claim_productivity_dates_id_seq": [
+      1,
+      false
+    ],
+    "issue_categories_id_seq": [
+      15,
+      true
+    ],
+    "issue_resolution_actions_id_seq": [
+      1,
+      false
+    ],
+    "issue_status_history_id_seq": [
+      1,
+      false
+    ],
+    "issues_id_seq": [
+      1,
+      false
+    ],
+    "ledger_balance_snapshot_id_seq": [
+      1,
+      false
+    ],
+    "ledger_command_reservation_id_seq": [
+      1,
+      false
+    ],
+    "ledger_transaction_id_seq": [
+      1,
+      false
+    ],
+    "obligation_command_reservation_id_seq": [
+      1,
+      false
+    ],
+    "passkey_credentials_id_seq": [
+      1,
+      false
+    ],
+    "payroll_event_id_seq": [
+      1,
+      false
+    ],
+    "recovery_requests_id_seq": [
+      1,
+      false
+    ],
+    "rent_settings_id_seq": [
+      1,
+      false
+    ],
+    "seats_id_seq": [
+      1,
+      false
+    ],
+    "store_item_visibility_id_seq": [
+      1,
+      false
+    ],
+    "student_recovery_codes_id_seq": [
+      1,
+      false
+    ]
+  },
+  "source_sha": "d079e1005383f3565134a6ff71200a39858ab824"
+}
