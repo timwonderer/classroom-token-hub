@@ -61,14 +61,14 @@
         {% endcall %}
         {% endif %}
 
-        {% set register_button %}
-            <button type="button" class="btn btn-light" id="registerPasskeyButton"{% if operation_state %} disabled{% endif %}>
+        {% call cards.top_card('Your passkeys', icon='security', body_class='mb-4', heading_tag='h2') %}
+        <div class="card-body">
+            <div class="mb-3">
+            <button type="button" class="btn btn-primary" id="registerPasskeyButton"{% if operation_state %} disabled{% endif %}>
                 <span class="material-symbols-outlined icon-middle icon-sm" aria-hidden="true">add</span>
                 Register new passkey
             </button>
-        {% endset %}
-        {% call cards.top_card('Your passkeys', icon='security', header_actions=register_button, body_class='mb-4', heading_tag='h2') %}
-        <div class="card-body">
+            </div>
             {% if credentials %}
             <div class="list-group list-group-flush">
                 {% for cred in credentials %}
