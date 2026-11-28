@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.75 | 2026-11-27 | 3.74 | Normative |
+| SOP-DOC-001 | 3.76 | 2026-11-27 | 3.75 | Normative |
 
 ---
 
@@ -288,6 +288,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.76 (2026-11-27):**
+
+- Register DOM-IDEN-003 v2.16, DOM-CORE-002 v1.23, FEAT-IDEN-106 v1.4 and SPEC-IDEN-002 v1.4: TOTP replacement is authorized by dedicated provider step-up evidence (purpose `totp-replace`) consumed against a stored single-use challenge, with a consumed-token receipt retained until its retention time and a point-of-use provider configuration check. Target behavior and its required validation; no live-provider ceremony is claimed.
 
 **Version 3.75 (2026-11-27):**
 

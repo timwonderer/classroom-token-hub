@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-IDEN-106 | 1.3 | 2026-11-26 | 1.2 | Normative |
+| FEAT-IDEN-106 | 1.4 | 2026-11-27 | 1.3 | Normative |
 
 ## I. Purpose
 
@@ -28,9 +28,14 @@ and DOM-IDEN-003/005. No implementation behavior overrides that authority.
 
 ## V. Routine TOTP replacement
 
-Require an authenticated eligible teacher or sysadmin principal with activated TOTP and a fresh, purpose-bound
-assertion from that teacher's activated passkey. Apply INV-ARC-019 local validation;
-provider proof alone is insufficient. Stage only an encrypted new secret (generated per SPEC-SEC-001 §V seed-length requirement) on the current
+Require an authenticated eligible teacher or sysadmin principal with activated TOTP and dedicated provider
+step-up evidence (purpose `totp-replace`) from that principal's activated passkey, issued against a stored
+single-use challenge and consumed as SPEC-IDEN-002 §V ("TOTP replacement step-up evidence") requires. An ordinary
+sign-in token never authorizes, however recent, and the TOTP never authorizes its own replacement. Apply
+INV-ARC-019 local validation; provider proof alone is insufficient: authorization is CTH's own locked consumption
+of the evidence, and the provider's user-verification requirement is provider-dependent and not observable by CTH
+(it is not fresh consent, and the mechanism is not cryptographically bound to this operation). The replacement
+fails closed while the provider's `totp-replace` configuration cannot be confirmed; sign-in is unaffected. Stage only an encrypted new secret (generated per SPEC-SEC-001 §V seed-length requirement) on the current
 operation and expose QR/manual-entry material to its authorized browser.
 
 Until final verification/commit, the existing TOTP remains unchanged. Verify a submitted
@@ -67,7 +72,8 @@ principal with the new TOTP and no passkey; the credential compliance gate (DOM-
 
 ## VII. Idempotency, audit and presentation
 
-Use operation transitions and unique receipts as specified in SPEC-IDEN-002. Replays
+Use operation transitions and unique receipts as specified in SPEC-IDEN-002; a consumed step-up token ID is
+refused for as long as its receipt row is retained (`step_up_retain_until`). Replays
 cannot overwrite a newer generation or repeat session invalidation. Routine cancellation,
 expiry or incorrect new code preserves existing TOTP. SATAR and routine rotation are
 not interchangeable grants, and neither issues backup codes.
@@ -81,7 +87,8 @@ passkey-retirement work; do not claim that provider work rolls back atomically.
 ## VIII. Required validation
 
 Cover abort-before-verification, wrong code, local rollback, expiry, proof replay,
-old-secret invalidation, post-replacement challenge/session invalidation, stale response,
+old-secret invalidation, post-replacement challenge/session invalidation, stale response, step-up evidence
+rejection, replay and retention, provider-configuration failure (SPEC-IDEN-002 §IX),
 SATAR supersession before/after retirement intent, lost provider responses, generation
 races, username uniqueness rollback, secret erasure and no-class maintenance. Preserve
 all SATAR selection, class-confirmation and independent-recovery tests.
@@ -89,5 +96,5 @@ all SATAR selection, class-confirmation and independent-recovery tests.
 ## IX. Amendment
 
 Increment version and effective date, preserve the INV → DOM → FEAT hierarchy,
-and update SOP-DOC-001 and dependent references. The 2026-11-26 revision widens routine replacement to sysadmin principals, requires seed-length-compliant generation and records the post-SATAR gate (DOM-IDEN-003 §VII.A). The 2026-11-23 revision records
+and update SOP-DOC-001 and dependent references. The 2026-11-27 revision (v1.4) replaces the passkey assertion with dedicated provider step-up evidence consumed against a stored single-use challenge (SPEC-IDEN-002 v1.4 §V); SATAR is unchanged. The 2026-11-26 revision widens routine replacement to sysadmin principals, requires seed-length-compliant generation and records the post-SATAR gate (DOM-IDEN-003 §VII.A). The 2026-11-23 revision records
 the approved lifecycle contract; it does not claim implemented or deployed behavior.

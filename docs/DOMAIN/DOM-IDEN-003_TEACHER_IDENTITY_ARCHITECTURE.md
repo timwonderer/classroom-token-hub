@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.15 | 2026-11-27 | 2.14 | Constitutional |
+| DOM-IDEN-003 | 2.16 | 2026-11-27 | 2.15 | Constitutional |
 
 ---
 
@@ -239,8 +239,8 @@ checks and explicit mutation commands; FEAT orchestrates them. No route, GET, qu
 or validator may mutate credentials, reconcile inventory or issue authorization.
 
 Mandatory dual enrollment applies (below); multiple passkeys may coexist. Existing
-teachers prove fresh TOTP for passkey enrollment and removal. TOTP replacement requires a fresh assertion using an activated, locally
-owned passkey. Missing proof does not authorize a weaker maintenance path: SATAR
+teachers prove fresh TOTP for passkey enrollment and removal. TOTP replacement requires dedicated provider step-up evidence from an activated, locally
+owned passkey, consumed as SPEC-IDEN-002 §V ("TOTP replacement step-up evidence") specifies; an ordinary sign-in assertion never suffices. Missing proof does not authorize a weaker maintenance path: SATAR
 remains independent recovery. No contact information, backup codes, administrative
 overrides, physical-device separation or synchronization restrictions are introduced.
 
@@ -622,6 +622,8 @@ Revisions to this document SHALL:
 2. Update the effective date.
 3. Maintain consistency with DOM-IDEN-001 and DOM-IDEN-005.
 4. Maintain consistency with INV-CORE-000.
+
+**2026-11-27 amendment (v2.16):** TOTP replacement is authorized by dedicated provider step-up evidence consumed against a stored single-use challenge (SPEC-IDEN-002 v1.4 §V), not by an ordinary sign-in assertion. No other lifecycle mechanism, notification or old-TOTP requirement is introduced.
 
 **2026-11-27 amendment (v2.15; Owner ruling 2026-11-27: passkey replacement removed; replacement is enrollment followed by revocation):** Removes selected-passkey replacement as an operation; the requirement that a principal holds at least one activated passkey, and the refusal to revoke the last one, are unchanged. Credential-lifecycle replacement of the TOTP seed is a different operation and is unchanged.
 

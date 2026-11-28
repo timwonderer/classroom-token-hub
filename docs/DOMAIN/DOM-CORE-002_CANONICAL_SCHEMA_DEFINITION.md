@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002 | 1.22 | 2026-11-26 | 1.21 | Constitutional |
+| DOM-CORE-002 | 1.23 | 2026-11-27 | 1.22 | Constitutional |
 
 ---
 
@@ -179,7 +179,7 @@ authority in v2 and must not be treated as canonical schema surfaces.
 | `id` | UUID | Primary key |
 | `user_id` | FK `users.id` | `ON DELETE CASCADE` |
 | `purpose` | enum | `totp_replace`, `passkey_enroll`, `passkey_replace`, `passkey_revoke` |
-| `stage` | enum | `authorized`, `registration_pending`, `candidate_verified`, `retirement_committed`, `provider_uncertain`, `completed`, `cancelled` |
+| `stage` | enum | `awaiting_step_up`, `authorized`, `registration_pending`, `candidate_verified`, `retirement_committed`, `provider_uncertain`, `completed`, `cancelled` |
 | `authorized_generation` | Integer | Generation the operation was authorized against |
 | `session_binding_hash` | String(64) | Hash binding the operation to its session |
 | `deadline_at` | timestamptz | Interactive deadline |
@@ -189,10 +189,15 @@ authority in v2 and must not be treated as canonical schema surfaces.
 | `retry_after_at` | timestamptz, nullable | Bounded reconciliation retry |
 | `attempt_count` | Integer | Bounded attempts |
 | `error_category` | String, nullable | Non-identifying category only |
+| `step_up_challenge_hash` | String(64), nullable | Purpose-separated verifier of the single-use TOTP-replacement step-up challenge; erased at consumption, expiry or supersession (SPEC-IDEN-002 §V) |
+| `step_up_issued_at`, `step_up_challenge_expires_at` | timestamptz, nullable | The challenge's issue instant `t0` and window end `c` |
+| `step_up_token_id` | UUID, nullable | The consumed provider step-up token ID; unique across all rows (index `uq_credential_operations_step_up_token_id`, not partial) |
+| `step_up_retain_until` | timestamptz, nullable | Until when a terminal row is kept so its token ID keeps refusing replay (`expiresAt` + 10 s); the sweep deletes only after it |
 | `created_at`, `updated_at` | timestamptz | |
 
 A partial unique index on `user_id` where `stage` is not `completed` or `cancelled`
-permits at most one open operation per principal.
+permits at most one open operation per principal. A unique index on `step_up_token_id`
+(all rows) refuses a replayed step-up token while any row carries its ID.
 
 ---
 
@@ -471,6 +476,8 @@ and display `name`. Class deletion cascades groups. Policies reference it throug
 class-scoped composite foreign key. This is group identity, not policy versioning.
 
 ## VIII. Amendment
+
+Version 1.23 (2026-11-27) adds the `awaiting_step_up` stage and the step-up challenge, consumed-token and retention columns of `credential_operations` (SPEC-IDEN-002 v1.4; DOM-IDEN-003 v2.16; migration `b1b2b4599b87`).
 
 Version 1.22 (2026-11-26) registers `credential_operations` and `users.credential_generation` for the credential lifecycle contract (SPEC-IDEN-002 v1.1; DOM-IDEN-003 v2.13). Schema contract only; implementation requires its own migration.
 
